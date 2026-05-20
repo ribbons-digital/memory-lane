@@ -11,13 +11,16 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "node --test --import tsx test/*.test.ts",
     "test:watch": "node --test --watch --import tsx test/*.test.ts"
   },
   "devDependencies": {
+    "@types/node": "^25.9.1",
     "tsx": "^4.19.0",
     "typescript": "^5.4.0"
   }

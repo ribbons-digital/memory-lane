@@ -1,5 +1,6 @@
 import * as path from "node:path"
 import * as os from "node:os"
+import * as crypto from "node:crypto"
 import { createMemoryStore, createMemoryId, type MemoryStore } from "./storage.js"
 import {
   containsLikelySecret, effectiveMemoryKind, inferCategory, inferMemoryKind,
@@ -7,6 +8,9 @@ import {
 } from "./search.js"
 import { resolveProjectScope } from "./project-scope.js"
 import { loadConfig, getDefaultConfigPath } from "./config.js"
+import { createEmbeddingStore } from "./embedding-store.js"
+import { retrieveSemanticMemories } from "./retrieval.js"
+import { compact as compactStores } from "./compact.js"
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
   MemorySource, MemoryKind, SaveInput, SaveResult, ProjectScope,
@@ -159,41 +163,76 @@ export class MemoryEngine {
     return this.store.list().filter((m) => m.status === "pending")
   }
 
-  /** Semantic recall (Phase 2). Stub for now — will wire to retrieval pipeline. */
-  async recall(query: string, _options?: RecallOptions): Promise<RecallResult> {
-    const memories = this.search(query)
-    return {
-      memories,
-      semantic: { enabled: this.config.semantic.enabled, used: false, fallbackReason: "semantic retrieval not yet wired" },
-    }
-  }
+  // ── Phase 2: Semantic Retrieval ────────────────────────────
 
-  // ── Phase 2 stubs (will be overridden by extension in Task 13) ──
+  async recall(query: string, options?: RecallOptions): Promise<RecallResult> {
+    const config = this.config.semantic
+    const scope = options?.projectScope ?? this.scope
+    const projectKey = scope?.key ?? ""
+
+    const embStore = createEmbeddingStore(this.embPath)
+    return retrieveSemanticMemories(
+      this.store.list(),
+      embStore.listEmbeddings(),
+      embStore.listInvalidations(),
+      query,
+      projectKey,
+      config,
+      this.embProvider,
+    )
+  }
 
   compact(): CompactReport {
-    return { removedMemories: 0, removedEmbeddings: 0, removedInvalidations: 0 }
+    return compactStores(this.memPath, this.embPath)
   }
 
-  doctor(): Record<string, unknown> {
-    const mems = this.store.list()
-    const total = mems.length
-    return {
-      configFile: this.configPath,
-      configExists: true,
-      semanticEnabled: this.config.semantic.enabled,
-      memoryFile: this.memPath,
-      embeddingFile: this.embPath,
-      totalMemories: total,
-      approvedMemories: mems.filter((m) => m.status === "approved").length,
-      pendingMemories: mems.filter((m) => m.status === "pending").length,
-      deletedMemories: mems.filter((m) => m.status === "deleted").length,
-      embeddingCount: 0,
-      deadWeightRatio: total ? mems.filter((m) => m.status === "deleted" || m.status === "rejected").length / total : 0,
-      activeProfileName: this.config.semantic.activeEmbeddingProfile,
-      projectScope: this.scope?.key ?? "none",
+  /** Rebuild embeddings for all approved memories. */
+  async reindexEmbeddings(opts?: { force?: boolean; signal?: AbortSignal }): Promise<{ embedded: number; skippedExisting: number; skippedSecrets: number }> {
+    if (!this.embProvider || !this.config.semantic.enabled) {
+      return { embedded: 0, skippedExisting: 0, skippedSecrets: 0 }
     }
+
+    const embStore = createEmbeddingStore(this.embPath)
+    const config = this.config.semantic
+    const profile = config.embeddings.profiles[config.activeEmbeddingProfile]
+    if (!profile) throw new Error("No active embedding profile configured")
+
+    const approved = this.store.list().filter((m) => m.status === "approved")
+    const safe = approved.filter((m) => !containsLikelySecret(m.text))
+    const safeIds = new Set(safe.map((m) => m.id))
+
+    // Count existing embeddings
+    const existing = embStore.listEmbeddings()
+    const skippedExisting = existing.filter((e) => safeIds.has(e.memoryId)).length
+
+    const profileName = config.activeEmbeddingProfile
+    const model = profile.model
+    const skippedSecrets = approved.length - safe.length
+
+    // Reindex all safe approved memories
+    let embedded = 0
+    const batchSize = profile.batchSize ?? 16
+    for (let i = 0; i < safe.length; i += batchSize) {
+      const batch = safe.slice(i, i + batchSize)
+      const vectors = await this.embProvider.embed(batch.map((m) => m.text), opts?.signal)
+      for (let j = 0; j < batch.length; j++) {
+        embStore.append({
+          memoryId: batch[j].id,
+          memoryUpdatedAt: batch[j].updatedAt,
+          contentHash: crypto.createHash("sha256").update(batch[j].text, "utf8").digest("hex"),
+          profileName,
+          model,
+          dimensions: vectors[j].length,
+          vector: vectors[j],
+          createdAt: new Date().toISOString(),
+        })
+        embedded++
+      }
+    }
+    return { embedded, skippedExisting, skippedSecrets }
   }
 
+  /** Probe the embedding provider to verify connectivity. */
   async probeEmbeddingProvider(): Promise<{ ok: boolean; dimensions?: number; error?: string }> {
     if (!this.embProvider) return { ok: false, error: "No embedding provider configured" }
     try {
@@ -204,7 +243,28 @@ export class MemoryEngine {
     }
   }
 
-  async reindexEmbeddings(_opts?: { force?: boolean; signal?: AbortSignal }): Promise<{ embedded: number; skippedExisting: number; skippedSecrets: number }> {
-    return { embedded: 0, skippedExisting: 0, skippedSecrets: 0 }
+  /** Generate a diagnostic report. */
+  doctor(): Record<string, unknown> {
+    const mems = this.store.list()
+    const embStore = createEmbeddingStore(this.embPath)
+    const embs = embStore.listEmbeddings()
+    const total = mems.length
+    const config = this.config.semantic
+
+    return {
+      configFile: this.configPath,
+      configExists: true,
+      semanticEnabled: config.enabled,
+      memoryFile: this.memPath,
+      embeddingFile: this.embPath,
+      totalMemories: total,
+      approvedMemories: mems.filter((m) => m.status === "approved").length,
+      pendingMemories: mems.filter((m) => m.status === "pending").length,
+      deletedMemories: mems.filter((m) => m.status === "deleted").length,
+      embeddingCount: embs.length,
+      deadWeightRatio: total ? mems.filter((m) => m.status === "deleted" || m.status === "rejected").length / total : 0,
+      activeProfileName: config.activeEmbeddingProfile,
+      projectScope: this.scope?.key ?? "none",
+    }
   }
 }
