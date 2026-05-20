@@ -10,7 +10,7 @@ import { resolveProjectScope } from "./project-scope.js"
 import { loadConfig, getDefaultConfigPath } from "./config.js"
 import { createEmbeddingStore } from "./embedding-store.js"
 import { retrieveSemanticMemories } from "./retrieval.js"
-import { compact as compactStores } from "./compact.js"
+import { compact as compactStores, shouldCompact } from "./compact.js"
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
   MemorySource, MemoryKind, SaveInput, SaveResult, ProjectScope,
@@ -58,6 +58,11 @@ export class MemoryEngine {
     this.config = loadConfig(this.configPath)
     this.embProvider = opts?.embeddingProvider
     this.refreshScope()
+
+    // Auto-compact on startup if dead weight exceeds threshold
+    if (shouldCompact(this.memPath)) {
+      compactStores(this.memPath, this.embPath)
+    }
   }
 
   /** Re-resolve the project scope from current cwd or given path. */
@@ -87,12 +92,14 @@ export class MemoryEngine {
     const dup = findDuplicateMemory(this.store.list(), text, category, scopeType, this.scope?.key)
     if (dup) {
       if (input.status === "approved" && dup.status === "pending") {
-        this.store.append(clone(dup, {
+        const upgraded = clone(dup, {
           text, category, scope: scope as MemoryRecord["scope"],
           source: input.source ?? "manual", status: "approved", kind,
           project: dup.project,
-        }))
-        return { status: "saved", memory: dup }
+        })
+        this.store.append(upgraded)
+        this.invalidateEmbedding(dup.id, "updated")
+        return { status: "saved", memory: upgraded }
       }
       return { status: "skipped", reason: "duplicate" }
     }
@@ -125,6 +132,7 @@ export class MemoryEngine {
     if (!mem) return undefined
     const updated = clone(mem, { status: "approved" })
     this.store.append(updated)
+    this.invalidateEmbedding(id, "updated")
     return updated
   }
 
@@ -134,6 +142,7 @@ export class MemoryEngine {
     if (!mem) return undefined
     const updated = clone(mem, { status: "rejected" })
     this.store.append(updated)
+    this.invalidateEmbedding(id, "deleted")
     return updated
   }
 
@@ -143,6 +152,7 @@ export class MemoryEngine {
     if (!mem) return undefined
     const updated = clone(mem, { status: "deleted" })
     this.store.append(updated)
+    this.invalidateEmbedding(id, "deleted")
     return updated
   }
 
@@ -161,6 +171,17 @@ export class MemoryEngine {
   /** List pending memories for review. */
   reviewPending(): MemoryRecord[] {
     return this.store.list().filter((m) => m.status === "pending")
+  }
+
+  private invalidateEmbedding(memoryId: string, reason: "updated" | "deleted" | "stale"): void {
+    const embStore = createEmbeddingStore(this.embPath)
+    const invalidation: import("./types.js").EmbeddingInvalidationRecord = {
+      type: "invalidation",
+      memoryId,
+      invalidatedAt: new Date().toISOString(),
+      reason,
+    }
+    embStore.append(invalidation)
   }
 
   // ── Phase 2: Semantic Retrieval ────────────────────────────

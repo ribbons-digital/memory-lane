@@ -1,3 +1,4 @@
+import * as crypto from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { describe, it, beforeEach } from "node:test"
@@ -6,6 +7,10 @@ import { compact, shouldCompact } from "../src/compact.js"
 import { tempDir } from "./helpers.js"
 import { createMemoryId } from "../src/storage.js"
 import type { MemoryRecord } from "../src/types.js"
+
+function sha256(text: string): string {
+  return crypto.createHash("sha256").update(text, "utf8").digest("hex")
+}
 
 function rec(overrides: Partial<MemoryRecord>): MemoryRecord {
   return {
@@ -60,8 +65,9 @@ describe("compact", () => {
     const dead = rec({ id: "dead", status: "deleted" })
     fs.writeFileSync(mf, [alive, dead].map(JSON.stringify).join("\n") + "\n", "utf8")
 
-    const embAlive = { memoryId: "alive", contentHash: "x", profileName: "p", model: "m", dimensions: 1, vector: [0.5], createdAt: "2026-01-01T00:00:00.000Z", memoryUpdatedAt: "2026-01-01T00:00:00.000Z" }
-    const embDead = { memoryId: "dead", contentHash: "x", profileName: "p", model: "m", dimensions: 1, vector: [0.5], createdAt: "2026-01-01T00:00:00.000Z", memoryUpdatedAt: "2026-01-01T00:00:00.000Z" }
+    // alive memory has text "x" (default from rec()), so contentHash must be sha256("x")
+    const embAlive = { memoryId: "alive", contentHash: sha256("x"), profileName: "p", model: "m", dimensions: 1, vector: [0.5], createdAt: "2026-01-01T00:00:00.000Z", memoryUpdatedAt: "2026-01-01T00:00:00.000Z" }
+    const embDead = { memoryId: "dead", contentHash: sha256("x"), profileName: "p", model: "m", dimensions: 1, vector: [0.5], createdAt: "2026-01-01T00:00:00.000Z", memoryUpdatedAt: "2026-01-01T00:00:00.000Z" }
     const invalidation = { type: "invalidation", memoryId: "dead", invalidatedAt: "2026-01-01T00:00:00.000Z", reason: "deleted" }
     fs.writeFileSync(ef, [embAlive, embDead, invalidation].map(JSON.stringify).join("\n") + "\n", "utf8")
 
