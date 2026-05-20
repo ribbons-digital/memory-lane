@@ -3,14 +3,16 @@ import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
 function run(args: string[], env?: Record<string, string>) {
-  const cli = path.resolve("packages/cli/dist/index.js")
+  const cli = path.resolve(__dirname, "../dist/index.js")
   const result = execFileSync("node", [cli, ...args], {
     encoding: "utf8",
     env: { ...process.env, ...env },
-    cwd: path.resolve("."),
   })
   return result.trim()
 }
