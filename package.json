@@ -1,0 +1,13 @@
+{
+  "name": "memory-lane",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "test:core": "pnpm --filter @memory-lane/core test",
+    "test:cli": "pnpm --filter @memory-lane/cli test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
