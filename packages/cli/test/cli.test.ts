@@ -37,6 +37,17 @@ describe("CLI integration", () => {
     assert.ok(list.includes("use pnpm"))
   })
 
+  it("list shows saved timestamp", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    run(["save", "timestamp test"], env)
+    const list = run(["list"], env)
+    assert.ok(list.includes("saved "), `Expected 'saved <date>' in output, got: ${list}`)
+  })
+
   it("search finds matching memory", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,

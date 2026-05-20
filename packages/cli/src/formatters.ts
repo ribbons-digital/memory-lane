@@ -2,6 +2,18 @@ import type { MemoryRecord, RecallResult, SaveResult, CompactReport } from "@mem
 
 const VERSION = "0.1.0"
 
+function formatDate(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
 function meta(extra?: Record<string, unknown>) {
   return { version: VERSION, ...extra }
 }
@@ -12,7 +24,7 @@ export function formatMemories(memories: MemoryRecord[], json: boolean): string 
   }
   if (!memories.length) return "No memories found."
   return memories.map((m) =>
-    `[${m.id}] (${m.scope.type}/${m.category}/${m.kind ?? "?"}) ${m.status !== "approved" ? `[${m.status}] ` : ""}${m.text}`,
+    `[${m.id}] (${m.scope.type}/${m.category}/${m.kind ?? "?"}) ${m.status !== "approved" ? `[${m.status}] ` : ""}${m.text}  (saved ${formatDate(m.createdAt)})`,
   ).join("\n")
 }
 
