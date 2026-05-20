@@ -125,12 +125,22 @@ describe("MemoryEngine", () => {
     assert.equal(pending[0].text, "pending memory")
   })
 
-  it("suggest creates pending entry", () => {
+  it("suggest creates pending entry by default", () => {
     const e = engine()
     const r = e.suggest("I prefer tabs", "preference", "global")
     assert.equal(r.status, "saved")
     if (r.status === "saved") {
       assert.equal(r.memory.status, "pending")
+      assert.equal(r.memory.source, "user-suggested")
+    }
+  })
+
+  it("suggest can auto-approve when status is explicit", () => {
+    const e = engine()
+    const r = e.suggest("remember this rule", "project", "project", undefined, "approved")
+    assert.equal(r.status, "saved")
+    if (r.status === "saved") {
+      assert.equal(r.memory.status, "approved")
       assert.equal(r.memory.source, "user-suggested")
     }
   })

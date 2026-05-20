@@ -85,6 +85,8 @@ async function main(): Promise<void> {
           text,
           flag(argv, "category") as any,
           flag(argv, "scope") as any,
+          undefined,
+          flag(argv, "status") as any,
         )
         console.log(formatSaveResult(result, json))
         break

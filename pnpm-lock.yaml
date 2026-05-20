@@ -40,6 +40,19 @@ importers:
         specifier: ^5.4.0
         version: 5.9.3
 
+  packages/pi-adapter:
+    dependencies:
+      '@memory-lane/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.41
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+
 packages:
 
   '@cspotcode/source-map-support@0.8.1':

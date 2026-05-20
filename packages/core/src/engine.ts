@@ -121,9 +121,9 @@ export class MemoryEngine {
     return { status: "saved", memory }
   }
 
-  /** Queue a memory suggestion (pending). */
-  suggest(text: string, category?: MemoryCategory, scopeType?: MemoryScopeType, kind?: MemoryKind): SaveResult {
-    return this.save({ text, category, scopeType, source: "user-suggested", status: "pending", kind })
+  /** Queue a memory suggestion. Defaults to pending, but can auto-approve for explicit user requests. */
+  suggest(text: string, category?: MemoryCategory, scopeType?: MemoryScopeType, kind?: MemoryKind, status?: MemoryStatus): SaveResult {
+    return this.save({ text, category, scopeType, source: "user-suggested", status: status ?? "pending", kind })
   }
 
   /** Approve a pending memory by id. Returns the updated memory or undefined. */

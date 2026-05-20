@@ -166,16 +166,42 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   pi.registerTool({
     name: "memory_suggest",
     label: "Suggest Memory",
-    description: "Queue a durable project-specific memory suggestion for user review.",
+    description: "Queue a durable project-specific memory suggestion for user review. Use when you proactively identify something worth remembering. For pending suggestions. When the user explicitly asks you to remember something, use memory_save instead.",
+    parameters: { text: { type: "string" }, category: { type: "string" }, status: { type: "string" } },
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const e = getEngine(ctx.cwd)
+      const cat = params.category ?? "project"
+      const status = params.status === "approved" ? "approved" as const : "pending" as const
+      const result = e.suggest(params.text, cat as any, "project", undefined, status)
+      if (result.status === "saved") {
+        const reviewMsg = status === "pending" ? " Run /memory review." : ""
+        notify(ctx, `Memory ${result.memory.id} ${status === "approved" ? "saved" : "suggested"}${reviewMsg}`)
+        return {
+          content: [{ type: "text", text: `Memory ${result.memory.id} ${status === "approved" ? "saved" : "queued"}${reviewMsg}` }],
+          details: { id: result.memory.id },
+        }
+      }
+      return {
+        content: [{ type: "text", text: `Skipped: ${result.reason}` }],
+        details: { skipped: result.reason },
+      }
+    },
+  })
+
+  pi.registerTool({
+    name: "memory_save",
+    label: "Save Memory",
+    description: "Save an approved persistent memory directly. Use when the user explicitly asks you to remember something — bypasses the approval step.",
     parameters: { text: { type: "string" }, category: { type: "string" } },
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const e = getEngine(ctx.cwd)
       const cat = params.category ?? "project"
-      const result = e.suggest(params.text, cat as any, "project")
+      const kind = inferMemoryKind(params.text, cat as any)
+      const result = e.save({ text: params.text, category: cat as any, status: "approved", source: "manual", kind })
       if (result.status === "saved") {
-        notify(ctx, `Memory suggestion ${result.memory.id} queued. Run /memory review.`)
+        notify(ctx, `Memory ${result.memory.id} saved: ${result.memory.text.slice(0, 60)}...`)
         return {
-          content: [{ type: "text", text: `Memory suggestion ${result.memory.id} queued.` }],
+          content: [{ type: "text", text: `Saved memory ${result.memory.id}: ${result.memory.text.slice(0, 100)}` }],
           details: { id: result.memory.id },
         }
       }
