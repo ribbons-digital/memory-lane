@@ -25,7 +25,7 @@ export interface ExtensionAPI {
     name: string
     label: string
     description: string
-    parameters: Record<string, { type: string }>
+    parameters: Record<string, { type: string; description?: string; enum?: string[] }>
     execute: (
       id: string,
       params: Record<string, string>,
@@ -167,7 +167,19 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     name: "memory_suggest",
     label: "Suggest Memory",
     description: "Queue a durable project-specific memory suggestion for user review. Use when you proactively identify something worth remembering. For pending suggestions. When the user explicitly asks you to remember something, use memory_save instead.",
-    parameters: { text: { type: "string" }, category: { type: "string" }, status: { type: "string" } },
+    parameters: {
+      text: { type: "string", description: "The memory text to suggest" },
+      category: {
+        type: "string",
+        description: "Category: preference, personal, or project",
+        enum: ["preference", "personal", "project"],
+      },
+      status: {
+        type: "string",
+        description: "Status: 'approved' to bypass review, or omitted for pending",
+        enum: ["approved", "pending"],
+      },
+    },
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const e = getEngine(ctx.cwd)
       const cat = params.category ?? "project"
@@ -192,7 +204,14 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     name: "memory_save",
     label: "Save Memory",
     description: "Save an approved persistent memory directly. Use when the user explicitly asks you to remember something — bypasses the approval step.",
-    parameters: { text: { type: "string" }, category: { type: "string" } },
+    parameters: {
+      text: { type: "string", description: "The memory text to save" },
+      category: {
+        type: "string",
+        description: "Category: preference, personal, or project",
+        enum: ["preference", "personal", "project"],
+      },
+    },
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const e = getEngine(ctx.cwd)
       const cat = params.category ?? "project"
@@ -216,7 +235,9 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     name: "memory_recall",
     label: "Recall Memory",
     description: "Recall approved persistent memories.",
-    parameters: { query: { type: "string" } },
+    parameters: {
+      query: { type: "string", description: "Search query to find relevant memories" },
+    },
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const e = getEngine(ctx.cwd)
       const result = await e.recall(params.query ?? "")

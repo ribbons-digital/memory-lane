@@ -2460,7 +2460,19 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     name: "memory_suggest",
     label: "Suggest Memory",
     description: "Queue a durable project-specific memory suggestion for user review.",
-    parameters: { text: { type: "string" }, category: { type: "string" } },
+    parameters: {
+      text: { type: "string", description: "The memory text to suggest" },
+      category: {
+        type: "string",
+        description: "Category: preference, personal, or project",
+        enum: ["preference", "personal", "project"],
+      },
+      status: {
+        type: "string",
+        description: "Status: 'approved' to bypass review, or omitted for pending",
+        enum: ["approved", "pending"],
+      },
+    },
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const e = getEngine(ctx.cwd)
       const result = e.suggest(params.text, "project", "project")
@@ -2476,7 +2488,9 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     name: "memory_recall",
     label: "Recall Memory",
     description: "Recall approved persistent memories.",
-    parameters: { query: { type: "string" } },
+    parameters: {
+      query: { type: "string", description: "Search query to find relevant memories" },
+    },
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const e = getEngine(ctx.cwd)
       const result = await e.recall(params.query ?? "")
