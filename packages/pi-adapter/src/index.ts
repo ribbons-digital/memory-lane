@@ -1,5 +1,6 @@
 import * as path from "node:path"
 import * as os from "node:os"
+import { Type } from "typebox"
 import {
   MemoryEngine, parseExplicitMemoryRequest, detectUserMemorySuggestion,
   isCheckpointMemorySaveRequest, inferCategory, inferMemoryKind,
@@ -25,7 +26,7 @@ export interface ExtensionAPI {
     name: string
     label: string
     description: string
-    parameters: Record<string, { type: string; description?: string; enum?: string[] }>
+    parameters: import("typebox").TObject<any>
     execute: (
       id: string,
       params: Record<string, string>,
@@ -163,23 +164,17 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
 
   // ── Tools ────────────────────────────────────────────────
 
+  const memorySuggestSchema = Type.Object({
+    text: Type.String({ description: "The memory text to suggest" }),
+    category: Type.Optional(Type.String({ description: "Category: preference, personal, or project", enum: ["preference", "personal", "project"] })),
+    status: Type.Optional(Type.String({ description: "Status: 'approved' to bypass review, or omitted for pending", enum: ["approved", "pending"] })),
+  })
+
   pi.registerTool({
     name: "memory_suggest",
     label: "Suggest Memory",
     description: "Queue a durable project-specific memory suggestion for user review. Use when you proactively identify something worth remembering. For pending suggestions. When the user explicitly asks you to remember something, use memory_save instead.",
-    parameters: {
-      text: { type: "string", description: "The memory text to suggest" },
-      category: {
-        type: "string",
-        description: "Category: preference, personal, or project",
-        enum: ["preference", "personal", "project"],
-      },
-      status: {
-        type: "string",
-        description: "Status: 'approved' to bypass review, or omitted for pending",
-        enum: ["approved", "pending"],
-      },
-    },
+    parameters: memorySuggestSchema,
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const e = getEngine(ctx.cwd)
       const cat = params.category ?? "project"
@@ -200,18 +195,16 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     },
   })
 
+  const memorySaveSchema = Type.Object({
+    text: Type.String({ description: "The memory text to save" }),
+    category: Type.Optional(Type.String({ description: "Category: preference, personal, or project", enum: ["preference", "personal", "project"] })),
+  })
+
   pi.registerTool({
     name: "memory_save",
     label: "Save Memory",
     description: "Save an approved persistent memory directly. Use when the user explicitly asks you to remember something — bypasses the approval step.",
-    parameters: {
-      text: { type: "string", description: "The memory text to save" },
-      category: {
-        type: "string",
-        description: "Category: preference, personal, or project",
-        enum: ["preference", "personal", "project"],
-      },
-    },
+    parameters: memorySaveSchema,
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const e = getEngine(ctx.cwd)
       const cat = params.category ?? "project"
@@ -231,13 +224,15 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     },
   })
 
+  const memoryRecallSchema = Type.Object({
+    query: Type.String({ description: "Search query to find relevant memories" }),
+  })
+
   pi.registerTool({
     name: "memory_recall",
     label: "Recall Memory",
     description: "Recall approved persistent memories.",
-    parameters: {
-      query: { type: "string", description: "Search query to find relevant memories" },
-    },
+    parameters: memoryRecallSchema,
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const e = getEngine(ctx.cwd)
       const result = await e.recall(params.query ?? "")
