@@ -22,5 +22,8 @@ The pipeline that combines embedding-based cosine similarity, lexical token over
 **Compaction**:
 The process of rewriting storage files to remove deleted/rejected memory tombstones, stale embeddings, and invalidation records. Runs on engine startup if dead weight exceeds 30%, and is also available as an explicit manual command. Never runs mid-session.
 
+**Auto-embed**:
+When semantic search is enabled and an embedding provider with `embedSync` support is configured, newly saved approved memories are automatically embedded at save time (fire-and-forget). This ensures incremental saves are immediately available for semantic recall without manual `reindex`. Memories saved without `embedSync` support still require `reindex` to become semantically searchable.
+
 **Intent detection**:
-Regex-based pattern matching for memory-related user intents (save, suggest, recall) lives in the core. LLM-powered intent classification lives in the adapter layer (harness-specific).
+Regex-based pattern matching for memory-related user intents (save, suggest, recall) lives in the core. LLM-powered intent classification lives in the adapter layer (harness-specific). In harnesses without an event bus (e.g. Codex), auto-trigger relies on system prompt instructions directing the LLM to invoke the CLI.

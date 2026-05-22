@@ -110,3 +110,20 @@ export function isLocalBaseUrl(url: string): boolean {
     return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(new URL(url).hostname.toLowerCase())
   } catch { return false }
 }
+
+// ── Write helpers ────────────────────────────────────────────
+
+/** Write a config file, merging the given partial config with defaults. */
+export function writeConfig(configPath: string, partial: Partial<SemanticMemoryConfig>): void {
+  const existing = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {}
+  const merged = deepMerge(DEFAULT_CONFIG, { ...existing, ...partial }) as SemanticMemoryConfig
+  fs.mkdirSync(path.dirname(configPath), { recursive: true })
+  fs.writeFileSync(configPath, JSON.stringify(merged, null, 2) + "\n", "utf8")
+}
+
+/** Read raw config JSON (without validation) for editing. */
+export function readRawConfig(configPath?: string): unknown {
+  const file = configPath ?? getDefaultConfigPath()
+  if (!fs.existsSync(file)) return null
+  return JSON.parse(fs.readFileSync(file, "utf8"))
+}

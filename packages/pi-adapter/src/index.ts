@@ -135,7 +135,8 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
       const rest = parts.slice(1).join(" ")
 
       if (cmd === "list") {
-        const mems = e.list()
+        const allScope = parts.includes("--all")
+        const mems = e.list({ all: allScope })
         notify(ctx, mems.length ? mems.map(formatMemory).join("\n") : "No memories.")
       } else if (cmd === "search") {
         const mems = e.search(rest)
@@ -157,7 +158,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         const d = e.doctor()
         notify(ctx, Object.entries(d).map(([k, v]) => `${k}: ${v}`).join("\n"))
       } else {
-        notify(ctx, "Usage: /memory list | search <q> | delete <id> | use [q] | review | compact | status")
+        notify(ctx, "Usage: /memory list [--all] | search <q> | delete <id> | use [q] | review | compact | status")
       }
     },
   })

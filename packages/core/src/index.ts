@@ -10,6 +10,7 @@ export {
 export { resolveProjectScope } from "./project-scope.js"
 export {
   loadConfig, DEFAULT_CONFIG, getDefaultConfigPath, isLocalBaseUrl, validateConfig,
+  writeConfig, readRawConfig,
 } from "./config.js"
 export { createEmbeddingStore, foldEmbeddings } from "./embedding-store.js"
 export { createOpenAIEmbeddingProvider } from "./embedding-provider.js"

@@ -99,7 +99,7 @@ Commands:
   save <text> [--scope global|project] [--category preference|personal|project] [--status approved|pending]
   suggest <text> [--scope global|project] [--category preference|personal|project]
   recall [query] [--top-k 8]
-  list [--status approved|pending|rejected|deleted]
+  list [--status approved|pending|rejected|deleted] [--all]
   search <query>
   delete <id>
   approve <id>
@@ -109,8 +109,10 @@ Commands:
   doctor
   reindex [--force]
   status
+  config [show|enable-semantic|disable-semantic|set <key> <value>]
 
 Flags:
   --json           Output JSON instead of human-readable text
-  --project <path> Set the project scope directory`
+  --project <path> Set the project scope directory
+  --all            (list) Show all memories, bypassing project scope`
 }

@@ -1,9 +1,42 @@
 #!/usr/bin/env node
-import { MemoryEngine } from "@memory-lane/core"
+import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider } from "@memory-lane/core"
 import {
   formatMemories, formatRecall, formatSaveResult, formatResult,
   formatCompact, formatDoctor, formatError, usage,
 } from "./formatters.js"
+
+// ── Config helpers ───────────────────────────────────────────
+
+function deepMergeConfig(base: unknown, override: unknown): unknown {
+  const isPlain = (v: any) => typeof v === "object" && v !== null && !Array.isArray(v)
+  if (override === null || override === undefined || !isPlain(override)) return override ?? base
+  const result: Record<string, unknown> = isPlain(base) ? { ...(base as Record<string, unknown>) } : {}
+  for (const [k, v] of Object.entries(override as Record<string, unknown>)) {
+    if (["__proto__", "constructor", "prototype"].includes(k)) continue
+    result[k] = deepMergeConfig(k in result ? result[k] : undefined, v)
+  }
+  return result
+}
+
+function setByPath(obj: Record<string, unknown>, path: string, value: unknown): void {
+  const parts = path.split(".")
+  let current = obj
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (!current[parts[i]] || typeof current[parts[i]] !== "object") current[parts[i]] = {}
+    current = current[parts[i]] as Record<string, unknown>
+  }
+  current[parts[parts.length - 1]] = value
+}
+
+function parseConfigValue(raw: string): unknown {
+  if (raw === "true") return true
+  if (raw === "false") return false
+  if (raw === "null") return null
+  const n = Number(raw)
+  if (Number.isFinite(n) && !/[^0-9.e+-]/.test(raw)) return n
+  try { return JSON.parse(raw) } catch { /* fall through */ }
+  return raw
+}
 
 // ── Arg parsing helpers ──────────────────────────────────────
 
@@ -49,12 +82,26 @@ async function main(): Promise<void> {
     process.exit(command && command !== "help" ? 2 : 0)
   }
 
+  // Resolve config path and optionally create embedding provider
+  const configPath = process.env.MEMORY_LANE_CONFIG || getDefaultConfigPath()
+  let embeddingProvider: ReturnType<typeof createOpenAIEmbeddingProvider> | undefined
+  try {
+    const cfg = loadConfig(configPath)
+    if (cfg.semantic.enabled) {
+      const profile = cfg.semantic.embeddings.profiles[cfg.semantic.activeEmbeddingProfile]
+      if (profile) {
+        embeddingProvider = createOpenAIEmbeddingProvider(profile)
+      }
+    }
+  } catch { /* no provider if config invalid or missing */ }
+
   let engine: MemoryEngine
   try {
     engine = new MemoryEngine({
       memoryPath: process.env.MEMORY_LANE_FILE,
       embeddingsPath: process.env.MEMORY_LANE_EMBEDDINGS_FILE,
-      configPath: process.env.MEMORY_LANE_CONFIG,
+      configPath,
+      embeddingProvider,
     })
     if (projPath) engine.refreshScope(projPath)
   } catch (err: unknown) {
@@ -100,7 +147,9 @@ async function main(): Promise<void> {
       }
 
       case "list": {
-        const mems = engine.list(flag(argv, "status") as any)
+        const statusFlag = flag(argv, "status") as any
+        const allScope = hasFlag(argv, "all")
+        const mems = engine.list({ status: statusFlag, all: allScope })
         console.log(formatMemories(mems, json))
         break
       }
@@ -179,9 +228,40 @@ async function main(): Promise<void> {
         break
       }
 
-      default:
-        console.log(formatError(`Unknown command: ${command}. Run 'memory-lane help' for usage.`, json))
-        process.exit(2)
+      default: {
+        if (command === "config") {
+          const subCmd = rest[0]?.toLowerCase()
+          if (!subCmd || subCmd === "show") {
+            const raw = readRawConfig(engine["configPath"] as string)
+            if (!raw) { console.log(formatError("No config file found.", json)); break }
+            if (json) console.log(JSON.stringify(raw, null, 2))
+            else console.log(`Config: ${getDefaultConfigPath()}\n` + JSON.stringify(raw, null, 2))
+          } else if (subCmd === "enable-semantic") {
+            const cfgPath = process.env.MEMORY_LANE_CONFIG || getDefaultConfigPath()
+            writeConfig(cfgPath, { semantic: { enabled: true } as any })
+            console.log(json ? JSON.stringify({ ok: true, semantic: { enabled: true } }) : "Semantic search enabled. Run 'memory-lane reindex' to build embeddings.")
+          } else if (subCmd === "disable-semantic") {
+            const cfgPath = process.env.MEMORY_LANE_CONFIG || getDefaultConfigPath()
+            writeConfig(cfgPath, { semantic: { enabled: false } as any })
+            console.log(json ? JSON.stringify({ ok: true, semantic: { enabled: false } }) : "Semantic search disabled.")
+          } else if (subCmd === "set") {
+            const key = rest[1]
+            const value = rest.slice(2).join(" ")
+            if (!key) { console.log(formatError("Usage: memory-lane config set <json-path> <value>", json)); break }
+            const cfgPath = process.env.MEMORY_LANE_CONFIG || getDefaultConfigPath()
+            const existing = (readRawConfig(cfgPath) as Record<string, unknown>) || {}
+            const merged = deepMergeConfig(DEFAULT_CONFIG, existing) as Record<string, unknown>
+            setByPath(merged, key, parseConfigValue(value))
+            writeConfig(cfgPath, merged as any)
+            console.log(json ? JSON.stringify({ ok: true, path: key }) : `Set ${key}`)
+          } else {
+            console.log(formatError("Usage: memory-lane config [show | enable-semantic | disable-semantic | set <key> <value>]", json))
+          }
+        } else {
+          console.log(formatError(`Unknown command: ${command}. Run 'memory-lane help' for usage.`, json))
+          process.exit(2)
+        }
+      }
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)

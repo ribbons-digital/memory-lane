@@ -65,6 +65,29 @@ export class MemoryEngine {
     }
   }
 
+  /** Embed a single memory (fire-and-forget, called internally from save/approve).
+   *  Works with both sync and async providers. Non-fatal — failures are swallowed. */
+  private async _embedMemory(memory: MemoryRecord): Promise<void> {
+    if (containsLikelySecret(memory.text)) return
+    try {
+      const profile = this.config.semantic.embeddings.profiles[this.config.semantic.activeEmbeddingProfile]
+      if (!profile || !this.embProvider) return
+      const vectors = await this.embProvider.embed([memory.text])
+      if (!vectors?.length) return
+      const embStore = createEmbeddingStore(this.embPath)
+      embStore.append({
+        memoryId: memory.id,
+        memoryUpdatedAt: memory.updatedAt,
+        contentHash: crypto.createHash("sha256").update(memory.text, "utf8").digest("hex"),
+        profileName: this.config.semantic.activeEmbeddingProfile,
+        model: profile.model,
+        dimensions: vectors[0].length,
+        vector: vectors[0],
+        createdAt: new Date().toISOString(),
+      })
+    } catch { /* non-fatal: embedding can be rebuilt via reindex */ }
+  }
+
   /** Re-resolve the project scope from current cwd or given path. */
   refreshScope(cwd?: string): void {
     this.scope = resolveProjectScope(cwd)
@@ -118,6 +141,10 @@ export class MemoryEngine {
       kind,
     }
     this.store.append(memory)
+    // Auto-embed on save when semantic is enabled and provider available
+    if (memory.status === "approved" && this.embProvider && this.config.semantic.enabled) {
+      this._embedMemory(memory).catch(() => { /* swallowed */ })
+    }
     return { status: "saved", memory }
   }
 
@@ -156,11 +183,27 @@ export class MemoryEngine {
     return updated
   }
 
-  /** List memories, optionally filtered by status. */
-  list(status?: MemoryStatus): MemoryRecord[] {
+  /** List memories. By default respects project scope — only memories visible to
+   *  the current project (global + matching project key) are returned.
+   *  Use `{ all: true }` to bypass scope filtering (e.g. admin review across projects).
+   *
+   *  Overload signatures:
+   *    list(status) — legacy: filter by status only
+   *    list(opts) — new: { status?, all? }
+   */
+  list(status?: MemoryStatus): MemoryRecord[]
+  list(opts?: { status?: MemoryStatus; all?: boolean }): MemoryRecord[]
+  list(arg?: MemoryStatus | { status?: MemoryStatus; all?: boolean }): MemoryRecord[] {
     const all = this.store.list()
-    if (!status) return all
-    return all.filter((m) => m.status === status)
+    const scopeKey = this.scope?.key ?? ""
+    const opts = typeof arg === "object" ? arg : { status: arg }
+    const visible = opts?.all ? all : all.filter((m) => {
+      if (m.scope.type === "global") return true
+      const mk = m.scope.key ?? m.project?.key ?? m.project?.root
+      return mk === scopeKey
+    })
+    if (!opts?.status) return visible
+    return visible.filter((m) => m.status === opts.status)
   }
 
   /** Search memories by text query within the current project scope. */
