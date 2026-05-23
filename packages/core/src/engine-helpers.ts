@@ -30,14 +30,26 @@ function memoryScope(scopeType: MemoryScopeType, projectScope: ProjectScope | nu
   return scopeType === "project" ? { type: scopeType, key: projectScope?.key } : { type: scopeType }
 }
 
+function resolveCategory(input: SaveInput, text: string): MemoryCategory {
+  return input.category ?? inferCategory(text)
+}
+
+function resolveScopeType(input: SaveInput, category: MemoryCategory): MemoryScopeType {
+  return input.scopeType ?? (category === "project" ? "project" : "global")
+}
+
+function resolveKind(input: SaveInput, text: string, category: MemoryCategory): MemoryKind {
+  return input.kind ?? inferMemoryKind(text, category)
+}
+
 export function saveContext(input: SaveInput, text: string, projectScope: ProjectScope | null): SaveContext {
-  const category = input.category ?? inferCategory(text)
-  const scopeType = input.scopeType ?? (category === "project" ? "project" : "global")
+  const category = resolveCategory(input, text)
+  const scopeType = resolveScopeType(input, category)
   return {
     text,
     category,
     scopeType,
-    kind: input.kind ?? inferMemoryKind(text, category),
+    kind: resolveKind(input, text, category),
     scope: memoryScope(scopeType, projectScope),
   }
 }
@@ -62,10 +74,12 @@ export function shouldAutoEmbed(memory: MemoryRecord, semantic: SemanticConfig, 
   return memory.status === "approved" && Boolean(provider) && semantic.enabled
 }
 
+function memoryScopeKey(memory: MemoryRecord): string | undefined {
+  return memory.scope.key ?? memory.project?.key ?? memory.project?.root
+}
+
 export function visibleInScope(memory: MemoryRecord, scopeKey: string): boolean {
-  if (memory.scope.type === "global") return true
-  const memoryScopeKey = memory.scope.key ?? memory.project?.key ?? memory.project?.root
-  return memoryScopeKey === scopeKey
+  return memory.scope.type === "global" || memoryScopeKey(memory) === scopeKey
 }
 
 export function timestamp(now?: string | Date): string {
