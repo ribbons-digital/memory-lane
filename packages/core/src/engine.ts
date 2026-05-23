@@ -2,28 +2,25 @@
 // MemoryEngine exposes public methods used by the CLI, pi adapter, and package consumers.
 import * as path from "node:path"
 import * as os from "node:os"
-import * as crypto from "node:crypto"
-import { createMemoryStore, createMemoryId, type MemoryStore } from "./storage.js"
+import { createMemoryStore, type MemoryStore } from "./storage.js"
 import {
-  containsLikelySecret, effectiveMemoryKind, inferCategory, inferMemoryKind,
-  searchMemories, findDuplicateMemory,
+  effectiveMemoryKind, searchMemories, findDuplicateMemory,
 } from "./search.js"
+import { containsLikelySecret } from "./secret-detection.js"
 import { resolveProjectScope } from "./project-scope.js"
 import { loadConfig, getDefaultConfigPath } from "./config.js"
 import { createEmbeddingStore } from "./embedding-store.js"
 import { retrieveSemanticMemories } from "./retrieval.js"
 import { compact as compactStores, shouldCompact } from "./compact.js"
+import {
+  contentHash, createNewMemory, saveContext, shouldAutoEmbed, timestamp, visibleInScope,
+  type SaveContext,
+} from "./engine-helpers.js"
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
-  MemorySource, MemoryKind, SaveInput, SaveResult, ProjectScope,
+  MemoryKind, SaveInput, SaveResult, ProjectScope,
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport,
 } from "./types.js"
-
-function ts(now?: string | Date): string {
-  if (now instanceof Date) return now.toISOString()
-  if (typeof now === "string") return now
-  return new Date().toISOString()
-}
 
 function clone(memory: MemoryRecord, update: Partial<MemoryRecord>): MemoryRecord {
   return {
@@ -31,12 +28,13 @@ function clone(memory: MemoryRecord, update: Partial<MemoryRecord>): MemoryRecor
     ...update,
     id: memory.id,
     createdAt: memory.createdAt,
-    updatedAt: ts(),
+    updatedAt: timestamp(),
     kind: update.kind ?? effectiveMemoryKind({ ...memory, ...update }),
   }
 }
 
 const DEFAULT_DIR = path.join(os.homedir(), ".memory-lane")
+
 
 export class MemoryEngine {
   private readonly store: MemoryStore
@@ -67,26 +65,29 @@ export class MemoryEngine {
     }
   }
 
+  private appendEmbedding(memory: MemoryRecord, vector: number[], profileName: string, model: string): void {
+    createEmbeddingStore(this.embPath).append({
+      memoryId: memory.id,
+      memoryUpdatedAt: memory.updatedAt,
+      contentHash: contentHash(memory.text),
+      profileName,
+      model,
+      dimensions: vector.length,
+      vector,
+      createdAt: new Date().toISOString(),
+    })
+  }
+
   /** Embed a single memory (fire-and-forget, called internally from save/approve).
    *  Works with both sync and async providers. Non-fatal — failures are swallowed. */
   private async _embedMemory(memory: MemoryRecord): Promise<void> {
-    if (containsLikelySecret(memory.text)) return
+    if (containsLikelySecret(memory.text) || !this.embProvider) return
     try {
-      const profile = this.config.semantic.embeddings.profiles[this.config.semantic.activeEmbeddingProfile]
-      if (!profile || !this.embProvider) return
-      const vectors = await this.embProvider.embed([memory.text])
-      if (!vectors?.length) return
-      const embStore = createEmbeddingStore(this.embPath)
-      embStore.append({
-        memoryId: memory.id,
-        memoryUpdatedAt: memory.updatedAt,
-        contentHash: crypto.createHash("sha256").update(memory.text, "utf8").digest("hex"),
-        profileName: this.config.semantic.activeEmbeddingProfile,
-        model: profile.model,
-        dimensions: vectors[0].length,
-        vector: vectors[0],
-        createdAt: new Date().toISOString(),
-      })
+      const profileName = this.config.semantic.activeEmbeddingProfile
+      const profile = this.config.semantic.embeddings.profiles[profileName]
+      if (!profile) return
+      const [vector] = await this.embProvider.embed([memory.text])
+      if (vector) this.appendEmbedding(memory, vector, profileName, profile.model)
     } catch { /* non-fatal: embedding can be rebuilt via reindex */ }
   }
 
@@ -100,54 +101,40 @@ export class MemoryEngine {
     return this.scope
   }
 
+  private upgradePendingDuplicate(dup: MemoryRecord, input: SaveInput, ctx: SaveContext): SaveResult {
+    if (input.status !== "approved" || dup.status !== "pending") return { status: "skipped", reason: "duplicate" }
+    const upgraded = clone(dup, {
+      text: ctx.text,
+      category: ctx.category,
+      scope: ctx.scope,
+      source: input.source ?? "manual",
+      status: "approved",
+      kind: ctx.kind,
+      project: dup.project,
+    })
+    this.store.append(upgraded)
+    this.invalidateEmbedding(dup.id, "updated")
+    return { status: "saved", memory: upgraded }
+  }
+
+  private persistMemory(input: SaveInput, ctx: SaveContext): SaveResult {
+    const memory = createNewMemory(input, ctx, this.scope)
+    this.store.append(memory)
+    if (shouldAutoEmbed(memory, this.config.semantic, this.embProvider)) {
+      this._embedMemory(memory).catch(() => { /* swallowed */ })
+    }
+    return { status: "saved", memory }
+  }
+
   /** Save a memory. Returns SaveResult. */
   save(input: SaveInput): SaveResult {
     const text = input.text.trim()
     if (!text) return { status: "skipped", reason: "empty" }
     if (containsLikelySecret(text)) return { status: "skipped", reason: "secret" }
 
-    const category = input.category ?? inferCategory(text)
-    const scopeType = input.scopeType ?? (category === "project" ? "project" : "global")
-    const kind = input.kind ?? inferMemoryKind(text, category)
-
-    const scope = scopeType === "project"
-      ? { type: scopeType as MemoryScopeType, key: this.scope?.key }
-      : { type: scopeType as MemoryScopeType }
-
-    const dup = findDuplicateMemory(this.store.list(), text, category, scopeType, this.scope?.key)
-    if (dup) {
-      if (input.status === "approved" && dup.status === "pending") {
-        const upgraded = clone(dup, {
-          text, category, scope: scope as MemoryRecord["scope"],
-          source: input.source ?? "manual", status: "approved", kind,
-          project: dup.project,
-        })
-        this.store.append(upgraded)
-        this.invalidateEmbedding(dup.id, "updated")
-        return { status: "saved", memory: upgraded }
-      }
-      return { status: "skipped", reason: "duplicate" }
-    }
-
-    const now = ts()
-    const memory: MemoryRecord = {
-      id: createMemoryId(),
-      status: input.status ?? "pending",
-      text,
-      category,
-      scope: scope as MemoryRecord["scope"],
-      source: input.source ?? "manual",
-      createdAt: now,
-      updatedAt: now,
-      project: this.scope ? { cwd: this.scope.cwd, root: this.scope.root, key: this.scope.key } : undefined,
-      kind,
-    }
-    this.store.append(memory)
-    // Auto-embed on save when semantic is enabled and provider available
-    if (memory.status === "approved" && this.embProvider && this.config.semantic.enabled) {
-      this._embedMemory(memory).catch(() => { /* swallowed */ })
-    }
-    return { status: "saved", memory }
+    const ctx = saveContext(input, text, this.scope)
+    const dup = findDuplicateMemory(this.store.list(), ctx.text, ctx.category, ctx.scopeType, this.scope?.key)
+    return dup ? this.upgradePendingDuplicate(dup, input, ctx) : this.persistMemory(input, ctx)
   }
 
   /** Queue a memory suggestion. Defaults to pending, but can auto-approve for explicit user requests. */
@@ -199,11 +186,7 @@ export class MemoryEngine {
     const all = this.store.list()
     const scopeKey = this.scope?.key ?? ""
     const opts = typeof arg === "object" ? arg : { status: arg }
-    const visible = opts?.all ? all : all.filter((m) => {
-      if (m.scope.type === "global") return true
-      const mk = m.scope.key ?? m.project?.key ?? m.project?.root
-      return mk === scopeKey
-    })
+    const visible = opts?.all ? all : all.filter((m) => visibleInScope(m, scopeKey))
     if (!opts?.status) return visible
     return visible.filter((m) => m.status === opts.status)
   }
@@ -275,25 +258,24 @@ export class MemoryEngine {
     const model = profile.model
     const skippedSecrets = approved.length - safe.length
 
-    // Reindex all safe approved memories
     let embedded = 0
     const batchSize = profile.batchSize ?? 16
     for (let i = 0; i < safe.length; i += batchSize) {
       const batch = safe.slice(i, i + batchSize)
       const vectors = await this.embProvider.embed(batch.map((m) => m.text), opts?.signal)
-      for (let j = 0; j < batch.length; j++) {
+      batch.forEach((memory, index) => {
         embStore.append({
-          memoryId: batch[j].id,
-          memoryUpdatedAt: batch[j].updatedAt,
-          contentHash: crypto.createHash("sha256").update(batch[j].text, "utf8").digest("hex"),
+          memoryId: memory.id,
+          memoryUpdatedAt: memory.updatedAt,
+          contentHash: contentHash(memory.text),
           profileName,
           model,
-          dimensions: vectors[j].length,
-          vector: vectors[j],
+          dimensions: vectors[index].length,
+          vector: vectors[index],
           createdAt: new Date().toISOString(),
         })
         embedded++
-      }
+      })
     }
     return { embedded, skippedExisting, skippedSecrets }
   }

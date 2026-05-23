@@ -1,8 +1,9 @@
 export * from "./types.js"
 export { MemoryEngine } from "./engine.js"
 export { createMemoryStore, createMemoryId, foldMemoryRecords } from "./storage.js"
+export { containsLikelySecret } from "./secret-detection.js"
 export {
-  containsLikelySecret, inferCategory, inferMemoryKind, effectiveMemoryKind,
+  inferCategory, inferMemoryKind, effectiveMemoryKind,
   memoryMatchesContext, filterMemoriesForContext, searchMemories, findDuplicateMemory,
   isCheckpointRecallQuery, normalizeMemoryText,
   parseExplicitMemoryRequest, detectUserMemorySuggestion, isCheckpointMemorySaveRequest,
