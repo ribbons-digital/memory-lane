@@ -1,3 +1,5 @@
+// fallow-ignore-file unused-class-member
+// MemoryEngine exposes public methods used by the CLI, pi adapter, and package consumers.
 import * as path from "node:path"
 import * as os from "node:os"
 import * as crypto from "node:crypto"

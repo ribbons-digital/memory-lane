@@ -22,8 +22,3 @@ export function tempDir(): string {
   registerCleanup()
   return dir
 }
-
-export function writeJsonl(file: string, records: unknown[]): void {
-  const lines = records.map((r) => JSON.stringify(r)).join("\n")
-  fs.writeFileSync(file, lines + (lines.endsWith("\n") ? "" : "\n"), "utf8")
-}

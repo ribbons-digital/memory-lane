@@ -68,42 +68,256 @@ function positionals(argv: string[]): string[] {
   return result
 }
 
+// ── Runtime context ──────────────────────────────────────────
+
+type EmbeddingProvider = ReturnType<typeof createOpenAIEmbeddingProvider>
+
+interface CliContext {
+  argv: string[]
+  rest: string[]
+  json: boolean
+  configPath: string
+  engine: MemoryEngine
+}
+
+function resolveConfigPath(): string {
+  return process.env.MEMORY_LANE_CONFIG || getDefaultConfigPath()
+}
+
+function createEmbeddingProvider(configPath: string): EmbeddingProvider | undefined {
+  try {
+    const cfg = loadConfig(configPath)
+    if (!cfg.semantic.enabled) return undefined
+    const profile = cfg.semantic.embeddings.profiles[cfg.semantic.activeEmbeddingProfile]
+    return profile ? createOpenAIEmbeddingProvider(profile) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function createEngine(configPath: string, projPath?: string): MemoryEngine {
+  const engine = new MemoryEngine({
+    memoryPath: process.env.MEMORY_LANE_FILE,
+    embeddingsPath: process.env.MEMORY_LANE_EMBEDDINGS_FILE,
+    configPath,
+    embeddingProvider: createEmbeddingProvider(configPath),
+  })
+  if (projPath) engine.refreshScope(projPath)
+  return engine
+}
+
+function requireText(ctx: CliContext, message: string): string {
+  const text = ctx.rest.join(" ")
+  if (!text) {
+    console.log(formatError(message, ctx.json))
+    process.exit(1)
+  }
+  return text
+}
+
+function requireId(ctx: CliContext, action: string): string {
+  const id = ctx.rest[0]
+  if (!id) {
+    console.log(formatError(`ID required: memory-lane ${action} <id>`, ctx.json))
+    process.exit(1)
+  }
+  return id
+}
+
+// ── Command handlers ────────────────────────────────────────
+
+function handleSave(ctx: CliContext): void {
+  const text = requireText(ctx, "Text required: memory-lane save <text>")
+  const result = ctx.engine.save({
+    text,
+    scopeType: flag(ctx.argv, "scope") as any,
+    category: flag(ctx.argv, "category") as any,
+    status: (flag(ctx.argv, "status") as any) ?? "approved",
+  })
+  console.log(formatSaveResult(result, ctx.json))
+}
+
+function handleSuggest(ctx: CliContext): void {
+  const text = requireText(ctx, "Text required: memory-lane suggest <text>")
+  const result = ctx.engine.suggest(
+    text,
+    flag(ctx.argv, "category") as any,
+    flag(ctx.argv, "scope") as any,
+    undefined,
+    flag(ctx.argv, "status") as any,
+  )
+  console.log(formatSaveResult(result, ctx.json))
+}
+
+async function handleRecall(ctx: CliContext): Promise<void> {
+  const result = await ctx.engine.recall(ctx.rest.join(" "))
+  console.log(formatRecall(result, ctx.json))
+}
+
+function handleList(ctx: CliContext): void {
+  const statusFlag = flag(ctx.argv, "status") as any
+  const allScope = hasFlag(ctx.argv, "all")
+  const mems = ctx.engine.list({ status: statusFlag, all: allScope })
+  console.log(formatMemories(mems, ctx.json))
+}
+
+function handleSearch(ctx: CliContext): void {
+  const query = requireText(ctx, "Query required: memory-lane search <query>")
+  console.log(formatMemories(ctx.engine.search(query), ctx.json))
+}
+
+function handleDelete(ctx: CliContext): void {
+  const id = requireId(ctx, "delete")
+  const mem = ctx.engine.delete(id)
+  if (!mem) {
+    console.log(formatError(`Memory not found: ${id}`, ctx.json))
+    process.exit(1)
+  }
+  console.log(formatResult("Deleted", mem, ctx.json))
+}
+
+function handleApprove(ctx: CliContext): void {
+  const id = requireId(ctx, "approve")
+  const mem = ctx.engine.approve(id)
+  if (!mem) {
+    console.log(formatError(`Memory not found: ${id}`, ctx.json))
+    process.exit(1)
+  }
+  console.log(formatResult("Approved", mem, ctx.json))
+}
+
+function handleReject(ctx: CliContext): void {
+  const id = requireId(ctx, "reject")
+  const mem = ctx.engine.reject(id)
+  if (!mem) {
+    console.log(formatError(`Memory not found: ${id}`, ctx.json))
+    process.exit(1)
+  }
+  console.log(formatResult("Rejected", mem, ctx.json))
+}
+
+function handleReview(ctx: CliContext): void {
+  console.log(formatMemories(ctx.engine.reviewPending(), ctx.json))
+}
+
+function handleCompact(ctx: CliContext): void {
+  console.log(formatCompact(ctx.engine.compact(), ctx.json))
+}
+
+function handleDoctor(ctx: CliContext): void {
+  console.log(formatDoctor(ctx.engine.doctor(), ctx.json))
+}
+
+function handleStatus(ctx: CliContext): void {
+  const report = ctx.engine.doctor()
+  if (ctx.json) {
+    console.log(formatDoctor(report, true))
+    return
+  }
+  const r = report as any
+  console.log(`Total: ${r.totalMemories}, Approved: ${r.approvedMemories}, Pending: ${r.pendingMemories}, Embeddings: ${r.embeddingCount}`)
+}
+
+async function handleReindex(ctx: CliContext): Promise<void> {
+  const result = await ctx.engine.reindexEmbeddings({ force: hasFlag(ctx.argv, "force") })
+  if (ctx.json) {
+    console.log(JSON.stringify({ ok: true, data: result }, null, 2))
+  } else {
+    console.log(`Reindexed: ${result.embedded} embedded, ${result.skippedExisting} skipped (existing), ${result.skippedSecrets} skipped (secrets)`)
+  }
+}
+
+function showConfig(ctx: CliContext): void {
+  const raw = readRawConfig(ctx.configPath)
+  if (!raw) {
+    console.log(formatError("No config file found.", ctx.json))
+    return
+  }
+  if (ctx.json) console.log(JSON.stringify(raw, null, 2))
+  else console.log(`Config: ${getDefaultConfigPath()}\n` + JSON.stringify(raw, null, 2))
+}
+
+function setSemanticEnabled(ctx: CliContext, enabled: boolean): void {
+  writeConfig(ctx.configPath, { semantic: { enabled } as any })
+  if (ctx.json) {
+    console.log(JSON.stringify({ ok: true, semantic: { enabled } }))
+  } else {
+    console.log(enabled ? "Semantic search enabled. Run 'memory-lane reindex' to build embeddings." : "Semantic search disabled.")
+  }
+}
+
+function setConfigValue(ctx: CliContext): void {
+  const key = ctx.rest[1]
+  const value = ctx.rest.slice(2).join(" ")
+  if (!key) {
+    console.log(formatError("Usage: memory-lane config set <json-path> <value>", ctx.json))
+    return
+  }
+  const existing = (readRawConfig(ctx.configPath) as Record<string, unknown>) || {}
+  const merged = deepMergeConfig(DEFAULT_CONFIG, existing) as Record<string, unknown>
+  setByPath(merged, key, parseConfigValue(value))
+  writeConfig(ctx.configPath, merged as any)
+  console.log(ctx.json ? JSON.stringify({ ok: true, path: key }) : `Set ${key}`)
+}
+
+const configHandlers: Record<string, (ctx: CliContext) => void> = {
+  show: showConfig,
+  "enable-semantic": (ctx) => setSemanticEnabled(ctx, true),
+  "disable-semantic": (ctx) => setSemanticEnabled(ctx, false),
+  set: setConfigValue,
+}
+
+function handleConfig(ctx: CliContext): void {
+  const subCmd = ctx.rest[0]?.toLowerCase() ?? "show"
+  const handler = configHandlers[subCmd]
+  if (handler) handler(ctx)
+  else console.log(formatError("Usage: memory-lane config [show | enable-semantic | disable-semantic | set <key> <value>]", ctx.json))
+}
+
+type CommandHandler = (ctx: CliContext) => void | Promise<void>
+
+const commandHandlers: Record<string, CommandHandler> = {
+  save: handleSave,
+  suggest: handleSuggest,
+  recall: handleRecall,
+  list: handleList,
+  search: handleSearch,
+  delete: handleDelete,
+  approve: handleApprove,
+  reject: handleReject,
+  review: handleReview,
+  compact: handleCompact,
+  doctor: handleDoctor,
+  status: handleStatus,
+  reindex: handleReindex,
+  config: handleConfig,
+}
+
+async function dispatch(command: string, ctx: CliContext): Promise<void> {
+  const handler = commandHandlers[command]
+  if (!handler) {
+    console.log(formatError(`Unknown command: ${command}. Run 'memory-lane help' for usage.`, ctx.json))
+    process.exit(2)
+  }
+  await handler(ctx)
+}
+
 // ── Main ─────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
   const command = argv[0]?.toLowerCase()
   const json = hasFlag(argv, "json")
-  const projPath = flag(argv, "project")
-  const rest = positionals(argv.slice(1))
 
   if (!command || command === "help" || hasFlag(argv, "help") || hasFlag(argv, "h")) {
     console.log(usage())
     process.exit(command && command !== "help" ? 2 : 0)
   }
 
-  // Resolve config path and optionally create embedding provider
-  const configPath = process.env.MEMORY_LANE_CONFIG || getDefaultConfigPath()
-  let embeddingProvider: ReturnType<typeof createOpenAIEmbeddingProvider> | undefined
-  try {
-    const cfg = loadConfig(configPath)
-    if (cfg.semantic.enabled) {
-      const profile = cfg.semantic.embeddings.profiles[cfg.semantic.activeEmbeddingProfile]
-      if (profile) {
-        embeddingProvider = createOpenAIEmbeddingProvider(profile)
-      }
-    }
-  } catch { /* no provider if config invalid or missing */ }
-
+  const configPath = resolveConfigPath()
   let engine: MemoryEngine
   try {
-    engine = new MemoryEngine({
-      memoryPath: process.env.MEMORY_LANE_FILE,
-      embeddingsPath: process.env.MEMORY_LANE_EMBEDDINGS_FILE,
-      configPath,
-      embeddingProvider,
-    })
-    if (projPath) engine.refreshScope(projPath)
+    engine = createEngine(configPath, flag(argv, "project"))
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     console.log(formatError(`Failed to initialize engine: ${msg}`, json))
@@ -111,158 +325,13 @@ async function main(): Promise<void> {
   }
 
   try {
-    switch (command) {
-      case "save": {
-        const text = rest.join(" ")
-        if (!text) { console.log(formatError("Text required: memory-lane save <text>", json)); process.exit(1) }
-        const result = engine.save({
-          text,
-          scopeType: flag(argv, "scope") as any,
-          category: flag(argv, "category") as any,
-          status: (flag(argv, "status") as any) ?? "approved",
-        })
-        console.log(formatSaveResult(result, json))
-        break
-      }
-
-      case "suggest": {
-        const text = rest.join(" ")
-        if (!text) { console.log(formatError("Text required: memory-lane suggest <text>", json)); process.exit(1) }
-        const result = engine.suggest(
-          text,
-          flag(argv, "category") as any,
-          flag(argv, "scope") as any,
-          undefined,
-          flag(argv, "status") as any,
-        )
-        console.log(formatSaveResult(result, json))
-        break
-      }
-
-      case "recall": {
-        const query = rest.join(" ")
-        const result = await engine.recall(query)
-        console.log(formatRecall(result, json))
-        break
-      }
-
-      case "list": {
-        const statusFlag = flag(argv, "status") as any
-        const allScope = hasFlag(argv, "all")
-        const mems = engine.list({ status: statusFlag, all: allScope })
-        console.log(formatMemories(mems, json))
-        break
-      }
-
-      case "search": {
-        const query = rest.join(" ")
-        if (!query) { console.log(formatError("Query required: memory-lane search <query>", json)); process.exit(1) }
-        const mems = engine.search(query)
-        console.log(formatMemories(mems, json))
-        break
-      }
-
-      case "delete": {
-        const id = rest[0]
-        if (!id) { console.log(formatError("ID required: memory-lane delete <id>", json)); process.exit(1) }
-        const mem = engine.delete(id)
-        if (!mem) { console.log(formatError(`Memory not found: ${id}`, json)); process.exit(1) }
-        console.log(formatResult("Deleted", mem, json))
-        break
-      }
-
-      case "approve": {
-        const id = rest[0]
-        if (!id) { console.log(formatError("ID required: memory-lane approve <id>", json)); process.exit(1) }
-        const mem = engine.approve(id)
-        if (!mem) { console.log(formatError(`Memory not found: ${id}`, json)); process.exit(1) }
-        console.log(formatResult("Approved", mem, json))
-        break
-      }
-
-      case "reject": {
-        const id = rest[0]
-        if (!id) { console.log(formatError("ID required: memory-lane reject <id>", json)); process.exit(1) }
-        const mem = engine.reject(id)
-        if (!mem) { console.log(formatError(`Memory not found: ${id}`, json)); process.exit(1) }
-        console.log(formatResult("Rejected", mem, json))
-        break
-      }
-
-      case "review": {
-        const pending = engine.reviewPending()
-        console.log(formatMemories(pending, json))
-        break
-      }
-
-      case "compact": {
-        const report = engine.compact()
-        console.log(formatCompact(report, json))
-        break
-      }
-
-      case "doctor": {
-        const report = engine.doctor()
-        console.log(formatDoctor(report, json))
-        break
-      }
-
-      case "status": {
-        const report = engine.doctor()
-        if (json) {
-          console.log(formatDoctor(report, true))
-        } else {
-          const r = report as any
-          console.log(`Total: ${r.totalMemories}, Approved: ${r.approvedMemories}, Pending: ${r.pendingMemories}, Embeddings: ${r.embeddingCount}`)
-        }
-        break
-      }
-
-      case "reindex": {
-        const result = await engine.reindexEmbeddings({ force: hasFlag(argv, "force") })
-        if (json) {
-          console.log(JSON.stringify({ ok: true, data: result }, null, 2))
-        } else {
-          console.log(`Reindexed: ${result.embedded} embedded, ${result.skippedExisting} skipped (existing), ${result.skippedSecrets} skipped (secrets)`)
-        }
-        break
-      }
-
-      default: {
-        if (command === "config") {
-          const subCmd = rest[0]?.toLowerCase()
-          if (!subCmd || subCmd === "show") {
-            const raw = readRawConfig(engine["configPath"] as string)
-            if (!raw) { console.log(formatError("No config file found.", json)); break }
-            if (json) console.log(JSON.stringify(raw, null, 2))
-            else console.log(`Config: ${getDefaultConfigPath()}\n` + JSON.stringify(raw, null, 2))
-          } else if (subCmd === "enable-semantic") {
-            const cfgPath = process.env.MEMORY_LANE_CONFIG || getDefaultConfigPath()
-            writeConfig(cfgPath, { semantic: { enabled: true } as any })
-            console.log(json ? JSON.stringify({ ok: true, semantic: { enabled: true } }) : "Semantic search enabled. Run 'memory-lane reindex' to build embeddings.")
-          } else if (subCmd === "disable-semantic") {
-            const cfgPath = process.env.MEMORY_LANE_CONFIG || getDefaultConfigPath()
-            writeConfig(cfgPath, { semantic: { enabled: false } as any })
-            console.log(json ? JSON.stringify({ ok: true, semantic: { enabled: false } }) : "Semantic search disabled.")
-          } else if (subCmd === "set") {
-            const key = rest[1]
-            const value = rest.slice(2).join(" ")
-            if (!key) { console.log(formatError("Usage: memory-lane config set <json-path> <value>", json)); break }
-            const cfgPath = process.env.MEMORY_LANE_CONFIG || getDefaultConfigPath()
-            const existing = (readRawConfig(cfgPath) as Record<string, unknown>) || {}
-            const merged = deepMergeConfig(DEFAULT_CONFIG, existing) as Record<string, unknown>
-            setByPath(merged, key, parseConfigValue(value))
-            writeConfig(cfgPath, merged as any)
-            console.log(json ? JSON.stringify({ ok: true, path: key }) : `Set ${key}`)
-          } else {
-            console.log(formatError("Usage: memory-lane config [show | enable-semantic | disable-semantic | set <key> <value>]", json))
-          }
-        } else {
-          console.log(formatError(`Unknown command: ${command}. Run 'memory-lane help' for usage.`, json))
-          process.exit(2)
-        }
-      }
-    }
+    await dispatch(command, {
+      argv,
+      rest: positionals(argv.slice(1)),
+      json,
+      configPath,
+      engine,
+    })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     console.log(formatError(msg, json))

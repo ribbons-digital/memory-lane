@@ -25,6 +25,19 @@ function rec(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
   }
 }
 
+function enabledSemanticConfig(): SemanticMemoryConfig["semantic"] {
+  return {
+    ...BASE_CONFIG,
+    enabled: true,
+    activeEmbeddingProfile: "test",
+    embeddings: {
+      profiles: {
+        test: { provider: "openai-compatible-embeddings" as const, baseUrl: "http://localhost", model: "test" },
+      },
+    },
+  }
+}
+
 describe("retrieveSemanticMemories", () => {
   it("returns empty for no memories", async () => {
     const r = await retrieveSemanticMemories([], [], [], "query", "", BASE_CONFIG)
@@ -61,16 +74,7 @@ describe("retrieveSemanticMemories", () => {
 
   it("uses semantic provider when enabled", async () => {
     const memories = [rec({ id: "a", text: "use pnpm" })]
-    const config = {
-      ...BASE_CONFIG,
-      enabled: true,
-      activeEmbeddingProfile: "test",
-      embeddings: {
-        profiles: {
-          test: { provider: "openai-compatible-embeddings" as const, baseUrl: "http://localhost", model: "test" },
-        },
-      },
-    }
+    const config = enabledSemanticConfig()
     // Mock provider that returns vectors
     const provider = {
       async embed() { return [[0.5, 0.5]] },
@@ -94,16 +98,7 @@ describe("retrieveSemanticMemories", () => {
 
   it("falls back gracefully when provider throws", async () => {
     const memories = [rec({ id: "a", text: "use pnpm" })]
-    const config = {
-      ...BASE_CONFIG,
-      enabled: true,
-      activeEmbeddingProfile: "test",
-      embeddings: {
-        profiles: {
-          test: { provider: "openai-compatible-embeddings" as const, baseUrl: "http://localhost", model: "test" },
-        },
-      },
-    }
+    const config = enabledSemanticConfig()
     const provider = {
       async embed(): Promise<number[][]> { throw new Error("network error") },
     }
