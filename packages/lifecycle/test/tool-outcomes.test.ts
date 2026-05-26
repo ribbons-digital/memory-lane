@@ -1,5 +1,8 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
 import { isShellToolName, summarizeToolOutcome } from "../src/tool-outcomes.ts"
 
 test("identifies shell-like tools", () => {
@@ -39,6 +42,22 @@ test("queues npm install failure in pnpm repo as pending", () => {
     toolName: "Bash",
     toolInput: { command: "npm install left-pad" },
     toolResponse: { output: "pnpm-lock.yaml exists; npm install would update package-lock", exit_code: 1 },
+  })
+
+  assert.equal(candidates.length, 1)
+  assert.equal(candidates[0].decision, "save-pending")
+  assert.match(candidates[0].text, /pnpm/i)
+})
+
+test("queues npm install failure as pending when cwd has pnpm lockfile", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-pnpm-lock-"))
+  fs.writeFileSync(path.join(cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n", "utf8")
+
+  const candidates = summarizeToolOutcome({
+    cwd,
+    toolName: "Bash",
+    toolInput: { command: "npm install left-pad" },
+    toolResponse: { output: "install failed with dependency resolution error", exit_code: 1 },
   })
 
   assert.equal(candidates.length, 1)

@@ -1,3 +1,5 @@
+import * as fs from "node:fs"
+import * as path from "node:path"
 import { containsLikelySecret } from "@memory-lane/core"
 import type { MemoryCandidate, PostToolUseInput } from "./types.js"
 
@@ -47,6 +49,14 @@ function isSuccessful(response: unknown, preview: string): boolean {
   return /\b(?:passed|passes|success|succeeded|completed)\b/iu.test(preview)
 }
 
+function hasPnpmLockfile(cwd: string): boolean {
+  try {
+    return fs.existsSync(path.join(cwd, "pnpm-lock.yaml"))
+  } catch {
+    return false
+  }
+}
+
 function projectWorkflowCandidate(
   text: string,
   decision: MemoryCandidate["decision"],
@@ -88,7 +98,7 @@ export function summarizeToolOutcome(input: PostToolUseInput): MemoryCandidate[]
     return projectWorkflowCandidate("This repo installs packages with `pnpm install`.", "save-approved", 0.9, "successful package install command")
   }
 
-  const pnpmEvidence = /\bpnpm\b|pnpm-lock\.yaml/iu.test(responsePreview)
+  const pnpmEvidence = hasPnpmLockfile(input.cwd) || /\bpnpm\b|pnpm-lock\.yaml/iu.test(responsePreview)
   if (!success && /^npm\s+install\b/u.test(command) && pnpmEvidence) {
     return projectWorkflowCandidate(
       "This repo appears to use pnpm; `npm install` may conflict with the package manager convention.",
