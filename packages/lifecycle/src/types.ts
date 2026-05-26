@@ -1,4 +1,4 @@
-import type { MemoryRecord, SaveResult } from "@memory-lane/core"
+import type { MemoryRecord, MemorySource, SaveResult } from "@memory-lane/core"
 
 export interface LifecycleContext {
   cwd: string
@@ -39,4 +39,5 @@ export interface MemoryCandidate {
   confidence: number
   decision: CandidateDecision
   reason: string
+  source?: MemorySource
 }
