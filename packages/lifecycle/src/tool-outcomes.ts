@@ -14,13 +14,44 @@ export function isShellToolName(toolName: string): boolean {
     || normalized.includes("localshell")
 }
 
+const KNOWN_PREVIEW_FIELDS = ["output", "stdout", "stderr", "message", "text"]
+const MAX_PREVIEW_FIELD_CHARS = 2_000
+
+function primitivePreview(value: unknown, maxChars: number): string | undefined {
+  if (typeof value === "string") return value.slice(0, maxChars)
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value).slice(0, maxChars)
+  return undefined
+}
+
+function appendPart(parts: string[], part: string | undefined, currentLength: number): number {
+  if (!part) return currentLength
+  const remaining = MAX_TOOL_RESPONSE_CHARS - currentLength
+  if (remaining <= 0) return currentLength
+  const clipped = part.slice(0, remaining)
+  parts.push(clipped)
+  return currentLength + clipped.length
+}
+
 function stringifyPreview(value: unknown): string {
-  if (typeof value === "string") return value.slice(0, MAX_TOOL_RESPONSE_CHARS)
-  try {
-    return JSON.stringify(value).slice(0, MAX_TOOL_RESPONSE_CHARS)
-  } catch {
-    return String(value).slice(0, MAX_TOOL_RESPONSE_CHARS)
+  const primitive = primitivePreview(value, MAX_TOOL_RESPONSE_CHARS)
+  if (primitive !== undefined) return primitive
+  if (!value || typeof value !== "object") return String(value).slice(0, MAX_TOOL_RESPONSE_CHARS)
+
+  const obj = value as Record<string, unknown>
+  const parts: string[] = []
+  let currentLength = 0
+
+  for (const key of KNOWN_PREVIEW_FIELDS) {
+    currentLength = appendPart(parts, primitivePreview(obj[key], MAX_PREVIEW_FIELD_CHARS), currentLength)
   }
+
+  for (const [key, fieldValue] of Object.entries(obj)) {
+    if (currentLength >= MAX_TOOL_RESPONSE_CHARS) break
+    if (KNOWN_PREVIEW_FIELDS.includes(key) || key === "toJSON") continue
+    currentLength = appendPart(parts, primitivePreview(fieldValue, MAX_PREVIEW_FIELD_CHARS), currentLength)
+  }
+
+  return parts.join("\n").slice(0, MAX_TOOL_RESPONSE_CHARS)
 }
 
 function commandFromInput(input: unknown): string {

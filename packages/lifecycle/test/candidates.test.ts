@@ -38,3 +38,13 @@ test("question-only messages produce no candidates", () => {
 
   assert.deepEqual(candidates, [])
 })
+
+test("transient project imperatives produce no candidates", () => {
+  const candidates = extractStopCandidates({
+    cwd: process.cwd(),
+    lastUserMessage: "Fix the bug in this repo",
+    lastAssistantMessage: "I'll investigate the bug.",
+  })
+
+  assert.deepEqual(candidates, [])
+})

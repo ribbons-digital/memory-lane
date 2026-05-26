@@ -64,3 +64,20 @@ test("queues npm install failure as pending when cwd has pnpm lockfile", () => {
   assert.equal(candidates[0].decision, "save-pending")
   assert.match(candidates[0].text, /pnpm/i)
 })
+
+test("inspects known output fields without stringifying huge responses", () => {
+  const candidates = summarizeToolOutcome({
+    cwd: process.cwd(),
+    toolName: "Bash",
+    toolInput: { command: "npm install left-pad" },
+    toolResponse: {
+      huge: "x".repeat(100_000),
+      output: "pnpm-lock.yaml exists; npm install would update package-lock",
+      exit_code: 1,
+      toJSON() { throw new Error("must not stringify entire response") },
+    },
+  })
+
+  assert.equal(candidates.length, 1)
+  assert.equal(candidates[0].decision, "save-pending")
+})

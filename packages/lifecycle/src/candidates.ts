@@ -12,6 +12,10 @@ function isQuestion(text: string): boolean {
   return /^(?:what|how|why|when|where|who|do|does|did|is|are|can|could|should)\b/iu.test(text.trim())
 }
 
+function isObviousTransientImperative(text: string): boolean {
+  return /^(?:please\s+)?(?:add|build|change|check|create|debug|delete|deploy|fix|implement|install|investigate|make|remove|refactor|run|test|update|write)\b/iu.test(text.trim())
+}
+
 function decisionFor(category: MemoryCandidate["category"], explicit: boolean): MemoryCandidate["decision"] {
   if (explicit) return "save-approved"
   if (category === "project") return "save-approved"
@@ -22,6 +26,7 @@ function decisionFor(category: MemoryCandidate["category"], explicit: boolean): 
 function candidateFromText(text: string, explicit: boolean): MemoryCandidate | undefined {
   const normalized = normalizeMemoryText(text)
   if (!normalized || containsLikelySecret(normalized) || isQuestion(normalized)) return undefined
+  if (!explicit && isObviousTransientImperative(normalized)) return undefined
 
   const category = inferCategory(normalized)
   const decision = decisionFor(category, explicit)
