@@ -110,6 +110,8 @@ Commands:
   reindex [--force]
   status
   config [show|enable-semantic|disable-semantic|set <key> <value>]
+  codex <user-prompt-submit|stop|post-tool-use>
+                  Run a Codex hook adapter command; reads hook JSON from stdin
 
 Flags:
   --json           Output JSON instead of human-readable text

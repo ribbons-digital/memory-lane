@@ -11,6 +11,7 @@
     "test": "node --test --import tsx test/*.test.ts"
   },
   "dependencies": {
+    "@memory-lane/codex-adapter": "workspace:*",
     "@memory-lane/core": "workspace:*"
   },
   "devDependencies": {

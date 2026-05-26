@@ -1,6 +1,6 @@
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
-import { execFileSync } from "node:child_process"
+import { execFileSync, spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -15,6 +15,15 @@ function run(args: string[], env?: Record<string, string>) {
     env: { ...process.env, ...env },
   })
   return result.trim()
+}
+
+function runProcess(args: string[], options?: { env?: Record<string, string>; stdin?: string }) {
+  const cli = path.resolve(__dirname, "../dist/index.js")
+  return spawnSync("node", [cli, ...args], {
+    input: options?.stdin,
+    encoding: "utf8",
+    env: { ...process.env, ...options?.env },
+  })
 }
 
 describe("CLI integration", () => {
@@ -104,4 +113,39 @@ describe("CLI integration", () => {
     assert.equal(parsed.ok, true)
     assert.equal(parsed.data.totalMemories, 2)
   })
+
+  it("codex unknown event returns usage error", () => {
+    const result = runProcess(["codex", "unknown-event"], {
+      env: {
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+    })
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout + result.stderr, /Unknown Codex hook event/)
+  })
+
+  it("codex user-prompt-submit accepts hook payload on stdin", () => {
+    const result = runProcess(["codex", "user-prompt-submit"], {
+      env: {
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+      stdin: JSON.stringify({
+        hook_event_name: "UserPromptSubmit",
+        session_id: "session-1",
+        turn_id: "turn-1",
+        cwd: process.cwd(),
+        transcript_path: null,
+        model: "gpt-5-codex",
+        permission_mode: "default",
+        prompt: "ok",
+      }),
+    })
+    assert.equal(result.status, 0)
+    assert.equal(result.stdout.trim(), "{}")
+  })
+
 })

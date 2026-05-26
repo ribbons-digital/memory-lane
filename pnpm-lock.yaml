@@ -14,6 +14,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@memory-lane/codex-adapter':
+        specifier: workspace:*
+        version: link:../codex-adapter
       '@memory-lane/core':
         specifier: workspace:*
         version: link:../core

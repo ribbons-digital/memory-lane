@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider } from "@memory-lane/core"
+import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import {
   formatMemories, formatRecall, formatSaveResult, formatResult,
   formatCompact, formatDoctor, formatError, usage,
@@ -122,6 +123,14 @@ function requireId(ctx: CliContext, action: string): string {
     process.exit(1)
   }
   return id
+}
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = []
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  }
+  return Buffer.concat(chunks).toString("utf8")
 }
 
 // ── Command handlers ────────────────────────────────────────
@@ -274,6 +283,23 @@ function handleConfig(ctx: CliContext): void {
   else console.log(formatError("Usage: memory-lane config [show | enable-semantic | disable-semantic | set <key> <value>]", ctx.json))
 }
 
+const codexCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use"])
+
+async function handleCodex(ctx: CliContext): Promise<void> {
+  const event = ctx.rest[0]
+  if (!codexCommands.has(event)) {
+    console.log(formatError("Unknown Codex hook event. Usage: memory-lane codex user-prompt-submit|stop|post-tool-use", ctx.json))
+    process.exit(2)
+  }
+  const payloadText = await readStdin()
+  const output = await runCodexHookCommand(event as CodexCommand, {
+    engine: ctx.engine,
+    payloadText,
+    env: process.env,
+  })
+  console.log(output)
+}
+
 type CommandHandler = (ctx: CliContext) => void | Promise<void>
 
 const commandHandlers: Record<string, CommandHandler> = {
@@ -291,6 +317,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   status: handleStatus,
   reindex: handleReindex,
   config: handleConfig,
+  codex: handleCodex,
 }
 
 async function dispatch(command: string, ctx: CliContext): Promise<void> {
