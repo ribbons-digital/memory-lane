@@ -1,34 +1,90 @@
 # Memory Lane Integration for OpenAI Codex CLI
 
-## Setup
+## Recommended setup: Codex hooks
 
-1. Build and link: see `../claude-code.md` setup steps.
-2. Add to your Codex system prompt (`~/.codex/instructions.md`):
+Start with project-level `.codex/hooks.json` while testing Memory Lane in one repository. Move the same hooks to user-level `~/.codex/hooks.json` after you trust the behavior globally.
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane codex user-prompt-submit",
+            "timeoutSec": 10,
+            "statusMessage": "Retrieving relevant memory"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane codex stop",
+            "timeoutSec": 10,
+            "statusMessage": "Saving useful memory"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|shell:*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane codex post-tool-use",
+            "timeoutSec": 10,
+            "statusMessage": "Capturing useful tool outcome"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Codex tool matcher names can vary by version. If `PostToolUse` does not fire, adjust the matcher to the shell tool name shown by your Codex installation.
+
+## Context budget
+
+`UserPromptSubmit` injects only approved memories that are relevant to the current prompt. It has strict item and character limits, and generic prompts such as `ok`, `continue`, or `thanks` inject nothing.
+
+`Stop` and `PostToolUse` do not inject context. They save concise memories externally and are silent by default.
+
+## Privacy and review
+
+Memory Lane inspects prompts, bounded transcript tails, and bounded tool-output previews locally. It does not save raw transcripts, hook payloads, prompts, tool inputs, or full tool outputs. Secret detection runs before save and before injection.
+
+Review pending inferred memories with:
+
+```bash
+memory-lane review
+```
+
+Enable concise hook diagnostics with:
+
+```bash
+MEMORY_LANE_HOOK_DEBUG=1
+```
+
+## Fallback: prompt instructions
+
+If your Codex version does not support hooks, add CLI-use instructions to your Codex system prompt and call `memory-lane save`, `memory-lane recall`, and `memory-lane review` manually or through model-invoked shell commands.
+
+Example system prompt snippet:
 
 ```markdown
 ## Memory
 Use the memory-lane CLI for persistent memory:
-- Save decisions/facts: `memory-lane save "X" --status approved`
-- Recall: `memory-lane recall "query"`
-- List: `memory-lane list`
-- Progress checkpoint: `memory-lane save "Current progress: X" --category project`
+- Save approved durable decisions/facts: `memory-lane save "X" --status approved`
+- Recall relevant memory: `memory-lane recall "query"`
+- Review pending suggestions: `memory-lane review`
 ```
-
-## Auto-trigger via system prompt
-
-Codex doesn't have a programmatic event hook like pi's `on("input")`. The way to
-enable automatic memory saving is through **system prompt instructions** that tell
-the LLM to invoke the CLI when it detects memory-worthy content:
-
-```markdown
-## Memory (auto-save)
-When the user explicitly asks you to remember something, or when you identify a
-durable fact/decision/preference worth preserving across sessions, run:
-  memory-lane save "<the fact>" --category <preference|personal|project> --status approved
-```
-
-This relies on the LLM's pattern recognition rather than regex matching. The pi
-adapter uses `on("input")` + regex/LLM intent classification for the same purpose.
 
 ## Semantic search
 
@@ -39,6 +95,4 @@ memory-lane config enable-semantic
 memory-lane reindex
 ```
 
-With an OpenAI-compatible embedding provider configured in `~/.memory-lane/config.json`,
-newly saved approved memories are automatically embedded — no manual reindex needed
-for incremental saves.
+With an OpenAI-compatible embedding provider configured in `~/.memory-lane/config.json`, newly saved approved memories are automatically embedded on a fire-and-forget path. Run `memory-lane reindex` to rebuild embeddings if needed.

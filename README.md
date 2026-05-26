@@ -20,12 +20,14 @@ memory-lane doctor
 
 ## Architecture
 
-Three packages in a monorepo:
+Five packages in a monorepo:
 
 | Package | Purpose |
 |---|---|
 | `@memory-lane/core` | Pure Node.js library. Zero harness dependencies. |
+| `@memory-lane/lifecycle` | Shared harness-neutral memory automation policy for recall, autosave, context budgets, and tool outcomes. |
 | `@memory-lane/cli` | CLI wrapper. Works with any harness that can shell out. |
+| `@memory-lane/codex-adapter` | Codex hook adapter exposed through `memory-lane codex ...`. |
 | `@memory-lane/pi-adapter` | pi extension adapter. |
 
 ## Storage
@@ -156,3 +158,15 @@ See [`examples/harness-integrations/`](./examples/harness-integrations/) for int
 - OpenAI Codex CLI
 - Cursor
 - Windsurf
+
+### Codex hooks
+
+Codex users can wire Memory Lane into lifecycle hooks:
+
+```bash
+memory-lane codex user-prompt-submit
+memory-lane codex stop
+memory-lane codex post-tool-use
+```
+
+`UserPromptSubmit` injects a small relevant memory block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics.
