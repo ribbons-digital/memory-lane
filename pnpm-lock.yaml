@@ -40,6 +40,25 @@ importers:
         specifier: ^5.4.0
         version: 5.9.3
 
+  packages/codex-adapter:
+    dependencies:
+      '@memory-lane/core':
+        specifier: workspace:*
+        version: link:../core
+      '@memory-lane/lifecycle':
+        specifier: workspace:*
+        version: link:../lifecycle
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.41
+      tsx:
+        specifier: ^4.19.0
+        version: 4.22.3
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+
   packages/lifecycle:
     dependencies:
       '@memory-lane/core':

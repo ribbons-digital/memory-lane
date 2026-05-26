@@ -1,0 +1,11 @@
+{
+  "session_id": "session-1",
+  "turn_id": "turn-1",
+  "cwd": "/tmp/memory-lane-fixture",
+  "transcript_path": null,
+  "hook_event_name": "Stop",
+  "model": "gpt-5-codex",
+  "permission_mode": "default",
+  "stop_hook_active": false,
+  "last_assistant_message": "Got it. I will remember that this repo uses pnpm."
+}

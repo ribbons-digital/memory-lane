@@ -1,0 +1,14 @@
+{
+  "session_id": "session-1",
+  "turn_id": "turn-1",
+  "cwd": "/tmp/memory-lane-fixture",
+  "transcript_path": null,
+  "hook_event_name": "PostToolUse",
+  "model": "gpt-5-codex",
+  "permission_mode": "default",
+  "tool_name": "Bash",
+  "matcher_aliases": ["shell:local"],
+  "tool_use_id": "tool-1",
+  "tool_input": { "command": "pnpm test" },
+  "tool_response": { "exit_code": 0, "output": "Tests passed" }
+}
