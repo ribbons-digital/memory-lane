@@ -39,7 +39,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
 
     if (parsed.kind === "stop") {
       const latest = readLatestTurnFromTranscript(parsed.transcriptPath)
-      const result = handleStop(options.engine, { ...parsed.input, ...latest })
+      const result = handleStop(options.engine, { ...latest, ...parsed.input })
       return lifecycleNoopOutput(result, debug)
     }
 

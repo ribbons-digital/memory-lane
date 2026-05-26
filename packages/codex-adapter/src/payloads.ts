@@ -55,7 +55,7 @@ export function parseCodexPayload(value: unknown): ParsedCodexPayload {
       kind: "stop",
       hookEventName: event,
       transcriptPath: context.transcriptPath,
-      input: { ...context, lastAssistantMessage: nullableStringField(obj, "last_assistant_message") },
+      input: { ...context, lastUserMessage: nullableStringField(obj, "last_user_message"), lastAssistantMessage: nullableStringField(obj, "last_assistant_message") },
     }
   }
 
