@@ -23,7 +23,10 @@ The pipeline that combines embedding-based cosine similarity, lexical token over
 The process of rewriting storage files to remove deleted/rejected memory tombstones, stale embeddings, and invalidation records. Runs on engine startup if dead weight exceeds 30%, and is also available as an explicit manual command. Never runs mid-session.
 
 **Auto-embed**:
-When semantic search is enabled and an embedding provider with `embedSync` support is configured, newly saved approved memories are automatically embedded at save time (fire-and-forget). This ensures incremental saves are immediately available for semantic recall without manual `reindex`. Memories saved without `embedSync` support still require `reindex` to become semantically searchable.
+When semantic search is enabled and an embedding provider is configured, newly saved approved memories are automatically embedded at save time on a fire-and-forget async path. This ensures incremental saves can become available for semantic recall without manual `reindex`; if embedding fails, `reindex` can rebuild embeddings later.
 
 **Intent detection**:
-Regex-based pattern matching for memory-related user intents (save, suggest, recall) lives in the core. LLM-powered intent classification lives in the adapter layer (harness-specific). In harnesses without an event bus (e.g. Codex), auto-trigger relies on system prompt instructions directing the LLM to invoke the CLI.
+Regex-based pattern matching for memory-related user intents (save, suggest, recall) lives in the core. LLM-powered intent classification lives in the adapter layer (harness-specific). Harnesses with lifecycle hooks or events can trigger Memory Lane through adapters; harnesses without hooks or events can still rely on prompt instructions directing the LLM to invoke the CLI.
+
+**Memory provenance**:
+Optional harness-neutral origin metadata on a memory record that identifies which adapter and lifecycle event produced the memory. Provenance explains where a memory came from without storing raw hook payloads, transcripts, or harness-specific implementation details.
