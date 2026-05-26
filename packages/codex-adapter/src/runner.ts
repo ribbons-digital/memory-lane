@@ -10,8 +10,8 @@ export interface RunCodexHookOptions {
   env?: NodeJS.ProcessEnv
 }
 
-function isDebug(env?: NodeJS.ProcessEnv): boolean {
-  return env?.MEMORY_LANE_HOOK_DEBUG === "1" || env?.MEMORY_LANE_HOOK_DEBUG === "true"
+function isDebug(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.MEMORY_LANE_HOOK_DEBUG === "1" || env.MEMORY_LANE_HOOK_DEBUG === "true"
 }
 
 function parseJson(text: string): unknown {

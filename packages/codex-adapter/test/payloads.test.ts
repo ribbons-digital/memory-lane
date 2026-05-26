@@ -16,11 +16,27 @@ test("parses UserPromptSubmit payload", () => {
   assert.equal(parsed.kind === "user-prompt-submit" ? parsed.input.sessionId : undefined, "session-1")
 })
 
+test("parses Stop payload", () => {
+  const raw = JSON.parse(fs.readFileSync(path.join(fixtures, "stop.json"), "utf8"))
+  const parsed = parseCodexPayload(raw)
+  assert.equal(parsed.kind, "stop")
+  assert.equal(parsed.kind === "stop" ? parsed.input.lastAssistantMessage : undefined, "Got it. I will remember that this repo uses pnpm.")
+  assert.equal(parsed.kind === "stop" ? parsed.input.sessionId : undefined, "session-1")
+})
+
 test("parses PostToolUse payload", () => {
   const raw = JSON.parse(fs.readFileSync(path.join(fixtures, "post-tool-use-shell-success.json"), "utf8"))
   const parsed = parseCodexPayload(raw)
   assert.equal(parsed.kind, "post-tool-use")
   assert.equal(parsed.kind === "post-tool-use" ? parsed.input.toolName : undefined, "Bash")
+})
+
+test("parses shell failure PostToolUse payload", () => {
+  const raw = JSON.parse(fs.readFileSync(path.join(fixtures, "post-tool-use-shell-failure.json"), "utf8"))
+  const parsed = parseCodexPayload(raw)
+  assert.equal(parsed.kind, "post-tool-use")
+  assert.equal(parsed.kind === "post-tool-use" ? parsed.input.toolName : undefined, "Bash")
+  assert.deepEqual(parsed.kind === "post-tool-use" ? parsed.input.toolInput : undefined, { command: "npm install left-pad" })
 })
 
 test("returns invalid for malformed payload", () => {
