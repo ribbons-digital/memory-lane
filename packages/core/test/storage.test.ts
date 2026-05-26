@@ -51,6 +51,29 @@ describe("MemoryStore", () => {
     assert.equal(createMemoryStore(file).list().length, 1)
   })
 
+
+  it("storage accepts old records without provenance", () => {
+    const record = rec({ text: "Old memory without provenance" })
+    fs.writeFileSync(file, JSON.stringify(record) + "\n", "utf8")
+
+    const store = createMemoryStore(file)
+    const memories = store.list()
+    assert.equal(memories.length, 1)
+    assert.equal(memories[0].text, "Old memory without provenance")
+    assert.equal(memories[0].provenance, undefined)
+  })
+
+  it("storage rejects malformed provenance when present", () => {
+    const record = {
+      ...rec({ text: "Bad provenance" }),
+      provenance: { adapter: "codex", lifecycleEvent: "CodexStop" },
+    }
+    fs.writeFileSync(file, JSON.stringify(record) + "\n", "utf8")
+
+    const store = createMemoryStore(file)
+    assert.deepEqual(store.list(), [])
+  })
+
   it("caches reads", () => {
     const store = createMemoryStore(file)
     store.append(rec({ id: "a" }))

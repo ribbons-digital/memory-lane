@@ -45,6 +45,98 @@ describe("MemoryEngine", () => {
     if (r.status === "saved") assert.equal(r.memory.status, "approved")
   })
 
+
+  it("save stores optional memory provenance", () => {
+    const e = engine()
+    const result = e.save({
+      text: "This repo uses pnpm for package management",
+      category: "project",
+      status: "approved",
+      provenance: {
+        adapter: "codex",
+        lifecycleEvent: "turn_stop",
+        sessionId: "session-1",
+        turnId: "turn-1",
+      },
+    })
+
+    assert.equal(result.status, "saved")
+    if (result.status !== "saved") return
+    assert.deepEqual(result.memory.provenance, {
+      adapter: "codex",
+      lifecycleEvent: "turn_stop",
+      sessionId: "session-1",
+      turnId: "turn-1",
+    })
+  })
+
+  it("provenance survives approve reject and delete", () => {
+    const e = engine()
+    const saved = e.save({
+      text: "This repo runs tests with pnpm test",
+      category: "project",
+      status: "pending",
+      provenance: {
+        adapter: "codex",
+        lifecycleEvent: "post_tool_use",
+        sessionId: "session-1",
+        turnId: "turn-1",
+        toolName: "Bash",
+      },
+    })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    const approved = e.approve(saved.memory.id)
+    assert.equal(approved?.provenance?.adapter, "codex")
+    assert.equal(approved?.provenance?.lifecycleEvent, "post_tool_use")
+
+    const rejected = e.reject(saved.memory.id)
+    assert.equal(rejected?.provenance?.adapter, "codex")
+    assert.equal(rejected?.provenance?.toolName, "Bash")
+
+    const deleted = e.delete(saved.memory.id)
+    assert.equal(deleted?.provenance?.adapter, "codex")
+    assert.equal(deleted?.provenance?.toolName, "Bash")
+  })
+
+  it("pending duplicate upgrade preserves existing provenance", () => {
+    const e = engine()
+    const pending = e.save({
+      text: "This repo uses pnpm",
+      category: "project",
+      status: "pending",
+      provenance: {
+        adapter: "codex",
+        lifecycleEvent: "turn_stop",
+        sessionId: "session-1",
+        turnId: "turn-1",
+      },
+    })
+    assert.equal(pending.status, "saved")
+
+    const approved = e.save({
+      text: "This repo uses pnpm",
+      category: "project",
+      status: "approved",
+      source: "manual",
+      provenance: {
+        adapter: "manual-test",
+        lifecycleEvent: "user_prompt",
+      },
+    })
+
+    assert.equal(approved.status, "saved")
+    if (approved.status !== "saved") return
+    assert.equal(approved.memory.status, "approved")
+    assert.deepEqual(approved.memory.provenance, {
+      adapter: "codex",
+      lifecycleEvent: "turn_stop",
+      sessionId: "session-1",
+      turnId: "turn-1",
+    })
+  })
+
   it("detects duplicates", () => {
     const e = engine()
     e.save({ text: "use pnpm" })

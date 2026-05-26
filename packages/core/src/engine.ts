@@ -111,6 +111,7 @@ export class MemoryEngine {
       status: "approved",
       kind: ctx.kind,
       project: dup.project,
+      provenance: dup.provenance ?? input.provenance,
     })
     this.store.append(upgraded)
     this.invalidateEmbedding(dup.id, "updated")

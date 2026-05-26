@@ -3,6 +3,21 @@ export type MemoryCategory = "preference" | "personal" | "project"
 export type MemoryScopeType = "global" | "project"
 export type MemorySource = "manual" | "user-suggested" | "agent-suggested"
 
+export type MemoryLifecycleEvent =
+  | "user_prompt"
+  | "turn_stop"
+  | "post_tool_use"
+  | "session_start"
+  | "pre_compact"
+
+export interface MemoryProvenance {
+  adapter: string
+  lifecycleEvent: MemoryLifecycleEvent
+  sessionId?: string
+  turnId?: string
+  toolName?: string
+}
+
 export type MemoryKind =
   | "preference"
   | "personal_context"
@@ -34,6 +49,7 @@ export interface MemoryRecord {
   updatedAt: string
   project?: ProjectInfo
   kind?: MemoryKind
+  provenance?: MemoryProvenance
 }
 
 export interface ProjectScope {
@@ -49,6 +65,7 @@ export interface SaveInput {
   source?: MemorySource
   status?: MemoryStatus
   kind?: MemoryKind
+  provenance?: MemoryProvenance
 }
 
 export type SaveResult =

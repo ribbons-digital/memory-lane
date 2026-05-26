@@ -1,9 +1,16 @@
-import type { MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType, MemorySource } from "./types.js"
+import type { MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType, MemorySource, MemoryLifecycleEvent } from "./types.js"
 
 const VALID_STATUSES = new Set<MemoryStatus>(["pending", "approved", "rejected", "deleted"])
 const VALID_CATEGORIES = new Set<MemoryCategory>(["preference", "personal", "project"])
 const VALID_SCOPE_TYPES = new Set<MemoryScopeType>(["global", "project"])
 const VALID_SOURCES = new Set<MemorySource>(["manual", "user-suggested", "agent-suggested"])
+const VALID_LIFECYCLE_EVENTS = new Set<MemoryLifecycleEvent>([
+  "user_prompt",
+  "turn_stop",
+  "post_tool_use",
+  "session_start",
+  "pre_compact",
+])
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -45,9 +52,21 @@ function hasValidProject(value: Record<string, unknown>): boolean {
     && isOptionalString(project.key)
 }
 
+function hasValidProvenance(value: Record<string, unknown>): boolean {
+  const provenance = value.provenance
+  if (provenance === undefined) return true
+  return isPlainObject(provenance)
+    && isNonEmptyString(provenance.adapter)
+    && isEnumValue(provenance.lifecycleEvent, VALID_LIFECYCLE_EVENTS)
+    && isOptionalString(provenance.sessionId)
+    && isOptionalString(provenance.turnId)
+    && isOptionalString(provenance.toolName)
+}
+
 export function isMemoryRecord(value: unknown): value is MemoryRecord {
   return isPlainObject(value)
     && hasValidRequiredFields(value)
     && hasValidScope(value)
     && hasValidProject(value)
+    && hasValidProvenance(value)
 }
