@@ -12,6 +12,7 @@ import { loadConfig, getDefaultConfigPath } from "./config.js"
 import { createEmbeddingStore } from "./embedding-store.js"
 import { retrieveSemanticMemories } from "./retrieval.js"
 import { compact as compactStores, shouldCompact } from "./compact.js"
+import { validateSaveInput } from "./storage-validation.js"
 import {
   contentHash, createNewMemory, saveContext, shouldAutoEmbed, timestamp, visibleInScope,
   type SaveContext,
@@ -132,6 +133,7 @@ export class MemoryEngine {
     const text = input.text.trim()
     if (!text) return { status: "skipped", reason: "empty" }
     if (containsLikelySecret(text)) return { status: "skipped", reason: "secret" }
+    validateSaveInput(input)
 
     const ctx = saveContext(input, text, this.scope)
     const dup = findDuplicateMemory(this.store.list(), ctx.text, ctx.category, ctx.scopeType, this.scope?.key)

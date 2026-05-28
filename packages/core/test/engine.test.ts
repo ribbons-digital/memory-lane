@@ -30,6 +30,28 @@ describe("MemoryEngine", () => {
     if (r.status === "skipped") assert.equal(r.reason, "secret")
   })
 
+  it("rejects invalid save fields before writing", () => {
+    const e = engine()
+
+    assert.throws(
+      () => e.save({ text: "invalid category", category: "research" } as any),
+      /Invalid category.*research/,
+    )
+    assert.throws(
+      () => e.save({ text: "invalid scope", scopeType: "team" } as any),
+      /Invalid scopeType.*team/,
+    )
+    assert.throws(
+      () => e.save({ text: "invalid status", status: "archived" } as any),
+      /Invalid status.*archived/,
+    )
+    assert.throws(
+      () => e.save({ text: "invalid kind", kind: "research" } as any),
+      /Invalid kind.*research/,
+    )
+    assert.equal(e.list({ all: true }).length, 0)
+  })
+
   it("saves and lists memories", () => {
     const e = engine()
     const r = e.save({ text: "use pnpm for projects" })

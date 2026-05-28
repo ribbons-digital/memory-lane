@@ -46,6 +46,19 @@ describe("CLI integration", () => {
     assert.ok(list.includes("use pnpm"))
   })
 
+  it("save rejects invalid category without writing", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const result = runProcess(["save", "invalid category", "--category", "research"], { env })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout + result.stderr, /Invalid category.*research/)
+    assert.equal(fs.existsSync(memFile) ? fs.readFileSync(memFile, "utf8") : "", "")
+  })
+
   it("list shows saved timestamp", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,

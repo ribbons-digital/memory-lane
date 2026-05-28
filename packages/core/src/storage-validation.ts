@@ -1,10 +1,22 @@
-import type { MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType, MemorySource, MemoryLifecycleEvent } from "./types.js"
+import type {
+  MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType, MemorySource,
+  MemoryLifecycleEvent, MemoryKind, SaveInput,
+} from "./types.js"
 
-const VALID_STATUSES = new Set<MemoryStatus>(["pending", "approved", "rejected", "deleted"])
-const VALID_CATEGORIES = new Set<MemoryCategory>(["preference", "personal", "project"])
-const VALID_SCOPE_TYPES = new Set<MemoryScopeType>(["global", "project"])
-const VALID_SOURCES = new Set<MemorySource>(["manual", "user-suggested", "agent-suggested"])
-const VALID_LIFECYCLE_EVENTS = new Set<MemoryLifecycleEvent>([
+export const VALID_STATUSES = new Set<MemoryStatus>(["pending", "approved", "rejected", "deleted"])
+export const VALID_CATEGORIES = new Set<MemoryCategory>(["preference", "personal", "project"])
+export const VALID_SCOPE_TYPES = new Set<MemoryScopeType>(["global", "project"])
+export const VALID_SOURCES = new Set<MemorySource>(["manual", "user-suggested", "agent-suggested"])
+export const VALID_KINDS = new Set<MemoryKind>([
+  "preference",
+  "personal_context",
+  "project_fact",
+  "project_checkpoint",
+  "workflow_rule",
+  "decision",
+  "misc",
+])
+export const VALID_LIFECYCLE_EVENTS = new Set<MemoryLifecycleEvent>([
   "user_prompt",
   "turn_stop",
   "post_tool_use",
@@ -52,6 +64,10 @@ function hasValidProject(value: Record<string, unknown>): boolean {
     && isOptionalString(project.key)
 }
 
+function hasValidKind(value: Record<string, unknown>): boolean {
+  return value.kind === undefined || isEnumValue(value.kind, VALID_KINDS)
+}
+
 function hasValidProvenance(value: Record<string, unknown>): boolean {
   const provenance = value.provenance
   if (provenance === undefined) return true
@@ -63,10 +79,37 @@ function hasValidProvenance(value: Record<string, unknown>): boolean {
     && isOptionalString(provenance.toolName)
 }
 
+function allowedValues<T extends string>(allowed: Set<T>): string {
+  return [...allowed].join(", ")
+}
+
+function displayValue(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value)
+}
+
+function validateOptionalEnum<T extends string>(field: string, value: unknown, allowed: Set<T>): void {
+  if (value === undefined) return
+  if (!isEnumValue(value, allowed)) {
+    throw new Error(`Invalid ${field}: ${displayValue(value)}. Expected one of: ${allowedValues(allowed)}`)
+  }
+}
+
+export function validateSaveInput(input: SaveInput): void {
+  validateOptionalEnum("category", input.category, VALID_CATEGORIES)
+  validateOptionalEnum("scopeType", input.scopeType, VALID_SCOPE_TYPES)
+  validateOptionalEnum("status", input.status, VALID_STATUSES)
+  validateOptionalEnum("source", input.source, VALID_SOURCES)
+  validateOptionalEnum("kind", input.kind, VALID_KINDS)
+  if (input.provenance !== undefined && !hasValidProvenance({ provenance: input.provenance })) {
+    throw new Error("Invalid provenance. Expected adapter, lifecycleEvent, and optional string sessionId/turnId/toolName")
+  }
+}
+
 export function isMemoryRecord(value: unknown): value is MemoryRecord {
   return isPlainObject(value)
     && hasValidRequiredFields(value)
     && hasValidScope(value)
     && hasValidProject(value)
+    && hasValidKind(value)
     && hasValidProvenance(value)
 }
