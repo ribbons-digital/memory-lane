@@ -1,10 +1,8 @@
-import * as path from "node:path"
-import * as os from "node:os"
 import { Type } from "typebox"
 import {
   MemoryEngine, parseExplicitMemoryRequest, detectUserMemorySuggestion,
   isCheckpointMemorySaveRequest, inferCategory, inferMemoryKind,
-  normalizeMemoryText, type SaveResult,
+  normalizeMemoryText, initProjectLocalStorage, resolveWritableMemoryPaths, type SaveResult,
 } from "@memory-lane/core"
 
 // ── pi ExtensionAPI / ExtensionContext interfaces (shim) ──────
@@ -41,21 +39,50 @@ export interface ExtensionAPI {
 // ── Engine singleton ─────────────────────────────────────────
 
 let engine: MemoryEngine | null = null
+let engineKey: string | null = null
+
+function memoryEnv(): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    MEMORY_LANE_FILE: process.env.PI_MEMORY_FILE ?? process.env.MEMORY_LANE_FILE,
+    MEMORY_LANE_EMBEDDINGS_FILE: process.env.PI_MEMORY_EMBEDDINGS_FILE ?? process.env.MEMORY_LANE_EMBEDDINGS_FILE,
+    MEMORY_LANE_CONFIG: process.env.PI_MEMORY_CONFIG_FILE ?? process.env.MEMORY_LANE_CONFIG,
+  }
+}
 
 function getEngine(cwd: string): MemoryEngine {
-  if (!engine) {
+  const paths = resolveWritableMemoryPaths({ cwd, env: memoryEnv(), autoInitProjectLocalOnHomeFailure: true })
+  const key = `${paths.memoryPath}\n${paths.embeddingsPath}\n${paths.configPath}`
+  if (!engine || engineKey !== key) {
     engine = new MemoryEngine({
-      memoryPath: process.env.PI_MEMORY_FILE ?? path.join(os.homedir(), ".memory-lane", "memory.jsonl"),
-      embeddingsPath: process.env.PI_MEMORY_EMBEDDINGS_FILE ?? path.join(os.homedir(), ".memory-lane", "embeddings.jsonl"),
-      configPath: process.env.PI_MEMORY_CONFIG_FILE ?? path.join(os.homedir(), ".pi", "agent", "memory.config.json"),
+      memoryPath: paths.memoryPath,
+      embeddingsPath: paths.embeddingsPath,
+      configPath: paths.configPath,
     })
+    engineKey = key
   }
   engine.refreshScope(cwd)
   return engine
 }
 
+function resetEngine(): void {
+  engine = null
+  engineKey = null
+}
+
 function notify(ctx: ExtensionContext, message: string, level: "info" | "warning" | "error" = "info"): void {
   ctx?.ui?.notify?.(message, level)
+}
+
+function storageGuidance(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return [
+    `Memory Lane could not write to its current storage location (${message}).`,
+    "",
+    "Preferred: approve write access to ~/.memory-lane when your harness asks, then retry so memories stay global across projects.",
+    "",
+    "If you do not want to grant home-directory access, run `/memory init-project-local` to create .memory-lane/ in this project and retry using project-local storage.",
+  ].join("\n")
 }
 
 function formatMemory(m: { id: string; scope: { type: string }; category: string; text: string; status?: string }): string {
@@ -117,24 +144,36 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   pi.registerCommand("remember", {
     description: "Save an approved persistent memory",
     handler: async (args, ctx) => {
-      const e = getEngine(ctx.cwd)
-      const text = args?.trim() ?? ""
-      if (!text) { notify(ctx, "Text required", "warning"); return }
-      const result = e.save({ text, status: "approved", source: "manual" })
-      notify(ctx, formatSaveResult(result))
+      try {
+        const e = getEngine(ctx.cwd)
+        const text = args?.trim() ?? ""
+        if (!text) { notify(ctx, "Text required", "warning"); return }
+        const result = e.save({ text, status: "approved", source: "manual" })
+        notify(ctx, formatSaveResult(result))
+      } catch (err) {
+        notify(ctx, storageGuidance(err), "warning")
+      }
     },
   })
 
   pi.registerCommand("memory", {
     description: "List, search, delete, or recall persistent memories",
     handler: async (args, ctx) => {
-      const e = getEngine(ctx.cwd)
       const trimmed = (args ?? "").trim()
       const parts = trimmed.split(/\s+/)
       const cmd = parts[0]
       const rest = parts.slice(1).join(" ")
 
-      if (cmd === "list") {
+      if (cmd === "init-project-local" || (cmd === "init" && rest === "--project-local")) {
+        const result = initProjectLocalStorage(ctx.cwd)
+        resetEngine()
+        notify(ctx, `Initialized project-local Memory Lane storage at ${result.paths.root}. Future memory commands in this project will use .memory-lane/ unless explicit environment paths are set.`)
+        return
+      }
+
+      try {
+        const e = getEngine(ctx.cwd)
+        if (cmd === "list") {
         const allScope = parts.includes("--all")
         const mems = e.list({ all: allScope })
         notify(ctx, mems.length ? mems.map(formatMemory).join("\n") : "No memories.")
@@ -157,8 +196,11 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
       } else if (cmd === "status" || cmd === "doctor") {
         const d = e.doctor()
         notify(ctx, Object.entries(d).map(([k, v]) => `${k}: ${v}`).join("\n"))
-      } else {
-        notify(ctx, "Usage: /memory list [--all] | search <q> | delete <id> | use [q] | review | compact | status")
+        } else {
+          notify(ctx, "Usage: /memory list [--all] | search <q> | delete <id> | use [q] | review | compact | status | init-project-local")
+        }
+      } catch (err) {
+        notify(ctx, storageGuidance(err), "warning")
       }
     },
   })
@@ -177,21 +219,25 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     description: "Queue a durable project-specific memory suggestion for user review. Use when you proactively identify something worth remembering. For pending suggestions. When the user explicitly asks you to remember something, use memory_save instead.",
     parameters: memorySuggestSchema,
     async execute(_id, params, _signal, _onUpdate, ctx) {
-      const e = getEngine(ctx.cwd)
-      const cat = params.category ?? "project"
-      const status = params.status === "approved" ? "approved" as const : "pending" as const
-      const result = e.suggest(params.text, cat as any, "project", undefined, status)
-      if (result.status === "saved") {
-        const reviewMsg = status === "pending" ? " Run /memory review." : ""
-        notify(ctx, `Memory ${result.memory.id} ${status === "approved" ? "saved" : "suggested"}${reviewMsg}`)
-        return {
-          content: [{ type: "text", text: `Memory ${result.memory.id} ${status === "approved" ? "saved" : "queued"}${reviewMsg}` }],
-          details: { id: result.memory.id },
+      try {
+        const e = getEngine(ctx.cwd)
+        const cat = params.category ?? "project"
+        const status = params.status === "approved" ? "approved" as const : "pending" as const
+        const result = e.suggest(params.text, cat as any, "project", undefined, status)
+        if (result.status === "saved") {
+          const reviewMsg = status === "pending" ? " Run /memory review." : ""
+          notify(ctx, `Memory ${result.memory.id} ${status === "approved" ? "saved" : "suggested"}${reviewMsg}`)
+          return {
+            content: [{ type: "text", text: `Memory ${result.memory.id} ${status === "approved" ? "saved" : "queued"}${reviewMsg}` }],
+            details: { id: result.memory.id },
+          }
         }
-      }
-      return {
-        content: [{ type: "text", text: `Skipped: ${result.reason}` }],
-        details: { skipped: result.reason },
+        return {
+          content: [{ type: "text", text: `Skipped: ${result.reason}` }],
+          details: { skipped: result.reason },
+        }
+      } catch (err) {
+        return { content: [{ type: "text", text: storageGuidance(err) }], details: { error: "storage-unavailable" } }
       }
     },
   })
@@ -207,20 +253,24 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     description: "Save an approved persistent memory directly. Use when the user explicitly asks you to remember something — bypasses the approval step.",
     parameters: memorySaveSchema,
     async execute(_id, params, _signal, _onUpdate, ctx) {
-      const e = getEngine(ctx.cwd)
-      const cat = params.category ?? "project"
-      const kind = inferMemoryKind(params.text, cat as any)
-      const result = e.save({ text: params.text, category: cat as any, status: "approved", source: "manual", kind })
-      if (result.status === "saved") {
-        notify(ctx, `Memory ${result.memory.id} saved: ${result.memory.text.slice(0, 60)}...`)
-        return {
-          content: [{ type: "text", text: `Saved memory ${result.memory.id}: ${result.memory.text.slice(0, 100)}` }],
-          details: { id: result.memory.id },
+      try {
+        const e = getEngine(ctx.cwd)
+        const cat = params.category ?? "project"
+        const kind = inferMemoryKind(params.text, cat as any)
+        const result = e.save({ text: params.text, category: cat as any, status: "approved", source: "manual", kind })
+        if (result.status === "saved") {
+          notify(ctx, `Memory ${result.memory.id} saved: ${result.memory.text.slice(0, 60)}...`)
+          return {
+            content: [{ type: "text", text: `Saved memory ${result.memory.id}: ${result.memory.text.slice(0, 100)}` }],
+            details: { id: result.memory.id },
+          }
         }
-      }
-      return {
-        content: [{ type: "text", text: `Skipped: ${result.reason}` }],
-        details: { skipped: result.reason },
+        return {
+          content: [{ type: "text", text: `Skipped: ${result.reason}` }],
+          details: { skipped: result.reason },
+        }
+      } catch (err) {
+        return { content: [{ type: "text", text: storageGuidance(err) }], details: { error: "storage-unavailable" } }
       }
     },
   })
@@ -235,14 +285,18 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     description: "Recall approved persistent memories.",
     parameters: memoryRecallSchema,
     async execute(_id, params, _signal, _onUpdate, ctx) {
-      const e = getEngine(ctx.cwd)
-      const result = await e.recall(params.query ?? "")
-      const text = result.memories.length === 0
-        ? "No matching approved memories."
-        : `Recalled ${result.memories.length} memories.\n` + result.memories.map(formatMemory).join("\n")
-      return {
-        content: [{ type: "text", text }],
-        details: { ids: result.memories.map((m) => m.id) },
+      try {
+        const e = getEngine(ctx.cwd)
+        const result = await e.recall(params.query ?? "")
+        const text = result.memories.length === 0
+          ? "No matching approved memories."
+          : `Recalled ${result.memories.length} memories.\n` + result.memories.map(formatMemory).join("\n")
+        return {
+          content: [{ type: "text", text }],
+          details: { ids: result.memories.map((m) => m.id) },
+        }
+      } catch (err) {
+        return { content: [{ type: "text", text: storageGuidance(err) }], details: { error: "storage-unavailable" } }
       }
     },
   })
@@ -259,12 +313,16 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     const intent = await classifyIntent(text, ctx)
 
     if (intent.intent === "save" && intent.text) {
-      const e = getEngine(ctx.cwd)
-      const category = (intent.category as any) ?? inferCategory(intent.text)
-      const kind = inferMemoryKind(intent.text, category)
-      const result = e.save({ text: intent.text, category, status: "approved", kind })
-      if (result.status === "saved") {
-        notify(ctx, `Auto-saved memory: ${formatMemory(result.memory)}`, "info")
+      try {
+        const e = getEngine(ctx.cwd)
+        const category = (intent.category as any) ?? inferCategory(intent.text)
+        const kind = inferMemoryKind(intent.text, category)
+        const result = e.save({ text: intent.text, category, status: "approved", kind })
+        if (result.status === "saved") {
+          notify(ctx, `Auto-saved memory: ${formatMemory(result.memory)}`, "info")
+        }
+      } catch (err) {
+        notify(ctx, storageGuidance(err), "warning")
       }
     }
 

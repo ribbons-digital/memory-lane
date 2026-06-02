@@ -17,11 +17,12 @@ function run(args: string[], env?: Record<string, string>) {
   return result.trim()
 }
 
-function runProcess(args: string[], options?: { env?: Record<string, string>; stdin?: string }) {
+function runProcess(args: string[], options?: { env?: Record<string, string>; stdin?: string; cwd?: string }) {
   const cli = path.resolve(__dirname, "../dist/index.js")
   return spawnSync("node", [cli, ...args], {
     input: options?.stdin,
     encoding: "utf8",
+    cwd: options?.cwd,
     env: { ...process.env, ...options?.env },
   })
 }
@@ -44,6 +45,37 @@ describe("CLI integration", () => {
     run(["save", "use pnpm"], env)
     const list = run(["list"], env)
     assert.ok(list.includes("use pnpm"))
+  })
+
+  it("init --project-local creates project storage and save uses it", () => {
+    const project = tempDir()
+    const home = tempDir()
+    const init = runProcess(["init", "--project-local", "--project", project], { env: { HOME: home } })
+
+    assert.equal(init.status, 0)
+    assert.match(init.stdout, /Initialized project-local Memory Lane storage/)
+    assert.match(init.stdout, /MEMORY_LANE_FILE=/)
+    assert.ok(fs.existsSync(path.join(project, ".memory-lane", "memory.jsonl")))
+    assert.ok(fs.existsSync(path.join(project, ".memory-lane", "embeddings.jsonl")))
+    assert.ok(fs.existsSync(path.join(project, ".memory-lane", "config.json")))
+
+    const saved = runProcess(["save", "project-local memory", "--project", project], { env: { HOME: home } })
+
+    assert.equal(saved.status, 0)
+    assert.ok(fs.readFileSync(path.join(project, ".memory-lane", "memory.jsonl"), "utf8").includes("project-local memory"))
+    assert.equal(fs.existsSync(path.join(home, ".memory-lane", "memory.jsonl")), false)
+  })
+
+  it("save auto-falls back to project-local storage when home storage is blocked", () => {
+    const project = tempDir()
+    const fakeHomeFile = path.join(tempDir(), "not-a-directory")
+    fs.writeFileSync(fakeHomeFile, "file blocks ~/.memory-lane", "utf8")
+
+    const saved = runProcess(["save", "auto fallback memory", "--project", project], { env: { HOME: fakeHomeFile } })
+
+    assert.equal(saved.status, 0)
+    assert.ok(fs.readFileSync(path.join(project, ".memory-lane", "memory.jsonl"), "utf8").includes("auto fallback memory"))
+    assert.ok(fs.readFileSync(path.join(project, ".gitignore"), "utf8").includes(".memory-lane/"))
   })
 
   it("save rejects invalid category without writing", () => {

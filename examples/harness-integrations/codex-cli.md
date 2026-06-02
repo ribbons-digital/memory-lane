@@ -56,6 +56,18 @@ Codex tool matcher names can vary by version. If `PostToolUse` does not fire, ad
 
 `Stop` and `PostToolUse` do not inject context. They save concise memories externally and are silent by default.
 
+## Sandboxed storage
+
+Memory Lane prefers global storage at `~/.memory-lane/`. If Codex asks for permission to write there, approving it keeps memories global across projects.
+
+If home storage is not writable and no explicit `MEMORY_LANE_*` paths are set, Memory Lane automatically initializes `.memory-lane/` inside the project and continues with project-local storage. You can also initialize it explicitly:
+
+```bash
+memory-lane init --project-local --project /path/to/project
+```
+
+This creates `.memory-lane/` inside the project and prints environment variables you can add to hook configuration if needed. Commands run with `--project /path/to/project` automatically prefer `.memory-lane/` when it exists.
+
 ## Privacy and review
 
 Memory Lane inspects prompts, bounded transcript tails, and bounded tool-output previews locally. It does not save raw transcripts, hook payloads, prompts, tool inputs, or full tool outputs. Secret detection runs before save and before injection.

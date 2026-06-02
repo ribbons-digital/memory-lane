@@ -109,6 +109,7 @@ Commands:
   doctor
   reindex [--force]
   status
+  init --project-local [--project <path>]
   config [show|enable-semantic|disable-semantic|set <key> <value>]
   codex <user-prompt-submit|stop|post-tool-use>
                   Run a Codex hook adapter command; reads hook JSON from stdin

@@ -18,3 +18,7 @@ export { createOpenAIEmbeddingProvider } from "./embedding-provider.js"
 export { cosineSimilarity, lexicalScore, recencyScore, findMatchingEmbedding } from "./scoring.js"
 export { retrieveSemanticMemories } from "./retrieval.js"
 export { compact, shouldCompact } from "./compact.js"
+export {
+  resolveMemoryPaths, resolveWritableMemoryPaths, initProjectLocalStorage, assertWritableMemoryPath,
+  type MemoryPaths, type InitProjectLocalStorageResult,
+} from "./storage-locations.js"

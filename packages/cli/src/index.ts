@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider } from "@memory-lane/core"
+import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, resolveWritableMemoryPaths, type MemoryPaths } from "@memory-lane/core"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import {
   formatMemories, formatRecall, formatSaveResult, formatResult,
@@ -96,12 +96,12 @@ function createEmbeddingProvider(configPath: string): EmbeddingProvider | undefi
   }
 }
 
-function createEngine(configPath: string, projPath?: string): MemoryEngine {
+function createEngine(paths: MemoryPaths, projPath?: string): MemoryEngine {
   const engine = new MemoryEngine({
-    memoryPath: process.env.MEMORY_LANE_FILE,
-    embeddingsPath: process.env.MEMORY_LANE_EMBEDDINGS_FILE,
-    configPath,
-    embeddingProvider: createEmbeddingProvider(configPath),
+    memoryPath: paths.memoryPath,
+    embeddingsPath: paths.embeddingsPath,
+    configPath: paths.configPath,
+    embeddingProvider: createEmbeddingProvider(paths.configPath),
   })
   if (projPath) engine.refreshScope(projPath)
   return engine
@@ -227,6 +227,26 @@ function handleStatus(ctx: CliContext): void {
   console.log(`Total: ${r.totalMemories}, Approved: ${r.approvedMemories}, Pending: ${r.pendingMemories}, Embeddings: ${r.embeddingCount}`)
 }
 
+function handleInitCommand(argv: string[], json: boolean): void {
+  if (!hasFlag(argv, "project-local")) {
+    console.log(formatError("Usage: memory-lane init --project-local [--project <path>]", json))
+    process.exit(2)
+  }
+  const result = initProjectLocalStorage(flag(argv, "project") ?? process.cwd())
+  if (json) {
+    console.log(JSON.stringify({ ok: true, data: result }, null, 2))
+    return
+  }
+  console.log([
+    `Initialized project-local Memory Lane storage at ${result.paths.root}`,
+    "",
+    "Use these environment variables for sandboxed hooks if needed:",
+    `MEMORY_LANE_FILE=${result.env.MEMORY_LANE_FILE}`,
+    `MEMORY_LANE_EMBEDDINGS_FILE=${result.env.MEMORY_LANE_EMBEDDINGS_FILE}`,
+    `MEMORY_LANE_CONFIG=${result.env.MEMORY_LANE_CONFIG}`,
+  ].join("\n"))
+}
+
 async function handleReindex(ctx: CliContext): Promise<void> {
   const result = await ctx.engine.reindexEmbeddings({ force: hasFlag(ctx.argv, "force") })
   if (ctx.json) {
@@ -341,10 +361,23 @@ async function main(): Promise<void> {
     process.exit(command && command !== "help" ? 2 : 0)
   }
 
-  const configPath = resolveConfigPath()
+  if (command === "init") {
+    try {
+      handleInitCommand(argv, json)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.log(formatError(msg, json))
+      process.exit(1)
+    }
+    return
+  }
+
+  const projPath = flag(argv, "project")
+  const paths = resolveWritableMemoryPaths({ cwd: projPath ?? process.cwd(), env: process.env, autoInitProjectLocalOnHomeFailure: true })
+  const configPath = paths.configPath || resolveConfigPath()
   let engine: MemoryEngine
   try {
-    engine = createEngine(configPath, flag(argv, "project"))
+    engine = createEngine(paths, projPath)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     console.log(formatError(`Failed to initialize engine: ${msg}`, json))

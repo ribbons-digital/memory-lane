@@ -32,9 +32,19 @@ Five packages in a monorepo:
 
 ## Storage
 
-Memories are stored as append-only JSONL at `~/.memory-lane/memory.jsonl`. Each write appends a record; reads fold duplicates by id (last write wins). Atomic writes use `.tmp` + `rename`.
+By default, memories are stored as append-only JSONL at `~/.memory-lane/memory.jsonl`. Each write appends a record; reads fold duplicates by id (last write wins). Atomic writes use `.tmp` + `rename`.
 
-Embeddings (when configured) are at `~/.memory-lane/embeddings.jsonl` with mixed embedding records and invalidation records.
+Embeddings (when configured) default to `~/.memory-lane/embeddings.jsonl` with mixed embedding records and invalidation records.
+
+For sandboxed harnesses, Memory Lane first tries global storage at `~/.memory-lane`. If that home storage is not writable and no explicit `MEMORY_LANE_*` paths are set, commands and hooks automatically initialize project-local storage at `.memory-lane/` and continue there.
+
+You can also initialize project-local storage explicitly:
+
+```bash
+memory-lane init --project-local --project /path/to/project
+```
+
+Project-local initialization creates `.memory-lane/` in the project, adds `.memory-lane/` to `.gitignore`, and creates `.memory-lane-scope`. Commands and hooks run with `--project /path/to/project` automatically prefer this project-local store unless explicit `MEMORY_LANE_*` paths are set.
 
 ## Project Scoping
 
@@ -64,6 +74,7 @@ memory-lane compact               Remove deleted/rejected tombstones
 memory-lane doctor                Diagnostic report
 memory-lane status                Quick stats
 memory-lane reindex [--force]     Rebuild embeddings
+memory-lane init --project-local  Initialize sandbox-friendly project-local storage
 ```
 
 All commands support `--json` for machine-readable output and `--project <path>` to set the project scope.
@@ -119,6 +130,8 @@ After configuring, run `memory-lane reindex` to embed existing memories.
 | `MEMORY_LANE_CONFIG` | `~/.memory-lane/config.json` | Config file path |
 | `MEMORY_LANE_FILE` | `~/.memory-lane/memory.jsonl` | Memory store path |
 | `MEMORY_LANE_EMBEDDINGS_FILE` | `~/.memory-lane/embeddings.jsonl` | Embeddings store path |
+
+Explicit environment paths always win and never auto-fallback. If no explicit paths are set and a parent directory contains `.memory-lane/`, Memory Lane uses that project-local store. If home storage is not writable, Memory Lane auto-initializes `.memory-lane/` in the current project path.
 
 ## Programmatic Use
 
