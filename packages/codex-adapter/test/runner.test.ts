@@ -93,6 +93,37 @@ test("handler failure returns no-op", async () => {
   assert.equal(output, "{}")
 })
 
+test("stop reads latest turn from transcript", async () => {
+  const engine = engineInTemp()
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-codex-transcript-"))
+  const transcriptPath = path.join(dir, "transcript.jsonl")
+  fs.writeFileSync(transcriptPath, [
+    JSON.stringify({ role: "user", content: "hello" }),
+    JSON.stringify({ role: "assistant", content: "hello back" }),
+    JSON.stringify({ role: "user", content: "remember that Codex transcript tests use jsonl" }),
+    JSON.stringify({ role: "assistant", content: "I'll remember that Codex transcript tests use jsonl." }),
+  ].join("\n"))
+
+  await runCodexHookCommand("stop", {
+    engine,
+    payloadText: JSON.stringify({
+      hook_event_name: "Stop",
+      session_id: "session-1",
+      turn_id: "turn-1",
+      cwd: process.cwd(),
+      transcript_path: transcriptPath,
+      permission_mode: "default",
+      stop_hook_active: false,
+    }),
+  })
+
+  const saved = engine.list({ all: true })
+  assert.equal(saved.length, 1)
+  assert.match(saved[0].text, /Codex transcript tests use jsonl/)
+  assert.equal(saved[0].provenance?.adapter, "codex")
+  assert.equal(saved[0].provenance?.lifecycleEvent, "turn_stop")
+})
+
 test("debug output emits concise systemMessage", async () => {
   const output = await runCodexHookCommand("stop", {
     engine: engineInTemp(),

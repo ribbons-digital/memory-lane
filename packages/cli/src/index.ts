@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, resolveWritableMemoryPaths, type MemoryPaths } from "@memory-lane/core"
+import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import {
   formatMemories, formatRecall, formatSaveResult, formatResult,
@@ -303,16 +304,31 @@ function handleConfig(ctx: CliContext): void {
   else console.log(formatError("Usage: memory-lane config [show | enable-semantic | disable-semantic | set <key> <value>]", ctx.json))
 }
 
-const codexCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use"])
+const hookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use"])
 
 async function handleCodex(ctx: CliContext): Promise<void> {
   const event = ctx.rest[0]
-  if (!codexCommands.has(event)) {
+  if (!hookCommands.has(event)) {
     console.log(formatError("Unknown Codex hook event. Usage: memory-lane codex user-prompt-submit|stop|post-tool-use", ctx.json))
     process.exit(2)
   }
   const payloadText = await readStdin()
   const output = await runCodexHookCommand(event as CodexCommand, {
+    engine: ctx.engine,
+    payloadText,
+    env: process.env,
+  })
+  console.log(output)
+}
+
+async function handleClaude(ctx: CliContext): Promise<void> {
+  const event = ctx.rest[0]
+  if (!hookCommands.has(event)) {
+    console.log(formatError("Unknown Claude hook event. Usage: memory-lane claude user-prompt-submit|stop|post-tool-use", ctx.json))
+    process.exit(2)
+  }
+  const payloadText = await readStdin()
+  const output = await runClaudeHookCommand(event as ClaudeCommand, {
     engine: ctx.engine,
     payloadText,
     env: process.env,
@@ -337,6 +353,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   status: handleStatus,
   reindex: handleReindex,
   config: handleConfig,
+  claude: handleClaude,
   codex: handleCodex,
 }
 

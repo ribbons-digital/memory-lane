@@ -68,6 +68,33 @@ memory-lane status                # quick stats
 memory-lane doctor                # full diagnostic report
 memory-lane compact               # remove deleted/rejected entries
 memory-lane reindex               # (re)build embeddings for all approved memories
+memory-lane init --project-local  # initialize sandbox-friendly project-local storage
+```
+
+### Hook adapters
+
+Memory Lane includes lifecycle hook commands for supported CLI harnesses:
+
+```bash
+# Claude Code CLI hooks, not Claude Desktop
+memory-lane claude user-prompt-submit
+memory-lane claude stop
+memory-lane claude post-tool-use
+
+# OpenAI Codex CLI hooks
+memory-lane codex user-prompt-submit
+memory-lane codex stop
+memory-lane codex post-tool-use
+```
+
+`UserPromptSubmit` recalls relevant approved memories and injects a small context block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise diagnostics.
+
+### Sandboxed storage
+
+Default storage is `~/.memory-lane/`. If home storage is not writable and no explicit `MEMORY_LANE_*` paths are set, Memory Lane auto-initializes project-local `.memory-lane/` and continues there. Explicit `MEMORY_LANE_FILE`, `MEMORY_LANE_EMBEDDINGS_FILE`, and `MEMORY_LANE_CONFIG` always win and do not auto-fallback.
+
+```bash
+memory-lane init --project-local --project /path/to/project
 ```
 
 ### Semantic search configuration

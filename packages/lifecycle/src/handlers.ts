@@ -12,13 +12,18 @@ function candidateSource(candidate: MemoryCandidate, fallback: MemorySource): Me
   return candidate.source ?? fallback
 }
 
+interface LifecycleHandlerOptions {
+  adapter?: string
+}
+
 function provenance(
   input: { sessionId?: string; turnId?: string },
   lifecycleEvent: MemoryProvenance["lifecycleEvent"],
   toolName?: string,
+  adapter = "codex",
 ): MemoryProvenance {
   return {
-    adapter: "codex",
+    adapter,
     lifecycleEvent,
     sessionId: input.sessionId,
     turnId: input.turnId,
@@ -31,6 +36,7 @@ function persistCandidates(
   candidates: MemoryCandidate[],
   input: StopInput | PostToolUseInput,
   lifecycleEvent: "turn_stop" | "post_tool_use",
+  options?: LifecycleHandlerOptions,
 ): LifecycleResult {
   const saved: SaveResult[] = []
   const discarded: LifecycleResult["discarded"] = []
@@ -48,7 +54,7 @@ function persistCandidates(
       kind: candidate.kind,
       status: candidate.decision === "save-approved" ? "approved" : "pending",
       source: candidateSource(candidate, "agent-suggested"),
-      provenance: provenance(input, lifecycleEvent, "toolName" in input ? input.toolName : undefined),
+      provenance: provenance(input, lifecycleEvent, "toolName" in input ? input.toolName : undefined, options?.adapter),
     }))
   }
 
@@ -67,12 +73,12 @@ export async function handleUserPromptSubmit(
   return createResult(rendered || undefined)
 }
 
-export function handleStop(engine: MemoryEngine, input: StopInput): LifecycleResult {
+export function handleStop(engine: MemoryEngine, input: StopInput, options?: LifecycleHandlerOptions): LifecycleResult {
   engine.refreshScope(input.cwd)
-  return persistCandidates(engine, extractStopCandidates(input), input, "turn_stop")
+  return persistCandidates(engine, extractStopCandidates(input), input, "turn_stop", options)
 }
 
-export function handlePostToolUse(engine: MemoryEngine, input: PostToolUseInput): LifecycleResult {
+export function handlePostToolUse(engine: MemoryEngine, input: PostToolUseInput, options?: LifecycleHandlerOptions): LifecycleResult {
   engine.refreshScope(input.cwd)
-  return persistCandidates(engine, summarizeToolOutcome(input), input, "post_tool_use")
+  return persistCandidates(engine, summarizeToolOutcome(input), input, "post_tool_use", options)
 }

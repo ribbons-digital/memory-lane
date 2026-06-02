@@ -20,13 +20,14 @@ memory-lane doctor
 
 ## Architecture
 
-Five packages in a monorepo:
+Six packages in a monorepo:
 
 | Package | Purpose |
 |---|---|
 | `@memory-lane/core` | Pure Node.js library. Zero harness dependencies. |
 | `@memory-lane/lifecycle` | Shared harness-neutral memory automation policy for recall, autosave, context budgets, and tool outcomes. |
 | `@memory-lane/cli` | CLI wrapper. Works with any harness that can shell out. |
+| `@memory-lane/claude-adapter` | Claude Code hook adapter exposed through `memory-lane claude ...`. |
 | `@memory-lane/codex-adapter` | Codex hook adapter exposed through `memory-lane codex ...`. |
 | `@memory-lane/pi-adapter` | pi extension adapter. |
 
@@ -171,6 +172,20 @@ See [`examples/harness-integrations/`](./examples/harness-integrations/) for int
 - OpenAI Codex CLI
 - Cursor
 - Windsurf
+
+### Claude Code hooks
+
+Claude Code CLI users can wire Memory Lane into lifecycle hooks:
+
+```bash
+memory-lane claude user-prompt-submit
+memory-lane claude stop
+memory-lane claude post-tool-use
+```
+
+`UserPromptSubmit` injects a small relevant memory block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics.
+
+These commands are for Claude Code CLI hooks, not the Claude Desktop app. Claude Desktop would need a separate MCP-style integration.
 
 ### Codex hooks
 

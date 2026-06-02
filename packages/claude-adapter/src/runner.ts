@@ -1,10 +1,10 @@
 import type { MemoryEngine } from "@memory-lane/core"
 import { handlePostToolUse, handleStop, handleUserPromptSubmit } from "@memory-lane/lifecycle"
 import { lifecycleNoopOutput, noopOutput, userPromptSubmitOutput } from "./outputs.js"
-import { parseCodexPayload, type CodexCommand } from "./payloads.js"
+import { parseClaudePayload, type ClaudeCommand } from "./payloads.js"
 import { readLatestTurnFromTranscript } from "./transcript.js"
 
-export interface RunCodexHookOptions {
+export interface RunClaudeHookOptions {
   engine: MemoryEngine
   payloadText: string
   env?: NodeJS.ProcessEnv
@@ -18,7 +18,7 @@ function parseJson(text: string): unknown {
   return JSON.parse(text)
 }
 
-export async function runCodexHookCommand(command: CodexCommand, options: RunCodexHookOptions): Promise<string> {
+export async function runClaudeHookCommand(command: ClaudeCommand, options: RunClaudeHookOptions): Promise<string> {
   const debug = isDebug(options.env)
   let payload: unknown
   try {
@@ -27,7 +27,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
     return noopOutput("invalid JSON payload", debug)
   }
 
-  const parsed = parseCodexPayload(payload)
+  const parsed = parseClaudePayload(payload)
   if (parsed.kind === "invalid") return noopOutput(parsed.reason, debug)
   if (parsed.kind !== command) return noopOutput(`event mismatch: command ${command} received ${parsed.kind}`, debug)
 
@@ -43,11 +43,11 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         ...parsed.input,
         lastUserMessage: parsed.input.lastUserMessage ?? latest.lastUserMessage,
         lastAssistantMessage: parsed.input.lastAssistantMessage ?? latest.lastAssistantMessage,
-      })
+      }, { adapter: "claude" })
       return lifecycleNoopOutput(result, debug)
     }
 
-    const result = handlePostToolUse(options.engine, parsed.input)
+    const result = handlePostToolUse(options.engine, parsed.input, { adapter: "claude" })
     return lifecycleNoopOutput(result, debug)
   } catch {
     return noopOutput("hook handling failed", debug)
