@@ -2,13 +2,14 @@ import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { execFileSync, spawnSync } from "node:child_process"
 import * as fs from "node:fs"
+import * as os from "node:os"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-function run(args: string[], env?: Record<string, string>) {
+function run(args: string[], env?: NodeJS.ProcessEnv) {
   const cli = path.resolve(__dirname, "../dist/index.js")
   const result = execFileSync("node", [cli, ...args], {
     encoding: "utf8",
@@ -17,7 +18,7 @@ function run(args: string[], env?: Record<string, string>) {
   return result.trim()
 }
 
-function runProcess(args: string[], options?: { env?: Record<string, string>; stdin?: string; cwd?: string }) {
+function runProcess(args: string[], options?: { env?: NodeJS.ProcessEnv; stdin?: string; cwd?: string }) {
   const cli = path.resolve(__dirname, "../dist/index.js")
   return spawnSync("node", [cli, ...args], {
     input: options?.stdin,
@@ -25,6 +26,10 @@ function runProcess(args: string[], options?: { env?: Record<string, string>; st
     cwd: options?.cwd,
     env: { ...process.env, ...options?.env },
   })
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
 describe("CLI integration", () => {
@@ -145,6 +150,27 @@ describe("CLI integration", () => {
     assert.ok(Array.isArray(parsed.data.memories))
   })
 
+  it("JSON save output includes Obsidian mirror warnings", () => {
+    const missingVault = path.join(dir, "missing-vault")
+    fs.writeFileSync(cfgFile, JSON.stringify({
+      obsidian: { enabled: true, vaultPath: missingVault, folder: "Memory Lane", mode: "mirror" },
+    }), "utf8")
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const result = runProcess(["save", "json warning test", "--json"], { env })
+
+    assert.equal(result.status, 0)
+    const parsed = JSON.parse(result.stdout)
+    assert.equal(parsed.ok, true)
+    assert.equal(parsed.data.saved.text, "json warning test")
+    assert.ok(Array.isArray(parsed.data.warnings))
+    assert.match(parsed.data.warnings.join("\n"), /Vault path does not exist/u)
+  })
+
   it("doctor reports stats", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,
@@ -223,6 +249,95 @@ describe("CLI integration", () => {
     })
     assert.equal(result.status, 0)
     assert.equal(result.stdout.trim(), "{}")
+  })
+
+  it("obsidian status reports unconfigured mirror", () => {
+    const result = runProcess(["obsidian", "status"], {
+      env: {
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+    })
+
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Obsidian mirror: disabled/)
+  })
+
+  it("obsidian init configures mirror and performs initial sync", () => {
+    const home = tempDir()
+    const vault = path.join(home, "Vault")
+    fs.mkdirSync(vault)
+    const env = {
+      HOME: home,
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    runProcess(["save", "This repo uses pnpm", "--category", "project"], { env })
+
+    const result = runProcess(["obsidian", "init", "--vault", "~/Vault"], { env })
+
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Configured Obsidian mirror/)
+    assert.match(result.stdout, /Warning: No \.obsidian\/ directory found/)
+    assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "README.md")), true)
+    const files = fs.readdirSync(path.join(vault, "Memory Lane", "memories"))
+    assert.equal(files.length, 1)
+    const config = JSON.parse(fs.readFileSync(cfgFile, "utf8"))
+    assert.equal(config.obsidian.enabled, true)
+    assert.equal(config.obsidian.vaultPath, vault)
+    assert.equal(config.obsidian.folder, "Memory Lane")
+    assert.equal(config.obsidian.mode, "mirror")
+  })
+
+  it("obsidian init expands home with os.homedir when HOME is unset", () => {
+    const home = os.homedir()
+    assert.notEqual(home, "")
+    const missingVaultName = `.memory-lane-missing-${path.basename(tempDir())}`
+    const expectedVaultPath = path.join(home, missingVaultName)
+
+    const result = runProcess(["obsidian", "init", "--vault", `~/${missingVaultName}`], {
+      env: {
+        HOME: undefined,
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+    })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout + result.stderr, new RegExp(`Vault path does not exist: ${escapeRegExp(expectedVaultPath)}`))
+  })
+
+  it("obsidian sync dry-run does not write files", () => {
+    const vault = tempDir()
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    runProcess(["save", "Dry run memory", "--category", "project"], { env })
+    runProcess(["config", "set", "obsidian", JSON.stringify({ enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" })], { env })
+
+    const result = runProcess(["obsidian", "sync", "--dry-run"], { env })
+
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Would create:/)
+    assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "memories")), false)
+  })
+
+  it("obsidian sync requires configured enabled mirror", () => {
+    const result = runProcess(["obsidian", "sync"], {
+      env: {
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+    })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout + result.stderr, /Obsidian mirror is not configured/)
   })
 
 })

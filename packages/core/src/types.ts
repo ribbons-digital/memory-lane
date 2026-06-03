@@ -69,8 +69,8 @@ export interface SaveInput {
 }
 
 export type SaveResult =
-  | { status: "saved"; memory: MemoryRecord }
-  | { status: "skipped"; reason: "empty" | "secret" | "duplicate" }
+  | { status: "saved"; memory: MemoryRecord; warnings?: string[] }
+  | { status: "skipped"; reason: "empty" | "secret" | "duplicate"; warnings?: string[] }
 
 export interface RecallOptions {
   topK?: number
@@ -114,6 +114,13 @@ export interface EmbeddingProfileConfig {
   timeoutMs?: number
 }
 
+export interface ObsidianMirrorConfig {
+  enabled: boolean
+  vaultPath?: string
+  folder?: string
+  mode?: "mirror"
+}
+
 export interface SemanticMemoryConfig {
   semantic: {
     enabled: boolean
@@ -129,6 +136,7 @@ export interface SemanticMemoryConfig {
     }
     privacy: { allowRemoteEmbeddings: boolean }
   }
+  obsidian?: ObsidianMirrorConfig
 }
 
 export interface MemoryEngineConfig {

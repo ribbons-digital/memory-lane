@@ -50,7 +50,14 @@ export function formatRecall(result: RecallResult, json: boolean): string {
 
 export function formatSaveResult(result: SaveResult, json: boolean): string {
   if (result.status === "saved") {
-    return formatResult("Saved", result.memory, json)
+    if (json) {
+      const data: Record<string, unknown> = { saved: result.memory }
+      if (result.warnings?.length) data.warnings = result.warnings
+      return JSON.stringify({ ok: true, data, meta: meta() }, null, 2)
+    }
+    const formatted = formatResult("Saved", result.memory, false)
+    if (!result.warnings?.length) return formatted
+    return [formatted, ...result.warnings.map((warning) => `Warning: ${warning}`)].join("\n")
   }
   if (json) {
     return JSON.stringify({ ok: true, data: { status: "skipped", reason: result.reason }, meta: meta() }, null, 2)
@@ -111,6 +118,8 @@ Commands:
   status
   init --project-local [--project <path>]
   config [show|enable-semantic|disable-semantic|set <key> <value>]
+  obsidian <init|status|sync>
+                  Manage optional Obsidian Markdown mirror
   claude <user-prompt-submit|stop|post-tool-use>
                   Run a Claude Code hook adapter command; reads hook JSON from stdin
   codex <user-prompt-submit|stop|post-tool-use>

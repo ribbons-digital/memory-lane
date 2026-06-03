@@ -18,6 +18,7 @@ export const DEFAULT_CONFIG: SemanticMemoryConfig = {
     },
     privacy: { allowRemoteEmbeddings: false },
   },
+  obsidian: { enabled: false },
 }
 
 export function getDefaultConfigPath(): string {
@@ -48,6 +49,26 @@ function bool(v: unknown, p: string): boolean {
 function num(v: unknown, p: string): number {
   if (typeof v !== "number" || !Number.isFinite(v)) throw new ConfigError(`${p} must be finite number`)
   return v
+}
+function optionalStr(v: unknown, p: string): string | undefined {
+  if (v === undefined) return undefined
+  return str(v, p)
+}
+function validateObsidianFolder(folder: string, p: string): void {
+  if (path.isAbsolute(folder) || path.win32.isAbsolute(folder) || folder.split(/[\\/]+/u).includes("..")) {
+    throw new ConfigError(`${p} must be a relative path inside the vault`)
+  }
+}
+function validateObsidianConfig(v: unknown): void {
+  if (v === undefined) return
+  const o = obj(v, "obsidian")
+  const enabled = bool(o.enabled, "obsidian.enabled")
+  if (!enabled) return
+  str(o.vaultPath, "obsidian.vaultPath")
+  const folder = optionalStr(o.folder, "obsidian.folder") ?? "Memory Lane"
+  validateObsidianFolder(folder, "obsidian.folder")
+  if (o.mode !== "mirror") throw new ConfigError("obsidian.mode must be mirror")
+  o.folder = folder
 }
 
 function validateProfile(v: unknown, p: string): void {
@@ -89,6 +110,7 @@ export function validateConfig(config: unknown): SemanticMemoryConfig {
   num(r.recencyWeight, "semantic.retrieval.recencyWeight")
   bool(r.fallbackToAllVisibleOnMiss, "semantic.retrieval.fallbackToAllVisibleOnMiss")
   bool(obj(s.privacy, "semantic.privacy").allowRemoteEmbeddings, "semantic.privacy.allowRemoteEmbeddings")
+  validateObsidianConfig(root.obsidian)
   return config as SemanticMemoryConfig
 }
 
@@ -116,7 +138,7 @@ export function isLocalBaseUrl(url: string): boolean {
 /** Write a config file, merging the given partial config with defaults. */
 export function writeConfig(configPath: string, partial: Partial<SemanticMemoryConfig>): void {
   const existing = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {}
-  const merged = deepMerge(DEFAULT_CONFIG, { ...existing, ...partial }) as SemanticMemoryConfig
+  const merged = deepMerge(DEFAULT_CONFIG, deepMerge(existing, partial)) as SemanticMemoryConfig
   fs.mkdirSync(path.dirname(configPath), { recursive: true })
   fs.writeFileSync(configPath, JSON.stringify(merged, null, 2) + "\n", "utf8")
 }

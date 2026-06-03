@@ -71,6 +71,17 @@ memory-lane reindex               # (re)build embeddings for all approved memori
 memory-lane init --project-local  # initialize sandbox-friendly project-local storage
 ```
 
+### Obsidian mirror
+
+```bash
+memory-lane obsidian init --vault ~/Obsidian/MyVault
+memory-lane obsidian status
+memory-lane obsidian sync --dry-run
+memory-lane obsidian sync
+```
+
+The Obsidian mirror is opt-in and one-way: JSONL remains the source of truth and generated Markdown files may be overwritten.
+
 ### Hook adapters
 
 Memory Lane includes lifecycle hook commands for supported CLI harnesses:

@@ -1,3 +1,4 @@
+import * as fs from "node:fs"
 import * as path from "node:path"
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
@@ -282,5 +283,71 @@ describe("MemoryEngine", () => {
     const result = await e.recall("pnpm")
     assert.equal(result.memories.length, 1)
     assert.equal(result.semantic.used, false)
+  })
+
+  it("save mirrors approved memory when obsidian mirror is configured", () => {
+    const vault = path.join(dir, "vault")
+    fs.mkdirSync(path.join(vault, ".obsidian"), { recursive: true })
+    const configPath = path.join(dir, "config.json")
+    fs.writeFileSync(configPath, JSON.stringify({
+      obsidian: { enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" },
+    }), "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "memory.jsonl"),
+      embeddingsPath: path.join(dir, "embeddings.jsonl"),
+      configPath,
+    })
+
+    const result = e.save({ text: "Mirror this memory", category: "project", status: "approved" })
+
+    assert.equal(result.status, "saved")
+    if (result.status === "saved") {
+      assert.equal(result.warnings, undefined)
+      assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "memories", `${result.memory.id}.md`)), true)
+    }
+  })
+
+  it("delete removes mirrored file", () => {
+    const vault = path.join(dir, "vault")
+    fs.mkdirSync(path.join(vault, ".obsidian"), { recursive: true })
+    const configPath = path.join(dir, "config.json")
+    fs.writeFileSync(configPath, JSON.stringify({
+      obsidian: { enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" },
+    }), "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "memory.jsonl"),
+      embeddingsPath: path.join(dir, "embeddings.jsonl"),
+      configPath,
+    })
+    const saved = e.save({ text: "Delete mirrored memory", category: "project", status: "approved" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") throw new Error("expected save")
+    const mirroredPath = path.join(vault, "Memory Lane", "memories", `${saved.memory.id}.md`)
+    assert.equal(fs.existsSync(mirroredPath), true)
+
+    e.delete(saved.memory.id)
+
+    assert.equal(fs.existsSync(mirroredPath), false)
+  })
+
+  it("mirror warning does not prevent save when obsidian vault path is invalid", () => {
+    const configPath = path.join(dir, "config.json")
+    const missingVault = path.join(dir, "missing-vault")
+    fs.writeFileSync(configPath, JSON.stringify({
+      obsidian: { enabled: true, vaultPath: missingVault, folder: "Memory Lane", mode: "mirror" },
+    }), "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "memory.jsonl"),
+      embeddingsPath: path.join(dir, "embeddings.jsonl"),
+      configPath,
+    })
+
+    const result = e.save({ text: "Save despite mirror warning", category: "project", status: "approved" })
+
+    assert.equal(result.status, "saved")
+    if (result.status === "saved") {
+      assert.match(result.warnings?.join("\n") ?? "", /Vault path does not exist/u)
+      assert.equal(e.list({ all: true }).some((memory) => memory.id === result.memory.id), true)
+    }
   })
 })

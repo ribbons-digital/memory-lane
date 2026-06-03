@@ -13,7 +13,8 @@
   "dependencies": {
     "@memory-lane/claude-adapter": "workspace:*",
     "@memory-lane/codex-adapter": "workspace:*",
-    "@memory-lane/core": "workspace:*"
+    "@memory-lane/core": "workspace:*",
+    "@memory-lane/obsidian-mirror": "workspace:*"
   },
   "devDependencies": {
     "ts-node": "^10.9.2",

@@ -76,9 +76,23 @@ memory-lane doctor                Diagnostic report
 memory-lane status                Quick stats
 memory-lane reindex [--force]     Rebuild embeddings
 memory-lane init --project-local  Initialize sandbox-friendly project-local storage
+memory-lane obsidian ...          Manage optional Obsidian Markdown mirror
 ```
 
 All commands support `--json` for machine-readable output and `--project <path>` to set the project scope.
+
+### Obsidian mirror
+
+Obsidian support is opt-in. JSONL remains the source of truth; Memory Lane can mirror active approved and pending memories into generated Markdown files in an Obsidian-compatible vault.
+
+```bash
+memory-lane obsidian init --vault ~/Obsidian/MyVault
+memory-lane obsidian status
+memory-lane obsidian sync --dry-run
+memory-lane obsidian sync
+```
+
+Generated files live under `Memory Lane/memories/<id>.md` by default. Do not edit generated files directly; changes may be overwritten. Obsidian import and Obsidian-backed storage are separate future phases.
 
 ## Configuration
 
