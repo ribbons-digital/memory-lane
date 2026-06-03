@@ -20,6 +20,9 @@
     "test": "node --test --import tsx test/*.test.ts",
     "test:watch": "node --test --watch --import tsx test/*.test.ts"
   },
+  "dependencies": {
+    "@memory-lane/obsidian-mirror": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^25.9.1",
     "tsx": "^4.19.0",

@@ -2,6 +2,7 @@
 // MemoryEngine exposes public methods used by the CLI, pi adapter, and package consumers.
 import * as path from "node:path"
 import * as os from "node:os"
+import { syncObsidianMirror } from "@memory-lane/obsidian-mirror"
 import { createMemoryStore, type MemoryStore } from "./storage.js"
 import {
   effectiveMemoryKind, searchMemories, findDuplicateMemory,
@@ -102,6 +103,27 @@ export class MemoryEngine {
     return this.scope
   }
 
+  private mirrorWarnings(): string[] {
+    const obsidian = this.config.obsidian
+    if (!obsidian?.enabled || !obsidian.vaultPath) return []
+    try {
+      const result = syncObsidianMirror(
+        { vaultPath: obsidian.vaultPath, folder: obsidian.folder },
+        this.store.list(),
+      )
+      return result.ok ? result.warnings : result.warnings.length ? result.warnings : ["Obsidian mirror update failed"]
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      return [`Obsidian mirror update failed: ${message}`]
+    }
+  }
+
+  private withMirrorWarnings(result: SaveResult): SaveResult {
+    if (result.status !== "saved") return result
+    const warnings = this.mirrorWarnings()
+    return warnings.length ? { ...result, warnings } : { ...result, warnings: [] }
+  }
+
   private upgradePendingDuplicate(dup: MemoryRecord, input: SaveInput, ctx: SaveContext): SaveResult {
     if (input.status !== "approved" || dup.status !== "pending") return { status: "skipped", reason: "duplicate" }
     const upgraded = clone(dup, {
@@ -137,7 +159,7 @@ export class MemoryEngine {
 
     const ctx = saveContext(input, text, this.scope)
     const dup = findDuplicateMemory(this.store.list(), ctx.text, ctx.category, ctx.scopeType, this.scope?.key)
-    return dup ? this.upgradePendingDuplicate(dup, input, ctx) : this.persistMemory(input, ctx)
+    return this.withMirrorWarnings(dup ? this.upgradePendingDuplicate(dup, input, ctx) : this.persistMemory(input, ctx))
   }
 
   /** Queue a memory suggestion. Defaults to pending, but can auto-approve for explicit user requests. */
@@ -152,6 +174,7 @@ export class MemoryEngine {
     const updated = clone(mem, { status: "approved" })
     this.store.append(updated)
     this.invalidateEmbedding(id, "updated")
+    this.mirrorWarnings()
     return updated
   }
 
@@ -162,6 +185,7 @@ export class MemoryEngine {
     const updated = clone(mem, { status: "rejected" })
     this.store.append(updated)
     this.invalidateEmbedding(id, "deleted")
+    this.mirrorWarnings()
     return updated
   }
 
@@ -172,6 +196,7 @@ export class MemoryEngine {
     const updated = clone(mem, { status: "deleted" })
     this.store.append(updated)
     this.invalidateEmbedding(id, "deleted")
+    this.mirrorWarnings()
     return updated
   }
 

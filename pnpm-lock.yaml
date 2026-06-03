@@ -76,6 +76,10 @@ importers:
         version: 5.9.3
 
   packages/core:
+    dependencies:
+      '@memory-lane/obsidian-mirror':
+        specifier: workspace:*
+        version: link:../obsidian-mirror
     devDependencies:
       '@types/node':
         specifier: ^25.9.1
