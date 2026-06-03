@@ -68,6 +68,7 @@ function validateObsidianConfig(v: unknown): void {
   const folder = optionalStr(o.folder, "obsidian.folder") ?? "Memory Lane"
   validateObsidianFolder(folder, "obsidian.folder")
   if (o.mode !== "mirror") throw new ConfigError("obsidian.mode must be mirror")
+  o.folder = folder
 }
 
 function validateProfile(v: unknown, p: string): void {

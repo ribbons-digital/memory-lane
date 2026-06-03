@@ -89,6 +89,25 @@ describe("validateConfig", () => {
     })
   })
 
+  it("defaults enabled obsidian mirror folder", () => {
+    const config = validateConfig({
+      semantic: {
+        enabled: false,
+        activeEmbeddingProfile: "local-example",
+        embeddings: { profiles: {} },
+        retrieval: { topK: 8, minSimilarity: 0.25, semanticWeight: 0.65, lexicalWeight: 0.25, recencyWeight: 0.1, fallbackToAllVisibleOnMiss: true },
+        privacy: { allowRemoteEmbeddings: false },
+      },
+      obsidian: {
+        enabled: true,
+        vaultPath: "/tmp/memory-lane-vault",
+        mode: "mirror",
+      },
+    })
+
+    assert.equal(config.obsidian?.folder, "Memory Lane")
+  })
+
   it("rejects unsafe obsidian folders", () => {
     const baseConfig = {
       semantic: {
