@@ -1,9 +1,9 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import type { MemoryRecord } from "@memory-lane/core"
+import type { MirrorMemoryRecord } from "../src/types.ts"
 import { renderMemoryMarkdown, mirrorFileName } from "../src/markdown.ts"
 
-const baseMemory: MemoryRecord = {
+const baseMemory: MirrorMemoryRecord = {
   id: "c6d6e4c9",
   status: "approved",
   category: "project",

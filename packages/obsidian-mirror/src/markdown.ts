@@ -1,6 +1,6 @@
-import type { MemoryRecord } from "@memory-lane/core"
+import type { MirrorMemoryRecord } from "./types.js"
 
-export function mirrorFileName(memory: Pick<MemoryRecord, "id">): string {
+export function mirrorFileName(memory: Pick<MirrorMemoryRecord, "id">): string {
   return `${memory.id}.md`
 }
 
@@ -20,7 +20,7 @@ function titleFromText(text: string): string {
   return first.length > 80 ? `${first.slice(0, 79)}…` : first
 }
 
-export function renderMemoryMarkdown(memory: MemoryRecord): string {
+export function renderMemoryMarkdown(memory: MirrorMemoryRecord): string {
   const title = titleFromText(memory.text)
   const frontmatter = [
     line("memory_lane_id", memory.id),

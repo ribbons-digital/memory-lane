@@ -1,6 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import type { MemoryRecord } from "@memory-lane/core"
+import type { MirrorMemoryRecord } from "./types.js"
 import { mirrorFileName, renderMemoryMarkdown } from "./markdown.js"
 
 export interface ObsidianMirrorSettings {
@@ -28,9 +28,13 @@ function folder(settings: ObsidianMirrorSettings): string {
   return settings.folder?.trim() || "Memory Lane"
 }
 
+export function isSafeMirrorFolder(value: string): boolean {
+  const trimmed = value.trim()
+  return trimmed.length > 0 && !path.isAbsolute(trimmed) && !path.win32.isAbsolute(trimmed) && !trimmed.split(/[\\/]+/u).includes("..")
+}
+
 function folderWarning(settings: ObsidianMirrorSettings): string | undefined {
-  const value = folder(settings)
-  if (path.isAbsolute(value) || value.split(/[\\/]+/u).includes("..")) {
+  if (!isSafeMirrorFolder(folder(settings))) {
     return "Mirror folder must be a relative path inside the vault."
   }
   return undefined
@@ -44,18 +48,24 @@ function memoriesDir(settings: ObsidianMirrorSettings): string {
   return path.join(mirrorRoot(settings), "memories")
 }
 
-function memoryPath(settings: ObsidianMirrorSettings, memory: MemoryRecord): string {
+function memoryPath(settings: ObsidianMirrorSettings, memory: MirrorMemoryRecord): string {
   const name = mirrorFileName(memory)
   if (path.basename(name) !== name) throw new Error(`Unsafe memory id for mirror file: ${memory.id}`)
   return path.join(memoriesDir(settings), name)
 }
 
-function isActive(memory: MemoryRecord): boolean {
+function isActive(memory: MirrorMemoryRecord): boolean {
   return memory.status === "approved" || memory.status === "pending"
 }
 
 function generated(content: string): boolean {
-  return /memory_lane_mirror:\s*true/u.test(content)
+  const lines = content.split(/\r?\n/u)
+  if (lines[0] !== "---") return false
+
+  const end = lines.findIndex((line, index) => index > 0 && line.trim() === "---")
+  if (end === -1) return false
+
+  return lines.slice(1, end).some((line) => /^[ \t]*memory_lane_mirror[ \t]*:[ \t]*true[ \t]*$/u.test(line))
 }
 
 function readme(): string {
@@ -110,7 +120,7 @@ export function initObsidianMirror(settings: ObsidianMirrorSettings): MirrorSync
   return { ok: true, root: status.root, created: 0, updated: 0, deleted: 0, warnings: status.warnings }
 }
 
-export function syncObsidianMirror(settings: ObsidianMirrorSettings, memories: MemoryRecord[], opts?: { dryRun?: boolean }): MirrorSyncResult {
+export function syncObsidianMirror(settings: ObsidianMirrorSettings, memories: MirrorMemoryRecord[], opts?: { dryRun?: boolean }): MirrorSyncResult {
   const status = statusObsidianMirror(settings)
   if (!status.ok) return { ok: false, root: status.root, created: 0, updated: 0, deleted: 0, warnings: status.warnings }
 
