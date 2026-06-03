@@ -150,6 +150,27 @@ describe("CLI integration", () => {
     assert.ok(Array.isArray(parsed.data.memories))
   })
 
+  it("JSON save output includes Obsidian mirror warnings", () => {
+    const missingVault = path.join(dir, "missing-vault")
+    fs.writeFileSync(cfgFile, JSON.stringify({
+      obsidian: { enabled: true, vaultPath: missingVault, folder: "Memory Lane", mode: "mirror" },
+    }), "utf8")
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const result = runProcess(["save", "json warning test", "--json"], { env })
+
+    assert.equal(result.status, 0)
+    const parsed = JSON.parse(result.stdout)
+    assert.equal(parsed.ok, true)
+    assert.equal(parsed.data.saved.text, "json warning test")
+    assert.ok(Array.isArray(parsed.data.warnings))
+    assert.match(parsed.data.warnings.join("\n"), /Vault path does not exist/u)
+  })
+
   it("doctor reports stats", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,

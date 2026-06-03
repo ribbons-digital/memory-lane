@@ -103,10 +103,12 @@ export class MemoryEngine {
     return this.scope
   }
 
-  private mirrorWarnings(): string[] {
+  private syncMirrorAndCollectWarnings(): string[] {
     const obsidian = this.config.obsidian
     if (!obsidian?.enabled || !obsidian.vaultPath) return []
     try {
+      // TODO(obsidian): Slice 1 keeps mirroring simple by syncing the full store after each mutation;
+      // optimize with targeted per-record mirroring later if needed.
       const result = syncObsidianMirror(
         { vaultPath: obsidian.vaultPath, folder: obsidian.folder },
         this.store.list(),
@@ -120,8 +122,8 @@ export class MemoryEngine {
 
   private withMirrorWarnings(result: SaveResult): SaveResult {
     if (result.status !== "saved") return result
-    const warnings = this.mirrorWarnings()
-    return warnings.length ? { ...result, warnings } : { ...result, warnings: [] }
+    const warnings = this.syncMirrorAndCollectWarnings()
+    return warnings.length ? { ...result, warnings } : result
   }
 
   private upgradePendingDuplicate(dup: MemoryRecord, input: SaveInput, ctx: SaveContext): SaveResult {
@@ -174,7 +176,7 @@ export class MemoryEngine {
     const updated = clone(mem, { status: "approved" })
     this.store.append(updated)
     this.invalidateEmbedding(id, "updated")
-    this.mirrorWarnings()
+    this.syncMirrorAndCollectWarnings()
     return updated
   }
 
@@ -185,7 +187,7 @@ export class MemoryEngine {
     const updated = clone(mem, { status: "rejected" })
     this.store.append(updated)
     this.invalidateEmbedding(id, "deleted")
-    this.mirrorWarnings()
+    this.syncMirrorAndCollectWarnings()
     return updated
   }
 
@@ -196,7 +198,7 @@ export class MemoryEngine {
     const updated = clone(mem, { status: "deleted" })
     this.store.append(updated)
     this.invalidateEmbedding(id, "deleted")
-    this.mirrorWarnings()
+    this.syncMirrorAndCollectWarnings()
     return updated
   }
 

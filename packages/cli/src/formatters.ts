@@ -50,8 +50,13 @@ export function formatRecall(result: RecallResult, json: boolean): string {
 
 export function formatSaveResult(result: SaveResult, json: boolean): string {
   if (result.status === "saved") {
-    const formatted = formatResult("Saved", result.memory, json)
-    if (json || !result.warnings?.length) return formatted
+    if (json) {
+      const data: Record<string, unknown> = { saved: result.memory }
+      if (result.warnings?.length) data.warnings = result.warnings
+      return JSON.stringify({ ok: true, data, meta: meta() }, null, 2)
+    }
+    const formatted = formatResult("Saved", result.memory, false)
+    if (!result.warnings?.length) return formatted
     return [formatted, ...result.warnings.map((warning) => `Warning: ${warning}`)].join("\n")
   }
   if (json) {

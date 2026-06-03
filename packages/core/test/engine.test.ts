@@ -302,7 +302,7 @@ describe("MemoryEngine", () => {
 
     assert.equal(result.status, "saved")
     if (result.status === "saved") {
-      assert.deepEqual(result.warnings, [])
+      assert.equal(result.warnings, undefined)
       assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "memories", `${result.memory.id}.md`)), true)
     }
   })
