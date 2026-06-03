@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
-import { loadConfig, DEFAULT_CONFIG, isLocalBaseUrl, validateConfig, ConfigError } from "../src/config.js"
+import { loadConfig, DEFAULT_CONFIG, isLocalBaseUrl, validateConfig, ConfigError, writeConfig } from "../src/config.js"
 import { tempDir } from "./helpers.js"
 
 describe("loadConfig", () => {
@@ -45,6 +45,43 @@ describe("loadConfig", () => {
     const f = path.join(dir, "b.json")
     fs.writeFileSync(f, JSON.stringify({ semantic: { retrieval: { topK: "not-a-number" } } }))
     assert.throws(() => loadConfig(f), ConfigError)
+  })
+})
+
+describe("writeConfig", () => {
+  let dir: string
+  beforeEach(() => { dir = tempDir() })
+
+  it("preserves existing semantic embedding profiles when writing partial semantic updates", () => {
+    const f = path.join(dir, "c.json")
+    fs.writeFileSync(f, JSON.stringify({
+      semantic: {
+        enabled: false,
+        activeEmbeddingProfile: "local-profile",
+        embeddings: {
+          profiles: {
+            "local-profile": {
+              provider: "openai-compatible-embeddings",
+              baseUrl: "http://localhost:11434/v1",
+              model: "nomic-embed-text",
+            },
+          },
+        },
+        retrieval: { topK: 3 },
+      },
+    }))
+
+    writeConfig(f, { semantic: { enabled: true } as any })
+
+    const cfg = loadConfig(f)
+    assert.equal(cfg.semantic.enabled, true)
+    assert.equal(cfg.semantic.activeEmbeddingProfile, "local-profile")
+    assert.deepEqual(cfg.semantic.embeddings.profiles["local-profile"], {
+      provider: "openai-compatible-embeddings",
+      baseUrl: "http://localhost:11434/v1",
+      model: "nomic-embed-text",
+    })
+    assert.equal(cfg.semantic.retrieval.topK, 3)
   })
 })
 

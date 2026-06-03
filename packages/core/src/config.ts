@@ -138,7 +138,7 @@ export function isLocalBaseUrl(url: string): boolean {
 /** Write a config file, merging the given partial config with defaults. */
 export function writeConfig(configPath: string, partial: Partial<SemanticMemoryConfig>): void {
   const existing = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {}
-  const merged = deepMerge(DEFAULT_CONFIG, { ...existing, ...partial }) as SemanticMemoryConfig
+  const merged = deepMerge(DEFAULT_CONFIG, deepMerge(existing, partial)) as SemanticMemoryConfig
   fs.mkdirSync(path.dirname(configPath), { recursive: true })
   fs.writeFileSync(configPath, JSON.stringify(merged, null, 2) + "\n", "utf8")
 }

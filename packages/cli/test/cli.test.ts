@@ -2,13 +2,14 @@ import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { execFileSync, spawnSync } from "node:child_process"
 import * as fs from "node:fs"
+import * as os from "node:os"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-function run(args: string[], env?: Record<string, string>) {
+function run(args: string[], env?: NodeJS.ProcessEnv) {
   const cli = path.resolve(__dirname, "../dist/index.js")
   const result = execFileSync("node", [cli, ...args], {
     encoding: "utf8",
@@ -17,7 +18,7 @@ function run(args: string[], env?: Record<string, string>) {
   return result.trim()
 }
 
-function runProcess(args: string[], options?: { env?: Record<string, string>; stdin?: string; cwd?: string }) {
+function runProcess(args: string[], options?: { env?: NodeJS.ProcessEnv; stdin?: string; cwd?: string }) {
   const cli = path.resolve(__dirname, "../dist/index.js")
   return spawnSync("node", [cli, ...args], {
     input: options?.stdin,
@@ -25,6 +26,10 @@ function runProcess(args: string[], options?: { env?: Record<string, string>; st
     cwd: options?.cwd,
     env: { ...process.env, ...options?.env },
   })
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
 describe("CLI integration", () => {
@@ -263,6 +268,25 @@ describe("CLI integration", () => {
     assert.equal(config.obsidian.vaultPath, vault)
     assert.equal(config.obsidian.folder, "Memory Lane")
     assert.equal(config.obsidian.mode, "mirror")
+  })
+
+  it("obsidian init expands home with os.homedir when HOME is unset", () => {
+    const home = os.homedir()
+    assert.notEqual(home, "")
+    const missingVaultName = `.memory-lane-missing-${path.basename(tempDir())}`
+    const expectedVaultPath = path.join(home, missingVaultName)
+
+    const result = runProcess(["obsidian", "init", "--vault", `~/${missingVaultName}`], {
+      env: {
+        HOME: undefined,
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+    })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout + result.stderr, new RegExp(`Vault path does not exist: ${escapeRegExp(expectedVaultPath)}`))
   })
 
   it("obsidian sync dry-run does not write files", () => {

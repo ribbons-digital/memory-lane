@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import * as os from "node:os"
 import * as path from "node:path"
 import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, resolveWritableMemoryPaths, type MemoryPaths } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
@@ -293,8 +294,9 @@ function setConfigValue(ctx: CliContext): void {
 }
 
 function expandHome(input: string): string {
-  if (input === "~") return process.env.HOME ?? input
-  if (input.startsWith("~/")) return path.join(process.env.HOME ?? "", input.slice(2))
+  const home = process.env.HOME || os.homedir()
+  if (input === "~") return home || input
+  if (input.startsWith("~/")) return home ? path.join(home, input.slice(2)) : input
   return input
 }
 
