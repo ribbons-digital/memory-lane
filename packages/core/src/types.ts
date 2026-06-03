@@ -114,6 +114,13 @@ export interface EmbeddingProfileConfig {
   timeoutMs?: number
 }
 
+export interface ObsidianMirrorConfig {
+  enabled: boolean
+  vaultPath?: string
+  folder?: string
+  mode?: "mirror"
+}
+
 export interface SemanticMemoryConfig {
   semantic: {
     enabled: boolean
@@ -129,6 +136,7 @@ export interface SemanticMemoryConfig {
     }
     privacy: { allowRemoteEmbeddings: boolean }
   }
+  obsidian?: ObsidianMirrorConfig
 }
 
 export interface MemoryEngineConfig {

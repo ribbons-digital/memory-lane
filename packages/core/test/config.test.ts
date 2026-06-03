@@ -13,6 +13,8 @@ describe("loadConfig", () => {
     const cfg = loadConfig(path.join(dir, "nope.json"))
     assert.equal(cfg.semantic.enabled, false)
     assert.equal(cfg.semantic.retrieval.topK, 8)
+    assert.equal(DEFAULT_CONFIG.obsidian?.enabled, false)
+    assert.equal(cfg.obsidian?.enabled, false)
   })
 
   it("merges user config over defaults", () => {
@@ -47,6 +49,70 @@ describe("loadConfig", () => {
 })
 
 describe("validateConfig", () => {
+  it("accepts disabled obsidian mirror config", () => {
+    const config = validateConfig({
+      semantic: {
+        enabled: false,
+        activeEmbeddingProfile: "local-example",
+        embeddings: { profiles: {} },
+        retrieval: { topK: 8, minSimilarity: 0.25, semanticWeight: 0.65, lexicalWeight: 0.25, recencyWeight: 0.1, fallbackToAllVisibleOnMiss: true },
+        privacy: { allowRemoteEmbeddings: false },
+      },
+      obsidian: { enabled: false },
+    })
+
+    assert.equal(config.obsidian?.enabled, false)
+  })
+
+  it("accepts enabled obsidian mirror config", () => {
+    const config = validateConfig({
+      semantic: {
+        enabled: false,
+        activeEmbeddingProfile: "local-example",
+        embeddings: { profiles: {} },
+        retrieval: { topK: 8, minSimilarity: 0.25, semanticWeight: 0.65, lexicalWeight: 0.25, recencyWeight: 0.1, fallbackToAllVisibleOnMiss: true },
+        privacy: { allowRemoteEmbeddings: false },
+      },
+      obsidian: {
+        enabled: true,
+        vaultPath: "/tmp/memory-lane-vault",
+        folder: "Memory Lane",
+        mode: "mirror",
+      },
+    })
+
+    assert.deepEqual(config.obsidian, {
+      enabled: true,
+      vaultPath: "/tmp/memory-lane-vault",
+      folder: "Memory Lane",
+      mode: "mirror",
+    })
+  })
+
+  it("rejects unsafe obsidian folders", () => {
+    const baseConfig = {
+      semantic: {
+        enabled: false,
+        activeEmbeddingProfile: "local-example",
+        embeddings: { profiles: {} },
+        retrieval: { topK: 8, minSimilarity: 0.25, semanticWeight: 0.65, lexicalWeight: 0.25, recencyWeight: 0.1, fallbackToAllVisibleOnMiss: true },
+        privacy: { allowRemoteEmbeddings: false },
+      },
+    }
+
+    for (const folder of ["../escape", "memories/../escape", "/absolute"] as const) {
+      assert.throws(() => validateConfig({
+        ...baseConfig,
+        obsidian: {
+          enabled: true,
+          vaultPath: "/tmp/memory-lane-vault",
+          folder,
+          mode: "mirror",
+        },
+      }), /obsidian\.folder/)
+    }
+  })
+
   it("accepts valid config with profile", () => {
     const cfg = {
       semantic: {
