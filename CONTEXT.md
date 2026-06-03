@@ -30,3 +30,23 @@ Regex-based pattern matching for memory-related user intents (save, suggest, rec
 
 **Memory provenance**:
 Optional harness-neutral origin metadata on a memory record that identifies which adapter and lifecycle event produced the memory. Provenance explains where a memory came from without storing raw hook payloads, transcripts, or harness-specific implementation details.
+
+**Obsidian mirror**:
+An optional one-way Markdown projection of Memory Lane's JSONL memory records into an Obsidian vault. The JSONL memory store remains the source of truth; edits to mirrored Markdown are not imported by the mirror.
+_Avoid_: Obsidian-backed storage, import, sync
+
+**Obsidian import**:
+An explicit operation that reads user-marked Markdown notes from an Obsidian vault and validates them into Memory Lane records. Import is separate from the Obsidian mirror and includes conflict handling.
+_Avoid_: Mirror, automatic sync
+
+**Obsidian mirror/import support**:
+The overall feature area that includes both one-way Obsidian mirror and later explicit Obsidian import. It is not the same as Obsidian-backed storage.
+_Avoid_: Obsidian-backed storage
+
+**Mirrored memory file**:
+A generated Markdown file in an Obsidian mirror that represents one active Memory Lane record by stable memory id. It is human-readable but not user-authored; changes may be overwritten because JSONL remains the source of truth.
+_Avoid_: Imported note, source record
+
+**Mirror sync**:
+An explicit repair or backfill operation that reconciles the Obsidian mirror folder with the active approved and pending records in the JSONL memory store. It may create, update, or delete generated mirrored memory files only inside Memory Lane's configured mirror folder.
+_Avoid_: Import, bidirectional sync
