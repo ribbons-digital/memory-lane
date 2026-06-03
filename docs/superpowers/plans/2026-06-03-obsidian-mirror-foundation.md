@@ -678,7 +678,7 @@ git commit -m "feat(obsidian): add mirror renderer and sync"
 - Modify: `skills/memory-lane/SKILL.md`
 - Modify: `pnpm-lock.yaml`
 
-- [ ] **Step 1: Add CLI dependency and install**
+- [x] **Step 1: Add CLI dependency and install**
 
 Modify `packages/cli/package.json` dependencies to include:
 
@@ -694,7 +694,7 @@ sfw pnpm install
 
 Expected: lockfile updates.
 
-- [ ] **Step 2: Write failing CLI tests**
+- [x] **Step 2: Write failing CLI tests**
 
 Append tests to `packages/cli/test/cli.test.ts` inside the CLI suite:
 
@@ -766,7 +766,7 @@ it("obsidian sync dry-run does not write files", () => {
 })
 ```
 
-- [ ] **Step 3: Run tests to verify RED**
+- [x] **Step 3: Run tests to verify RED**
 
 Run:
 
@@ -776,7 +776,7 @@ pnpm --filter @memory-lane/cli test
 
 Expected: FAIL because `obsidian` command is unknown.
 
-- [ ] **Step 4: Implement CLI commands**
+- [x] **Step 4: Implement CLI commands**
 
 In `packages/cli/src/index.ts`, add imports:
 
@@ -864,7 +864,7 @@ Update `packages/cli/src/formatters.ts` usage block with:
                   Manage optional Obsidian Markdown mirror
 ```
 
-- [ ] **Step 5: Docs, tests, commit**
+- [x] **Step 5: Docs, tests, commit**
 
 Update `README.md` with a short section:
 
