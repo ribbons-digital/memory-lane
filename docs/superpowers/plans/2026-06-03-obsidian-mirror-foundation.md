@@ -249,7 +249,7 @@ git commit -m "feat(core): add obsidian mirror config"
 - Create: `packages/obsidian-mirror/test/sync.test.ts`
 - Modify: `pnpm-lock.yaml`
 
-- [ ] **Step 1: Create package metadata only**
+- [x] **Step 1: Create package metadata only**
 
 Create `packages/obsidian-mirror/package.json`:
 
@@ -311,7 +311,7 @@ sfw pnpm install
 
 Expected: workspace lockfile updates and package is discoverable.
 
-- [ ] **Step 2: Write failing renderer tests**
+- [x] **Step 2: Write failing renderer tests**
 
 Create `packages/obsidian-mirror/test/markdown.test.ts`:
 
@@ -374,7 +374,7 @@ test("renderMemoryMarkdown escapes YAML scalar values", () => {
 })
 ```
 
-- [ ] **Step 3: Run renderer tests to verify RED**
+- [x] **Step 3: Run renderer tests to verify RED**
 
 Run:
 
@@ -384,7 +384,7 @@ pnpm --filter @memory-lane/obsidian-mirror test
 
 Expected: FAIL because `markdown.ts` does not exist/export functions.
 
-- [ ] **Step 4: Implement renderer**
+- [x] **Step 4: Implement renderer**
 
 Create `packages/obsidian-mirror/src/markdown.ts`:
 
@@ -450,7 +450,7 @@ Update `packages/obsidian-mirror/src/index.ts`:
 export * from "./markdown.js"
 ```
 
-- [ ] **Step 5: Add sync tests and implementation**
+- [x] **Step 5: Add sync tests and implementation**
 
 Create `packages/obsidian-mirror/test/sync.test.ts`:
 
@@ -658,7 +658,7 @@ pnpm build
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/obsidian-mirror pnpm-lock.yaml
