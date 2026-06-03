@@ -2,7 +2,7 @@
 
 ## Current state
 
-Memory Lane is on `main` at commit `c22a825 merge: obsidian mirror foundation`.
+Memory Lane is on `main` at commit `9876cb8 merge: obsidian mirror status warnings`.
 
 Recent completed work:
 
@@ -14,9 +14,12 @@ Recent completed work:
   - `CONTEXT.md`
   - `docs/adr/0002-obsidian-mirror-before-import-and-backed-storage.md`
 - Implemented and merged Phase 1 Slice 1: optional one-way Obsidian mirror foundation.
-- Cleaned up the Obsidian feature worktree and branch:
+- Implemented and merged a small follow-up slice surfacing Obsidian mirror warnings from approve/reject/delete status transitions.
+- Cleaned up the Obsidian feature worktrees and branches:
   - removed `~/.config/superpowers/worktrees/memory-lane/obsidian-mirror-foundation`
   - deleted `feature/obsidian-mirror-foundation`
+  - removed `~/.config/superpowers/worktrees/memory-lane/obsidian-mirror-status-warnings`
+  - deleted `feature/obsidian-mirror-status-warnings`
 
 Post-merge verification on `main` passed after refreshing workspace links with:
 
@@ -26,7 +29,7 @@ pnpm build
 pnpm test
 ```
 
-`main` is clean and ahead of `origin/main` by 17 commits.
+`main` is clean. After the status-warning follow-up merge, it may be ahead of `origin/main` until pushed.
 
 ## Obsidian mirror foundation now on main
 
@@ -56,11 +59,11 @@ memory_lane_mirror: true
 - `MemoryEngine` performs best-effort mirror sync after successful writes/status transitions.
 - Mirror failures do not break JSONL writes.
 - CLI save warnings appear in human output and JSON output.
+- CLI/API approve/reject/delete status transition warnings also surface when mirror sync warns.
 - Config writes now preserve nested existing settings via deep merge.
 
 Known accepted Phase 1 limitations:
 
-- `approve()`, `reject()`, and `delete()` perform best-effort mirror sync but do not yet surface mirror warnings to CLI/API callers.
 - Mirror sync currently scans/syncs the full store after mutations; targeted per-record mirroring can be optimized later if needed.
 - No import, bidirectional sync, Obsidian-backed storage, or index pages yet.
 - Hooks do not prompt for or own Obsidian setup.
@@ -104,22 +107,23 @@ External comparison references discussed:
 
 ## Current uncommitted changes
 
-Expected current uncommitted file:
+Expected current uncommitted files before committing the import-contract docs:
 
-- `HANDOFF.md` — updated to reflect the merged Obsidian mirror foundation.
+- `ROADMAP.md` — updated to make the next active slice the Controlled Obsidian Import Contract.
+- `CONTEXT.md` — updated with Obsidian import area/importable note terminology.
+- `HANDOFF.md` — updated to reflect the merged status-warning follow-up and import-contract docs.
+- `docs/adr/0003-controlled-obsidian-import-contract.md` — new ADR for the controlled import boundary.
+- `docs/superpowers/specs/2026-06-03-obsidian-import-contract.md` — new detailed import contract spec.
 
-No code changes are expected.
+No code changes are expected before the next implementation plan is approved.
 
 ## Suggested next steps
 
-1. Commit this `HANDOFF.md` update if desired.
-2. Push `main` when ready; it is currently ahead of `origin/main` by 17 commits.
-3. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
-4. Start the next Obsidian slice only after choosing scope, likely one of:
-   - Obsidian import design/spec.
-   - Warning surfacing for approve/reject/delete mirror failures.
-   - Lightweight generated index/status improvements.
-5. Plan future MCP server support for Claude Desktop and other clients.
+1. Commit the import-contract documentation updates.
+2. Write an implementation plan for the first import implementation slice, keeping it to five todos.
+3. Implement import with TDD in a feature worktree.
+4. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
+5. Plan future MCP server support for Claude Desktop and other clients after mirror/import foundations are clear.
 
 ## Suggested skills
 

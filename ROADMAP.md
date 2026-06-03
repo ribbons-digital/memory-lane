@@ -34,7 +34,37 @@ Add the next Phase 1 slice only after these todos are complete.
 
 Later phases below are intentionally higher-level. Before implementing any later phase, rewrite that phase into a focused slice of no more than five active todos.
 
-## Phase 2 — Obsidian Mirror UX Polish
+## Phase 2 — Controlled Obsidian Import Contract
+
+**Goal:** Design the explicit Obsidian import workflow before implementation. Import remains separate from the mirror: JSONL stays the source of truth, import only reads user-marked Markdown, and no bidirectional sync or Obsidian-backed storage is introduced.
+
+Todos:
+
+1. Define importable note discovery and marker contract, including which folders are scanned and how generated mirror files are excluded.
+2. Define Markdown/frontmatter import schema, including required and optional fields, body text handling, category/scope/status defaults, and provenance/import metadata.
+3. Define create/update/conflict semantics, including behavior for `memory_lane_id`, duplicate text, deleted/rejected records, and invalid fields.
+4. Define dry-run output and warning model for human and JSON CLI output.
+5. Write a detailed implementation plan/spec before coding the import package or CLI commands.
+
+Add the next Phase 2 slice only after these todos are complete.
+
+## Phase 3 — Controlled Import from Obsidian
+
+**Goal:** Implement explicit Markdown-to-JSONL import based on the Phase 2 contract.
+
+Todos:
+
+1. Add parser and validator tests for importable notes.
+2. Add CLI commands:
+   ```bash
+   memory-lane obsidian import --dry-run
+   memory-lane obsidian import
+   ```
+3. Apply imported notes through existing Memory Lane validation and append-only JSONL writes.
+4. Add conflict and duplicate handling from the approved import contract.
+5. Add docs for authoring importable notes, dry-run review, and why import is not automatic sync.
+
+## Phase 4 — Obsidian Mirror UX Polish
 
 **Goal:** Make the generated mirror easier to browse in Obsidian without changing the canonical one-file-per-memory layout from Phase 1.
 
@@ -53,29 +83,7 @@ Todos:
 4. Add docs explaining mirror semantics, generated files, status/category filtering, and why hooks never prompt for Obsidian setup.
 5. Evaluate optional user-facing niceties such as custom index titles or folder names without changing canonical `memories/<id>.md` paths.
 
-## Phase 3 — Controlled Import from Obsidian
-
-**Goal:** Allow users to author or edit memories in Obsidian, but only through explicit import.
-
-Todos:
-
-1. Support importable notes marked with:
-   ```yaml
-   memory_lane: true
-   ```
-2. Add CLI commands:
-   ```bash
-   memory-lane obsidian import --dry-run
-   memory-lane obsidian import
-   ```
-3. Validate imported notes using existing Memory Lane validation.
-4. Define conflict policy:
-   - same `memory_lane_id` updates existing memory
-   - no ID creates a new memory
-   - invalid fields are skipped with warnings
-5. Add tests for import, duplicate handling, invalid frontmatter, and edited text.
-
-## Phase 4 — MCP Server MVP
+## Phase 5 — MCP Server MVP
 
 **Goal:** Expose Memory Lane through MCP without changing the storage model.
 
@@ -95,7 +103,7 @@ Todos:
 4. Reuse existing `MemoryEngine`, project scope, validation, and retrieval logic.
 5. Add setup docs for Claude Desktop, Claude Code, Codex, and Cursor.
 
-## Phase 5 — MCP + Hooks Coordination
+## Phase 6 — MCP + Hooks Coordination
 
 **Goal:** Make MCP and lifecycle hooks complement each other cleanly.
 
@@ -109,7 +117,7 @@ Todos:
 4. Add optional Obsidian mirror status through MCP.
 5. Add diagnostics to detect duplicate or conflicting hook + MCP setups.
 
-## Phase 6 — Obsidian-Backed Storage Prototype
+## Phase 7 — Obsidian-Backed Storage Prototype
 
 **Goal:** Experiment with Markdown as a primary backend without replacing JSONL globally.
 
@@ -133,7 +141,7 @@ Todos:
 4. Define deletion/tombstone and rename behavior.
 5. Gate behind an explicit experimental flag.
 
-## Phase 7 — Obsidian-Backed Storage Hardening
+## Phase 8 — Obsidian-Backed Storage Hardening
 
 **Goal:** Decide whether Obsidian-backed storage is production-worthy.
 
