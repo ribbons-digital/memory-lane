@@ -296,8 +296,8 @@ describe("CLI integration", () => {
       MEMORY_LANE_EMBEDDINGS_FILE: embFile,
       MEMORY_LANE_CONFIG: cfgFile,
     }
-    runProcess(["config", "set", "obsidian", JSON.stringify({ enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" })], { env })
     runProcess(["save", "Dry run memory", "--category", "project"], { env })
+    runProcess(["config", "set", "obsidian", JSON.stringify({ enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" })], { env })
 
     const result = runProcess(["obsidian", "sync", "--dry-run"], { env })
 
