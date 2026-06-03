@@ -926,7 +926,7 @@ git commit -m "feat(cli): add obsidian mirror commands"
 - Modify: `packages/cli/src/formatters.ts`
 - Modify: `pnpm-lock.yaml`
 
-- [ ] **Step 1: Add core dependency and write failing engine test**
+- [x] **Step 1: Add core dependency and write failing engine test**
 
 Modify `packages/core/package.json` dependencies to include:
 
@@ -991,7 +991,7 @@ test("delete removes mirrored file", () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run:
 
@@ -1001,7 +1001,7 @@ pnpm --filter @memory-lane/core test
 
 Expected: FAIL because `SaveResult` has no `warnings` and engine does not mirror.
 
-- [ ] **Step 3: Extend SaveResult and engine side effects**
+- [x] **Step 3: Extend SaveResult and engine side effects**
 
 In `packages/core/src/types.ts`, change `SaveResult` to:
 
@@ -1049,7 +1049,7 @@ return this.withMirrorWarnings(dup ? this.upgradePendingDuplicate(dup, input, ct
 
 For `approve`, `reject`, and `delete`, after `this.store.append(updated)` and invalidation, call `this.mirrorWarnings()` and ignore the result for now because those methods return `MemoryRecord | undefined`. The mirror still updates; CLI warning support for these status transitions can be a later slice.
 
-- [ ] **Step 4: Run tests to verify GREEN**
+- [x] **Step 4: Run tests to verify GREEN**
 
 Run:
 
@@ -1061,7 +1061,7 @@ pnpm build
 
 Expected: PASS.
 
-- [ ] **Step 5: CLI warning formatting and commit**
+- [x] **Step 5: CLI warning formatting and commit**
 
 In `packages/cli/src/formatters.ts`, update `formatSaveResult` saved case:
 
