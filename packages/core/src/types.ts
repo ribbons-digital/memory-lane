@@ -72,6 +72,8 @@ export type SaveResult =
   | { status: "saved"; memory: MemoryRecord; warnings?: string[] }
   | { status: "skipped"; reason: "empty" | "secret" | "duplicate"; warnings?: string[] }
 
+export type MemoryMutationResult = MemoryRecord & { warnings?: string[] }
+
 export interface RecallOptions {
   topK?: number
   projectScope?: ProjectScope

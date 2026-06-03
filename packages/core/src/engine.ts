@@ -20,7 +20,7 @@ import {
 } from "./engine-helpers.js"
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
-  MemoryKind, SaveInput, SaveResult, ProjectScope,
+  MemoryKind, SaveInput, SaveResult, MemoryMutationResult, ProjectScope,
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport,
 } from "./types.js"
 
@@ -126,6 +126,11 @@ export class MemoryEngine {
     return warnings.length ? { ...result, warnings } : result
   }
 
+  private mutationResultWithMirrorWarnings(memory: MemoryRecord): MemoryMutationResult {
+    const warnings = this.syncMirrorAndCollectWarnings()
+    return warnings.length ? { ...memory, warnings } : memory
+  }
+
   private upgradePendingDuplicate(dup: MemoryRecord, input: SaveInput, ctx: SaveContext): SaveResult {
     if (input.status !== "approved" || dup.status !== "pending") return { status: "skipped", reason: "duplicate" }
     const upgraded = clone(dup, {
@@ -169,37 +174,34 @@ export class MemoryEngine {
     return this.save({ text, category, scopeType, source: "user-suggested", status: status ?? "pending", kind })
   }
 
-  /** Approve a pending memory by id. Returns the updated memory or undefined. */
-  approve(id: string): MemoryRecord | undefined {
+  /** Approve a pending memory by id. Returns the updated memory plus mirror warnings, or undefined. */
+  approve(id: string): MemoryMutationResult | undefined {
     const mem = this.store.list().find((m) => m.id === id && m.status !== "deleted")
     if (!mem) return undefined
     const updated = clone(mem, { status: "approved" })
     this.store.append(updated)
     this.invalidateEmbedding(id, "updated")
-    this.syncMirrorAndCollectWarnings()
-    return updated
+    return this.mutationResultWithMirrorWarnings(updated)
   }
 
-  /** Reject a memory by id. Returns the updated memory or undefined. */
-  reject(id: string): MemoryRecord | undefined {
+  /** Reject a memory by id. Returns the updated memory plus mirror warnings, or undefined. */
+  reject(id: string): MemoryMutationResult | undefined {
     const mem = this.store.list().find((m) => m.id === id && m.status !== "deleted")
     if (!mem) return undefined
     const updated = clone(mem, { status: "rejected" })
     this.store.append(updated)
     this.invalidateEmbedding(id, "deleted")
-    this.syncMirrorAndCollectWarnings()
-    return updated
+    return this.mutationResultWithMirrorWarnings(updated)
   }
 
-  /** Soft-delete a memory by id. Returns the deleted memory or undefined. */
-  delete(id: string): MemoryRecord | undefined {
+  /** Soft-delete a memory by id. Returns the deleted memory plus mirror warnings, or undefined. */
+  delete(id: string): MemoryMutationResult | undefined {
     const mem = this.store.list().find((m) => m.id === id && m.status !== "deleted")
     if (!mem) return undefined
     const updated = clone(mem, { status: "deleted" })
     this.store.append(updated)
     this.invalidateEmbedding(id, "deleted")
-    this.syncMirrorAndCollectWarnings()
-    return updated
+    return this.mutationResultWithMirrorWarnings(updated)
   }
 
   /** List memories. By default respects project scope — only memories visible to

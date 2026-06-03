@@ -201,6 +201,36 @@ describe("MemoryEngine", () => {
     assert.equal(e.list().find((m) => m.id === r.memory.id)?.status, "deleted")
   })
 
+
+  it("status transitions return Obsidian mirror warnings", () => {
+    const missingVault = path.join(dir, "missing-vault")
+    fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({
+      obsidian: { enabled: true, vaultPath: missingVault, folder: "Memory Lane", mode: "mirror" },
+    }), "utf8")
+    const e = engine()
+
+    const pending = e.save({ text: "approve warning", status: "pending" })
+    assert.equal(pending.status, "saved")
+    if (pending.status !== "saved") return
+    const approved = e.approve(pending.memory.id)
+    assert.equal(approved?.status, "approved")
+    assert.match(approved?.warnings?.join("\n") ?? "", /Vault path does not exist/u)
+
+    const rejectedSource = e.save({ text: "reject warning", status: "pending" })
+    assert.equal(rejectedSource.status, "saved")
+    if (rejectedSource.status !== "saved") return
+    const rejected = e.reject(rejectedSource.memory.id)
+    assert.equal(rejected?.status, "rejected")
+    assert.match(rejected?.warnings?.join("\n") ?? "", /Vault path does not exist/u)
+
+    const deletedSource = e.save({ text: "delete warning", status: "approved" })
+    assert.equal(deletedSource.status, "saved")
+    if (deletedSource.status !== "saved") return
+    const deleted = e.delete(deletedSource.memory.id)
+    assert.equal(deleted?.status, "deleted")
+    assert.match(deleted?.warnings?.join("\n") ?? "", /Vault path does not exist/u)
+  })
+
   it("approve returns undefined for non-existent id", () => {
     const e = engine()
     assert.equal(e.approve("nonexistent"), undefined)

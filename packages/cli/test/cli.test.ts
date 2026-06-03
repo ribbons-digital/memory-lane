@@ -171,6 +171,31 @@ describe("CLI integration", () => {
     assert.match(parsed.data.warnings.join("\n"), /Vault path does not exist/u)
   })
 
+
+  it("JSON delete output includes Obsidian mirror warnings", () => {
+    const missingVault = path.join(dir, "missing-vault")
+    fs.writeFileSync(cfgFile, JSON.stringify({
+      obsidian: { enabled: true, vaultPath: missingVault, folder: "Memory Lane", mode: "mirror" },
+    }), "utf8")
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    run(["save", "delete warning json", "--status", "approved"], env)
+    const before = JSON.parse(run(["list", "--json"], env))
+    const id = before.data.memories[0].id
+
+    const result = runProcess(["delete", id, "--json"], { env })
+
+    assert.equal(result.status, 0)
+    const parsed = JSON.parse(result.stdout)
+    assert.equal(parsed.ok, true)
+    assert.equal(parsed.data.deleted.status, "deleted")
+    assert.ok(Array.isArray(parsed.data.warnings))
+    assert.match(parsed.data.warnings.join("\n"), /Vault path does not exist/u)
+  })
+
   it("doctor reports stats", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,

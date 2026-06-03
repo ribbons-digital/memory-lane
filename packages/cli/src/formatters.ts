@@ -1,4 +1,4 @@
-import type { MemoryRecord, RecallResult, SaveResult, CompactReport } from "@memory-lane/core"
+import type { MemoryRecord, RecallResult, SaveResult, MemoryMutationResult, CompactReport } from "@memory-lane/core"
 
 const VERSION = "0.1.0"
 
@@ -63,6 +63,18 @@ export function formatSaveResult(result: SaveResult, json: boolean): string {
     return JSON.stringify({ ok: true, data: { status: "skipped", reason: result.reason }, meta: meta() }, null, 2)
   }
   return `Skipped: ${result.reason}`
+}
+
+export function formatMutationResult(label: string, result: MemoryMutationResult, json: boolean): string {
+  const { warnings, ...memory } = result
+  if (json) {
+    const data: Record<string, unknown> = { [label.toLowerCase()]: memory }
+    if (warnings?.length) data.warnings = warnings
+    return JSON.stringify({ ok: true, data, meta: meta() }, null, 2)
+  }
+  const formatted = formatResult(label, memory, false)
+  if (!warnings?.length) return formatted
+  return [formatted, ...warnings.map((warning) => `Warning: ${warning}`)].join("\n")
 }
 
 export function formatResult(label: string, data: unknown, json: boolean): string {

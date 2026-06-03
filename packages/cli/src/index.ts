@@ -6,7 +6,7 @@ import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-ad
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import { initObsidianMirror, statusObsidianMirror, syncObsidianMirror } from "@memory-lane/obsidian-mirror"
 import {
-  formatMemories, formatRecall, formatSaveResult, formatResult,
+  formatMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
   formatCompact, formatDoctor, formatError, usage,
 } from "./formatters.js"
 
@@ -186,7 +186,7 @@ function handleDelete(ctx: CliContext): void {
     console.log(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
   }
-  console.log(formatResult("Deleted", mem, ctx.json))
+  console.log(formatMutationResult("Deleted", mem, ctx.json))
 }
 
 function handleApprove(ctx: CliContext): void {
@@ -196,7 +196,7 @@ function handleApprove(ctx: CliContext): void {
     console.log(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
   }
-  console.log(formatResult("Approved", mem, ctx.json))
+  console.log(formatMutationResult("Approved", mem, ctx.json))
 }
 
 function handleReject(ctx: CliContext): void {
@@ -206,7 +206,7 @@ function handleReject(ctx: CliContext): void {
     console.log(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
   }
-  console.log(formatResult("Rejected", mem, ctx.json))
+  console.log(formatMutationResult("Rejected", mem, ctx.json))
 }
 
 function handleReview(ctx: CliContext): void {
