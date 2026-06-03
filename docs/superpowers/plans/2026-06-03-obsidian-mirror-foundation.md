@@ -42,7 +42,7 @@
 - Modify: `packages/core/src/config.ts`
 - Modify: `packages/core/test/config.test.ts`
 
-- [ ] **Step 1: Write failing config tests**
+- [x] **Step 1: Write failing config tests**
 
 Append tests to `packages/core/test/config.test.ts` near existing config validation tests:
 
@@ -127,7 +127,7 @@ test("validateConfig rejects unsafe obsidian folder", () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
 
 Run:
 
@@ -137,7 +137,7 @@ pnpm --filter @memory-lane/core test
 
 Expected: FAIL because `SemanticMemoryConfig` has no `obsidian` property or validation rejects unknown shape incorrectly.
 
-- [ ] **Step 3: Add types and validation**
+- [x] **Step 3: Add types and validation**
 
 In `packages/core/src/types.ts`, replace the current `SemanticMemoryConfig` interface with this expanded shape:
 
@@ -218,7 +218,7 @@ function validateObsidianConfig(v: unknown): void {
 
 Call `validateObsidianConfig(root.obsidian)` inside `validateConfig()` before the return.
 
-- [ ] **Step 4: Run tests to verify GREEN**
+- [x] **Step 4: Run tests to verify GREEN**
 
 Run:
 
@@ -228,7 +228,7 @@ pnpm --filter @memory-lane/core test
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/types.ts packages/core/src/config.ts packages/core/test/config.test.ts
