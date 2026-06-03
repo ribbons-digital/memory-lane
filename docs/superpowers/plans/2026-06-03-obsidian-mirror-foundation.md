@@ -1094,7 +1094,7 @@ git commit -m "feat(core): mirror memory writes to obsidian"
 **Files:**
 - Potentially modify docs/tests discovered during final verification.
 
-- [ ] **Step 1: Run full verification**
+- [x] **Step 1: Run full verification**
 
 Run:
 
@@ -1106,7 +1106,7 @@ git status --short
 
 Expected: build/test PASS; only intentional changes are present.
 
-- [ ] **Step 2: Manual smoke test in temp vault**
+- [x] **Step 2: Manual smoke test in temp vault**
 
 Run:
 
@@ -1128,7 +1128,7 @@ find "$vault" -maxdepth 3 -type f | sort
 
 Expected: output includes `README.md` and one file under `Memory Lane/memories/`.
 
-- [ ] **Step 3: Request code review**
+- [x] **Step 3: Request code review**
 
 Dispatch reviewer with this context:
 
@@ -1136,7 +1136,7 @@ Dispatch reviewer with this context:
 Review the feature branch implementing Phase 1 Slice 1 of Obsidian mirror support. Requirements: opt-in one-way mirror only; JSONL remains source of truth; generated one-file-per-active-memory Markdown under memories/<id>.md; init/status/sync --dry-run; best-effort MemoryEngine mirror updates; hooks/adapters should not own Obsidian logic; mirror failures must not break JSONL writes. Check config validation, path safety, generated file deletion safety, CLI behavior, tests, and docs.
 ```
 
-- [ ] **Step 4: Address review feedback**
+- [x] **Step 4: Address review feedback**
 
 Fix Critical/Important issues with TDD. For each fix:
 
@@ -1147,7 +1147,7 @@ pnpm test
 
 Expected: PASS after fixes.
 
-- [ ] **Step 5: Final commit if needed**
+- [x] **Step 5: Final commit if needed**
 
 If review fixes changed files:
 
