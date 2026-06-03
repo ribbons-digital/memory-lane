@@ -225,4 +225,74 @@ describe("CLI integration", () => {
     assert.equal(result.stdout.trim(), "{}")
   })
 
+  it("obsidian status reports unconfigured mirror", () => {
+    const result = runProcess(["obsidian", "status"], {
+      env: {
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+    })
+
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Obsidian mirror: disabled/)
+  })
+
+  it("obsidian init configures mirror and performs initial sync", () => {
+    const home = tempDir()
+    const vault = path.join(home, "Vault")
+    fs.mkdirSync(vault)
+    const env = {
+      HOME: home,
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    runProcess(["save", "This repo uses pnpm", "--category", "project"], { env })
+
+    const result = runProcess(["obsidian", "init", "--vault", "~/Vault"], { env })
+
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Configured Obsidian mirror/)
+    assert.match(result.stdout, /Warning: No \.obsidian\/ directory found/)
+    assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "README.md")), true)
+    const files = fs.readdirSync(path.join(vault, "Memory Lane", "memories"))
+    assert.equal(files.length, 1)
+    const config = JSON.parse(fs.readFileSync(cfgFile, "utf8"))
+    assert.equal(config.obsidian.enabled, true)
+    assert.equal(config.obsidian.vaultPath, vault)
+    assert.equal(config.obsidian.folder, "Memory Lane")
+    assert.equal(config.obsidian.mode, "mirror")
+  })
+
+  it("obsidian sync dry-run does not write files", () => {
+    const vault = tempDir()
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    runProcess(["config", "set", "obsidian", JSON.stringify({ enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" })], { env })
+    runProcess(["save", "Dry run memory", "--category", "project"], { env })
+
+    const result = runProcess(["obsidian", "sync", "--dry-run"], { env })
+
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Would create:/)
+    assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "memories")), false)
+  })
+
+  it("obsidian sync requires configured enabled mirror", () => {
+    const result = runProcess(["obsidian", "sync"], {
+      env: {
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+    })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout + result.stderr, /Obsidian mirror is not configured/)
+  })
+
 })

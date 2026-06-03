@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+import * as path from "node:path"
 import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, resolveWritableMemoryPaths, type MemoryPaths } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
+import { initObsidianMirror, statusObsidianMirror, syncObsidianMirror } from "@memory-lane/obsidian-mirror"
 import {
   formatMemories, formatRecall, formatSaveResult, formatResult,
   formatCompact, formatDoctor, formatError, usage,
@@ -290,6 +292,103 @@ function setConfigValue(ctx: CliContext): void {
   console.log(ctx.json ? JSON.stringify({ ok: true, path: key }) : `Set ${key}`)
 }
 
+function expandHome(input: string): string {
+  if (input === "~") return process.env.HOME ?? input
+  if (input.startsWith("~/")) return path.join(process.env.HOME ?? "", input.slice(2))
+  return input
+}
+
+function configuredObsidian(ctx: CliContext): { enabled: boolean; vaultPath?: string; folder?: string; mode?: "mirror" } {
+  const raw = readRawConfig(ctx.configPath) as any
+  return raw?.obsidian ?? { enabled: false }
+}
+
+function obsidianConfigRequiredMessage(): string {
+  return "Obsidian mirror is not configured. Run `memory-lane obsidian init --vault <path>`."
+}
+
+function handleObsidian(ctx: CliContext): void {
+  const sub = ctx.rest[0]
+
+  if (sub === "status") {
+    const cfg = configuredObsidian(ctx)
+    if (!cfg.enabled || !cfg.vaultPath) {
+      console.log(ctx.json ? JSON.stringify({ ok: true, data: { enabled: false } }, null, 2) : "Obsidian mirror: disabled")
+      return
+    }
+
+    const status = statusObsidianMirror({ vaultPath: cfg.vaultPath, folder: cfg.folder })
+    if (ctx.json) {
+      console.log(JSON.stringify({ ok: status.ok, data: status }, null, 2))
+      return
+    }
+    console.log([
+      "Obsidian mirror: enabled",
+      `Root: ${status.root}`,
+      ...status.warnings.map((warning) => `Warning: ${warning}`),
+    ].join("\n"))
+    return
+  }
+
+  if (sub === "init") {
+    const vault = flag(ctx.argv, "vault")
+    if (!vault || vault === "true") {
+      console.log(formatError("Usage: memory-lane obsidian init --vault <path> [--folder <folder>]", ctx.json))
+      process.exit(2)
+    }
+
+    const vaultPath = path.resolve(expandHome(vault))
+    const folder = flag(ctx.argv, "folder") ?? "Memory Lane"
+    const init = initObsidianMirror({ vaultPath, folder })
+    if (!init.ok) {
+      const message = init.warnings.length ? init.warnings.join("\n") : "Failed to initialize Obsidian mirror."
+      console.log(formatError(message, ctx.json))
+      process.exit(1)
+    }
+
+    writeConfig(ctx.configPath, { obsidian: { enabled: true, vaultPath, folder, mode: "mirror" } } as any)
+    const sync = syncObsidianMirror({ vaultPath, folder }, ctx.engine.list({ all: true }))
+    if (ctx.json) {
+      console.log(JSON.stringify({ ok: sync.ok, data: { init, sync } }, null, 2))
+    } else {
+      console.log([
+        `Configured Obsidian mirror at ${sync.root}`,
+        `Synced active memories. Created: ${sync.created}, Updated: ${sync.updated}, Deleted: ${sync.deleted}`,
+        ...sync.warnings.map((warning) => `Warning: ${warning}`),
+      ].join("\n"))
+    }
+    if (!sync.ok) process.exit(1)
+    return
+  }
+
+  if (sub === "sync") {
+    const cfg = configuredObsidian(ctx)
+    if (!cfg.enabled || !cfg.vaultPath) {
+      console.log(formatError(obsidianConfigRequiredMessage(), ctx.json))
+      process.exit(1)
+    }
+
+    const dryRun = hasFlag(ctx.argv, "dry-run")
+    const result = syncObsidianMirror({ vaultPath: cfg.vaultPath, folder: cfg.folder }, ctx.engine.list({ all: true }), { dryRun })
+    if (ctx.json) {
+      console.log(JSON.stringify({ ok: result.ok, data: result }, null, 2))
+    } else {
+      console.log([
+        dryRun ? "Obsidian mirror dry run:" : "Obsidian mirror synced:",
+        `${dryRun ? "Would create" : "Created"}: ${result.created}`,
+        `${dryRun ? "Would update" : "Updated"}: ${result.updated}`,
+        `${dryRun ? "Would delete" : "Deleted"}: ${result.deleted}`,
+        ...result.warnings.map((warning) => `Warning: ${warning}`),
+      ].join("\n"))
+    }
+    if (!result.ok) process.exit(1)
+    return
+  }
+
+  console.log(formatError("Usage: memory-lane obsidian init|status|sync", ctx.json))
+  process.exit(2)
+}
+
 const configHandlers: Record<string, (ctx: CliContext) => void> = {
   show: showConfig,
   "enable-semantic": (ctx) => setSemanticEnabled(ctx, true),
@@ -353,6 +452,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   status: handleStatus,
   reindex: handleReindex,
   config: handleConfig,
+  obsidian: handleObsidian,
   claude: handleClaude,
   codex: handleCodex,
 }

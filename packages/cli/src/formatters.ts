@@ -111,6 +111,8 @@ Commands:
   status
   init --project-local [--project <path>]
   config [show|enable-semantic|disable-semantic|set <key> <value>]
+  obsidian <init|status|sync>
+                  Manage optional Obsidian Markdown mirror
   claude <user-prompt-submit|stop|post-tool-use>
                   Run a Claude Code hook adapter command; reads hook JSON from stdin
   codex <user-prompt-submit|stop|post-tool-use>
