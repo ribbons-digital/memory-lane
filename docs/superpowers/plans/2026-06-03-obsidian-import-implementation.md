@@ -1084,7 +1084,7 @@ git commit -m "feat(cli): add obsidian import dry run"
 - Modify: `packages/obsidian-mirror/src/sync.ts`
 - Modify: `packages/obsidian-mirror/test/sync.test.ts`
 
-- [ ] **Step 1: Add apply integration tests**
+- [x] **Step 1: Add apply integration tests**
 
 Add tests in `packages/cli/test/cli.test.ts`:
 
@@ -1154,7 +1154,7 @@ Add tests in `packages/cli/test/cli.test.ts`:
   })
 ```
 
-- [ ] **Step 2: Add mirror init imports-folder test**
+- [x] **Step 2: Add mirror init imports-folder test**
 
 Add to `packages/obsidian-mirror/test/sync.test.ts`:
 
@@ -1170,7 +1170,7 @@ Add to `packages/obsidian-mirror/test/sync.test.ts`:
   })
 ```
 
-- [ ] **Step 3: Run tests to verify failure**
+- [x] **Step 3: Run tests to verify failure**
 
 Run:
 
@@ -1181,7 +1181,7 @@ pnpm --filter @memory-lane/obsidian-mirror test
 
 Expected: CLI apply tests fail because apply is not implemented; mirror test fails because `imports/` is not created.
 
-- [ ] **Step 4: Create imports folder in mirror init/sync**
+- [x] **Step 4: Create imports folder in mirror init/sync**
 
 Modify `packages/obsidian-mirror/src/sync.ts`:
 
@@ -1209,7 +1209,7 @@ Update `readme()` bullet list to include:
     "- `imports/*.md` may contain user-authored notes for explicit import with `memory_lane: true`.",
 ```
 
-- [ ] **Step 5: Implement apply formatting and handler**
+- [x] **Step 5: Implement apply formatting and handler**
 
 In `packages/cli/src/formatters.ts`, add apply-specific type and formatter:
 
@@ -1299,7 +1299,7 @@ In `packages/cli/src/index.ts`, add `formatAppliedImport` import and replace the
     return
 ```
 
-- [ ] **Step 6: Run targeted tests**
+- [x] **Step 6: Run targeted tests**
 
 Run:
 
@@ -1311,7 +1311,7 @@ pnpm --filter @memory-lane/obsidian-mirror test
 
 Expected: all targeted tests pass.
 
-- [ ] **Step 7: Commit Task 4**
+- [x] **Step 7: Commit Task 4**
 
 Run:
 
