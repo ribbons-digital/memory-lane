@@ -43,10 +43,11 @@ export ML_TEST_VAULT="$ML_TEST_ROOT/TestVault"
 mkdir -p "$ML_TEST_VAULT"
 ```
 
-If using the local TypeScript CLI during development, run commands as:
+If using the local repo during development, build first and run the generated local CLI directly:
 
 ```bash
-pnpm --filter @memory-lane/cli start -- <args>
+pnpm build
+node packages/cli/dist/index.js <args>
 ```
 
 If the package is built/linked globally, replace that prefix with:
@@ -55,10 +56,10 @@ If the package is built/linked globally, replace that prefix with:
 memory-lane <args>
 ```
 
-The examples below use a helper variable:
+The examples below use a helper variable for the local repo CLI:
 
 ```bash
-ML="pnpm --filter @memory-lane/cli start --"
+ML="node packages/cli/dist/index.js"
 ```
 
 ## 1. Baseline CLI sanity
