@@ -373,7 +373,7 @@ git commit -m "feat(obsidian): add mirror index renderer"
 - Modify: `packages/obsidian-mirror/src/sync.ts`
 - Modify: `packages/obsidian-mirror/test/sync.test.ts`
 
-- [ ] **Step 1: Write failing sync/tag tests**
+- [x] **Step 1: Write failing sync/tag tests**
 
 Append tests to `packages/obsidian-mirror/test/sync.test.ts`:
 
@@ -423,7 +423,7 @@ test("syncObsidianMirror deletes stale generated index files only", (t) => {
 })
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -433,7 +433,7 @@ pnpm --filter @memory-lane/obsidian-mirror test
 
 Expected: FAIL because tags and index sync are not wired yet.
 
-- [ ] **Step 3: Add tags to memory frontmatter**
+- [x] **Step 3: Add tags to memory frontmatter**
 
 Modify `packages/obsidian-mirror/src/markdown.ts` so `renderMemoryMarkdown` includes tags after `memory_lane_mirror`:
 
@@ -453,7 +453,7 @@ function tagLines(memory: MirrorMemoryRecord): string[] {
 
 Then include `...tagLines(memory)` in the `frontmatter` array immediately after `line("memory_lane_mirror", true)`.
 
-- [ ] **Step 4: Wire index sync**
+- [x] **Step 4: Wire index sync**
 
 Modify `packages/obsidian-mirror/src/sync.ts`:
 
@@ -511,7 +511,7 @@ if (fs.existsSync(indexDir)) {
 
 - Update `readme()` to mention `index.md`, `indexes/*.md`, generated/read-only semantics, and import location.
 
-- [ ] **Step 5: Run tests and verify pass**
+- [x] **Step 5: Run tests and verify pass**
 
 Run:
 
@@ -522,7 +522,7 @@ pnpm build
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/obsidian-mirror/src/markdown.ts packages/obsidian-mirror/src/sync.ts packages/obsidian-mirror/test/sync.test.ts
