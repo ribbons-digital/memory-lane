@@ -1410,7 +1410,7 @@ Expected:
 - tests pass for all packages;
 - only planned docs and code files are modified.
 
-- [ ] **Step 4: Request final code review**
+- [x] **Step 4: Request final code review**
 
 Use reviewer subagent with this prompt:
 
@@ -1420,7 +1420,7 @@ Review the Obsidian import implementation against docs/superpowers/specs/2026-06
 
 Expected: reviewer returns APPROVED or concrete issues to fix.
 
-- [ ] **Step 5: Fix review findings if any**
+- [x] **Step 5: Fix review findings if any**
 
 If review returns issues, write failing tests for each issue first. Then implement minimal fixes and rerun:
 
@@ -1444,7 +1444,7 @@ git add README.md skills/memory-lane/SKILL.md docs/superpowers/plans/2026-06-03-
 git commit -m "docs: document obsidian import workflow"
 ```
 
-- [ ] **Step 8: Final status report**
+- [x] **Step 8: Final status report**
 
 Run:
 
