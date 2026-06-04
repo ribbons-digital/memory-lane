@@ -93,20 +93,38 @@ These items do **not** reopen Phases 1–3 and should not start the next roadmap
 
 **Goal:** Make the generated mirror easier to browse in Obsidian without changing the canonical one-file-per-memory layout from Phase 1.
 
+Planned first slice decisions:
+
+- Mirror index files are generated/read-only mirror artifacts, not user-authored notes.
+- First index set:
+  - `<vault>/<folder>/index.md` landing page
+  - `<vault>/<folder>/indexes/pending.md`
+  - `<vault>/<folder>/indexes/approved.md`
+  - `<vault>/<folder>/indexes/project.md` grouped by project key
+  - `<vault>/<folder>/indexes/recent.md` sorted by `updatedAt` descending
+- Generated indexes use standard Markdown links to `memories/<id>.md` for portability and deterministic tests.
+- Lightweight Obsidian tags are added to both mirrored memory files and mirror index files while preserving generated-file markers:
+  - memory files include `memory-lane`, `memory-lane/memory`, status, category, and kind tags
+  - index files include `memory-lane` and `memory-lane/index` tags plus `memory_lane_index: true`
+  - no Dataview-specific custom fields are added in the first slice beyond existing useful frontmatter
+- `memory-lane doctor` adds cheap, non-mutating Obsidian checks only: enabled/config presence, vault path existence, folder safety, mirror folder existence, `memories/` existence, and `imports/` existence.
+- Include Windows absolute-path folder validation in this slice so config validation and mirror sync safety agree.
+- Mirror sync owns generated index files at `<vault>/<folder>/index.md` and `<vault>/<folder>/indexes/*.md`; stale generated index cleanup is allowed only inside the configured index area and only for `.md` files marked with both `memory_lane_mirror: true` and `memory_lane_index: true`.
+- All first-slice index files are generated even when empty, with explicit empty-state text.
+- Index entries stay compact: Markdown link text/title plus status, category, kind, scope label, and updated date; source/provenance/full metadata stay in the mirrored memory file.
+- Future improvement: one-file-per-project indexes after filename/slug rules are deliberately designed.
+- Future improvement: optional Obsidian wikilinks if users prefer native Obsidian link syntax.
+- Future improvement: full mirror reconciliation diagnostics in doctor after stale-file/active-record comparison rules are deliberately designed.
+- Future improvement: import dry-run secret warnings as a separate import-hardening task.
+- Future improvement: import snapshot type cleanup as a separate maintainability task.
+
 Todos:
 
-1. Add Obsidian-friendly index pages:
-   - pending memories
-   - approved memories
-   - project memories
-   - recent memories
-2. Add optional tags/properties for Obsidian Bases or Dataview:
-   ```yaml
-   tags: [memory-lane, project, approved]
-   ```
-3. Add `memory-lane doctor` warnings for broken, missing, or stale mirror config.
-4. Add docs explaining mirror semantics, generated files, status/category filtering, and why hooks never prompt for Obsidian setup.
-5. Evaluate optional user-facing niceties such as custom index titles or folder names without changing canonical `memories/<id>.md` paths.
+1. Add generated mirror index rendering/sync support for the first index set, including stable empty index files, compact standard-Markdown link entries, and safe stale index deletion gated by `memory_lane_mirror: true` plus `memory_lane_index: true`.
+2. Add lightweight Obsidian tags/properties to generated mirrored memory files and mirror index files without adding Dataview-specific custom fields.
+3. Add cheap, non-mutating Obsidian checks to `memory-lane doctor`, and align folder validation with mirror sync by rejecting Windows absolute folder paths.
+4. Update README, CLI help, generated mirror README, skill docs, and manual testing docs to explain generated index files, tags, status/category/project/recent browsing, and why hooks/import do not treat index files as user-authored notes.
+5. Write a focused implementation plan/spec for this Phase 4 slice before coding, keeping deferred improvements out of scope: one-file-per-project indexes, optional wikilinks, full reconciliation diagnostics, import dry-run secret warnings, and import snapshot cleanup.
 
 ## Phase 5 — MCP Server MVP
 

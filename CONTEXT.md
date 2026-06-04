@@ -55,6 +55,10 @@ _Avoid_: Obsidian-backed storage
 A generated Markdown file in an Obsidian mirror that represents one active Memory Lane record by stable memory id. It is human-readable but not user-authored; changes may be overwritten because JSONL remains the source of truth.
 _Avoid_: Imported note, source record
 
+**Mirror index file**:
+A generated Markdown file in an Obsidian mirror that links to mirrored memory files by status, project, category, kind, or recency. It is generated from the JSONL memory store, may be overwritten by mirror sync, and is not imported.
+_Avoid_: User-authored note, import note, editable index
+
 **Mirror sync**:
 An explicit repair or backfill operation that reconciles the Obsidian mirror folder with the active approved and pending records in the JSONL memory store. It may create, update, or delete generated mirrored memory files only inside Memory Lane's configured mirror folder.
 _Avoid_: Import, bidirectional sync
