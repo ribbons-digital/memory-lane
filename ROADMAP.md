@@ -81,11 +81,7 @@ These items do **not** reopen Phases 1–3 and should not start the next roadmap
    - Current apply path uses normal `MemoryEngine.save`/`MemoryEngine.update` validation, so likely secrets are skipped at apply time.
    - Improve dry-run so secret-containing import notes are warned/skipped before apply, either by passing a secret-detection callback into the import planner or extracting secret detection into a small shared utility.
 
-2. **Windows absolute-path folder validation**
-   - Mirror sync already guards against POSIX and Windows absolute folder paths.
-   - Align config validation by rejecting `path.win32.isAbsolute(folder)` as well.
-
-3. **Import snapshot type cleanup**
+2. **Import snapshot type cleanup**
    - `ExistingImportMemory` includes optional fields that the planner currently does not read and the CLI snapshot mapper does not populate.
    - Either trim the type to fields actually used by the planner or populate the fields consistently for future maintainability.
 
@@ -108,7 +104,6 @@ Planned first slice decisions:
   - index files include `memory-lane` and `memory-lane/index` tags plus `memory_lane_index: true`
   - no Dataview-specific custom fields are added in the first slice beyond existing useful frontmatter
 - `memory-lane doctor` adds cheap, non-mutating Obsidian checks only: enabled/config presence, vault path existence, folder safety, mirror folder existence, `memories/` existence, and `imports/` existence.
-- Include Windows absolute-path folder validation in this slice so config validation and mirror sync safety agree.
 - Mirror sync owns generated index files at `<vault>/<folder>/index.md` and `<vault>/<folder>/indexes/*.md`; stale generated index cleanup is allowed only inside the configured index area and only for `.md` files marked with both `memory_lane_mirror: true` and `memory_lane_index: true`.
 - All first-slice index files are generated even when empty, with explicit empty-state text.
 - Index entries stay compact: Markdown link text/title plus status, category, kind, scope label, and updated date; source/provenance/full metadata stay in the mirrored memory file.
@@ -122,7 +117,7 @@ Todos:
 
 1. Add generated mirror index rendering/sync support for the first index set, including stable empty index files, compact standard-Markdown link entries, and safe stale index deletion gated by `memory_lane_mirror: true` plus `memory_lane_index: true`.
 2. Add lightweight Obsidian tags/properties to generated mirrored memory files and mirror index files without adding Dataview-specific custom fields.
-3. Add cheap, non-mutating Obsidian checks to `memory-lane doctor`, and align folder validation with mirror sync by rejecting Windows absolute folder paths.
+3. Add cheap, non-mutating Obsidian checks to `memory-lane doctor`.
 4. Update README, CLI help, generated mirror README, skill docs, and manual testing docs to explain generated index files, tags, status/category/project/recent browsing, and why hooks/import do not treat index files as user-authored notes.
 5. Write a focused implementation plan/spec for this Phase 4 slice before coding, keeping deferred improvements out of scope: one-file-per-project indexes, optional wikilinks, full reconciliation diagnostics, import dry-run secret warnings, and import snapshot cleanup.
 
