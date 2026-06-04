@@ -90,7 +90,7 @@ Modify:
 - Create: `packages/obsidian-mirror/test/indexes.test.ts`
 - Modify: `packages/obsidian-mirror/src/index.ts`
 
-- [ ] **Step 1: Write failing index renderer tests**
+- [x] **Step 1: Write failing index renderer tests**
 
 Create `packages/obsidian-mirror/test/indexes.test.ts`:
 
@@ -189,7 +189,7 @@ test("renderMirrorIndexes emits stable empty states", () => {
 })
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -199,7 +199,7 @@ pnpm --filter @memory-lane/obsidian-mirror test
 
 Expected: FAIL because `../src/indexes.ts` does not exist.
 
-- [ ] **Step 3: Implement index renderer**
+- [x] **Step 3: Implement index renderer**
 
 Create `packages/obsidian-mirror/src/indexes.ts`:
 
@@ -347,7 +347,7 @@ export * from "./sync.js"
 export * from "./types.js"
 ```
 
-- [ ] **Step 4: Run tests and verify pass**
+- [x] **Step 4: Run tests and verify pass**
 
 Run:
 
@@ -357,7 +357,7 @@ pnpm --filter @memory-lane/obsidian-mirror test
 
 Expected: PASS for the new index renderer tests and existing mirror tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/obsidian-mirror/src/indexes.ts packages/obsidian-mirror/src/index.ts packages/obsidian-mirror/test/indexes.test.ts
