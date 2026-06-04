@@ -172,7 +172,7 @@ Commands:
   obsidian status
                   Show Obsidian mirror status
   obsidian sync [--dry-run]
-                  Reconcile generated mirror files
+                  Reconcile generated mirror files and indexes
   obsidian import [--dry-run]
                   Explicitly import user-authored notes from configured imports/; applies by default
   claude <user-prompt-submit|stop|post-tool-use>

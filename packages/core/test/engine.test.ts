@@ -452,6 +452,80 @@ describe("MemoryEngine", () => {
     assert.equal(d.totalMemories, 2)
   })
 
+  it("doctor reports disabled obsidian mirror", () => {
+    const e = engine()
+    const report = e.doctor()
+    assert.equal(report.obsidianEnabled, false)
+    assert.deepEqual(report.obsidianWarnings, [])
+  })
+
+  it("doctor reports healthy obsidian folders without writing", () => {
+    const vault = path.join(dir, "vault")
+    fs.mkdirSync(path.join(vault, "Memory Lane", "memories"), { recursive: true })
+    fs.mkdirSync(path.join(vault, "Memory Lane", "imports"), { recursive: true })
+    const configPath = path.join(dir, "cfg.json")
+    fs.writeFileSync(configPath, JSON.stringify({ obsidian: { enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" } }), "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem.jsonl"),
+      embeddingsPath: path.join(dir, "emb.jsonl"),
+      configPath,
+    })
+
+    const mirrorRoot = path.join(vault, "Memory Lane")
+    const before = fs.readdirSync(mirrorRoot).sort()
+    const report = e.doctor()
+    const after = fs.readdirSync(mirrorRoot).sort()
+
+    assert.equal(report.obsidianEnabled, true)
+    assert.equal(report.obsidianVaultPath, vault)
+    assert.equal(report.obsidianFolder, "Memory Lane")
+    assert.equal(report.obsidianMirrorRoot, mirrorRoot)
+    assert.equal(report.obsidianMirrorFolderExists, true)
+    assert.equal(report.obsidianMemoriesFolderExists, true)
+    assert.equal(report.obsidianImportsFolderExists, true)
+    assert.deepEqual(report.obsidianWarnings, [])
+    assert.deepEqual(after, before)
+  })
+
+  it("doctor reports obsidian folder warnings", () => {
+    const vault = path.join(dir, "vault")
+    fs.mkdirSync(vault, { recursive: true })
+    const configPath = path.join(dir, "cfg.json")
+    fs.writeFileSync(configPath, JSON.stringify({ obsidian: { enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" } }), "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem.jsonl"),
+      embeddingsPath: path.join(dir, "emb.jsonl"),
+      configPath,
+    })
+
+    const report = e.doctor()
+
+    assert.equal(report.obsidianEnabled, true)
+    assert.equal(report.obsidianMirrorFolderExists, false)
+    assert.equal(report.obsidianMemoriesFolderExists, false)
+    assert.equal(report.obsidianImportsFolderExists, false)
+    assert.match((report.obsidianWarnings as string[]).join("\n"), /Mirror folder does not exist/)
+    assert.match((report.obsidianWarnings as string[]).join("\n"), /memories\/ folder does not exist/)
+    assert.match((report.obsidianWarnings as string[]).join("\n"), /imports\/ folder does not exist/)
+  })
+
+  it("doctor reports missing obsidian vault path", () => {
+    const vault = path.join(dir, "missing-vault")
+    const configPath = path.join(dir, "cfg.json")
+    fs.writeFileSync(configPath, JSON.stringify({ obsidian: { enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" } }), "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem.jsonl"),
+      embeddingsPath: path.join(dir, "emb.jsonl"),
+      configPath,
+    })
+
+    const report = e.doctor()
+
+    assert.equal(report.obsidianEnabled, true)
+    assert.equal(report.obsidianMirrorFolderExists, false)
+    assert.match((report.obsidianWarnings as string[]).join("\n"), /Obsidian vault path does not exist/)
+  })
+
   it("probe returns error without provider", async () => {
     const e = engine()
     const p = await e.probeEmbeddingProvider()

@@ -90,7 +90,7 @@ Modify:
 - Create: `packages/obsidian-mirror/test/indexes.test.ts`
 - Modify: `packages/obsidian-mirror/src/index.ts`
 
-- [ ] **Step 1: Write failing index renderer tests**
+- [x] **Step 1: Write failing index renderer tests**
 
 Create `packages/obsidian-mirror/test/indexes.test.ts`:
 
@@ -189,7 +189,7 @@ test("renderMirrorIndexes emits stable empty states", () => {
 })
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -199,7 +199,7 @@ pnpm --filter @memory-lane/obsidian-mirror test
 
 Expected: FAIL because `../src/indexes.ts` does not exist.
 
-- [ ] **Step 3: Implement index renderer**
+- [x] **Step 3: Implement index renderer**
 
 Create `packages/obsidian-mirror/src/indexes.ts`:
 
@@ -347,7 +347,7 @@ export * from "./sync.js"
 export * from "./types.js"
 ```
 
-- [ ] **Step 4: Run tests and verify pass**
+- [x] **Step 4: Run tests and verify pass**
 
 Run:
 
@@ -357,7 +357,7 @@ pnpm --filter @memory-lane/obsidian-mirror test
 
 Expected: PASS for the new index renderer tests and existing mirror tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/obsidian-mirror/src/indexes.ts packages/obsidian-mirror/src/index.ts packages/obsidian-mirror/test/indexes.test.ts
@@ -373,7 +373,7 @@ git commit -m "feat(obsidian): add mirror index renderer"
 - Modify: `packages/obsidian-mirror/src/sync.ts`
 - Modify: `packages/obsidian-mirror/test/sync.test.ts`
 
-- [ ] **Step 1: Write failing sync/tag tests**
+- [x] **Step 1: Write failing sync/tag tests**
 
 Append tests to `packages/obsidian-mirror/test/sync.test.ts`:
 
@@ -423,7 +423,7 @@ test("syncObsidianMirror deletes stale generated index files only", (t) => {
 })
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -433,7 +433,7 @@ pnpm --filter @memory-lane/obsidian-mirror test
 
 Expected: FAIL because tags and index sync are not wired yet.
 
-- [ ] **Step 3: Add tags to memory frontmatter**
+- [x] **Step 3: Add tags to memory frontmatter**
 
 Modify `packages/obsidian-mirror/src/markdown.ts` so `renderMemoryMarkdown` includes tags after `memory_lane_mirror`:
 
@@ -453,7 +453,7 @@ function tagLines(memory: MirrorMemoryRecord): string[] {
 
 Then include `...tagLines(memory)` in the `frontmatter` array immediately after `line("memory_lane_mirror", true)`.
 
-- [ ] **Step 4: Wire index sync**
+- [x] **Step 4: Wire index sync**
 
 Modify `packages/obsidian-mirror/src/sync.ts`:
 
@@ -511,7 +511,7 @@ if (fs.existsSync(indexDir)) {
 
 - Update `readme()` to mention `index.md`, `indexes/*.md`, generated/read-only semantics, and import location.
 
-- [ ] **Step 5: Run tests and verify pass**
+- [x] **Step 5: Run tests and verify pass**
 
 Run:
 
@@ -522,7 +522,7 @@ pnpm build
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/obsidian-mirror/src/markdown.ts packages/obsidian-mirror/src/sync.ts packages/obsidian-mirror/test/sync.test.ts
@@ -537,7 +537,7 @@ git commit -m "feat(obsidian): sync generated mirror indexes"
 - Modify: `packages/core/src/engine.ts`
 - Modify: `packages/core/test/engine.test.ts`
 
-- [ ] **Step 1: Write failing doctor tests**
+- [x] **Step 1: Write failing doctor tests**
 
 Add tests to `packages/core/test/engine.test.ts` near existing doctor tests:
 
@@ -599,7 +599,7 @@ test("doctor reports obsidian folder warnings", (t) => {
 })
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -609,7 +609,7 @@ pnpm --filter @memory-lane/core test
 
 Expected: FAIL because doctor does not include Obsidian fields yet.
 
-- [ ] **Step 3: Implement cheap doctor fields**
+- [x] **Step 3: Implement cheap doctor fields**
 
 Modify `packages/core/src/engine.ts`:
 
@@ -679,7 +679,7 @@ return {
 }
 ```
 
-- [ ] **Step 4: Run tests and verify pass**
+- [x] **Step 4: Run tests and verify pass**
 
 Run:
 
@@ -690,7 +690,7 @@ pnpm build
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/engine.ts packages/core/test/engine.test.ts
@@ -708,7 +708,7 @@ git commit -m "feat(obsidian): add mirror doctor checks"
 - Modify: `packages/cli/src/formatters.ts`
 - Modify: `HANDOFF.md` if stale
 
-- [ ] **Step 1: Update README**
+- [x] **Step 1: Update README**
 
 In `README.md`, expand the Obsidian mirror section to include:
 
@@ -733,7 +733,7 @@ Also document tags:
 Generated files include lightweight tags such as `memory-lane`, `memory-lane/memory`, `memory-lane/index`, and status/category/kind tags for Obsidian browsing, Bases, or Dataview filtering.
 ```
 
-- [ ] **Step 2: Update skill docs**
+- [x] **Step 2: Update skill docs**
 
 In `skills/memory-lane/SKILL.md`, add agent-facing rules:
 
@@ -741,7 +741,7 @@ In `skills/memory-lane/SKILL.md`, add agent-facing rules:
 Generated mirror index files live at `index.md` and `indexes/*.md`. Treat them like generated mirror memory files: do not edit them as source notes, do not import them, and do not imply changes to indexes update JSONL memories.
 ```
 
-- [ ] **Step 3: Update manual testing guide**
+- [x] **Step 3: Update manual testing guide**
 
 In `docs/manual-testing/obsidian-mirror-import.md`, add checks after Obsidian init:
 
@@ -757,7 +757,7 @@ Expected:
 index.md and indexes/*.md exist, include memory_lane_index: true, and link to memories/<id>.md with standard Markdown links.
 ```
 
-- [ ] **Step 4: Update CLI help if needed**
+- [x] **Step 4: Update CLI help if needed**
 
 In `packages/cli/src/formatters.ts`, adjust Obsidian sync line to mention generated indexes:
 
@@ -766,7 +766,7 @@ obsidian sync [--dry-run]
                   Reconcile generated mirror files and indexes
 ```
 
-- [ ] **Step 5: Run docs-adjacent verification**
+- [x] **Step 5: Run docs-adjacent verification**
 
 Run:
 
@@ -777,7 +777,7 @@ pnpm test
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add README.md skills/memory-lane/SKILL.md docs/manual-testing/obsidian-mirror-import.md packages/cli/src/formatters.ts HANDOFF.md
@@ -794,7 +794,7 @@ If `HANDOFF.md` is unchanged, omit it from `git add`.
 - Modify: `docs/superpowers/plans/2026-06-04-obsidian-mirror-ux-polish.md`
 - Modify: `ROADMAP.md` only if implementation completion status should be reflected after merge.
 
-- [ ] **Step 1: Run full verification**
+- [x] **Step 1: Run full verification**
 
 Run:
 
@@ -805,7 +805,7 @@ pnpm test
 
 Expected: all workspace packages build and all tests pass.
 
-- [ ] **Step 2: Run focused manual smoke test**
+- [x] **Step 2: Run focused manual smoke test**
 
 Use a disposable config/vault:
 
@@ -829,11 +829,11 @@ rm -rf "$ML_TEST_ROOT"
 
 Expected: index files exist, contain generated markers, link to the mirrored memory, and doctor prints Obsidian fields.
 
-- [ ] **Step 3: Mark completed steps in this plan**
+- [x] **Step 3: Mark completed steps in this plan**
 
 Replace unchecked boxes for completed tasks with checked boxes in `docs/superpowers/plans/2026-06-04-obsidian-mirror-ux-polish.md`.
 
-- [ ] **Step 4: Commit plan tracking**
+- [x] **Step 4: Commit plan tracking**
 
 ```bash
 git add docs/superpowers/plans/2026-06-04-obsidian-mirror-ux-polish.md ROADMAP.md
@@ -843,6 +843,8 @@ git commit -m "docs: mark obsidian mirror ux polish complete"
 Only include `ROADMAP.md` if it changed.
 
 - [ ] **Step 5: Request final review before merge**
+
+Parent will request final review.
 
 Ask a reviewer to validate:
 
