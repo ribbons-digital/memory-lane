@@ -80,7 +80,13 @@ memory-lane obsidian sync --dry-run
 memory-lane obsidian sync
 ```
 
-The Obsidian mirror is opt-in and one-way: JSONL remains the source of truth and generated Markdown files may be overwritten. Generated mirror files live under `<vault>/<folder>/memories/<id>.md` and are marked with `memory_lane_mirror: true`. Do not tell users to edit generated mirror files as a way to change memory state.
+The Obsidian mirror is opt-in and one-way: JSONL remains the source of truth and generated Markdown files may be overwritten. Generated mirror memory files live under `<vault>/<folder>/memories/<id>.md` and are marked with `memory_lane_mirror: true`.
+
+Generated mirror index files live at `<vault>/<folder>/index.md` and `<vault>/<folder>/indexes/*.md` (`pending.md`, `approved.md`, `project.md`, and `recent.md`). Treat indexes like generated mirror memory files: do not edit them as source notes, do not import them, and do not imply changes to indexes update JSONL memories. They use standard Markdown links to `memories/<id>.md` and may be overwritten by `memory-lane obsidian sync`.
+
+Generated memory files include lightweight tags such as `memory-lane`, `memory-lane/memory`, and status/category/kind tags. Generated index files include `memory-lane` and `memory-lane/index`. Do not tell users to edit generated mirror files as a way to change memory state.
+
+`memory-lane doctor` includes cheap Obsidian diagnostics when the mirror is configured, but it does not repair, sync, or write Obsidian files. Hooks should not configure, prompt for, or run Obsidian mirror/import setup.
 
 ## Obsidian import
 
@@ -103,7 +109,7 @@ Import notes live under `<vault>/<folder>/imports/` and must include top-of-file
 Import note rules/gotchas for agents:
 
 - Import uses the configured Obsidian mirror location only; do not pass or invent `--vault`, `--folder`, or `--path` overrides for `obsidian import`.
-- Generated mirror files with `memory_lane_mirror: true` are skipped.
+- Generated mirror files with `memory_lane_mirror: true` are skipped, including generated indexes with `memory_lane_index: true`.
 - Notes without `memory_lane: true` are ignored.
 - Dotfiles, dotfolders, symlinks, and non-`.md` files are skipped.
 - Body text after frontmatter becomes the memory text; frontmatter is metadata only.

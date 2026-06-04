@@ -94,13 +94,28 @@ memory-lane obsidian sync --dry-run
 memory-lane obsidian sync
 ```
 
-Generated mirror files live under `Memory Lane/memories/<id>.md` by default. Do not edit generated files directly; changes may be overwritten on the next sync or memory mutation. Rejected/deleted memories are removed from the mirror. Stale deletion is constrained to generated files marked with `memory_lane_mirror: true`.
+Generated mirror files include:
+
+```text
+Memory Lane/index.md
+Memory Lane/indexes/pending.md
+Memory Lane/indexes/approved.md
+Memory Lane/indexes/project.md
+Memory Lane/indexes/recent.md
+Memory Lane/memories/<id>.md
+```
+
+Index files are generated, read-only mirror artifacts. They are safe to browse in Obsidian, but they are not user-authored import notes and may be overwritten by `memory-lane obsidian sync`. The index pages use standard Markdown links to `memories/<id>.md` files. Do not edit generated files directly; changes may be overwritten on the next sync or memory mutation. Rejected/deleted memories are removed from the mirror. Stale deletion is constrained to generated files marked with `memory_lane_mirror: true`; generated indexes are additionally marked with `memory_lane_index: true`.
+
+Generated files include lightweight tags for Obsidian browsing, Bases, or Dataview filtering. Memory files include `memory-lane`, `memory-lane/memory`, and status/category/kind tags such as `memory-lane/status/approved`, `memory-lane/category/project`, and `memory-lane/kind/project_fact`. Index files include `memory-lane` and `memory-lane/index`.
+
+`memory-lane doctor` includes cheap Obsidian diagnostics such as configured vault/folder paths, mirror/import folder existence, and warnings. Doctor does not repair, sync, or write Obsidian files.
 
 `obsidian init` and non-dry-run `obsidian sync` also create an `imports/` folder for user-authored import notes; `obsidian sync --dry-run` does not write files.
 
 ### Import from Obsidian
 
-Memory Lane can explicitly import user-authored Markdown notes from the configured Obsidian folder. Import is **not** automatic sync, not bidirectional sync, and not Obsidian-backed storage: JSONL remains the source of truth, generated mirror files are never imported, and source notes are not rewritten, moved, archived, deleted, or annotated with generated ids.
+Memory Lane can explicitly import user-authored Markdown notes from the configured Obsidian folder. Import is **not** automatic sync, not bidirectional sync, and not Obsidian-backed storage: JSONL remains the source of truth, generated mirror memory files and generated indexes are never imported, and source notes are not rewritten, moved, archived, deleted, or annotated with generated ids.
 
 Only this folder is scanned, recursively:
 
@@ -147,7 +162,7 @@ memory-lane obsidian import --json
 Rules and gotchas:
 
 - Notes without `memory_lane: true` are ignored.
-- Notes with `memory_lane_mirror: true` are skipped because they are generated mirror files.
+- Notes with `memory_lane_mirror: true` are skipped because they are generated mirror files; generated indexes also have `memory_lane_index: true` and are not user-authored import notes.
 - Dotfiles, dotfolders, symlinks, and non-`.md` files are skipped during discovery.
 - Discovery order is deterministic by normalized relative path.
 - `status` may be `pending` or explicit `approved`; `rejected` and `deleted` are invalid for import.

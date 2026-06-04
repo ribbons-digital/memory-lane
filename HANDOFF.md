@@ -17,6 +17,7 @@ Recent completed work:
 - Claude adapter is for **Claude Code CLI hooks only**, not Claude Desktop.
 - Root roadmap/context/ADR docs were added for Obsidian mirror/import, MCP server, and future experimental Obsidian-backed storage.
 - Optional one-way Obsidian mirror is implemented and merged.
+- Obsidian mirror UX polish through Task 4 is implemented on `feature/obsidian-mirror-ux-polish`: generated indexes, tags, cheap doctor diagnostics, and docs/help/manual testing updates.
 - Mirror warnings from save/approve/reject/delete are surfaced in human and JSON CLI output.
 - Explicit, non-destructive Obsidian Markdown import is implemented and merged:
   - new standalone `@memory-lane/obsidian-import` parser/planner package;
@@ -60,16 +61,33 @@ Implemented scope:
 - Mirror files are generated at:
 
 ```text
+<vault>/<folder>/index.md
+<vault>/<folder>/indexes/pending.md
+<vault>/<folder>/indexes/approved.md
+<vault>/<folder>/indexes/project.md
+<vault>/<folder>/indexes/recent.md
 <vault>/<folder>/memories/<id>.md
 ```
+
+- Index files are generated/read-only mirror artifacts, may be overwritten by sync, and are not import notes.
+- Index files use standard Markdown links to `memories/<id>.md`.
+- Generated memory files include lightweight tags: `memory-lane`, `memory-lane/memory`, and status/category/kind tags.
+- Generated index files include lightweight tags: `memory-lane` and `memory-lane/index`.
 
 - JSONL remains the source of truth.
 - Mirror includes only active records: `approved` and `pending`.
 - Rejected/deleted records remove stale generated files.
-- Stale deletion is constrained to configured `memories/` and only deletes files with frontmatter:
+- Stale memory deletion is constrained to configured `memories/` and only deletes files with frontmatter:
 
 ```yaml
 memory_lane_mirror: true
+```
+
+- Stale generated-index deletion is constrained to files with both markers:
+
+```yaml
+memory_lane_mirror: true
+memory_lane_index: true
 ```
 
 - `MemoryEngine` performs best-effort mirror sync after successful writes/status transitions.
@@ -77,11 +95,12 @@ memory_lane_mirror: true
 - `obsidian init` and non-dry-run `obsidian sync` create `<vault>/<folder>/imports/` for user-authored import notes.
 - `obsidian sync --dry-run` does not create the import folder or write mirror files.
 - Hooks do not prompt for or own Obsidian setup.
+- `memory-lane doctor` includes cheap Obsidian diagnostics and warnings; it does not repair, sync, or write Obsidian files.
 
 Known accepted mirror limitations:
 
 - Mirror sync currently scans/syncs the full store after mutations; targeted per-record mirroring can be optimized later.
-- No Obsidian index pages yet.
+- No per-project index pages beyond the first-slice `indexes/project.md` grouping.
 - No Obsidian-backed storage.
 
 ## Obsidian import semantics
@@ -114,7 +133,7 @@ memory_lane: true
 ```
 
 - Notes without `memory_lane: true` are ignored.
-- Generated mirror files with `memory_lane_mirror: true` are skipped.
+- Generated mirror files with `memory_lane_mirror: true` are skipped, including generated indexes with `memory_lane_index: true`.
 - Markdown body after frontmatter, trimmed, becomes memory text; frontmatter is metadata only.
 - Unknown frontmatter fields are ignored.
 - Defaults are:
@@ -183,7 +202,7 @@ git push origin main
 
 2. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior.
 3. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
-4. Do not start Phase 4 or any hardening backlog item until the user explicitly approves it.
+4. Complete Task 5 final verification/plan tracking for `feature/obsidian-mirror-ux-polish` only when explicitly requested.
 5. Later, consider small hardening follow-ups from `ROADMAP.md` such as dry-run secret warnings, Windows path validation consistency, or import snapshot type cleanup.
 6. Plan future MCP server support for Claude Desktop and other clients after mirror/import foundations are stable.
 
