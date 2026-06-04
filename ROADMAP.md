@@ -12,6 +12,8 @@ Each phase lists a focused implementation slice of no more than five todos. If a
 
 ## Phase 1 — Obsidian Mirror Foundation
 
+**Status:** Complete and merged.
+
 **Goal:** Add opt-in one-way Obsidian mirror support while JSONL remains the source of truth. Phase 1 does not include import, bidirectional sync, Obsidian-backed storage, index pages, or hook setup prompts.
 
 ### Slice 1 — Contract and First Working Mirror
@@ -36,7 +38,9 @@ Later phases below are intentionally higher-level. Before implementing any later
 
 ## Phase 2 — Controlled Obsidian Import Contract
 
-**Goal:** Design the explicit Obsidian import workflow before implementation. Import remains separate from the mirror: JSONL stays the source of truth, import only reads user-marked Markdown, and no bidirectional sync or Obsidian-backed storage is introduced.
+**Status:** Complete and merged.
+
+**Goal:** Define the explicit Obsidian import workflow before implementation. Import remains separate from the mirror: JSONL stays the source of truth, import only reads user-marked Markdown, and no bidirectional sync or Obsidian-backed storage is introduced.
 
 Todos:
 
@@ -50,19 +54,23 @@ Add the next Phase 2 slice only after these todos are complete.
 
 ## Phase 3 — Controlled Import from Obsidian
 
+**Status:** Complete and merged.
+
 **Goal:** Implement explicit Markdown-to-JSONL import based on the Phase 2 contract.
 
-Todos:
+Completed scope:
 
-1. Add parser and validator tests for importable notes.
-2. Add CLI commands:
+1. Added parser, discovery, and planner tests for importable notes in `@memory-lane/obsidian-import`.
+2. Added CLI commands:
    ```bash
    memory-lane obsidian import --dry-run
+   memory-lane obsidian import --json --dry-run
    memory-lane obsidian import
+   memory-lane obsidian import --json
    ```
-3. Apply imported notes through existing Memory Lane validation and append-only JSONL writes.
-4. Add conflict and duplicate handling from the approved import contract.
-5. Add docs for authoring importable notes, dry-run review, and why import is not automatic sync.
+3. Applied imported notes through normal `MemoryEngine.save` and `MemoryEngine.update` append-only JSONL writes.
+4. Added conflict and duplicate handling from the approved import contract.
+5. Added docs for authoring importable notes, dry-run review, JSONL source-of-truth semantics, generated-file skip behavior, and why import is not automatic sync.
 
 ## Phase 4 — Obsidian Mirror UX Polish
 

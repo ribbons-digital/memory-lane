@@ -167,8 +167,14 @@ Commands:
   status
   init --project-local [--project <path>]
   config [show|enable-semantic|disable-semantic|set <key> <value>]
-  obsidian <init|status|sync|import>
-                  Manage optional Obsidian Markdown mirror; import applies by default and supports --dry-run
+  obsidian init --vault <path> [--folder "Memory Lane"]
+                  Configure optional one-way Obsidian mirror
+  obsidian status
+                  Show Obsidian mirror status
+  obsidian sync [--dry-run]
+                  Reconcile generated mirror files
+  obsidian import [--dry-run]
+                  Explicitly import user-authored notes from configured imports/; applies by default
   claude <user-prompt-submit|stop|post-tool-use>
                   Run a Claude Code hook adapter command; reads hook JSON from stdin
   codex <user-prompt-submit|stop|post-tool-use>

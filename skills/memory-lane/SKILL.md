@@ -80,20 +80,41 @@ memory-lane obsidian sync --dry-run
 memory-lane obsidian sync
 ```
 
-The Obsidian mirror is opt-in and one-way: JSONL remains the source of truth and generated Markdown files may be overwritten.
+The Obsidian mirror is opt-in and one-way: JSONL remains the source of truth and generated Markdown files may be overwritten. Generated mirror files live under `<vault>/<folder>/memories/<id>.md` and are marked with `memory_lane_mirror: true`. Do not tell users to edit generated mirror files as a way to change memory state.
 
 ## Obsidian import
 
-Use explicit import commands only when the user asks to import user-authored Obsidian notes into Memory Lane. Do not imply bidirectional sync and do not import generated mirror files.
+Use explicit import commands only when the user asks to import user-authored Obsidian notes into Memory Lane. Do not imply automatic sync, bidirectional sync, or Obsidian-backed storage, and do not import generated mirror files. Hooks should not configure, prompt for, or run Obsidian import.
 
 Commands:
 
 ```bash
+# Always preview first
 memory-lane obsidian import --dry-run
+memory-lane obsidian import --json --dry-run
+
+# Apply only after the user accepts the plan/warnings
 memory-lane obsidian import
+memory-lane obsidian import --json
 ```
 
-Import notes live under `<vault>/<folder>/imports/` and must include `memory_lane: true` frontmatter. JSONL remains the source of truth.
+Import notes live under `<vault>/<folder>/imports/` and must include top-of-file `memory_lane: true` frontmatter. JSONL remains the source of truth. Source notes are read-only inputs: Memory Lane does not rewrite, move, archive, delete, or add ids to them.
+
+Import note rules/gotchas for agents:
+
+- Import uses the configured Obsidian mirror location only; do not pass or invent `--vault`, `--folder`, or `--path` overrides for `obsidian import`.
+- Generated mirror files with `memory_lane_mirror: true` are skipped.
+- Notes without `memory_lane: true` are ignored.
+- Dotfiles, dotfolders, symlinks, and non-`.md` files are skipped.
+- Body text after frontmatter becomes the memory text; frontmatter is metadata only.
+- Defaults: `category: personal`, `scope: global`, `status: pending`.
+- Allowed import statuses: `pending` and `approved`. `rejected`/`deleted` are invalid.
+- `scope: project` requires project identity; otherwise the note is skipped with a warning.
+- `memory_lane_id` updates only active approved/pending memories; deleted, rejected, or missing ids are skipped with warnings.
+- Updates cannot demote approved memories to pending or change scope/project identity.
+- Duplicate ids or duplicate create body text in one run cause all conflicting notes to be skipped.
+- Apply is partial-success and non-transactional: valid notes may be saved while invalid notes are skipped.
+- Apply uses normal Memory Lane save/update behavior, so validation, append-only JSONL, embedding invalidation, and best-effort mirror warnings still apply.
 
 ### Hook adapters
 

@@ -20,13 +20,15 @@ memory-lane doctor
 
 ## Architecture
 
-Six packages in a monorepo:
+Eight packages in a monorepo:
 
 | Package | Purpose |
 |---|---|
 | `@memory-lane/core` | Pure Node.js library. Zero harness dependencies. |
 | `@memory-lane/lifecycle` | Shared harness-neutral memory automation policy for recall, autosave, context budgets, and tool outcomes. |
 | `@memory-lane/cli` | CLI wrapper. Works with any harness that can shell out. |
+| `@memory-lane/obsidian-mirror` | Optional one-way JSONL → Obsidian Markdown mirror. |
+| `@memory-lane/obsidian-import` | Standalone parser/planner for explicit Obsidian Markdown → JSONL imports. |
 | `@memory-lane/claude-adapter` | Claude Code hook adapter exposed through `memory-lane claude ...`. |
 | `@memory-lane/codex-adapter` | Codex hook adapter exposed through `memory-lane codex ...`. |
 | `@memory-lane/pi-adapter` | pi extension adapter. |
@@ -76,14 +78,14 @@ memory-lane doctor                Diagnostic report
 memory-lane status                Quick stats
 memory-lane reindex [--force]     Rebuild embeddings
 memory-lane init --project-local  Initialize sandbox-friendly project-local storage
-memory-lane obsidian ...          Manage optional Obsidian Markdown mirror
+memory-lane obsidian ...          Manage optional Obsidian mirror/import workflows
 ```
 
 All commands support `--json` for machine-readable output and `--project <path>` to set the project scope.
 
 ### Obsidian mirror
 
-Obsidian support is opt-in. JSONL remains the source of truth; Memory Lane can mirror active approved and pending memories into generated Markdown files in an Obsidian-compatible vault.
+Obsidian support is opt-in and disabled by default. JSONL remains the source of truth; Memory Lane can mirror active `approved` and `pending` memories into generated Markdown files in an Obsidian-compatible vault. Hooks do not configure or prompt for Obsidian setup.
 
 ```bash
 memory-lane obsidian init --vault ~/Obsidian/MyVault
@@ -92,19 +94,23 @@ memory-lane obsidian sync --dry-run
 memory-lane obsidian sync
 ```
 
-Generated files live under `Memory Lane/memories/<id>.md` by default. Do not edit generated files directly; changes may be overwritten.
+Generated mirror files live under `Memory Lane/memories/<id>.md` by default. Do not edit generated files directly; changes may be overwritten on the next sync or memory mutation. Rejected/deleted memories are removed from the mirror. Stale deletion is constrained to generated files marked with `memory_lane_mirror: true`.
+
+`obsidian init` and non-dry-run `obsidian sync` also create an `imports/` folder for user-authored import notes; `obsidian sync --dry-run` does not write files.
 
 ### Import from Obsidian
 
-Memory Lane can explicitly import user-authored Markdown notes from the configured Obsidian folder. Import is not automatic sync: JSONL remains the source of truth, generated mirror files are never imported, and source notes are not rewritten.
+Memory Lane can explicitly import user-authored Markdown notes from the configured Obsidian folder. Import is **not** automatic sync, not bidirectional sync, and not Obsidian-backed storage: JSONL remains the source of truth, generated mirror files are never imported, and source notes are not rewritten, moved, archived, deleted, or annotated with generated ids.
 
-Create import notes under:
+Only this folder is scanned, recursively:
 
 ```text
 <vault>/<folder>/imports/
 ```
 
-Each importable note must opt in with frontmatter:
+The first implementation intentionally does **not** support `--vault`, `--folder`, or `--path` overrides for import. Configure the mirror once with `memory-lane obsidian init --vault <path> [--folder "Memory Lane"]`, then run import against that configured location.
+
+Each importable note must opt in with top-of-file frontmatter:
 
 ```md
 ---
@@ -116,19 +122,41 @@ status: pending
 Use pnpm for package installs.
 ```
 
-Preview first:
+The Markdown body after frontmatter, trimmed, becomes the memory text. Frontmatter is metadata only. Unknown frontmatter fields are ignored. Defaults are:
+
+```yaml
+category: personal
+scope: global
+status: pending
+```
+
+Preview first; dry-run performs no JSONL writes and no mirror writes:
 
 ```bash
 memory-lane obsidian import --dry-run
+memory-lane obsidian import --json --dry-run
 ```
 
 Apply imports:
 
 ```bash
 memory-lane obsidian import
+memory-lane obsidian import --json
 ```
 
-Notes without `memory_lane: true` are ignored. Notes marked `memory_lane_mirror: true` are skipped because they are generated mirror files.
+Rules and gotchas:
+
+- Notes without `memory_lane: true` are ignored.
+- Notes with `memory_lane_mirror: true` are skipped because they are generated mirror files.
+- Dotfiles, dotfolders, symlinks, and non-`.md` files are skipped during discovery.
+- Discovery order is deterministic by normalized relative path.
+- `status` may be `pending` or explicit `approved`; `rejected` and `deleted` are invalid for import.
+- `scope: project` requires a project identity from the running command context; otherwise the note is skipped with a warning.
+- Add `memory_lane_id: <id>` to update an existing active (`approved` or `pending`) memory. Missing, rejected, or deleted ids are skipped with warnings.
+- Updates do not allow status demotion from `approved` to `pending`, scope changes, or project identity changes.
+- Duplicate `memory_lane_id` values in the same run skip all conflicting notes. Duplicate create body text in the same run also skips all conflicting notes.
+- Import is partial-success: valid notes are applied; invalid notes are skipped with warnings; there is no transaction or rollback.
+- Apply writes through normal Memory Lane APIs, so validation, append-only JSONL, embedding invalidation, and best-effort mirror warnings still apply.
 
 ## Configuration
 
