@@ -307,6 +307,7 @@ describe("CLI integration", () => {
     assert.match(result.stdout, /Configured Obsidian mirror/)
     assert.match(result.stdout, /Warning: No \.obsidian\/ directory found/)
     assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "README.md")), true)
+    assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "imports")), true)
     const files = fs.readdirSync(path.join(vault, "Memory Lane", "memories"))
     assert.equal(files.length, 1)
     const config = JSON.parse(fs.readFileSync(cfgFile, "utf8"))
@@ -350,6 +351,22 @@ describe("CLI integration", () => {
     assert.equal(result.status, 0)
     assert.match(result.stdout, /Would create:/)
     assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "memories")), false)
+    assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "imports")), false)
+  })
+
+  it("obsidian sync creates imports folder when writing", () => {
+    const vault = tempDir()
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    runProcess(["config", "set", "obsidian", JSON.stringify({ enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" })], { env })
+
+    const result = runProcess(["obsidian", "sync"], { env })
+
+    assert.equal(result.status, 0)
+    assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "imports")), true)
   })
 
   it("obsidian sync requires configured enabled mirror", () => {
@@ -427,17 +444,96 @@ describe("CLI integration", () => {
     assert.match(result.stdout, /No importable notes found/u)
   })
 
-  it("obsidian import without dry-run returns usage error", () => {
+  it("obsidian import applies creates and leaves source notes untouched", () => {
+    const vault = tempDir()
+    const imports = path.join(vault, "Memory Lane", "imports")
+    fs.mkdirSync(imports, { recursive: true })
+    const sourcePath = path.join(imports, "pnpm.md")
+    const source = "---\nmemory_lane: true\ncategory: project\nstatus: approved\nkind: project_fact\n---\nUse pnpm for installs\n"
+    fs.writeFileSync(sourcePath, source, "utf8")
     const env = {
       MEMORY_LANE_FILE: memFile,
       MEMORY_LANE_EMBEDDINGS_FILE: embFile,
       MEMORY_LANE_CONFIG: cfgFile,
     }
+    runProcess(["config", "set", "obsidian", JSON.stringify({ enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" })], { env })
+
+    const result = runProcess(["obsidian", "import", "--json"], { env })
+
+    assert.equal(result.status, 0)
+    const parsed = JSON.parse(result.stdout)
+    assert.equal(parsed.ok, true)
+    assert.deepEqual(parsed.data.summary, { created: 1, updated: 0, skipped: 0 })
+    assert.equal(parsed.data.results[0].action, "created")
+    assert.equal(parsed.data.results[0].status, "approved")
+    assert.equal(typeof parsed.data.results[0].memoryId, "string")
+    const list = JSON.parse(run(["list", "--json"], env))
+    assert.equal(list.data.memories.length, 1)
+    assert.equal(list.data.memories[0].text, "Use pnpm for installs")
+    assert.equal(list.data.memories[0].source, "manual")
+    assert.equal(fs.readFileSync(sourcePath, "utf8"), source)
+  })
+
+  it("obsidian import applies updates by memory_lane_id", () => {
+    const vault = tempDir()
+    const imports = path.join(vault, "Memory Lane", "imports")
+    fs.mkdirSync(imports, { recursive: true })
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    run(["save", "Old text", "--status", "pending", "--category", "personal"], env)
+    const before = JSON.parse(run(["list", "--json"], env))
+    const id = before.data.memories[0].id
+    fs.writeFileSync(
+      path.join(imports, "update.md"),
+      `---\nmemory_lane: true\nmemory_lane_id: ${id}\nstatus: approved\ncategory: preference\nkind: workflow_rule\n---\nUpdated text\n`,
+      "utf8",
+    )
+    runProcess(["config", "set", "obsidian", JSON.stringify({ enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" })], { env })
+
+    const result = runProcess(["obsidian", "import", "--json"], { env })
+
+    assert.equal(result.status, 0)
+    const parsed = JSON.parse(result.stdout)
+    assert.deepEqual(parsed.data.summary, { created: 0, updated: 1, skipped: 0 })
+    assert.equal(parsed.data.results[0].action, "updated")
+    assert.equal(parsed.data.results[0].memoryId, id)
+    assert.equal(parsed.data.results[0].status, "approved")
+    const after = JSON.parse(run(["list", "--json"], env))
+    assert.equal(after.data.memories.length, 1)
+    assert.equal(after.data.memories[0].id, id)
+    assert.equal(after.data.memories[0].text, "Updated text")
+    assert.equal(after.data.memories[0].category, "preference")
+    assert.equal(after.data.memories[0].status, "approved")
+    assert.equal(after.data.memories[0].kind, "workflow_rule")
+  })
+
+  it("obsidian import partially succeeds and skips invalid notes by default", () => {
+    const vault = tempDir()
+    const imports = path.join(vault, "Memory Lane", "imports")
+    fs.mkdirSync(imports, { recursive: true })
+    fs.writeFileSync(path.join(imports, "valid.md"), "---\nmemory_lane: true\n---\nValid memory\n", "utf8")
+    fs.writeFileSync(path.join(imports, "invalid.md"), "---\nmemory_lane: true\ncategory: research\n---\nInvalid memory\n", "utf8")
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    runProcess(["config", "set", "obsidian", JSON.stringify({ enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" })], { env })
 
     const result = runProcess(["obsidian", "import"], { env })
 
-    assert.equal(result.status, 2)
-    assert.match(result.stdout + result.stderr, /Usage: memory-lane obsidian import --dry-run/u)
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Obsidian import:/u)
+    assert.match(result.stdout, /Imported: 1/u)
+    assert.match(result.stdout, /Updated: 0/u)
+    assert.match(result.stdout, /Skipped: 1/u)
+    assert.match(result.stdout, /invalid\.md: invalid category value/u)
+    const list = JSON.parse(run(["list", "--json"], env))
+    assert.equal(list.data.memories.length, 1)
+    assert.equal(list.data.memories[0].text, "Valid memory")
   })
 
 })

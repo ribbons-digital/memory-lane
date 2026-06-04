@@ -3,6 +3,22 @@ import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsi
 
 const VERSION = "0.1.0"
 
+export interface ObsidianImportApplyResult {
+  summary: {
+    created: number
+    updated: number
+    skipped: number
+  }
+  results: Array<{
+    path: string
+    action: "created" | "updated" | "skipped"
+    memoryId?: string
+    status?: string
+    warnings: string[]
+  }>
+  warnings: string[]
+}
+
 function formatDate(iso: string): string {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return iso
@@ -105,18 +121,23 @@ export function formatDoctor(report: Record<string, unknown>, json: boolean): st
   return Object.entries(report).map(([k, v]) => `${k}: ${v}`).join("\n")
 }
 
-export function formatImportPlan(plan: ObsidianImportPlan, json: boolean, dryRun: boolean): string {
-  if (json) return JSON.stringify({ ok: true, data: plan, meta: meta() }, null, 2)
+export function formatImportPlan(result: ObsidianImportPlan | ObsidianImportApplyResult, json: boolean, dryRun: boolean): string {
+  if (json) return JSON.stringify({ ok: true, data: result, meta: meta() }, null, 2)
 
-  const lines = [
-    dryRun ? "Obsidian import dry run:" : "Obsidian import:",
-    `${dryRun ? "Would import" : "Imported"}: ${plan.summary.wouldCreate}`,
-    `${dryRun ? "Would update" : "Updated"}: ${plan.summary.wouldUpdate}`,
-    `Skipped: ${plan.summary.skipped}`,
+  const lines = dryRun ? [
+    "Obsidian import dry run:",
+    `Would import: ${(result as ObsidianImportPlan).summary.wouldCreate}`,
+    `Would update: ${(result as ObsidianImportPlan).summary.wouldUpdate}`,
+    `Skipped: ${(result as ObsidianImportPlan).summary.skipped}`,
+  ] : [
+    "Obsidian import:",
+    `Imported: ${(result as ObsidianImportApplyResult).summary.created}`,
+    `Updated: ${(result as ObsidianImportApplyResult).summary.updated}`,
+    `Skipped: ${(result as ObsidianImportApplyResult).summary.skipped}`,
   ]
-  const warnings = plan.results.flatMap((result: ObsidianImportResult) => result.warnings)
+  const warnings = result.results.flatMap((item: ObsidianImportResult | ObsidianImportApplyResult["results"][number]) => item.warnings)
   if (warnings.length) lines.push("Warnings:", ...warnings.map((warning) => `- ${warning}`))
-  if (!plan.results.length) lines.push("No importable notes found. Create notes under Memory Lane/imports/ with memory_lane: true.")
+  if (!result.results.length) lines.push("No importable notes found. Create notes under Memory Lane/imports/ with memory_lane: true.")
   return lines.join("\n")
 }
 
@@ -147,7 +168,7 @@ Commands:
   init --project-local [--project <path>]
   config [show|enable-semantic|disable-semantic|set <key> <value>]
   obsidian <init|status|sync|import>
-                  Manage optional Obsidian Markdown mirror; import supports --dry-run
+                  Manage optional Obsidian Markdown mirror; import applies by default and supports --dry-run
   claude <user-prompt-submit|stop|post-tool-use>
                   Run a Claude Code hook adapter command; reads hook JSON from stdin
   codex <user-prompt-submit|stop|post-tool-use>

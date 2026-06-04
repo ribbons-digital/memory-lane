@@ -26,12 +26,13 @@ const approved: MirrorMemoryRecord = {
 const pending: MirrorMemoryRecord = { ...approved, id: "22222222", status: "pending", text: "Pending memory" }
 const deleted: MirrorMemoryRecord = { ...approved, id: "33333333", status: "deleted", text: "Deleted memory" }
 
-test("initObsidianMirror creates README and memories folder", (t) => {
+test("initObsidianMirror creates README, memories, and imports folders", (t) => {
   const vault = tempDir(t)
   const result = initObsidianMirror({ vaultPath: vault, folder: "Memory Lane" })
   assert.equal(result.ok, true)
   assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "README.md")), true)
   assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "memories")), true)
+  assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "imports")), true)
 })
 
 test("syncObsidianMirror writes active memories and skips deleted", (t) => {
@@ -48,6 +49,14 @@ test("syncObsidianMirror dry-run reports without writing", (t) => {
   const result = syncObsidianMirror({ vaultPath: vault, folder: "Memory Lane" }, [approved], { dryRun: true })
   assert.equal(result.created, 1)
   assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "memories", "11111111.md")), false)
+  assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "imports")), false)
+})
+
+test("syncObsidianMirror creates imports folder when writing", (t) => {
+  const vault = tempDir(t)
+  const result = syncObsidianMirror({ vaultPath: vault, folder: "Memory Lane" }, [approved])
+  assert.equal(result.ok, true)
+  assert.equal(fs.existsSync(path.join(vault, "Memory Lane", "imports")), true)
 })
 
 test("syncObsidianMirror deletes stale generated files only", (t) => {
