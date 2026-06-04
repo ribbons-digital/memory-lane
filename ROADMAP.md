@@ -87,6 +87,8 @@ These items do **not** reopen Phases 1–3 and should not start the next roadmap
 
 ## Phase 4 — Obsidian Mirror UX Polish
 
+**Status:** Implementation complete; pending final review and merge.
+
 **Goal:** Make the generated mirror easier to browse in Obsidian without changing the canonical one-file-per-memory layout from Phase 1.
 
 Planned first slice decisions:

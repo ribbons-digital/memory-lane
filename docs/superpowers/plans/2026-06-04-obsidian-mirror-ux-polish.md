@@ -794,7 +794,7 @@ If `HANDOFF.md` is unchanged, omit it from `git add`.
 - Modify: `docs/superpowers/plans/2026-06-04-obsidian-mirror-ux-polish.md`
 - Modify: `ROADMAP.md` only if implementation completion status should be reflected after merge.
 
-- [ ] **Step 1: Run full verification**
+- [x] **Step 1: Run full verification**
 
 Run:
 
@@ -805,7 +805,7 @@ pnpm test
 
 Expected: all workspace packages build and all tests pass.
 
-- [ ] **Step 2: Run focused manual smoke test**
+- [x] **Step 2: Run focused manual smoke test**
 
 Use a disposable config/vault:
 
@@ -829,11 +829,11 @@ rm -rf "$ML_TEST_ROOT"
 
 Expected: index files exist, contain generated markers, link to the mirrored memory, and doctor prints Obsidian fields.
 
-- [ ] **Step 3: Mark completed steps in this plan**
+- [x] **Step 3: Mark completed steps in this plan**
 
 Replace unchecked boxes for completed tasks with checked boxes in `docs/superpowers/plans/2026-06-04-obsidian-mirror-ux-polish.md`.
 
-- [ ] **Step 4: Commit plan tracking**
+- [x] **Step 4: Commit plan tracking**
 
 ```bash
 git add docs/superpowers/plans/2026-06-04-obsidian-mirror-ux-polish.md ROADMAP.md
@@ -843,6 +843,8 @@ git commit -m "docs: mark obsidian mirror ux polish complete"
 Only include `ROADMAP.md` if it changed.
 
 - [ ] **Step 5: Request final review before merge**
+
+Parent will request final review.
 
 Ask a reviewer to validate:
 
