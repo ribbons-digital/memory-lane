@@ -537,7 +537,7 @@ git commit -m "feat(obsidian): sync generated mirror indexes"
 - Modify: `packages/core/src/engine.ts`
 - Modify: `packages/core/test/engine.test.ts`
 
-- [ ] **Step 1: Write failing doctor tests**
+- [x] **Step 1: Write failing doctor tests**
 
 Add tests to `packages/core/test/engine.test.ts` near existing doctor tests:
 
@@ -599,7 +599,7 @@ test("doctor reports obsidian folder warnings", (t) => {
 })
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -609,7 +609,7 @@ pnpm --filter @memory-lane/core test
 
 Expected: FAIL because doctor does not include Obsidian fields yet.
 
-- [ ] **Step 3: Implement cheap doctor fields**
+- [x] **Step 3: Implement cheap doctor fields**
 
 Modify `packages/core/src/engine.ts`:
 
@@ -679,7 +679,7 @@ return {
 }
 ```
 
-- [ ] **Step 4: Run tests and verify pass**
+- [x] **Step 4: Run tests and verify pass**
 
 Run:
 
@@ -690,7 +690,7 @@ pnpm build
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/engine.ts packages/core/test/engine.test.ts
