@@ -72,6 +72,23 @@ Completed scope:
 4. Added conflict and duplicate handling from the approved import contract.
 5. Added docs for authoring importable notes, dry-run review, JSONL source-of-truth semantics, generated-file skip behavior, and why import is not automatic sync.
 
+
+## Hardening Backlog — Completed Phase Follow-ups
+
+These items do **not** reopen Phases 1–3 and should not start the next roadmap phase by themselves. Treat them as small hardening tasks to schedule only after explicit user approval.
+
+1. **Obsidian import dry-run secret warnings**
+   - Current apply path uses normal `MemoryEngine.save`/`MemoryEngine.update` validation, so likely secrets are skipped at apply time.
+   - Improve dry-run so secret-containing import notes are warned/skipped before apply, either by passing a secret-detection callback into the import planner or extracting secret detection into a small shared utility.
+
+2. **Windows absolute-path folder validation**
+   - Mirror sync already guards against POSIX and Windows absolute folder paths.
+   - Align config validation by rejecting `path.win32.isAbsolute(folder)` as well.
+
+3. **Import snapshot type cleanup**
+   - `ExistingImportMemory` includes optional fields that the planner currently does not read and the CLI snapshot mapper does not populate.
+   - Either trim the type to fields actually used by the planner or populate the fields consistently for future maintainability.
+
 ## Phase 4 — Obsidian Mirror UX Polish
 
 **Goal:** Make the generated mirror easier to browse in Obsidian without changing the canonical one-file-per-memory layout from Phase 1.

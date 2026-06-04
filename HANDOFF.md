@@ -158,6 +158,7 @@ status: pending
 - Obsidian import ADR: `docs/adr/0003-controlled-obsidian-import-contract.md`
 - Obsidian import contract spec: `docs/superpowers/specs/2026-06-03-obsidian-import-contract.md`
 - Obsidian import implementation plan: `docs/superpowers/plans/2026-06-03-obsidian-import-implementation.md`
+- Manual testing guide: `docs/manual-testing/obsidian-mirror-import.md`
 - Claude Code integration docs: `examples/harness-integrations/claude-code.md`
 - Codex integration docs: `examples/harness-integrations/codex-cli.md`
 - Memory Lane skill docs: `skills/memory-lane/SKILL.md`
@@ -180,10 +181,11 @@ External comparison references discussed:
 git push origin main
 ```
 
-2. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
-3. Consider small Obsidian import UX follow-ups from final review (non-blocking): trimming unused planner snapshot fields or reconciling discovery type naming.
-4. Plan future MCP server support for Claude Desktop and other clients after mirror/import foundations are stable.
-5. Plan Obsidian mirror UX polish such as index pages and doctor warnings.
+2. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior.
+3. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
+4. Do not start Phase 4 or any hardening backlog item until the user explicitly approves it.
+5. Later, consider small hardening follow-ups from `ROADMAP.md` such as dry-run secret warnings, Windows path validation consistency, or import snapshot type cleanup.
+6. Plan future MCP server support for Claude Desktop and other clients after mirror/import foundations are stable.
 
 ## Suggested skills for future agents
 
