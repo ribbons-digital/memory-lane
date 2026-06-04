@@ -1,4 +1,5 @@
 import type { MemoryRecord, RecallResult, SaveResult, MemoryMutationResult, CompactReport } from "@memory-lane/core"
+import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
 
@@ -104,6 +105,21 @@ export function formatDoctor(report: Record<string, unknown>, json: boolean): st
   return Object.entries(report).map(([k, v]) => `${k}: ${v}`).join("\n")
 }
 
+export function formatImportPlan(plan: ObsidianImportPlan, json: boolean, dryRun: boolean): string {
+  if (json) return JSON.stringify({ ok: true, data: plan, meta: meta() }, null, 2)
+
+  const lines = [
+    dryRun ? "Obsidian import dry run:" : "Obsidian import:",
+    `${dryRun ? "Would import" : "Imported"}: ${plan.summary.wouldCreate}`,
+    `${dryRun ? "Would update" : "Updated"}: ${plan.summary.wouldUpdate}`,
+    `Skipped: ${plan.summary.skipped}`,
+  ]
+  const warnings = plan.results.flatMap((result: ObsidianImportResult) => result.warnings)
+  if (warnings.length) lines.push("Warnings:", ...warnings.map((warning) => `- ${warning}`))
+  if (!plan.results.length) lines.push("No importable notes found. Create notes under Memory Lane/imports/ with memory_lane: true.")
+  return lines.join("\n")
+}
+
 export function formatError(message: string, json: boolean): string {
   if (json) {
     return JSON.stringify({ ok: false, error: message, meta: meta() }, null, 2)
@@ -130,8 +146,8 @@ Commands:
   status
   init --project-local [--project <path>]
   config [show|enable-semantic|disable-semantic|set <key> <value>]
-  obsidian <init|status|sync>
-                  Manage optional Obsidian Markdown mirror
+  obsidian <init|status|sync|import>
+                  Manage optional Obsidian Markdown mirror; import supports --dry-run
   claude <user-prompt-submit|stop|post-tool-use>
                   Run a Claude Code hook adapter command; reads hook JSON from stdin
   codex <user-prompt-submit|stop|post-tool-use>

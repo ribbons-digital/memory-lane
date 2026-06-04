@@ -365,4 +365,79 @@ describe("CLI integration", () => {
     assert.match(result.stdout + result.stderr, /Obsidian mirror is not configured/)
   })
 
+  it("obsidian import dry-run plans creates and skips without writing", () => {
+    const home = tempDir()
+    const vault = path.join(home, "Vault")
+    const imports = path.join(vault, "Memory Lane", "imports")
+    fs.mkdirSync(imports, { recursive: true })
+    fs.writeFileSync(path.join(imports, "pnpm.md"), "---\nmemory_lane: true\ncategory: project\nstatus: approved\n---\nUse pnpm for installs", "utf8")
+    fs.writeFileSync(path.join(imports, "draft.md"), "---\ncategory: project\n---\nIgnore me", "utf8")
+    const env = {
+      HOME: home,
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    runProcess(["obsidian", "init", "--vault", vault], { env })
+
+    const result = runProcess(["obsidian", "import", "--dry-run", "--json"], { env })
+
+    assert.equal(result.status, 0)
+    const parsed = JSON.parse(result.stdout)
+    assert.equal(parsed.ok, true)
+    assert.equal(parsed.data.summary.wouldCreate, 1)
+    assert.equal(parsed.data.summary.wouldUpdate, 0)
+    assert.equal(parsed.data.summary.skipped, 0)
+    assert.equal(parsed.data.results[0].action, "create")
+    assert.equal(parsed.data.results[0].status, "approved")
+    const list = JSON.parse(run(["list", "--json"], env))
+    assert.equal(list.data.memories.length, 0)
+  })
+
+  it("obsidian import dry-run requires configured mirror", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const result = runProcess(["obsidian", "import", "--dry-run"], { env })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout + result.stderr, /Obsidian mirror is not configured/u)
+  })
+
+  it("obsidian import dry-run human output summarizes empty plan", () => {
+    const vault = tempDir()
+    fs.mkdirSync(path.join(vault, "Memory Lane", "imports"), { recursive: true })
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    runProcess(["config", "set", "obsidian", JSON.stringify({ enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" })], { env })
+
+    const result = runProcess(["obsidian", "import", "--dry-run"], { env })
+
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Obsidian import dry run:/u)
+    assert.match(result.stdout, /Would import: 0/u)
+    assert.match(result.stdout, /Would update: 0/u)
+    assert.match(result.stdout, /Skipped: 0/u)
+    assert.match(result.stdout, /No importable notes found/u)
+  })
+
+  it("obsidian import without dry-run returns usage error", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const result = runProcess(["obsidian", "import"], { env })
+
+    assert.equal(result.status, 2)
+    assert.match(result.stdout + result.stderr, /Usage: memory-lane obsidian import --dry-run/u)
+  })
+
 })

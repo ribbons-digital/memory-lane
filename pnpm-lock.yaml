@@ -42,6 +42,9 @@ importers:
       '@memory-lane/core':
         specifier: workspace:*
         version: link:../core
+      '@memory-lane/obsidian-import':
+        specifier: workspace:*
+        version: link:../obsidian-import
       '@memory-lane/obsidian-mirror':
         specifier: workspace:*
         version: link:../obsidian-mirror
