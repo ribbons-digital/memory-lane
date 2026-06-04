@@ -1,8 +1,9 @@
 // fallow-ignore-file unused-class-member
 // MemoryEngine exposes public methods used by the CLI, pi adapter, and package consumers.
+import * as fs from "node:fs"
 import * as path from "node:path"
 import * as os from "node:os"
-import { syncObsidianMirror } from "@memory-lane/obsidian-mirror"
+import { isSafeMirrorFolder, syncObsidianMirror } from "@memory-lane/obsidian-mirror"
 import { createMemoryStore, type MemoryStore } from "./storage.js"
 import {
   effectiveMemoryKind, searchMemories, findDuplicateMemory,
@@ -359,6 +360,40 @@ export class MemoryEngine {
     }
   }
 
+  private obsidianDoctor(): Record<string, unknown> {
+    const obsidian = this.config.obsidian
+    const warnings: string[] = []
+    if (!obsidian?.enabled) {
+      return { obsidianEnabled: false, obsidianWarnings: warnings }
+    }
+
+    const folder = obsidian.folder?.trim() || "Memory Lane"
+    const vaultPath = obsidian.vaultPath
+    const folderSafe = isSafeMirrorFolder(folder)
+    const mirrorRoot = vaultPath ? path.join(vaultPath, folder) : undefined
+    const memories = mirrorRoot ? path.join(mirrorRoot, "memories") : undefined
+    const imports = mirrorRoot ? path.join(mirrorRoot, "imports") : undefined
+
+    if (!vaultPath) warnings.push("Obsidian vault path is missing.")
+    else if (!fs.existsSync(vaultPath)) warnings.push(`Obsidian vault path does not exist: ${vaultPath}`)
+    else if (!fs.statSync(vaultPath).isDirectory()) warnings.push(`Obsidian vault path is not a directory: ${vaultPath}`)
+    if (!folderSafe) warnings.push("Obsidian mirror folder must be a relative path inside the vault.")
+    if (mirrorRoot && !fs.existsSync(mirrorRoot)) warnings.push(`Mirror folder does not exist: ${mirrorRoot}`)
+    if (memories && !fs.existsSync(memories)) warnings.push(`memories/ folder does not exist: ${memories}`)
+    if (imports && !fs.existsSync(imports)) warnings.push(`imports/ folder does not exist: ${imports}`)
+
+    return {
+      obsidianEnabled: true,
+      obsidianVaultPath: vaultPath,
+      obsidianFolder: folder,
+      obsidianMirrorRoot: mirrorRoot,
+      obsidianMirrorFolderExists: mirrorRoot ? fs.existsSync(mirrorRoot) : false,
+      obsidianMemoriesFolderExists: memories ? fs.existsSync(memories) : false,
+      obsidianImportsFolderExists: imports ? fs.existsSync(imports) : false,
+      obsidianWarnings: warnings,
+    }
+  }
+
   /** Generate a diagnostic report. */
   doctor(): Record<string, unknown> {
     const mems = this.store.list()
@@ -381,6 +416,7 @@ export class MemoryEngine {
       deadWeightRatio: total ? mems.filter((m) => m.status === "deleted" || m.status === "rejected").length / total : 0,
       activeProfileName: config.activeEmbeddingProfile,
       projectScope: this.scope?.key ?? "none",
+      ...this.obsidianDoctor(),
     }
   }
 }
