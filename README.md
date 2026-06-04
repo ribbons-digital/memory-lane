@@ -92,7 +92,43 @@ memory-lane obsidian sync --dry-run
 memory-lane obsidian sync
 ```
 
-Generated files live under `Memory Lane/memories/<id>.md` by default. Do not edit generated files directly; changes may be overwritten. Obsidian import and Obsidian-backed storage are separate future phases.
+Generated files live under `Memory Lane/memories/<id>.md` by default. Do not edit generated files directly; changes may be overwritten.
+
+### Import from Obsidian
+
+Memory Lane can explicitly import user-authored Markdown notes from the configured Obsidian folder. Import is not automatic sync: JSONL remains the source of truth, generated mirror files are never imported, and source notes are not rewritten.
+
+Create import notes under:
+
+```text
+<vault>/<folder>/imports/
+```
+
+Each importable note must opt in with frontmatter:
+
+```md
+---
+memory_lane: true
+category: project
+scope: project
+status: pending
+---
+Use pnpm for package installs.
+```
+
+Preview first:
+
+```bash
+memory-lane obsidian import --dry-run
+```
+
+Apply imports:
+
+```bash
+memory-lane obsidian import
+```
+
+Notes without `memory_lane: true` are ignored. Notes marked `memory_lane_mirror: true` are skipped because they are generated mirror files.
 
 ## Configuration
 

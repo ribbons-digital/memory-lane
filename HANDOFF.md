@@ -2,7 +2,7 @@
 
 ## Current state
 
-Memory Lane is on `main` at commit `9876cb8 merge: obsidian mirror status warnings`.
+Memory Lane is on feature branch `feature/obsidian-import-implementation` for the explicit Obsidian import slice.
 
 Recent completed work:
 
@@ -20,16 +20,21 @@ Recent completed work:
   - deleted `feature/obsidian-mirror-foundation`
   - removed `~/.config/superpowers/worktrees/memory-lane/obsidian-mirror-status-warnings`
   - deleted `feature/obsidian-mirror-status-warnings`
+- Implemented explicit, non-destructive Obsidian Markdown import:
+  - new `@memory-lane/obsidian-import` parser/planner package;
+  - core `MemoryEngine.update` support for import updates;
+  - CLI `memory-lane obsidian import [--dry-run]` dry-run/apply flow;
+  - import discovery under `<vault>/<folder>/imports/` only;
+  - `memory_lane: true` opt-in and `memory_lane_mirror: true` generated-file skip.
 
-Post-merge verification on `main` passed after refreshing workspace links with:
+Task 5 verification on the import feature branch passed with:
 
 ```bash
-sfw pnpm install
 pnpm build
 pnpm test
 ```
 
-`main` is clean. After the status-warning follow-up merge, it may be ahead of `origin/main` until pushed.
+The parent session still needs to request final review before merge. Do not merge this branch without review and user/maintainer approval.
 
 ## Obsidian mirror foundation now on main
 
@@ -65,7 +70,8 @@ memory_lane_mirror: true
 Known accepted Phase 1 limitations:
 
 - Mirror sync currently scans/syncs the full store after mutations; targeted per-record mirroring can be optimized later if needed.
-- No import, bidirectional sync, Obsidian-backed storage, or index pages yet.
+- Import is explicit only; it is not automatic sync or bidirectional sync, and source notes are not rewritten.
+- No Obsidian-backed storage or index pages yet.
 - Hooks do not prompt for or own Obsidian setup.
 
 ## Important references
@@ -107,21 +113,13 @@ External comparison references discussed:
 
 ## Current uncommitted changes
 
-Expected current uncommitted files before committing the import-contract docs:
-
-- `ROADMAP.md` — updated to make the next active slice the Controlled Obsidian Import Contract.
-- `CONTEXT.md` — updated with Obsidian import area/importable note terminology.
-- `HANDOFF.md` — updated to reflect the merged status-warning follow-up and import-contract docs.
-- `docs/adr/0003-controlled-obsidian-import-contract.md` — new ADR for the controlled import boundary.
-- `docs/superpowers/specs/2026-06-03-obsidian-import-contract.md` — new detailed import contract spec.
-
-No code changes are expected before the next implementation plan is approved.
+No uncommitted changes are expected after the Obsidian import documentation commit. The parent session still needs to request final review before merge.
 
 ## Suggested next steps
 
-1. Commit the import-contract documentation updates.
-2. Write an implementation plan for the first import implementation slice, keeping it to five todos.
-3. Implement import with TDD in a feature worktree.
+1. Parent requests final review of the Obsidian import implementation against `docs/superpowers/specs/2026-06-03-obsidian-import-contract.md`.
+2. Fix any review findings with tests first, then rerun `pnpm build` and `pnpm test`.
+3. Merge only after final review approval and user/maintainer approval.
 4. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
 5. Plan future MCP server support for Claude Desktop and other clients after mirror/import foundations are clear.
 

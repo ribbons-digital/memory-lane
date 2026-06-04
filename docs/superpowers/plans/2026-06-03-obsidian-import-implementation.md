@@ -1328,8 +1328,9 @@ git commit -m "feat(obsidian): apply markdown imports"
 - Modify: `README.md`
 - Modify: `skills/memory-lane/SKILL.md`
 - Modify: `docs/superpowers/plans/2026-06-03-obsidian-import-implementation.md`
+- Modify if stale: `HANDOFF.md`
 
-- [ ] **Step 1: Update README Obsidian section**
+- [x] **Step 1: Update README Obsidian section**
 
 Add this subsection near existing Obsidian mirror docs in `README.md`:
 
@@ -1374,7 +1375,7 @@ Notes without `memory_lane: true` are ignored. Notes marked `memory_lane_mirror:
 
 If the nested fenced code block causes Markdown formatting trouble, close and reopen fences explicitly; do not omit the examples.
 
-- [ ] **Step 2: Update Memory Lane skill docs**
+- [x] **Step 2: Update Memory Lane skill docs**
 
 In `skills/memory-lane/SKILL.md`, add:
 
@@ -1394,7 +1395,7 @@ Import notes live under `<vault>/<folder>/imports/` and must include `memory_lan
 ```
 ```
 
-- [ ] **Step 3: Run full verification**
+- [x] **Step 3: Run full verification**
 
 Run:
 
@@ -1430,16 +1431,16 @@ pnpm test
 
 Expected: all tests pass and reviewer concerns are addressed.
 
-- [ ] **Step 6: Mark plan tasks complete**
+- [x] **Step 6: Mark plan tasks complete**
 
 As each task is completed, update this plan by changing each completed checkbox from `- [ ]` to `- [x]`. Commit the plan update with the related task or as a final docs tracking commit.
 
-- [ ] **Step 7: Commit final docs/review state**
+- [x] **Step 7: Commit final docs/review state**
 
 Run:
 
 ```bash
-git add README.md skills/memory-lane/SKILL.md docs/superpowers/plans/2026-06-03-obsidian-import-implementation.md
+git add README.md skills/memory-lane/SKILL.md docs/superpowers/plans/2026-06-03-obsidian-import-implementation.md HANDOFF.md
 git commit -m "docs: document obsidian import workflow"
 ```
 

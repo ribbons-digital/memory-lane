@@ -82,6 +82,19 @@ memory-lane obsidian sync
 
 The Obsidian mirror is opt-in and one-way: JSONL remains the source of truth and generated Markdown files may be overwritten.
 
+## Obsidian import
+
+Use explicit import commands only when the user asks to import user-authored Obsidian notes into Memory Lane. Do not imply bidirectional sync and do not import generated mirror files.
+
+Commands:
+
+```bash
+memory-lane obsidian import --dry-run
+memory-lane obsidian import
+```
+
+Import notes live under `<vault>/<folder>/imports/` and must include `memory_lane: true` frontmatter. JSONL remains the source of truth.
+
 ### Hook adapters
 
 Memory Lane includes lifecycle hook commands for supported CLI harnesses:
