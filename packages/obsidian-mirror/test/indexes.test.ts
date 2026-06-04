@@ -82,6 +82,18 @@ test("renderMirrorIndexes groups project memories by project key", () => {
   assert.match(projectIndex.content, /\[Project scoped memory\]\(\.\.\/memories\/33333333\.md\)/)
 })
 
+test("renderMirrorIndexes escapes markdown special characters in memory link text", () => {
+  const memory: MirrorMemoryRecord = {
+    ...base,
+    id: "66666666",
+    text: "[BUG] Fix parser (urgent)\nKeep the title link valid.",
+  }
+  const indexes = renderMirrorIndexes([memory])
+  const approvedIndex = indexes.find((index) => index.path === "indexes/approved.md")
+  assert.ok(approvedIndex)
+  assert.ok(approvedIndex.content.includes("[\\[BUG\\] Fix parser \\(urgent\\)](../memories/66666666.md)"))
+})
+
 test("renderMirrorIndexes sorts recent memories by updatedAt descending", () => {
   const indexes = renderMirrorIndexes([base, pending, project])
   const recent = indexes.find((index) => index.path === "indexes/recent.md")

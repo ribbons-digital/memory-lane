@@ -27,6 +27,10 @@ function titleFromText(text: string): string {
   return first.length > 80 ? `${first.slice(0, 79)}…` : first
 }
 
+function escapeLinkText(value: string): string {
+  return value.replace(/([\[\]()])/gu, "\\$1")
+}
+
 function dateOnly(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso.slice(0, 10)
@@ -57,7 +61,7 @@ function entry(memory: MirrorMemoryRecord): string[] {
   const title = titleFromText(memory.text)
   const kind = memory.kind ?? "memory"
   return [
-    `- [${title}](../memories/${memory.id}.md)`,
+    `- [${escapeLinkText(title)}](../memories/${memory.id}.md)`,
     `  - \`${memory.status}\` · \`${memory.category}\` · \`${kind}\` · \`${scopeLabel(memory)}\` · updated ${dateOnly(memory.updatedAt)}`,
   ]
 }
