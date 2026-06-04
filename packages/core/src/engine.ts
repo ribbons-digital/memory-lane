@@ -20,9 +20,20 @@ import {
 } from "./engine-helpers.js"
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
-  MemoryKind, SaveInput, SaveResult, MemoryMutationResult, ProjectScope,
+  MemoryKind, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, ProjectScope,
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport,
 } from "./types.js"
+
+function displayValue(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value)
+}
+
+function validateUpdateInput(input: UpdateInput): void {
+  validateSaveInput({ text: "update validation placeholder", category: input.category, kind: input.kind })
+  if (input.status !== undefined && input.status !== "pending" && input.status !== "approved") {
+    throw new Error(`Invalid status: ${displayValue(input.status)}. Expected one of: pending, approved`)
+  }
+}
 
 function clone(memory: MemoryRecord, update: Partial<MemoryRecord>): MemoryRecord {
   return {
@@ -181,6 +192,31 @@ export class MemoryEngine {
     const updated = clone(mem, { status: "approved" })
     this.store.append(updated)
     this.invalidateEmbedding(id, "updated")
+    return this.mutationResultWithMirrorWarnings(updated)
+  }
+
+  /** Update an active approved or pending memory by id. Returns the updated memory plus mirror warnings, or undefined. */
+  update(id: string, patch: UpdateInput): MemoryMutationResult | undefined {
+    const mem = this.store.list().find((m) => m.id === id && (m.status === "approved" || m.status === "pending"))
+    if (!mem) return undefined
+    validateUpdateInput(patch)
+
+    const updated: MemoryRecord = {
+      ...mem,
+      text: patch.text === undefined ? mem.text : patch.text.trim(),
+      category: patch.category ?? mem.category,
+      status: patch.status ?? mem.status,
+      kind: patch.kind ?? mem.kind,
+      updatedAt: timestamp(),
+    }
+    if (!updated.text) throw new Error("Invalid text: memory text cannot be empty")
+    if (containsLikelySecret(updated.text)) throw new Error("Invalid text: memory text contains a likely secret")
+
+    this.store.append(updated)
+    this.invalidateEmbedding(id, "updated")
+    if (shouldAutoEmbed(updated, this.config.semantic, this.embProvider)) {
+      this._embedMemory(updated).catch(() => { /* swallowed */ })
+    }
     return this.mutationResultWithMirrorWarnings(updated)
   }
 
