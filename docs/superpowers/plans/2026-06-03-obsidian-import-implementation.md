@@ -901,7 +901,7 @@ git commit -m "feat(core): add memory update api"
 - Modify: `packages/cli/src/index.ts`
 - Modify: `packages/cli/test/cli.test.ts`
 
-- [ ] **Step 1: Add CLI dry-run integration tests**
+- [x] **Step 1: Add CLI dry-run integration tests**
 
 Add tests in `packages/cli/test/cli.test.ts` near other Obsidian tests:
 
@@ -949,7 +949,7 @@ Add tests in `packages/cli/test/cli.test.ts` near other Obsidian tests:
   })
 ```
 
-- [ ] **Step 2: Run CLI tests to verify failure**
+- [x] **Step 2: Run CLI tests to verify failure**
 
 Run:
 
@@ -959,7 +959,7 @@ pnpm --filter @memory-lane/cli test
 
 Expected: fail because `obsidian import` is unknown and CLI does not depend on `@memory-lane/obsidian-import`.
 
-- [ ] **Step 3: Add CLI package dependency**
+- [x] **Step 3: Add CLI package dependency**
 
 Modify `packages/cli/package.json` dependencies to include:
 
@@ -975,7 +975,7 @@ sfw pnpm install
 
 Expected: lockfile updates workspace links.
 
-- [ ] **Step 4: Add import formatter**
+- [x] **Step 4: Add import formatter**
 
 Modify `packages/cli/src/formatters.ts` import types:
 
@@ -1002,7 +1002,7 @@ export function formatImportPlan(plan: ImportPlan, json: boolean, dryRun: boolea
 }
 ```
 
-- [ ] **Step 5: Add dry-run handler**
+- [x] **Step 5: Add dry-run handler**
 
 Modify `packages/cli/src/index.ts` imports:
 
@@ -1053,7 +1053,7 @@ Inside `handleObsidian(ctx)` before the final usage error, add:
 
 Also add `formatImportPlan` to the formatter import list.
 
-- [ ] **Step 6: Run CLI tests and build**
+- [x] **Step 6: Run CLI tests and build**
 
 Run:
 
@@ -1064,7 +1064,7 @@ pnpm --filter @memory-lane/cli test
 
 Expected: build passes and CLI dry-run tests pass.
 
-- [ ] **Step 7: Commit Task 3**
+- [x] **Step 7: Commit Task 3**
 
 Run:
 
