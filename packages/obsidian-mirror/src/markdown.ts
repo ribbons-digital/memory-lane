@@ -20,11 +20,24 @@ function titleFromText(text: string): string {
   return first.length > 80 ? `${first.slice(0, 79)}…` : first
 }
 
+function tagLines(memory: MirrorMemoryRecord): string[] {
+  const kind = memory.kind ?? "memory"
+  return [
+    "tags:",
+    "  - memory-lane",
+    "  - memory-lane/memory",
+    `  - memory-lane/status/${memory.status}`,
+    `  - memory-lane/category/${memory.category}`,
+    `  - memory-lane/kind/${kind}`,
+  ]
+}
+
 export function renderMemoryMarkdown(memory: MirrorMemoryRecord): string {
   const title = titleFromText(memory.text)
   const frontmatter = [
     line("memory_lane_id", memory.id),
     line("memory_lane_mirror", true),
+    ...tagLines(memory),
     line("title", title),
     line("status", memory.status),
     line("category", memory.category),
