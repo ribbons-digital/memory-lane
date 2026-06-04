@@ -708,7 +708,7 @@ git commit -m "feat(obsidian): add mirror doctor checks"
 - Modify: `packages/cli/src/formatters.ts`
 - Modify: `HANDOFF.md` if stale
 
-- [ ] **Step 1: Update README**
+- [x] **Step 1: Update README**
 
 In `README.md`, expand the Obsidian mirror section to include:
 
@@ -733,7 +733,7 @@ Also document tags:
 Generated files include lightweight tags such as `memory-lane`, `memory-lane/memory`, `memory-lane/index`, and status/category/kind tags for Obsidian browsing, Bases, or Dataview filtering.
 ```
 
-- [ ] **Step 2: Update skill docs**
+- [x] **Step 2: Update skill docs**
 
 In `skills/memory-lane/SKILL.md`, add agent-facing rules:
 
@@ -741,7 +741,7 @@ In `skills/memory-lane/SKILL.md`, add agent-facing rules:
 Generated mirror index files live at `index.md` and `indexes/*.md`. Treat them like generated mirror memory files: do not edit them as source notes, do not import them, and do not imply changes to indexes update JSONL memories.
 ```
 
-- [ ] **Step 3: Update manual testing guide**
+- [x] **Step 3: Update manual testing guide**
 
 In `docs/manual-testing/obsidian-mirror-import.md`, add checks after Obsidian init:
 
@@ -757,7 +757,7 @@ Expected:
 index.md and indexes/*.md exist, include memory_lane_index: true, and link to memories/<id>.md with standard Markdown links.
 ```
 
-- [ ] **Step 4: Update CLI help if needed**
+- [x] **Step 4: Update CLI help if needed**
 
 In `packages/cli/src/formatters.ts`, adjust Obsidian sync line to mention generated indexes:
 
@@ -766,7 +766,7 @@ obsidian sync [--dry-run]
                   Reconcile generated mirror files and indexes
 ```
 
-- [ ] **Step 5: Run docs-adjacent verification**
+- [x] **Step 5: Run docs-adjacent verification**
 
 Run:
 
@@ -777,7 +777,7 @@ pnpm test
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add README.md skills/memory-lane/SKILL.md docs/manual-testing/obsidian-mirror-import.md packages/cli/src/formatters.ts HANDOFF.md
