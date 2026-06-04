@@ -68,6 +68,13 @@ export interface SaveInput {
   provenance?: MemoryProvenance
 }
 
+export interface UpdateInput {
+  text?: string
+  category?: MemoryCategory
+  status?: Extract<MemoryStatus, "pending" | "approved">
+  kind?: MemoryKind
+}
+
 export type SaveResult =
   | { status: "saved"; memory: MemoryRecord; warnings?: string[] }
   | { status: "skipped"; reason: "empty" | "secret" | "duplicate"; warnings?: string[] }

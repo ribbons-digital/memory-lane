@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 import * as os from "node:os"
 import * as path from "node:path"
+import { readFile } from "node:fs/promises"
 import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, resolveWritableMemoryPaths, type MemoryPaths } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
+import { discoverObsidianImportFiles, planObsidianImport } from "@memory-lane/obsidian-import"
 import { initObsidianMirror, statusObsidianMirror, syncObsidianMirror } from "@memory-lane/obsidian-mirror"
 import {
   formatMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
-  formatCompact, formatDoctor, formatError, usage,
+  formatCompact, formatDoctor, formatImportPlan, formatError, usage,
+  type ObsidianImportApplyResult,
 } from "./formatters.js"
 
 // ── Config helpers ───────────────────────────────────────────
@@ -309,7 +312,106 @@ function obsidianConfigRequiredMessage(): string {
   return "Obsidian mirror is not configured. Run `memory-lane obsidian init --vault <path>`."
 }
 
-function handleObsidian(ctx: CliContext): void {
+function importSnapshots(engine: MemoryEngine) {
+  return engine.list({ all: true }).map((memory) => ({
+    id: memory.id,
+    text: memory.text,
+    category: memory.category,
+    scope: {
+      type: memory.scope.type,
+      key: memory.scope.key,
+    },
+    status: memory.status,
+    kind: memory.kind,
+  }))
+}
+
+function importApplyWarning(importPath: string, message: string): string {
+  return `${importPath}: ${message}`
+}
+
+function applyObsidianImportPlan(ctx: CliContext, plan: ReturnType<typeof planObsidianImport>): ObsidianImportApplyResult {
+  const results: ObsidianImportApplyResult["results"] = []
+
+  for (const item of plan.results) {
+    if (item.action === "skip") {
+      results.push({ path: item.path, action: "skipped", warnings: item.warnings })
+      continue
+    }
+
+    if (item.action === "create") {
+      try {
+        const saved = ctx.engine.save({
+          text: item.text,
+          category: item.category,
+          scopeType: item.scope.type,
+          status: item.status,
+          kind: item.kind,
+          source: "manual",
+        })
+        if (saved.status === "saved") {
+          results.push({
+            path: item.path,
+            action: "created",
+            memoryId: saved.memory.id,
+            status: saved.memory.status,
+            warnings: [...item.warnings, ...(saved.warnings ?? [])],
+          })
+        } else {
+          results.push({
+            path: item.path,
+            action: "skipped",
+            warnings: [...item.warnings, importApplyWarning(item.path, `save skipped: ${saved.reason}`), ...(saved.warnings ?? [])],
+          })
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error)
+        results.push({ path: item.path, action: "skipped", warnings: [...item.warnings, importApplyWarning(item.path, message)] })
+      }
+      continue
+    }
+
+    try {
+      const updated = ctx.engine.update(item.memoryId, {
+        text: item.text,
+        category: item.category,
+        status: item.status,
+        kind: item.kind,
+      })
+      if (updated) {
+        results.push({
+          path: item.path,
+          action: "updated",
+          memoryId: updated.id,
+          status: updated.status,
+          warnings: [...item.warnings, ...(updated.warnings ?? [])],
+        })
+      } else {
+        results.push({
+          path: item.path,
+          action: "skipped",
+          memoryId: item.memoryId,
+          warnings: [...item.warnings, importApplyWarning(item.path, "memory update target was not found")],
+        })
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      results.push({ path: item.path, action: "skipped", memoryId: item.memoryId, warnings: [...item.warnings, importApplyWarning(item.path, message)] })
+    }
+  }
+
+  return {
+    summary: {
+      created: results.filter((result) => result.action === "created").length,
+      updated: results.filter((result) => result.action === "updated").length,
+      skipped: results.filter((result) => result.action === "skipped").length,
+    },
+    results,
+    warnings: results.flatMap((result) => result.warnings),
+  }
+}
+
+async function handleObsidian(ctx: CliContext): Promise<void> {
   const sub = ctx.rest[0]
 
   if (sub === "status") {
@@ -387,7 +489,35 @@ function handleObsidian(ctx: CliContext): void {
     return
   }
 
-  console.log(formatError("Usage: memory-lane obsidian init|status|sync", ctx.json))
+  if (sub === "import") {
+    const cfg = configuredObsidian(ctx)
+    if (!cfg.enabled || !cfg.vaultPath) {
+      console.log(formatError(obsidianConfigRequiredMessage(), ctx.json))
+      process.exit(1)
+    }
+
+    const dryRun = hasFlag(ctx.argv, "dry-run")
+    const importPaths = await discoverObsidianImportFiles({ vaultPath: cfg.vaultPath, folder: cfg.folder })
+    const candidates = await Promise.all(importPaths.map(async (importPath) => ({
+      path: importPath,
+      content: await readFile(path.join(cfg.vaultPath!, importPath), "utf8"),
+    })))
+    const plan = planObsidianImport({
+      candidates,
+      existingMemories: importSnapshots(ctx.engine),
+      projectScopeKey: ctx.engine.getProjectScope()?.key,
+    })
+    if (dryRun) {
+      console.log(formatImportPlan(plan, ctx.json, true))
+      return
+    }
+
+    const applied = applyObsidianImportPlan(ctx, plan)
+    console.log(formatImportPlan(applied, ctx.json, false))
+    return
+  }
+
+  console.log(formatError("Usage: memory-lane obsidian init|status|sync|import", ctx.json))
   process.exit(2)
 }
 

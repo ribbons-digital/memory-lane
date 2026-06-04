@@ -1,6 +1,23 @@
 import type { MemoryRecord, RecallResult, SaveResult, MemoryMutationResult, CompactReport } from "@memory-lane/core"
+import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
+
+export interface ObsidianImportApplyResult {
+  summary: {
+    created: number
+    updated: number
+    skipped: number
+  }
+  results: Array<{
+    path: string
+    action: "created" | "updated" | "skipped"
+    memoryId?: string
+    status?: string
+    warnings: string[]
+  }>
+  warnings: string[]
+}
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
@@ -104,6 +121,26 @@ export function formatDoctor(report: Record<string, unknown>, json: boolean): st
   return Object.entries(report).map(([k, v]) => `${k}: ${v}`).join("\n")
 }
 
+export function formatImportPlan(result: ObsidianImportPlan | ObsidianImportApplyResult, json: boolean, dryRun: boolean): string {
+  if (json) return JSON.stringify({ ok: true, data: result, meta: meta() }, null, 2)
+
+  const lines = dryRun ? [
+    "Obsidian import dry run:",
+    `Would import: ${(result as ObsidianImportPlan).summary.wouldCreate}`,
+    `Would update: ${(result as ObsidianImportPlan).summary.wouldUpdate}`,
+    `Skipped: ${(result as ObsidianImportPlan).summary.skipped}`,
+  ] : [
+    "Obsidian import:",
+    `Imported: ${(result as ObsidianImportApplyResult).summary.created}`,
+    `Updated: ${(result as ObsidianImportApplyResult).summary.updated}`,
+    `Skipped: ${(result as ObsidianImportApplyResult).summary.skipped}`,
+  ]
+  const warnings = result.results.flatMap((item: ObsidianImportResult | ObsidianImportApplyResult["results"][number]) => item.warnings)
+  if (warnings.length) lines.push("Warnings:", ...warnings.map((warning) => `- ${warning}`))
+  if (!result.results.length) lines.push("No importable notes found. Create notes under Memory Lane/imports/ with memory_lane: true.")
+  return lines.join("\n")
+}
+
 export function formatError(message: string, json: boolean): string {
   if (json) {
     return JSON.stringify({ ok: false, error: message, meta: meta() }, null, 2)
@@ -130,8 +167,8 @@ Commands:
   status
   init --project-local [--project <path>]
   config [show|enable-semantic|disable-semantic|set <key> <value>]
-  obsidian <init|status|sync>
-                  Manage optional Obsidian Markdown mirror
+  obsidian <init|status|sync|import>
+                  Manage optional Obsidian Markdown mirror; import applies by default and supports --dry-run
   claude <user-prompt-submit|stop|post-tool-use>
                   Run a Claude Code hook adapter command; reads hook JSON from stdin
   codex <user-prompt-submit|stop|post-tool-use>

@@ -17,6 +17,11 @@ describe("MemoryEngine", () => {
     })
   }
 
+  function readJsonl(file: string): any[] {
+    if (!fs.existsSync(file)) return []
+    return fs.readFileSync(file, "utf8").split(/\r?\n/u).filter(Boolean).map((line) => JSON.parse(line))
+  }
+
   it("rejects empty text", () => {
     const e = engine()
     const r = e.save({ text: "" })
@@ -201,6 +206,153 @@ describe("MemoryEngine", () => {
     assert.equal(e.list().find((m) => m.id === r.memory.id)?.status, "deleted")
   })
 
+
+  it("updates active memories with validation and preserves identity", () => {
+    const e = engine()
+    const saved = e.save({
+      text: "Original memory text",
+      category: "project",
+      status: "pending",
+      source: "agent-suggested",
+      kind: "project_fact",
+      provenance: {
+        adapter: "codex",
+        lifecycleEvent: "turn_stop",
+        sessionId: "session-1",
+      },
+    })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    const updated = e.update(saved.memory.id, {
+      text: "  Updated memory text  ",
+      category: "personal",
+      status: "approved",
+      kind: "personal_context",
+    })
+
+    assert.ok(updated)
+    assert.equal(updated!.id, saved.memory.id)
+    assert.equal(updated!.createdAt, saved.memory.createdAt)
+    assert.equal(updated!.text, "Updated memory text")
+    assert.equal(updated!.category, "personal")
+    assert.equal(updated!.status, "approved")
+    assert.equal(updated!.kind, "personal_context")
+    assert.equal(updated!.source, "agent-suggested")
+    assert.deepEqual(updated!.scope, saved.memory.scope)
+    assert.deepEqual(updated!.project, saved.memory.project)
+    assert.deepEqual(updated!.provenance, saved.memory.provenance)
+    assert.equal(e.list({ all: true }).find((memory) => memory.id === saved.memory.id)?.text, "Updated memory text")
+    const log = readJsonl(path.join(dir, "mem.jsonl"))
+    assert.equal(log.length, 2)
+    assert.equal(log[1].id, saved.memory.id)
+  })
+
+  it("does not update rejected deleted or missing memories", () => {
+    const e = engine()
+    const rejectedSource = e.save({ text: "Reject before update", status: "pending" })
+    assert.equal(rejectedSource.status, "saved")
+    if (rejectedSource.status !== "saved") return
+    e.reject(rejectedSource.memory.id)
+
+    const deletedSource = e.save({ text: "Delete before update", status: "approved" })
+    assert.equal(deletedSource.status, "saved")
+    if (deletedSource.status !== "saved") return
+    e.delete(deletedSource.memory.id)
+    const logLength = readJsonl(path.join(dir, "mem.jsonl")).length
+
+    assert.equal(e.update(rejectedSource.memory.id, { text: "Should not update rejected" }), undefined)
+    assert.equal(e.update(deletedSource.memory.id, { text: "Should not update deleted" }), undefined)
+    assert.equal(e.update("missing", { text: "Should not update missing" }), undefined)
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, logLength)
+  })
+
+  it("rejects invalid update patches before writing", () => {
+    const e = engine()
+    const saved = e.save({ text: "Original valid memory", status: "approved" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    assert.throws(() => e.update(saved.memory.id, { text: "   " }), /empty/i)
+    assert.throws(() => e.update(saved.memory.id, { text: "my key is sk-abc123def456ghi789jkl" }), /secret/i)
+    assert.throws(
+      () => e.update(saved.memory.id, { category: "research" } as any),
+      /Invalid category.*research/,
+    )
+    assert.throws(
+      () => e.update(saved.memory.id, { status: "rejected" } as any),
+      /Invalid status.*rejected.*pending, approved/,
+    )
+    assert.throws(
+      () => e.update(saved.memory.id, { status: "archived" } as any),
+      /Invalid status.*archived.*pending, approved/,
+    )
+    assert.throws(
+      () => e.update(saved.memory.id, { kind: "research" } as any),
+      /Invalid kind.*research/,
+    )
+    assert.equal(e.list({ all: true }).find((memory) => memory.id === saved.memory.id)?.text, "Original valid memory")
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, 1)
+  })
+
+  it("update invalidates embeddings and auto-embeds approved safe memories", async () => {
+    fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "test-profile",
+        embeddings: {
+          profiles: {
+            "test-profile": {
+              provider: "openai-compatible-embeddings",
+              baseUrl: "http://localhost:11434",
+              model: "test-model",
+            },
+          },
+        },
+      },
+    }), "utf8")
+    const embeddedInputs: string[] = []
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem.jsonl"),
+      embeddingsPath: path.join(dir, "emb.jsonl"),
+      configPath: path.join(dir, "cfg.json"),
+      embeddingProvider: {
+        async embed(inputs: string[]) {
+          embeddedInputs.push(...inputs)
+          return inputs.map(() => [1, 0, 0])
+        },
+      },
+    })
+    const saved = e.save({ text: "Initial approved memory", status: "approved" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    const updated = e.update(saved.memory.id, { text: "Updated approved memory" })
+    assert.equal(updated?.text, "Updated approved memory")
+    await new Promise((resolve) => setImmediate(resolve))
+
+    assert.ok(embeddedInputs.includes("Updated approved memory"))
+    const embeddingLog = readJsonl(path.join(dir, "emb.jsonl"))
+    assert.ok(embeddingLog.some((entry) => entry.type === "invalidation" && entry.memoryId === saved.memory.id && entry.reason === "updated"))
+    assert.ok(embeddingLog.some((entry) => entry.memoryId === saved.memory.id && entry.memoryUpdatedAt === updated?.updatedAt))
+  })
+
+  it("update returns Obsidian mirror warnings without preventing JSONL update", () => {
+    const missingVault = path.join(dir, "missing-vault")
+    fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({
+      obsidian: { enabled: true, vaultPath: missingVault, folder: "Memory Lane", mode: "mirror" },
+    }), "utf8")
+    const e = engine()
+    const saved = e.save({ text: "Update despite mirror warning", status: "approved" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    const updated = e.update(saved.memory.id, { text: "Updated despite mirror warning" })
+
+    assert.equal(updated?.text, "Updated despite mirror warning")
+    assert.match(updated?.warnings?.join("\n") ?? "", /Vault path does not exist/u)
+    assert.equal(e.list({ all: true }).find((memory) => memory.id === saved.memory.id)?.text, "Updated despite mirror warning")
+  })
 
   it("status transitions return Obsidian mirror warnings", () => {
     const missingVault = path.join(dir, "missing-vault")

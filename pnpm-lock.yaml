@@ -42,6 +42,9 @@ importers:
       '@memory-lane/core':
         specifier: workspace:*
         version: link:../core
+      '@memory-lane/obsidian-import':
+        specifier: workspace:*
+        version: link:../obsidian-import
       '@memory-lane/obsidian-mirror':
         specifier: workspace:*
         version: link:../obsidian-mirror
@@ -96,6 +99,18 @@ importers:
       '@memory-lane/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.41
+      tsx:
+        specifier: ^4.19.0
+        version: 4.22.3
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+
+  packages/obsidian-import:
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
