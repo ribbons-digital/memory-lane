@@ -5,10 +5,10 @@
 Memory Lane is on `main` at merge commit:
 
 ```text
-b201083 merge: obsidian import implementation
+7d398b7 merge: obsidian mirror ux polish
 ```
 
-`main` is clean and ahead of `origin/main` by local commits. The Obsidian import feature branch/worktree has been merged and removed.
+`main` is clean and aligned with `origin/main`. The Obsidian import and mirror UX polish feature branches/worktrees have been merged and removed.
 
 Recent completed work:
 
@@ -17,7 +17,7 @@ Recent completed work:
 - Claude adapter is for **Claude Code CLI hooks only**, not Claude Desktop.
 - Root roadmap/context/ADR docs were added for Obsidian mirror/import, MCP server, and future experimental Obsidian-backed storage.
 - Optional one-way Obsidian mirror is implemented and merged.
-- Obsidian mirror UX polish through Task 4 is implemented on `feature/obsidian-mirror-ux-polish`: generated indexes, tags, cheap doctor diagnostics, and docs/help/manual testing updates.
+- Obsidian mirror UX polish is implemented, reviewed, merged, and pushed: generated indexes, tags, cheap doctor diagnostics, and docs/help/manual testing updates.
 - Mirror warnings from save/approve/reject/delete are surfaced in human and JSON CLI output.
 - Explicit, non-destructive Obsidian Markdown import is implemented and merged:
   - new standalone `@memory-lane/obsidian-import` parser/planner package;
@@ -28,10 +28,9 @@ Recent completed work:
   - generated mirror notes marked `memory_lane_mirror: true` are skipped;
   - source import notes are never rewritten.
 
-Final review returned `FINAL_APPROVED`. Verification on merged `main` passed after refreshing workspace links:
+Final reviews for Obsidian import and mirror UX polish returned `FINAL_APPROVED`. Verification on merged `main` passed:
 
 ```bash
-sfw pnpm install
 pnpm build
 pnpm test
 ```
@@ -194,17 +193,10 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Push `main` when ready:
-
-```bash
-git push origin main
-```
-
-2. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior.
-3. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
-4. Complete Task 5 final verification/plan tracking for `feature/obsidian-mirror-ux-polish` only when explicitly requested.
-5. Later, consider small hardening follow-ups from `ROADMAP.md` such as dry-run secret warnings, Windows path validation consistency, or import snapshot type cleanup.
-6. Plan future MCP server support for Claude Desktop and other clients after mirror/import foundations are stable.
+1. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior.
+2. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
+3. Decide whether to schedule any hardening backlog item from `ROADMAP.md`, such as import dry-run secret warnings or import snapshot type cleanup.
+4. Plan Phase 5 MCP server support for Claude Desktop and other clients after mirror/import foundations are stable.
 
 ## Suggested skills for future agents
 
