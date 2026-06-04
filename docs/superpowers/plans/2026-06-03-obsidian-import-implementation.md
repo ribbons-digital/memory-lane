@@ -749,7 +749,7 @@ git commit -m "feat(obsidian): add import planner package"
 - Modify: `packages/core/src/engine.ts`
 - Modify: `packages/core/test/engine.test.ts`
 
-- [ ] **Step 1: Write failing core update tests**
+- [x] **Step 1: Write failing core update tests**
 
 Add tests to the `MemoryEngine` describe block in `packages/core/test/engine.test.ts`:
 
@@ -803,7 +803,7 @@ Add tests to the `MemoryEngine` describe block in `packages/core/test/engine.tes
   })
 ```
 
-- [ ] **Step 2: Run core tests to verify failure**
+- [x] **Step 2: Run core tests to verify failure**
 
 Run:
 
@@ -813,7 +813,7 @@ pnpm --filter @memory-lane/core test
 
 Expected: fail because `MemoryEngine.update` is not defined.
 
-- [ ] **Step 3: Add update input type**
+- [x] **Step 3: Add update input type**
 
 Modify `packages/core/src/types.ts` after `SaveInput`:
 
@@ -826,7 +826,7 @@ export interface UpdateInput {
 }
 ```
 
-- [ ] **Step 4: Implement `MemoryEngine.update`**
+- [x] **Step 4: Implement `MemoryEngine.update`**
 
 Modify `packages/core/src/engine.ts` type imports to include `UpdateInput`:
 
@@ -872,7 +872,7 @@ Add this method after `suggest(...)` and before `approve(...)`:
   }
 ```
 
-- [ ] **Step 5: Run core tests**
+- [x] **Step 5: Run core tests**
 
 Run:
 
@@ -882,7 +882,7 @@ pnpm --filter @memory-lane/core test
 
 Expected: all core tests pass.
 
-- [ ] **Step 6: Commit Task 2**
+- [x] **Step 6: Commit Task 2**
 
 Run:
 
