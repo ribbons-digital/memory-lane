@@ -54,7 +54,7 @@ Modify:
 - Create: `packages/obsidian-import/test/discovery.test.ts`
 - Create: `packages/obsidian-import/test/planner.test.ts`
 
-- [ ] **Step 1: Write frontmatter parser tests**
+- [x] **Step 1: Write frontmatter parser tests**
 
 Create `packages/obsidian-import/test/frontmatter.test.ts`:
 
@@ -122,7 +122,7 @@ describe("parseImportMarkdown", () => {
 })
 ```
 
-- [ ] **Step 2: Write discovery tests**
+- [x] **Step 2: Write discovery tests**
 
 Create `packages/obsidian-import/test/discovery.test.ts`:
 
@@ -184,7 +184,7 @@ describe("discoverImportFiles", () => {
 })
 ```
 
-- [ ] **Step 3: Write planner tests**
+- [x] **Step 3: Write planner tests**
 
 Create `packages/obsidian-import/test/planner.test.ts`:
 
@@ -291,7 +291,7 @@ describe("planObsidianImport", () => {
 })
 ```
 
-- [ ] **Step 4: Run tests to verify they fail**
+- [x] **Step 4: Run tests to verify they fail**
 
 Run:
 
@@ -301,7 +301,7 @@ pnpm --filter @memory-lane/obsidian-import test
 
 Expected: fail because the package and exported functions do not exist yet.
 
-- [ ] **Step 5: Create package manifest and TypeScript config**
+- [x] **Step 5: Create package manifest and TypeScript config**
 
 Create `packages/obsidian-import/package.json`:
 
@@ -351,7 +351,7 @@ Create `packages/obsidian-import/tsconfig.json`:
 }
 ```
 
-- [ ] **Step 6: Implement types**
+- [x] **Step 6: Implement types**
 
 Create `packages/obsidian-import/src/types.ts`:
 
@@ -424,7 +424,7 @@ export interface ImportPlan {
 }
 ```
 
-- [ ] **Step 7: Implement constrained frontmatter parser**
+- [x] **Step 7: Implement constrained frontmatter parser**
 
 Create `packages/obsidian-import/src/frontmatter.ts`:
 
@@ -489,7 +489,7 @@ export function parseImportMarkdown(content: string): ParsedImportMarkdown {
 }
 ```
 
-- [ ] **Step 8: Implement discovery**
+- [x] **Step 8: Implement discovery**
 
 Create `packages/obsidian-import/src/discovery.ts`:
 
@@ -541,7 +541,7 @@ export function discoverImportFiles(settings: ObsidianImportSettings): ImportCan
 }
 ```
 
-- [ ] **Step 9: Implement planner and exports**
+- [x] **Step 9: Implement planner and exports**
 
 Create `packages/obsidian-import/src/planner.ts`:
 
@@ -720,7 +720,7 @@ export * from "./discovery.js"
 export * from "./planner.js"
 ```
 
-- [ ] **Step 10: Run package tests and build**
+- [x] **Step 10: Run package tests and build**
 
 Run:
 
@@ -731,7 +731,7 @@ pnpm --filter @memory-lane/obsidian-import build
 
 Expected: all `@memory-lane/obsidian-import` tests pass and package builds.
 
-- [ ] **Step 11: Commit Task 1**
+- [x] **Step 11: Commit Task 1**
 
 Run:
 
