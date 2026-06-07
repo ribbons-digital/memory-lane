@@ -3,6 +3,7 @@ import * as path from "node:path"
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { MemoryEngine } from "../src/engine.js"
+import { contentHash } from "../src/engine-helpers.js"
 import { tempDir } from "./helpers.js"
 
 describe("MemoryEngine", () => {
@@ -450,6 +451,165 @@ describe("MemoryEngine", () => {
     assert.equal(d.approvedMemories, 1)
     assert.equal(d.pendingMemories, 1)
     assert.equal(d.totalMemories, 2)
+  })
+
+  it("doctor does not warn about semantic under-indexing when semantic search is disabled", () => {
+    const configPath = path.join(dir, "cfg-disabled-semantic.json")
+    fs.writeFileSync(configPath, JSON.stringify({ semantic: { enabled: false } }), "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-disabled-semantic.jsonl"),
+      embeddingsPath: path.join(dir, "emb-disabled-semantic.jsonl"),
+      configPath,
+    })
+    e.save({ text: "approved text", status: "approved" })
+
+    const report = e.doctor()
+
+    assert.equal(report.semanticApprovedMemories, 1)
+    assert.equal(report.semanticEmbeddedApprovedMemories, 0)
+    assert.equal(report.semanticEmbeddingCoverage, 1)
+    assert.deepEqual(report.semanticWarnings, [])
+  })
+
+  it("doctor warns when semantic search is enabled and approved memories are under-indexed", () => {
+    const configPath = path.join(dir, "cfg-semantic-under-indexed.json")
+    fs.writeFileSync(configPath, JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "test-profile",
+        embeddings: {
+          profiles: {
+            "test-profile": {
+              provider: "openai-compatible-embeddings",
+              baseUrl: "http://localhost:11434",
+              model: "test-model",
+            },
+          },
+        },
+      },
+    }), "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-semantic-under-indexed.jsonl"),
+      embeddingsPath: path.join(dir, "emb-semantic-under-indexed.jsonl"),
+      configPath,
+    })
+    e.save({ text: "first approved memory", status: "approved" })
+    e.save({ text: "second approved memory", status: "approved" })
+
+    const report = e.doctor()
+
+    assert.equal(report.semanticApprovedMemories, 2)
+    assert.equal(report.semanticEmbeddedApprovedMemories, 0)
+    assert.equal(report.semanticEmbeddingCoverage, 0)
+    assert.match((report.semanticWarnings as string[]).join("\n"), /only 0\/2 approved memories have current embeddings/)
+    assert.match((report.semanticWarnings as string[]).join("\n"), /memory-lane reindex/)
+  })
+
+  it("doctor does not warn when every approved memory has a current embedding", () => {
+    const configPath = path.join(dir, "cfg-semantic-current.json")
+    const embPath = path.join(dir, "emb-semantic-current.jsonl")
+    fs.writeFileSync(configPath, JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "test-profile",
+        embeddings: {
+          profiles: {
+            "test-profile": {
+              provider: "openai-compatible-embeddings",
+              baseUrl: "http://localhost:11434",
+              model: "test-model",
+            },
+          },
+        },
+      },
+    }), "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-semantic-current.jsonl"),
+      embeddingsPath: embPath,
+      configPath,
+    })
+    const saved = e.save({ text: "fully indexed memory", status: "approved" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    fs.appendFileSync(embPath, JSON.stringify({
+      memoryId: saved.memory.id,
+      memoryUpdatedAt: saved.memory.updatedAt,
+      contentHash: contentHash(saved.memory.text),
+      profileName: "test-profile",
+      model: "test-model",
+      dimensions: 2,
+      vector: [1, 0],
+      createdAt: new Date().toISOString(),
+    }) + "\n", "utf8")
+
+    const report = e.doctor()
+
+    assert.equal(report.semanticApprovedMemories, 1)
+    assert.equal(report.semanticEmbeddedApprovedMemories, 1)
+    assert.equal(report.semanticEmbeddingCoverage, 1)
+    assert.deepEqual(report.semanticWarnings, [])
+  })
+
+  it("doctor ignores stale embeddings with mismatched content hash model or profile", () => {
+    const configPath = path.join(dir, "cfg-semantic-stale.json")
+    const embPath = path.join(dir, "emb-semantic-stale.jsonl")
+    fs.writeFileSync(configPath, JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "test-profile",
+        embeddings: {
+          profiles: {
+            "test-profile": {
+              provider: "openai-compatible-embeddings",
+              baseUrl: "http://localhost:11434",
+              model: "test-model",
+            },
+          },
+        },
+      },
+    }), "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-semantic-stale.jsonl"),
+      embeddingsPath: embPath,
+      configPath,
+    })
+    const saved = e.save({ text: "current indexed text", status: "approved" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    const base = {
+      memoryId: saved.memory.id,
+      memoryUpdatedAt: saved.memory.updatedAt,
+      dimensions: 2,
+      vector: [1, 0],
+      createdAt: new Date().toISOString(),
+    }
+    fs.appendFileSync(embPath, JSON.stringify({
+      ...base,
+      contentHash: contentHash("old indexed text"),
+      profileName: "test-profile",
+      model: "test-model",
+    }) + "\n", "utf8")
+    fs.appendFileSync(embPath, JSON.stringify({
+      ...base,
+      contentHash: contentHash(saved.memory.text),
+      profileName: "test-profile",
+      model: "other-model",
+    }) + "\n", "utf8")
+    fs.appendFileSync(embPath, JSON.stringify({
+      ...base,
+      contentHash: contentHash(saved.memory.text),
+      profileName: "other-profile",
+      model: "test-model",
+    }) + "\n", "utf8")
+
+    const report = e.doctor()
+
+    assert.equal(report.semanticApprovedMemories, 1)
+    assert.equal(report.semanticEmbeddedApprovedMemories, 0)
+    assert.equal(report.semanticEmbeddingCoverage, 0)
+    assert.match((report.semanticWarnings as string[]).join("\n"), /only 0\/1 approved memories have current embeddings/)
   })
 
   it("doctor reports disabled obsidian mirror", () => {

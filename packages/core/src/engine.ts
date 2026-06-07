@@ -360,6 +360,46 @@ export class MemoryEngine {
     }
   }
 
+  private semanticDoctor(memories: MemoryRecord[]): Record<string, unknown> {
+    const config = this.config.semantic
+    const approved = memories.filter((m) => m.status === "approved")
+    const semanticApprovedMemories = approved.length
+    const profileName = config.activeEmbeddingProfile
+    const profile = config.embeddings.profiles[profileName]
+    const model = profile?.model
+    const warnings: string[] = []
+
+    let semanticEmbeddedApprovedMemories = 0
+    if (model) {
+      const embeddings = createEmbeddingStore(this.embPath).listEmbeddings()
+      const currentKeys = new Set(
+        embeddings
+          .filter((embedding) => embedding.profileName === profileName && embedding.model === model)
+          .map((embedding) => [embedding.memoryId, embedding.contentHash].join("\0")),
+      )
+      semanticEmbeddedApprovedMemories = approved.filter((memory) => (
+        currentKeys.has([memory.id, contentHash(memory.text)].join("\0"))
+      )).length
+    }
+
+    const semanticEmbeddingCoverage = config.enabled && semanticApprovedMemories > 0
+      ? Math.round((semanticEmbeddedApprovedMemories / semanticApprovedMemories) * 1000) / 1000
+      : 1
+
+    if (config.enabled && semanticApprovedMemories > 0 && semanticEmbeddingCoverage < 0.8) {
+      warnings.push(
+        `Semantic search is enabled, but only ${semanticEmbeddedApprovedMemories}/${semanticApprovedMemories} approved memories have current embeddings. Run \`memory-lane reindex\`.`,
+      )
+    }
+
+    return {
+      semanticApprovedMemories,
+      semanticEmbeddedApprovedMemories,
+      semanticEmbeddingCoverage,
+      semanticWarnings: warnings,
+    }
+  }
+
   private obsidianDoctor(): Record<string, unknown> {
     const obsidian = this.config.obsidian
     const warnings: string[] = []
@@ -416,6 +456,7 @@ export class MemoryEngine {
       deadWeightRatio: total ? mems.filter((m) => m.status === "deleted" || m.status === "rejected").length / total : 0,
       activeProfileName: config.activeEmbeddingProfile,
       projectScope: this.scope?.key ?? "none",
+      ...this.semanticDoctor(mems),
       ...this.obsidianDoctor(),
     }
   }
