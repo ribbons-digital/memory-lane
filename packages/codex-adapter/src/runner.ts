@@ -1,5 +1,7 @@
-import type { MemoryEngine } from "@memory-lane/core"
-import { handlePostToolUse, handleStop, handleUserPromptSubmit } from "@memory-lane/lifecycle"
+import {
+  appendHookDebugLog, hookDebugEnabled, type HookDebugLogStatus, type MemoryEngine,
+} from "@memory-lane/core"
+import { handlePostToolUse, handleStop, handleUserPromptSubmit, type LifecycleResult } from "@memory-lane/lifecycle"
 import { lifecycleNoopOutput, noopOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseCodexPayload, type CodexCommand } from "./payloads.js"
 import { readLatestTurnFromTranscript } from "./transcript.js"
@@ -8,32 +10,67 @@ export interface RunCodexHookOptions {
   engine: MemoryEngine
   payloadText: string
   env?: NodeJS.ProcessEnv
-}
-
-function isDebug(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.MEMORY_LANE_HOOK_DEBUG === "1" || env.MEMORY_LANE_HOOK_DEBUG === "true"
+  hookDebugLogPath?: string
 }
 
 function parseJson(text: string): unknown {
   return JSON.parse(text)
 }
 
+function lifecycleCounts(result: LifecycleResult): {
+  saved: number
+  skipped: number
+  discarded: number
+  additionalContext: boolean
+  warningCount: number
+} {
+  return {
+    saved: result.saved.filter((saveResult) => saveResult.status === "saved").length,
+    skipped: result.saved.filter((saveResult) => saveResult.status === "skipped").length,
+    discarded: result.discarded.length,
+    additionalContext: Boolean(result.additionalContext),
+    warningCount: result.saved.reduce((count, saveResult) => count + (saveResult.warnings?.length ?? 0), 0),
+  }
+}
+
 export async function runCodexHookCommand(command: CodexCommand, options: RunCodexHookOptions): Promise<string> {
-  const debug = isDebug(options.env)
+  const startedAt = Date.now()
+  const debug = hookDebugEnabled(options.env)
+  const log = (status: HookDebugLogStatus, fields: Record<string, unknown> = {}) => {
+    if (!debug) return
+    appendHookDebugLog({
+      adapter: "codex",
+      event: command,
+      cwd: process.cwd(),
+      status,
+      ...fields,
+      durationMs: Date.now() - startedAt,
+    }, { filePath: options.hookDebugLogPath })
+  }
+
   let payload: unknown
   try {
     payload = parseJson(options.payloadText)
   } catch {
+    log("noop", { reason: "invalid JSON payload" })
     return noopOutput("invalid JSON payload", debug)
   }
 
   const parsed = parseCodexPayload(payload)
-  if (parsed.kind === "invalid") return noopOutput(parsed.reason, debug)
-  if (parsed.kind !== command) return noopOutput(`event mismatch: command ${command} received ${parsed.kind}`, debug)
+  if (parsed.kind === "invalid") {
+    log("noop", { reason: parsed.reason })
+    return noopOutput(parsed.reason, debug)
+  }
+  if (parsed.kind !== command) {
+    const reason = `event mismatch: command ${command} received ${parsed.kind}`
+    log("noop", { reason })
+    return noopOutput(reason, debug)
+  }
 
   try {
     if (parsed.kind === "user-prompt-submit") {
       const result = await handleUserPromptSubmit(options.engine, parsed.input)
+      log("ok", lifecycleCounts(result))
       return userPromptSubmitOutput(result, debug)
     }
 
@@ -44,12 +81,15 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         lastUserMessage: parsed.input.lastUserMessage ?? latest.lastUserMessage,
         lastAssistantMessage: parsed.input.lastAssistantMessage ?? latest.lastAssistantMessage,
       })
+      log("ok", lifecycleCounts(result))
       return lifecycleNoopOutput(result, debug)
     }
 
     const result = handlePostToolUse(options.engine, parsed.input)
+    log("ok", lifecycleCounts(result))
     return lifecycleNoopOutput(result, debug)
   } catch {
+    log("error", { reason: "hook handling failed" })
     return noopOutput("hook handling failed", debug)
   }
 }
