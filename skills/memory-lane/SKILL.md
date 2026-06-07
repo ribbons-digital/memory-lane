@@ -144,6 +144,10 @@ Lifecycle autosave filters transient reviewer, subagent, and task prompts such a
 
 For hook support checks, prefer `memory-lane doctor` first: use `hookDebugLogPath`, `hookDebugLogExists`, `hookDebugLogSizeBytes`, `hookDebugLogLastModified`, and `hookDebugWarnings` to confirm log availability without reading raw log contents. Only inspect `~/.memory-lane/hooks-log.jsonl` itself when the user asks or when troubleshooting requires it.
 
+### pi adapter boundary
+
+In pi, Memory Lane provides manual tools/commands and read-only lifecycle recall injection before the agent starts through pi's `before_agent_start` event. Do not assume pi currently performs Codex/Claude-style automatic stop autosave or post-tool-use tool outcomes capture. When a durable pi workflow rule, preference, or project fact should be saved, use `memory_save` for explicit user requests or `memory_suggest` for proactive suggestions.
+
 ### Sandboxed storage
 
 Default storage is `~/.memory-lane/`. If home storage is not writable and no explicit `MEMORY_LANE_*` paths are set, Memory Lane auto-initializes project-local `.memory-lane/` and continues there. Explicit `MEMORY_LANE_FILE`, `MEMORY_LANE_EMBEDDINGS_FILE`, and `MEMORY_LANE_CONFIG` always win and do not auto-fallback.

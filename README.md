@@ -272,6 +272,12 @@ See [`examples/harness-integrations/`](./examples/harness-integrations/) for int
 
 Lifecycle autosave intentionally filters transient reviewer, subagent, and task prompts such as commit review requests, “do not modify files” review tasks, and delegated status-report instructions. Those operational prompts are not durable memory. Explicit memory requests remain supported and authoritative: use `memory-lane save ...` or phrases like “Remember that ...” for durable workflow rules, preferences, or project facts.
 
+### pi adapter
+
+The pi adapter supports manual Memory Lane tools and commands (`memory_save`, `memory_suggest`, `memory_recall`, and `/memory ...`). It also performs read-only lifecycle recall injection through pi's documented `before_agent_start` event: relevant approved memories may be injected as hidden `memory-lane` context before the agent starts.
+
+pi lifecycle recall does not autosave new memories and does not capture tool outcomes yet. Codex and Claude Code hook adapters still own automatic stop/post-tool-use memory writes for those harnesses; pi autosave/tool capture is deferred to a later roadmap phase.
+
 ### Claude Code hooks
 
 Claude Code CLI users can wire Memory Lane into lifecycle hooks:
