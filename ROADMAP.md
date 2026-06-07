@@ -1,12 +1,13 @@
 # Memory Lane Roadmap
 
-This roadmap focuses on three upcoming directions:
+This roadmap focuses on four upcoming directions:
 
 1. Obsidian mirror/import support
 2. MCP server support
-3. Experimental Obsidian-backed storage
+3. Obsidian LLM Wiki / knowledge-base access
+4. Experimental Obsidian-backed storage
 
-The ordering is intentional: mirror/import gives users Obsidian value with low risk; MCP is broadly useful and should not depend on Obsidian; true Obsidian-backed storage comes last because it changes Memory Lane's core reliability model.
+The ordering is intentional: mirror/import gives users Obsidian value with low risk; MCP is broadly useful and should not depend on Obsidian; Obsidian LLM Wiki features should build on MCP/resource access while staying distinct from Memory Lane memories; true Obsidian-backed storage comes last because it changes Memory Lane's core reliability model.
 
 Each phase lists a focused implementation slice of no more than five todos. If a phase needs more work, add the next slice only after the current slice is complete, keeping the todo order aligned with implementation dependencies.
 
@@ -157,7 +158,27 @@ Todos:
 4. Add optional Obsidian mirror status through MCP.
 5. Add diagnostics to detect duplicate or conflicting hook + MCP setups.
 
-## Phase 7 — Obsidian-Backed Storage Prototype
+
+## Phase 7 — Obsidian LLM Wiki / Knowledge Base Integration
+
+**Goal:** Let LLM clients search and read selected Obsidian/Garden notes as source-backed knowledge without turning those notes into Memory Lane memories automatically.
+
+This is separate from Obsidian mirror/import:
+
+- Memory Lane memories remain compact JSONL records for durable agent preferences, facts, and checkpoints.
+- Obsidian LLM Wiki notes remain user-authored source documents in the vault/Garden.
+- Answers should be grounded in source notes with citations or file references.
+- Promotion from a wiki note/fact into Memory Lane should be explicit, not automatic.
+
+Todos:
+
+1. Define the boundary between Memory Lane memories and Obsidian/Garden knowledge-base notes, including naming, source-of-truth rules, and citation expectations.
+2. Add MCP resources/tools for listing, searching, and reading selected Obsidian/Garden notes without scanning private or generated folders by default.
+3. Add source-backed answer support with citations to note paths/headings/blocks where practical.
+4. Add an explicit "promote to Memory Lane" workflow that saves selected wiki-derived facts only after user/model action, preserving normal validation and review semantics.
+5. Document setup, privacy boundaries, ignored folders, and how this differs from mirror/import and Obsidian-backed storage.
+
+## Phase 8 — Obsidian-Backed Storage Prototype
 
 **Goal:** Experiment with Markdown as a primary backend without replacing JSONL globally.
 
@@ -181,7 +202,7 @@ Todos:
 4. Define deletion/tombstone and rename behavior.
 5. Gate behind an explicit experimental flag.
 
-## Phase 8 — Obsidian-Backed Storage Hardening
+## Phase 9 — Obsidian-Backed Storage Hardening
 
 **Goal:** Decide whether Obsidian-backed storage is production-worthy.
 

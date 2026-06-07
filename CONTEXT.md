@@ -62,3 +62,11 @@ _Avoid_: User-authored note, import note, editable index
 **Mirror sync**:
 An explicit repair or backfill operation that reconciles the Obsidian mirror folder with the active approved and pending records in the JSONL memory store. It may create, update, or delete generated mirrored memory files only inside Memory Lane's configured mirror folder.
 _Avoid_: Import, bidirectional sync
+
+**Obsidian LLM Wiki**:
+A future knowledge-base integration that lets LLM clients search and read selected user-authored Obsidian or Garden notes as source-backed reference material with citations. It is not a Memory Lane memory store and does not automatically convert notes into memories.
+_Avoid_: Obsidian mirror, Obsidian import, Obsidian-backed storage, automatic memory creation
+
+**Wiki-derived memory**:
+A Memory Lane memory explicitly created from a fact or decision found in an Obsidian LLM Wiki source note. Creation is deliberate and uses normal Memory Lane validation, review, scope, and source-of-truth rules.
+_Avoid_: Automatic extraction, source note, citation
