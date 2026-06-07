@@ -19,6 +19,10 @@ export { cosineSimilarity, lexicalScore, recencyScore, findMatchingEmbedding } f
 export { retrieveSemanticMemories } from "./retrieval.js"
 export { compact, shouldCompact } from "./compact.js"
 export {
+  hookDebugEnabled, defaultHookDebugLogPath, appendHookDebugLog,
+  type HookDebugLogRecord, type HookDebugLogStatus, type AppendHookDebugLogOptions,
+} from "./hook-debug-log.js"
+export {
   resolveMemoryPaths, resolveWritableMemoryPaths, initProjectLocalStorage, assertWritableMemoryPath,
   type MemoryPaths, type InitProjectLocalStorageResult,
 } from "./storage-locations.js"
