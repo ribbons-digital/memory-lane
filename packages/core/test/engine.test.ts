@@ -453,6 +453,84 @@ describe("MemoryEngine", () => {
     assert.equal(d.totalMemories, 2)
   })
 
+  it("doctor reports missing hook debug log without creating it", () => {
+    const hookDebugLogPath = path.join(dir, "missing-hook-root", ".memory-lane", "hooks-log.jsonl")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-hook-missing.jsonl"),
+      embeddingsPath: path.join(dir, "emb-hook-missing.jsonl"),
+      configPath: path.join(dir, "cfg-hook-missing.json"),
+      hookDebugLogPath,
+    })
+
+    const report = e.doctor()
+
+    assert.equal(report.hookDebugEnabledInCurrentEnv, false)
+    assert.equal(report.hookDebugLogPath, hookDebugLogPath)
+    assert.equal(report.hookDebugLogExists, false)
+    assert.equal(report.hookDebugLogSizeBytes, 0)
+    assert.equal(report.hookDebugLogLastModified, null)
+    assert.deepEqual(report.hookDebugWarnings, [])
+    assert.equal(fs.existsSync(path.dirname(hookDebugLogPath)), false)
+    assert.equal(fs.existsSync(hookDebugLogPath), false)
+  })
+
+  it("doctor reports existing hook debug log metadata", () => {
+    const hookDebugLogPath = path.join(dir, "existing-hooks", "hooks-log.jsonl")
+    fs.mkdirSync(path.dirname(hookDebugLogPath), { recursive: true })
+    fs.writeFileSync(hookDebugLogPath, JSON.stringify({ status: "ok" }) + "\n", "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-hook-existing.jsonl"),
+      embeddingsPath: path.join(dir, "emb-hook-existing.jsonl"),
+      configPath: path.join(dir, "cfg-hook-existing.json"),
+      hookDebugLogPath,
+    })
+
+    const report = e.doctor()
+
+    assert.equal(report.hookDebugLogPath, hookDebugLogPath)
+    assert.equal(report.hookDebugLogExists, true)
+    assert.equal(typeof report.hookDebugLogSizeBytes, "number")
+    assert.ok((report.hookDebugLogSizeBytes as number) > 0)
+    assert.equal(typeof report.hookDebugLogLastModified, "string")
+    assert.ok(!Number.isNaN(Date.parse(report.hookDebugLogLastModified as string)))
+    assert.deepEqual(report.hookDebugWarnings, [])
+  })
+
+  it("doctor reports hook debug enabled in the current env", () => {
+    const hookDebugLogPath = path.join(dir, "env-hooks", "hooks-log.jsonl")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-hook-env.jsonl"),
+      embeddingsPath: path.join(dir, "emb-hook-env.jsonl"),
+      configPath: path.join(dir, "cfg-hook-env.json"),
+      hookDebugLogPath,
+      env: { MEMORY_LANE_HOOK_DEBUG: "1" },
+    })
+
+    const report = e.doctor()
+
+    assert.equal(report.hookDebugEnabledInCurrentEnv, true)
+    assert.equal(report.hookDebugLogPath, hookDebugLogPath)
+  })
+
+  it("doctor warns when hook debug log path is a directory", () => {
+    const hookDebugLogPath = path.join(dir, "directory-hooks", "hooks-log.jsonl")
+    fs.mkdirSync(hookDebugLogPath, { recursive: true })
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-hook-directory.jsonl"),
+      embeddingsPath: path.join(dir, "emb-hook-directory.jsonl"),
+      configPath: path.join(dir, "cfg-hook-directory.json"),
+      hookDebugLogPath,
+    })
+
+    const report = e.doctor()
+
+    assert.equal(report.hookDebugLogExists, true)
+    assert.equal(report.hookDebugLogSizeBytes, 0)
+    assert.equal(report.hookDebugLogLastModified, null)
+    assert.match((report.hookDebugWarnings as string[]).join("\n"), /Hook debug log path is not a file/)
+    assert.match((report.hookDebugWarnings as string[]).join("\n"), new RegExp(hookDebugLogPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+  })
+
   it("doctor does not warn about semantic under-indexing when semantic search is disabled", () => {
     const configPath = path.join(dir, "cfg-disabled-semantic.json")
     fs.writeFileSync(configPath, JSON.stringify({ semantic: { enabled: false } }), "utf8")

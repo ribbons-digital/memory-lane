@@ -12,6 +12,7 @@ import { containsLikelySecret } from "./secret-detection.js"
 import { resolveProjectScope } from "./project-scope.js"
 import { loadConfig, getDefaultConfigPath } from "./config.js"
 import { createEmbeddingStore } from "./embedding-store.js"
+import { defaultHookDebugLogPath, hookDebugEnabled } from "./hook-debug-log.js"
 import { retrieveSemanticMemories } from "./retrieval.js"
 import { compact as compactStores, shouldCompact } from "./compact.js"
 import { validateSaveInput } from "./storage-validation.js"
@@ -22,7 +23,7 @@ import {
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
   MemoryKind, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, ProjectScope,
-  RecallOptions, RecallResult, EmbeddingProvider, CompactReport,
+  RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig,
 } from "./types.js"
 
 function displayValue(value: unknown): string {
@@ -58,19 +59,18 @@ export class MemoryEngine {
   private readonly embPath: string
   private readonly memPath: string
   private readonly configPath?: string
+  private readonly hookDebugLogPath: string
+  private readonly env: NodeJS.ProcessEnv | Record<string, string | undefined>
 
-  constructor(opts?: {
-    memoryPath?: string
-    embeddingsPath?: string
-    configPath?: string
-    embeddingProvider?: EmbeddingProvider
-  }) {
+  constructor(opts?: MemoryEngineConfig) {
     this.memPath = opts?.memoryPath ?? path.join(DEFAULT_DIR, "memory.jsonl")
     this.embPath = opts?.embeddingsPath ?? path.join(DEFAULT_DIR, "embeddings.jsonl")
     this.configPath = opts?.configPath ?? getDefaultConfigPath()
     this.store = createMemoryStore(this.memPath)
     this.config = loadConfig(this.configPath)
     this.embProvider = opts?.embeddingProvider
+    this.hookDebugLogPath = opts?.hookDebugLogPath ?? defaultHookDebugLogPath()
+    this.env = opts?.env ?? process.env
     this.refreshScope()
 
     // Auto-compact on startup if dead weight exceeds threshold
@@ -400,6 +400,47 @@ export class MemoryEngine {
     }
   }
 
+  private hookDebugDoctor(): Record<string, unknown> {
+    const warnings: string[] = []
+    const base = {
+      hookDebugEnabledInCurrentEnv: hookDebugEnabled(this.env),
+      hookDebugLogPath: this.hookDebugLogPath,
+    }
+
+    try {
+      const stat = fs.statSync(this.hookDebugLogPath)
+      if (!stat.isFile()) {
+        warnings.push(`Hook debug log path is not a file: ${this.hookDebugLogPath}`)
+        return {
+          ...base,
+          hookDebugLogExists: true,
+          hookDebugLogSizeBytes: 0,
+          hookDebugLogLastModified: null,
+          hookDebugWarnings: warnings,
+        }
+      }
+
+      return {
+        ...base,
+        hookDebugLogExists: true,
+        hookDebugLogSizeBytes: stat.size,
+        hookDebugLogLastModified: stat.mtime.toISOString(),
+        hookDebugWarnings: warnings,
+      }
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        warnings.push(`Hook debug log is not accessible: ${this.hookDebugLogPath}`)
+      }
+      return {
+        ...base,
+        hookDebugLogExists: false,
+        hookDebugLogSizeBytes: 0,
+        hookDebugLogLastModified: null,
+        hookDebugWarnings: warnings,
+      }
+    }
+  }
+
   private obsidianDoctor(): Record<string, unknown> {
     const obsidian = this.config.obsidian
     const warnings: string[] = []
@@ -457,6 +498,7 @@ export class MemoryEngine {
       activeProfileName: config.activeEmbeddingProfile,
       projectScope: this.scope?.key ?? "none",
       ...this.semanticDoctor(mems),
+      ...this.hookDebugDoctor(),
       ...this.obsidianDoctor(),
     }
   }

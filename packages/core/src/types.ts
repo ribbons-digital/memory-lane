@@ -153,6 +153,8 @@ export interface MemoryEngineConfig {
   embeddingsPath?: string
   configPath?: string
   embeddingProvider?: EmbeddingProvider
+  hookDebugLogPath?: string
+  env?: NodeJS.ProcessEnv | Record<string, string | undefined>
 }
 
 export interface CompactReport {
