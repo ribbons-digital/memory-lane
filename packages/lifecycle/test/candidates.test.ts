@@ -48,3 +48,45 @@ test("transient project imperatives produce no candidates", () => {
 
   assert.deepEqual(candidates, [])
 })
+
+test("reviewer task prompts produce no candidates", () => {
+  const candidates = extractStopCandidates({
+    cwd: process.cwd(),
+    lastUserMessage: "Task: Code quality/docs quality review for Task 4 only. Do not modify files.",
+    lastAssistantMessage: "Review complete.",
+  })
+
+  assert.deepEqual(candidates, [])
+})
+
+test("commit review prompts produce no candidates", () => {
+  const candidates = extractStopCandidates({
+    cwd: process.cwd(),
+    lastUserMessage: "Review commit abc123 and report APPROVED or CHANGES_REQUESTED.",
+    lastAssistantMessage: "I'll review it.",
+  })
+
+  assert.deepEqual(candidates, [])
+})
+
+test("subagent implementation handoff prompts produce no candidates", () => {
+  const candidates = extractStopCandidates({
+    cwd: process.cwd(),
+    lastUserMessage: "Implement plan Task 2 only. Report status as DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, or BLOCKED.",
+    lastAssistantMessage: "I'll execute Task 2.",
+  })
+
+  assert.deepEqual(candidates, [])
+})
+
+test("explicit memory requests about reviewer behavior are preserved", () => {
+  const candidates = extractStopCandidates({
+    cwd: process.cwd(),
+    lastUserMessage: "Remember that reviewer agents must not modify files",
+    lastAssistantMessage: "Got it.",
+  })
+
+  assert.equal(candidates.length, 1)
+  assert.equal(candidates[0].text, "reviewer agents must not modify files")
+  assert.equal(candidates[0].decision, "save-approved")
+})
