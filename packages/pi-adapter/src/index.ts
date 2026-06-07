@@ -1,4 +1,5 @@
 import { Type } from "typebox"
+import { handleUserPromptSubmit } from "@memory-lane/lifecycle"
 import {
   MemoryEngine, parseExplicitMemoryRequest, detectUserMemorySuggestion,
   isCheckpointMemorySaveRequest, inferCategory, inferMemoryKind,
@@ -13,6 +14,7 @@ export interface ExtensionContext {
   cwd: string
   ui?: { notify(message: string, level?: "info" | "warning" | "error"): void }
   llmProvider?: { generate(prompt: string, options?: any): Promise<string> }
+  sessionManager?: { getSessionFile?(): string | undefined }
 }
 
 export interface ExtensionAPI {
@@ -83,6 +85,26 @@ function storageGuidance(error: unknown): string {
     "",
     "If you do not want to grant home-directory access, run `/memory init-project-local` to create .memory-lane/ in this project and retry using project-local storage.",
   ].join("\n")
+}
+
+function piSessionId(ctx: ExtensionContext): string | undefined {
+  try {
+    return ctx.sessionManager?.getSessionFile?.()
+  } catch {
+    return undefined
+  }
+}
+
+function memoryLaneContextMessage(content: string) {
+  return {
+    customType: "memory-lane",
+    content,
+    display: false,
+    details: {
+      source: "memory-lane",
+      lifecycleEvent: "user_prompt_submit",
+    },
+  }
 }
 
 function formatMemory(m: { id: string; scope: { type: string }; category: string; text: string; status?: string }): string {
@@ -299,6 +321,28 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         return { content: [{ type: "text", text: storageGuidance(err) }], details: { error: "storage-unavailable" } }
       }
     },
+  })
+
+  // ── Read-only lifecycle recall injection ─────────────────
+
+  pi.on("before_agent_start", async (event, ctx) => {
+    const prompt = typeof event.prompt === "string" ? event.prompt.trim() : ""
+    if (!prompt) return undefined
+
+    try {
+      const e = getEngine(ctx.cwd)
+      const result = await handleUserPromptSubmit(e, {
+        cwd: ctx.cwd,
+        prompt,
+        sessionId: piSessionId(ctx),
+      })
+
+      if (!result.additionalContext) return undefined
+      return { message: memoryLaneContextMessage(result.additionalContext) }
+    } catch (err) {
+      notify(ctx, storageGuidance(err), "warning")
+      return undefined
+    }
   })
 
   // ── Input event handler (auto-save / suggest on user input) ──

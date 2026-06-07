@@ -54,6 +54,7 @@ function makeTempEnv(): { dir: string; restore: () => void } {
   delete process.env.MEMORY_LANE_EMBEDDINGS_FILE
   delete process.env.MEMORY_LANE_CONFIG
   fs.writeFileSync(process.env.PI_MEMORY_CONFIG_FILE, JSON.stringify({ semantic: { enabled: false } }))
+  fs.writeFileSync(path.join(dir, ".memory-lane-scope"), JSON.stringify({ id: "pi-test-project" }))
 
   return {
     dir,

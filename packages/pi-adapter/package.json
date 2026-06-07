@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@memory-lane/core": "workspace:*",
+    "@memory-lane/lifecycle": "workspace:*",
     "typebox": "^1.1.38"
   },
   "devDependencies": {

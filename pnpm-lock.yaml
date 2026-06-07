@@ -139,6 +139,9 @@ importers:
       '@memory-lane/core':
         specifier: workspace:*
         version: link:../core
+      '@memory-lane/lifecycle':
+        specifier: workspace:*
+        version: link:../lifecycle
       typebox:
         specifier: ^1.1.38
         version: 1.1.38
