@@ -168,6 +168,8 @@ memory-lane reindex --force           # re-embed even existing vectors
 
 > **Auto-embed**: When semantic search is enabled and an embedding provider is configured, newly saved approved memories are automatically embedded — no manual reindex needed for incremental saves.
 
+When `memory-lane doctor` reports `semanticWarnings`, treat them as advisory diagnostics. Do not run `memory-lane reindex` automatically from a hook or without user approval; offer it as an explicit repair command because it writes the embedding sidecar and may call the configured embedding provider.
+
 ### Project scope
 
 ```bash

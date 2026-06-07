@@ -217,6 +217,8 @@ No config file needed. Lexical search works out of the box.
 
 After configuring, run `memory-lane reindex` to embed existing memories.
 
+`memory-lane doctor` is read-only. When semantic search is enabled, it reports how many approved memories have current embeddings for the active profile/model. If coverage is low, doctor prints a semantic warning such as “Run `memory-lane reindex`.” Reindexing is an explicit repair step and is not run automatically by doctor or hooks.
+
 ## Environment Variables
 
 | Variable | Default | Description |
