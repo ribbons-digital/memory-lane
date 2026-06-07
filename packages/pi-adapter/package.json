@@ -12,7 +12,8 @@
     }
   },
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "test": "node --test --import tsx test/*.test.ts"
   },
   "dependencies": {
     "@memory-lane/core": "workspace:*",
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.4.0"
   }
 }
