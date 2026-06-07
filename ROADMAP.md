@@ -1,13 +1,14 @@
 # Memory Lane Roadmap
 
-This roadmap focuses on four upcoming directions:
+This roadmap focuses on five upcoming directions:
 
 1. Obsidian mirror/import support
-2. MCP server support
-3. Obsidian LLM Wiki / knowledge-base access
-4. Experimental Obsidian-backed storage
+2. pi adapter lifecycle support
+3. MCP server support
+4. Obsidian LLM Wiki / knowledge-base access
+5. Experimental Obsidian-backed storage
 
-The ordering is intentional: mirror/import gives users Obsidian value with low risk; MCP is broadly useful and should not depend on Obsidian; Obsidian LLM Wiki features should build on MCP/resource access while staying distinct from Memory Lane memories; true Obsidian-backed storage comes last because it changes Memory Lane's core reliability model.
+The ordering is intentional: mirror/import gives users Obsidian value with low risk; pi lifecycle recall improves the current harness without adding automatic writes; MCP is broadly useful and should not depend on Obsidian; Obsidian LLM Wiki features should build on MCP/resource access while staying distinct from Memory Lane memories; true Obsidian-backed storage comes last because it changes Memory Lane's core reliability model.
 
 Each phase lists a focused implementation slice of no more than five todos. If a phase needs more work, add the next slice only after the current slice is complete, keeping the todo order aligned with implementation dependencies.
 
@@ -124,7 +125,31 @@ Todos:
 4. Update README, CLI help, generated mirror README, skill docs, and manual testing docs to explain generated index files, tags, status/category/project/recent browsing, and why hooks/import do not treat index files as user-authored notes.
 5. Write a focused implementation plan/spec for this Phase 4 slice before coding, keeping deferred improvements out of scope: one-file-per-project indexes, optional wikilinks, full reconciliation diagnostics, import dry-run secret warnings, and import snapshot cleanup.
 
-## Phase 5 — MCP Server MVP
+## Phase 5 — pi Lifecycle Recall Injection
+
+**Goal:** Give pi/pi-mono sessions read-only lifecycle recall using pi's documented extension events and the shared `@memory-lane/lifecycle` policy, without adding automatic memory writes yet.
+
+Todos:
+
+1. Add a focused spec and plan for pi read-only lifecycle recall based on pi's `before_agent_start` event.
+2. Add `@memory-lane/lifecycle` to `@memory-lane/pi-adapter` and call `handleUserPromptSubmit` for user prompts.
+3. Inject recalled context through the documented pi extension response shape, keeping output low-noise and deterministic.
+4. Preserve existing pi commands/tools (`memory_save`, `memory_suggest`, `memory_recall`, `/memory ...`) without behavior regressions.
+5. Document pi support boundaries: read-only lifecycle recall is supported; pi autosave and tool-outcome capture are deferred.
+
+## Phase 6 — pi Lifecycle Autosave and Tool Capture
+
+**Goal:** After pi recall injection has soaked, add automatic pi memory writes through the same shared lifecycle policy used by Codex and Claude Code.
+
+Todos:
+
+1. Reassess pi event semantics after Phase 5, especially `agent_end`, `turn_end`, `tool_result`, and current `input` classifier behavior.
+2. Refactor pi autosave to use shared lifecycle stop-candidate filtering, including reviewer/subagent/task meta-prompt filtering.
+3. Add pi tool-outcome capture from `tool_result` using shared `handlePostToolUse`, with safeguards against duplicate saves.
+4. Add privacy-safe pi debug/diagnostic behavior if needed, matching hook debug principles without logging raw prompts/tool outputs.
+5. Update README and skill docs to clarify which pi lifecycle writes are automatic and how users can disable or inspect them.
+
+## Phase 7 — MCP Server MVP
 
 **Goal:** Expose Memory Lane through MCP without changing the storage model.
 
@@ -144,7 +169,7 @@ Todos:
 4. Reuse existing `MemoryEngine`, project scope, validation, and retrieval logic.
 5. Add setup docs for Claude Desktop, Claude Code, Codex, and Cursor.
 
-## Phase 6 — MCP + Hooks Coordination
+## Phase 8 — MCP + Hooks Coordination
 
 **Goal:** Make MCP and lifecycle hooks complement each other cleanly.
 
@@ -159,7 +184,7 @@ Todos:
 5. Add diagnostics to detect duplicate or conflicting hook + MCP setups.
 
 
-## Phase 7 — Obsidian LLM Wiki / Knowledge Base Integration
+## Phase 9 — Obsidian LLM Wiki / Knowledge Base Integration
 
 **Goal:** Let LLM clients search and read selected Obsidian/Garden notes as source-backed knowledge without turning those notes into Memory Lane memories automatically.
 
@@ -178,7 +203,7 @@ Todos:
 4. Add an explicit "promote to Memory Lane" workflow that saves selected wiki-derived facts only after user/model action, preserving normal validation and review semantics.
 5. Document setup, privacy boundaries, ignored folders, and how this differs from mirror/import and Obsidian-backed storage.
 
-## Phase 8 — Obsidian-Backed Storage Prototype
+## Phase 10 — Obsidian-Backed Storage Prototype
 
 **Goal:** Experiment with Markdown as a primary backend without replacing JSONL globally.
 
@@ -202,7 +227,7 @@ Todos:
 4. Define deletion/tombstone and rename behavior.
 5. Gate behind an explicit experimental flag.
 
-## Phase 9 — Obsidian-Backed Storage Hardening
+## Phase 11 — Obsidian-Backed Storage Hardening
 
 **Goal:** Decide whether Obsidian-backed storage is production-worthy.
 
