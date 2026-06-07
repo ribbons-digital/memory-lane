@@ -49,10 +49,10 @@ test("transient project imperatives produce no candidates", () => {
   assert.deepEqual(candidates, [])
 })
 
-test("reviewer task prompts produce no candidates", () => {
+test("project-like reviewer task prompts produce no candidates", () => {
   const candidates = extractStopCandidates({
     cwd: process.cwd(),
-    lastUserMessage: "Task: Code quality/docs quality review for Task 4 only. Do not modify files.",
+    lastUserMessage: "Task: Review the code quality in this repo. Do not modify files.",
     lastAssistantMessage: "Review complete.",
   })
 
