@@ -78,11 +78,13 @@ Review pending inferred memories with:
 memory-lane review
 ```
 
-Enable concise hook diagnostics with:
+Enable concise hook diagnostics and persistent hook debug logging with:
 
 ```bash
 MEMORY_LANE_HOOK_DEBUG=1
 ```
+
+Debug records are appended to `~/.memory-lane/hooks-log.jsonl`. They contain counts and metadata only, not prompts, transcripts, or tool output.
 
 ## Fallback: prompt instructions
 

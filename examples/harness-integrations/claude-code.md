@@ -90,7 +90,7 @@ Enable concise hook diagnostics with:
 MEMORY_LANE_HOOK_DEBUG=1
 ```
 
-Debug output uses Claude Code `systemMessage` responses and avoids raw transcript/tool-output details.
+Debug output uses Claude Code `systemMessage` responses and also appends persistent records to `~/.memory-lane/hooks-log.jsonl`. The log contains counts and metadata only, not prompts, transcripts, or tool output.
 
 ## Fallback: prompt instructions
 

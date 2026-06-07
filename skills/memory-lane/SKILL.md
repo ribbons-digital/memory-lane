@@ -138,7 +138,7 @@ memory-lane codex stop
 memory-lane codex post-tool-use
 ```
 
-`UserPromptSubmit` recalls relevant approved memories and injects a small context block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise diagnostics.
+`UserPromptSubmit` recalls relevant approved memories and injects a small context block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
 
 ### Sandboxed storage
 
