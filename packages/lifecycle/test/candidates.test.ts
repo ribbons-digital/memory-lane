@@ -79,6 +79,16 @@ test("subagent implementation handoff prompts produce no candidates", () => {
   assert.deepEqual(candidates, [])
 })
 
+test("standalone subagent status instructions produce no candidates", () => {
+  const candidates = extractStopCandidates({
+    cwd: process.cwd(),
+    lastUserMessage: "Report status as DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, or BLOCKED for this repo task.",
+    lastAssistantMessage: "DONE",
+  })
+
+  assert.deepEqual(candidates, [])
+})
+
 test("explicit memory requests about reviewer behavior are preserved", () => {
   const candidates = extractStopCandidates({
     cwd: process.cwd(),

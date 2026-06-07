@@ -25,8 +25,9 @@ function isMetaTaskPrompt(text: string): boolean {
   const taskReviewPrompt = /^task:\s+/iu.test(normalized) && /\b(?:code quality|docs quality|review|task\s+\d+\s+only|do not modify files)\b/iu.test(normalized)
   const commitReviewPrompt = /^review\s+commit\b/iu.test(normalized)
   const planTaskPrompt = /^implement\s+plan\s+task\s+\d+\s+only\b/iu.test(normalized)
+  const subagentStatusPrompt = /^report\s+status\s+as\b/iu.test(normalized) && subagentStatusRequest
 
-  return taskReviewPrompt || commitReviewPrompt || reviewerStatusRequest || (planTaskPrompt && subagentStatusRequest)
+  return taskReviewPrompt || commitReviewPrompt || reviewerStatusRequest || subagentStatusPrompt || (planTaskPrompt && subagentStatusRequest)
 }
 
 function decisionFor(category: MemoryCandidate["category"], explicit: boolean): MemoryCandidate["decision"] {
