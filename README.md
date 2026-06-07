@@ -270,6 +270,8 @@ See [`examples/harness-integrations/`](./examples/harness-integrations/) for int
 - Cursor
 - Windsurf
 
+Lifecycle autosave intentionally filters transient reviewer, subagent, and task prompts such as commit review requests, “do not modify files” review tasks, and delegated status-report instructions. Those operational prompts are not durable memory. Explicit memory requests remain supported and authoritative: use `memory-lane save ...` or phrases like “Remember that ...” for durable workflow rules, preferences, or project facts.
+
 ### Claude Code hooks
 
 Claude Code CLI users can wire Memory Lane into lifecycle hooks:
