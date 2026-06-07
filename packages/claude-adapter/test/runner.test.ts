@@ -84,7 +84,6 @@ test("stop saves with claude provenance", async () => {
   const output = await runClaudeHookCommand("stop", {
     engine,
     env: { MEMORY_LANE_HOOK_DEBUG: "1" } as NodeJS.ProcessEnv,
-    hookDebugLogPath: debugLogPath(),
     payloadText: stopPayload(),
   })
 
@@ -142,7 +141,6 @@ test("invalid payload returns debug no-op", async () => {
   const output = await runClaudeHookCommand("user-prompt-submit", {
     engine: engineInTemp(),
     env: { MEMORY_LANE_HOOK_DEBUG: "1" } as NodeJS.ProcessEnv,
-    hookDebugLogPath: debugLogPath(),
     payloadText: "{not json",
   })
 
