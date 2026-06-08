@@ -288,6 +288,8 @@ After configuring, run `memory-lane reindex` to embed existing memories.
 
 `memory-lane doctor` also reports hook debug log diagnostics: `hookDebugEnabledInCurrentEnv`, `hookDebugLogPath`, `hookDebugLogExists`, `hookDebugLogSizeBytes`, `hookDebugLogLastModified`, and `hookDebugWarnings`. These fields help confirm where `~/.memory-lane/hooks-log.jsonl` is, whether it exists, and its size/mtime. Doctor only stats the path; it does not create, read, rotate, truncate, or modify hook debug logs.
 
+`memory-lane doctor` also reports read-only integration diagnostics. It checks whether common local config files appear to contain Memory Lane setup for Claude Desktop MCP, Codex hooks, Claude Code hooks, and the pi extension. These checks inspect config/entrypoint files only; they do not read prompts, transcripts, tool outputs, memory text, MCP traffic, or hook debug log contents. MCP provides explicit tools; hooks provide automatic lifecycle recall/save where supported; pi currently has manual tools and read-only lifecycle recall.
+
 ## Environment Variables
 
 | Variable | Default | Description |
