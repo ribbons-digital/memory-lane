@@ -364,8 +364,9 @@ export function applyProjectPath(engine: MemoryEngine, projectPath?: string): vo
 }
 
 function saveData(result: SaveResult): { status: "saved"; memory: MemoryRecord; warnings?: string[] } | { status: "skipped"; reason: string; warnings?: string[] } {
-  if (result.status === "saved") return { status: "saved", memory: result.memory, warnings: result.warnings }
-  return { status: "skipped", reason: result.reason, warnings: result.warnings }
+  const warnings = result.warnings ? { warnings: result.warnings } : {}
+  if (result.status === "saved") return { status: "saved", memory: result.memory, ...warnings }
+  return { status: "skipped", reason: result.reason, ...warnings }
 }
 
 export async function handleMemorySave(engine: MemoryEngine, input: SaveToolInput) {

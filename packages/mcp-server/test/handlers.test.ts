@@ -8,8 +8,25 @@ import {
   handleMemoryList, handleMemoryRecall, handleMemoryReview, handleMemorySave, handleMemorySuggest,
 } from "../src/handlers.ts"
 
+const tempDirs = new Set<string>()
+let listenerRegistered = false
+
+function registerCleanup(): void {
+  if (listenerRegistered) return
+  listenerRegistered = true
+  process.setMaxListeners(100)
+  process.on("exit", () => {
+    for (const dir of tempDirs) {
+      try { fs.rmSync(dir, { recursive: true, force: true }) } catch {}
+    }
+  })
+}
+
 function tempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-mcp-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-mcp-"))
+  tempDirs.add(dir)
+  registerCleanup()
+  return dir
 }
 
 function engineInTemp(cwd?: string): MemoryEngine {
