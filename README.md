@@ -330,6 +330,9 @@ The MCP server exposes explicit tools only:
 - `memory_recall` — recall relevant memories for a query
 - `memory_list` — list memories visible to the current project scope by default
 - `memory_review` — list pending memories for review
+- `memory_approve` — approve a memory by id
+- `memory_reject` — reject a memory by id
+- `memory_delete` — soft-delete a memory by id
 
 MCP does not replace lifecycle hooks. Hooks provide automatic recall/save behavior for supported harnesses; MCP gives the model explicit tool access when the client asks for it. JSONL remains the source of truth, and Obsidian support remains optional.
 

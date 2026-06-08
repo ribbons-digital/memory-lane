@@ -5,7 +5,14 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { MemoryEngine } from "@memory-lane/core"
 import {
-  handleMemoryList, handleMemoryRecall, handleMemoryReview, handleMemorySave, handleMemorySuggest,
+  handleMemoryApprove,
+  handleMemoryDelete,
+  handleMemoryList,
+  handleMemoryRecall,
+  handleMemoryReject,
+  handleMemoryReview,
+  handleMemorySave,
+  handleMemorySuggest,
 } from "../src/handlers.ts"
 
 const tempDirs = new Set<string>()
@@ -113,4 +120,52 @@ test("memory_review returns pending memories", async () => {
   assert.equal(result.ok, true)
   assert.equal(result.data.memories.length, 1)
   assert.equal(result.data.memories[0].status, "pending")
+})
+
+test("memory_approve approves a pending memory", async () => {
+  const engine = engineInTemp()
+  const saved = engine.suggest("Approve this item")
+  assert.equal(saved.status, "saved")
+
+  const result = parseToolResult(await handleMemoryApprove(engine, { id: saved.memory.id }))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.status, "updated")
+  assert.equal(result.data.memory.id, saved.memory.id)
+  assert.equal(result.data.memory.status, "approved")
+})
+
+test("memory_reject rejects a pending memory", async () => {
+  const engine = engineInTemp()
+  const saved = engine.suggest("Reject this item")
+  assert.equal(saved.status, "saved")
+
+  const result = parseToolResult(await handleMemoryReject(engine, { id: saved.memory.id }))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.status, "updated")
+  assert.equal(result.data.memory.id, saved.memory.id)
+  assert.equal(result.data.memory.status, "rejected")
+})
+
+test("memory_delete soft-deletes an approved memory", async () => {
+  const engine = engineInTemp()
+  const saved = engine.save({ text: "Delete this item", status: "approved" })
+  assert.equal(saved.status, "saved")
+
+  const result = parseToolResult(await handleMemoryDelete(engine, { id: saved.memory.id }))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.status, "updated")
+  assert.equal(result.data.memory.id, saved.memory.id)
+  assert.equal(result.data.memory.status, "deleted")
+})
+
+test("review mutation tools report missing ids without throwing", async () => {
+  const engine = engineInTemp()
+
+  const result = parseToolResult(await handleMemoryDelete(engine, { id: "missing-id" }))
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data, { status: "not_found", id: "missing-id" })
 })

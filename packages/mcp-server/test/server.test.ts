@@ -44,13 +44,16 @@ function registeredToolNames(server: unknown): string[] {
   return Object.keys(registeredTools).sort()
 }
 
-test("exports the five Phase 7 tool names", () => {
+test("exports review-complete MCP tool names", () => {
   assert.deepEqual(MEMORY_LANE_TOOL_NAMES, [
     "memory_save",
     "memory_suggest",
     "memory_recall",
     "memory_list",
     "memory_review",
+    "memory_approve",
+    "memory_reject",
+    "memory_delete",
   ])
 })
 
@@ -70,12 +73,15 @@ test("creates an MCP server without writing to stdout", () => {
   }
 })
 
-test("registers the five Phase 7 tools on the MCP server", () => {
+test("registers review-complete tools on the MCP server", () => {
   const server = createMemoryLaneMcpServer({ engine: engineInTemp() })
 
   assert.deepEqual(registeredToolNames(server), [
+    "memory_approve",
+    "memory_delete",
     "memory_list",
     "memory_recall",
+    "memory_reject",
     "memory_review",
     "memory_save",
     "memory_suggest",
