@@ -12,6 +12,7 @@ import {
   handleMemoryReject,
   handleMemoryReview,
   handleMemorySave,
+  handleMemoryStatus,
   handleMemorySuggest,
 } from "../src/handlers.ts"
 
@@ -168,4 +169,37 @@ test("review mutation tools report missing ids without throwing", async () => {
 
   assert.equal(result.ok, true)
   assert.deepEqual(result.data, { status: "not_found", id: "missing-id" })
+})
+
+test("memory_status returns doctor counts without memory text", async () => {
+  const engine = engineInTemp()
+  engine.save({ text: "Do not leak this exact memory text", status: "approved", category: "project", scopeType: "global" })
+  engine.suggest("Do not leak this pending text")
+
+  const result = parseToolResult(await handleMemoryStatus(engine, {}))
+  const serialized = JSON.stringify(result)
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.status.totalMemories, 2)
+  assert.equal(result.data.status.approvedMemories, 1)
+  assert.equal(result.data.status.pendingMemories, 1)
+  assert.equal(result.data.status.semanticEnabled, false)
+  assert.equal(result.data.status.projectScope, "none")
+  assert.equal(result.meta.projectScope, "none")
+  assert.ok(Array.isArray(result.data.notes))
+  assert.match(result.data.notes.join("\n"), /MCP provides explicit/u)
+  assert.doesNotMatch(serialized, /Do not leak this exact memory text/u)
+  assert.doesNotMatch(serialized, /Do not leak this pending text/u)
+})
+
+test("memory_status applies projectPath before reading scope", async () => {
+  const projectA = tempDir()
+  fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "status-project-a" }))
+  const engine = engineInTemp()
+
+  const result = parseToolResult(await handleMemoryStatus(engine, { projectPath: projectA }))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.status.projectScope, "status-project-a")
+  assert.equal(result.meta.projectScope, "status-project-a")
 })
