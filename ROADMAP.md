@@ -127,15 +127,31 @@ Todos:
 
 ## Phase 5 — pi Lifecycle Recall Injection
 
+**Status:** Complete and merged.
+
 **Goal:** Give pi/pi-mono sessions read-only lifecycle recall using pi's documented extension events and the shared `@memory-lane/lifecycle` policy, without adding automatic memory writes yet.
 
-Todos:
+Completed scope:
 
-1. Add a focused spec and plan for pi read-only lifecycle recall based on pi's `before_agent_start` event.
-2. Add `@memory-lane/lifecycle` to `@memory-lane/pi-adapter` and call `handleUserPromptSubmit` for user prompts.
-3. Inject recalled context through the documented pi extension response shape, keeping output low-noise and deterministic.
-4. Preserve existing pi commands/tools (`memory_save`, `memory_suggest`, `memory_recall`, `/memory ...`) without behavior regressions.
-5. Document pi support boundaries: read-only lifecycle recall is supported; pi autosave and tool-outcome capture are deferred.
+1. Added focused spec and plan for pi read-only lifecycle recall based on pi's `before_agent_start` event.
+2. Added `@memory-lane/lifecycle` to `@memory-lane/pi-adapter` and calls `handleUserPromptSubmit` for user prompts.
+3. Injects recalled context through pi hidden custom messages, keeping output low-noise and deterministic.
+4. Preserved existing pi commands/tools (`memory_save`, `memory_suggest`, `memory_recall`, `/memory ...`) without behavior regressions.
+5. Documented pi support boundaries: read-only lifecycle recall is supported; pi autosave and tool-outcome capture are deferred.
+
+## Project Scope Hardening — Worktree-Aware Project Identity
+
+**Status:** Complete and merged.
+
+**Goal:** Prevent project-memory fragmentation when users work in linked Git worktrees for the same repository, while preserving `.memory-lane-scope` as the explicit override.
+
+Completed scope:
+
+1. Added tests proving linked Git worktrees resolve to the same Memory Lane project key as the main/common checkout.
+2. Updated `resolveProjectScope` to derive Git identity from `git rev-parse --git-common-dir` after checking `.memory-lane-scope`.
+3. Preserved normal Git repo behavior, non-Git `null` behavior, and the existing `ProjectScope` shape.
+4. Documented worktree-aware scoping, scope-file override behavior, and the fact that old fragmented worktree-path memories are not migrated automatically.
+5. Kept storage paths, Obsidian behavior, hook behavior, migration, alias, and glob config out of scope.
 
 ## Phase 6 — pi Lifecycle Autosave and Tool Capture
 

@@ -5,10 +5,10 @@
 Memory Lane is on `main` at merge commit:
 
 ```text
-7d398b7 merge: obsidian mirror ux polish
+796462f merge: worktree-aware project scope
 ```
 
-`main` is clean and aligned with `origin/main`. The Obsidian import and mirror UX polish feature branches/worktrees have been merged and removed.
+`main` is clean and aligned with `origin/main`. The worktree-aware project scope feature branch/worktree has been merged and removed. The older autosave meta-prompt filter worktree still exists under `~/.config/superpowers/worktrees/memory-lane/autosave-meta-prompt-filter`.
 
 Recent completed work:
 
@@ -19,6 +19,10 @@ Recent completed work:
 - Optional one-way Obsidian mirror is implemented and merged.
 - Obsidian mirror UX polish is implemented, reviewed, merged, and pushed: generated indexes, tags, cheap doctor diagnostics, and docs/help/manual testing updates.
 - Mirror warnings from save/approve/reject/delete are surfaced in human and JSON CLI output.
+- Semantic under-indexing diagnostics and hook debug log/doctor diagnostics are implemented and merged.
+- Autosave meta-prompt filtering is implemented and merged, including reviewer/task/subagent prompt suppression while preserving explicit memory requests.
+- pi read-only lifecycle recall injection is implemented and merged via `before_agent_start`; pi autosave/tool capture remains deferred.
+- Worktree-aware project scope is implemented, reviewed, merged, and pushed: linked Git worktrees share the same project key by default via Git common-dir identity, while `.memory-lane-scope` remains the explicit override.
 - Explicit, non-destructive Obsidian Markdown import is implemented and merged:
   - new standalone `@memory-lane/obsidian-import` parser/planner package;
   - core `MemoryEngine.update(id, patch)` for active-memory updates;
@@ -28,12 +32,14 @@ Recent completed work:
   - generated mirror notes marked `memory_lane_mirror: true` are skipped;
   - source import notes are never rewritten.
 
-Final reviews for Obsidian import and mirror UX polish returned `FINAL_APPROVED`. Verification on merged `main` passed:
+Final reviews for recent feature work returned approved outcomes. Verification on merged `main` passed:
 
 ```bash
 pnpm build
 pnpm test
 ```
+
+Manual smoke for worktree-aware scope confirmed the main checkout and linked feature worktree had the same `key`, with the linked worktree's `root` remaining the linked worktree path.
 
 ## Package overview
 
@@ -47,6 +53,20 @@ Current workspace packages:
 - `@memory-lane/claude-adapter` — Claude Code CLI hook adapter.
 - `@memory-lane/codex-adapter` — OpenAI Codex CLI hook adapter.
 - `@memory-lane/pi-adapter` — pi extension adapter.
+
+## Project identity semantics
+
+Project identity is resolved in this order:
+
+1. `.memory-lane-scope` walking up from the current directory; its `id` is authoritative.
+2. Git identity; normal repos use the repo root, while linked Git worktrees use the common Git directory's main checkout path as the project key.
+3. No project scope; saves fall back to global scope with the existing notice behavior.
+
+Important constraints:
+
+- Scope files are never auto-created.
+- Existing memories saved under old worktree path keys are not migrated automatically.
+- Storage paths, Obsidian behavior, hooks, aliases, glob config, and migration commands were not changed by the worktree-aware scope slice.
 
 ## Obsidian mirror semantics
 
@@ -167,6 +187,8 @@ status: pending
   - `memory-lane obsidian init --vault <path>`
 - MCP support should be developed after Obsidian mirror/import foundations.
 - Claude Desktop support should be via future MCP server, not the Claude hook adapter.
+- Codex SessionStart baseline injection should wait until after the current Codex Desktop hook soak/testing period.
+- pi autosave/tool-outcome capture should wait until after pi read-only recall injection has soaked.
 
 ## Important references
 
@@ -179,7 +201,10 @@ status: pending
 - Manual testing guide: `docs/manual-testing/obsidian-mirror-import.md`
 - Claude Code integration docs: `examples/harness-integrations/claude-code.md`
 - Codex integration docs: `examples/harness-integrations/codex-cli.md`
+- pi adapter package: `packages/pi-adapter/`
 - Memory Lane skill docs: `skills/memory-lane/SKILL.md`
+- Worktree-aware scope spec: `docs/superpowers/specs/2026-06-08-worktree-aware-project-scope.md`
+- Worktree-aware scope plan: `docs/superpowers/plans/2026-06-08-worktree-aware-project-scope.md`
 - Obsidian mirror package: `packages/obsidian-mirror/`
 - Obsidian import package: `packages/obsidian-import/`
 - Core engine/config: `packages/core/src/engine.ts`, `packages/core/src/config.ts`
@@ -193,10 +218,11 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior.
+1. Plan Phase 7 MCP Server MVP for Claude Desktop and other clients. This is the next substantial roadmap item because Obsidian mirror/import, pi read-only recall, and worktree-aware project identity are complete, while Codex SessionStart and pi autosave/tool capture should continue soaking.
 2. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
-3. Decide whether to schedule any hardening backlog item from `ROADMAP.md`, such as import dry-run secret warnings or import snapshot type cleanup.
-4. Plan Phase 5 MCP server support for Claude Desktop and other clients after mirror/import foundations are stable.
+3. Continue pi read-only lifecycle recall soak before implementing pi autosave/tool-outcome capture.
+4. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
+5. Only schedule hardening backlog items from `ROADMAP.md` (such as import dry-run secret warnings or import snapshot type cleanup) after explicit user approval.
 
 ## Suggested skills for future agents
 
