@@ -181,7 +181,7 @@ Completed scope:
 
 ## Phase 8 — MCP + Hooks Coordination
 
-**Status:** Slice 1 complete: read-only integration diagnostics in `memory-lane doctor`.
+**Status:** Slice 1 and Slice 2 complete: read-only integration diagnostics in `memory-lane doctor`, and read-only MCP `memory_status` tool.
 
 **Goal:** Make MCP and lifecycle hooks complement each other cleanly.
 
@@ -191,12 +191,13 @@ Completed scope:
    - hooks = automatic recall/save lifecycle
    - MCP = explicit model/tool access
 2. Added read-only doctor diagnostics for common local Memory Lane integration config files, including Claude Desktop MCP, Codex hooks, Claude Code hooks, and the pi extension.
+3. Added read-only MCP `memory_status` tool for counts, config paths, project scope, semantic status, and integration diagnostics through MCP clients.
 
 Todos:
 
-1. Add MCP resources for memory status/config.
+1. Add MCP resources for memory status/config if real MCP client usage shows resources are useful beyond the `memory_status` tool.
 2. Expand project-aware MCP behavior beyond existing per-tool `projectPath` overrides if needed.
-3. Add optional Obsidian mirror status through MCP.
+3. Add optional Obsidian mirror status through MCP beyond existing doctor/status fields if users need a dedicated MCP surface.
 4. Add deeper diagnostics for duplicate or conflicting hook + MCP setups if real-world testing shows confusion beyond basic setup detection.
 
 
