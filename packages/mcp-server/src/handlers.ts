@@ -1,6 +1,6 @@
 import type { MemoryEngine, MemoryMutationResult, MemoryRecord, RecallResult, SaveResult } from "@memory-lane/core"
 import type {
-  ListToolInput, MemoryIdToolInput, RecallToolInput, ReviewToolInput, SaveToolInput, SuggestToolInput, ToolEnvelope,
+  ListToolInput, MemoryIdToolInput, RecallToolInput, ReviewToolInput, SaveToolInput, StatusToolInput, SuggestToolInput, ToolEnvelope,
 } from "./types.js"
 
 type ToolResult<T> = {
@@ -46,6 +46,15 @@ function mutationData(id: string, result: MemoryMutationResult | undefined): { s
   return warnings ? { status: "updated", memory, warnings } : { status: "updated", memory }
 }
 
+const STATUS_NOTES = [
+  "MCP provides explicit Memory Lane tools only; it does not run lifecycle hooks.",
+  "Use memory-lane doctor in a terminal for the same read-only diagnostics outside MCP.",
+]
+
+function statusData(engine: MemoryEngine): { status: Record<string, unknown>; notes: string[] } {
+  return { status: engine.doctor(), notes: STATUS_NOTES }
+}
+
 export async function handleMemorySave(engine: MemoryEngine, input: SaveToolInput) {
   try {
     applyProjectPath(engine, input.projectPath)
@@ -78,6 +87,15 @@ export async function handleMemoryRecall(engine: MemoryEngine, input: RecallTool
     applyProjectPath(engine, input.projectPath)
     const result: RecallResult = await engine.recall(input.query ?? "")
     return jsonContent(envelope(engine, result, result.memories.length))
+  } catch (error) {
+    return jsonContent(errorEnvelope(error))
+  }
+}
+
+export async function handleMemoryStatus(engine: MemoryEngine, input: StatusToolInput) {
+  try {
+    applyProjectPath(engine, input.projectPath)
+    return jsonContent(envelope(engine, statusData(engine)))
   } catch (error) {
     return jsonContent(errorEnvelope(error))
   }

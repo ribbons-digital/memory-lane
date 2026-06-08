@@ -330,11 +330,14 @@ The MCP server exposes explicit tools only:
 - `memory_save` — save an approved memory
 - `memory_suggest` — queue a pending suggestion, or save approved when `status: "approved"`
 - `memory_recall` — recall relevant memories for a query
+- `memory_status` — read Memory Lane counts, config paths, project scope, and integration diagnostics
 - `memory_list` — list memories visible to the current project scope by default
 - `memory_review` — list pending memories for review
 - `memory_approve` — approve a memory by id
 - `memory_reject` — reject a memory by id
 - `memory_delete` — soft-delete a memory by id
+
+Use `memory_status` from MCP clients when you want the same kind of read-only setup/status overview that `memory-lane doctor` provides in a terminal. It reports counts and diagnostics only; it does not return raw memory text or run lifecycle hooks.
 
 MCP does not replace lifecycle hooks. Hooks provide automatic recall/save behavior for supported harnesses; MCP gives the model explicit tool access when the client asks for it. JSONL remains the source of truth, and Obsidian support remains optional.
 

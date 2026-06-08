@@ -9,6 +9,7 @@ import {
   handleMemoryReject,
   handleMemoryReview,
   handleMemorySave,
+  handleMemoryStatus,
   handleMemorySuggest,
 } from "./handlers.js"
 
@@ -16,6 +17,7 @@ export const MEMORY_LANE_TOOL_NAMES = [
   "memory_save",
   "memory_suggest",
   "memory_recall",
+  "memory_status",
   "memory_list",
   "memory_review",
   "memory_approve",
@@ -92,6 +94,18 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
       },
     },
     async (input) => handleMemoryRecall(engine, input),
+  )
+
+  server.registerTool(
+    "memory_status",
+    {
+      title: "Memory Lane Status",
+      description: "Read Memory Lane status, counts, project scope, and integration diagnostics without modifying memory.",
+      inputSchema: {
+        projectPath,
+      },
+    },
+    async (input) => handleMemoryStatus(engine, input),
   )
 
   server.registerTool(

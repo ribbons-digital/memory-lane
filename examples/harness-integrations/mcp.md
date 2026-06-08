@@ -61,11 +61,14 @@ Claude Code and Codex can continue using Memory Lane lifecycle hooks for automat
 - `memory_save`
 - `memory_suggest`
 - `memory_recall`
+- `memory_status`
 - `memory_list`
 - `memory_review`
 - `memory_approve`
 - `memory_reject`
 - `memory_delete`
+
+Ask your MCP client: "Use Memory Lane to check my status." The client can call `memory_status` to inspect counts, project scope, semantic status, storage/config paths, and integration diagnostics without modifying memory.
 
 Use `memory_review` to list pending memories, then `memory_approve` or `memory_reject` with a memory `id` to finish the review loop. Use `memory_delete` with a memory `id` to soft-delete an existing memory.
 

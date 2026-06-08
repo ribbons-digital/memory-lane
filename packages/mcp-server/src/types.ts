@@ -30,6 +30,8 @@ export interface ListToolInput extends ProjectPathInput {
 
 export type ReviewToolInput = ProjectPathInput
 
+export type StatusToolInput = ProjectPathInput
+
 export interface MemoryIdToolInput extends ProjectPathInput {
   id: string
 }
