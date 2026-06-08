@@ -184,8 +184,9 @@ test("memory_status returns doctor counts without memory text", async () => {
   assert.equal(result.data.status.approvedMemories, 1)
   assert.equal(result.data.status.pendingMemories, 1)
   assert.equal(result.data.status.semanticEnabled, false)
-  assert.equal(result.data.status.projectScope, "none")
-  assert.equal(result.meta.projectScope, "none")
+  const expectedScope = engine.getProjectScope()?.key ?? "none"
+  assert.equal(result.data.status.projectScope, expectedScope)
+  assert.equal(result.meta.projectScope, expectedScope)
   assert.ok(Array.isArray(result.data.notes))
   assert.match(result.data.notes.join("\n"), /MCP provides explicit/u)
   assert.doesNotMatch(serialized, /Do not leak this exact memory text/u)
