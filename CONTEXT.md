@@ -14,7 +14,7 @@ The primary append-only JSONL file at `~/.memory-lane/memory.jsonl` containing a
 A secondary append-only JSONL file at `~/.memory-lane/embeddings.jsonl` storing both vector embeddings for approved memories (keyed by memory id, profile name, and content hash) and embedding invalidation records (prefixed by `type: "invalidation"`).
 
 **Project identity**:
-Determined by checking for a `.memory-lane-scope` file (walking up from cwd) or a git root, in that order. If neither exists, project scope is unavailable — all saves fall back to global scope with a notice. Scope files are never auto-created.
+Determined by checking for a `.memory-lane-scope` file (walking up from cwd) first. If none exists, Memory Lane uses Git metadata: normal repos use the repo root, while linked Git worktrees use the common Git directory's main checkout path as the project key so worktrees share project memories by default. If neither a scope file nor Git identity is available, project scope is unavailable. Scope files are never auto-created and remain the explicit override for custom/stable identities.
 
 **Semantic retrieval**:
 The pipeline that combines embedding-based cosine similarity, lexical token overlap, recency scoring, and kind-based boosting to rank memories for a recall query. Falls back gracefully through semantic → lexical → all-visible.

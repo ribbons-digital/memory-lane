@@ -115,14 +115,16 @@ Project-local initialization creates `.memory-lane/` in the project, adds `.memo
 ## Project Scoping
 
 Project identity is resolved in order:
-1. `.memory-lane-scope` file (walks up from cwd) — `{ "id": "your-project-uuid" }`
-2. Git root (via `git rev-parse --show-toplevel`)
+1. `.memory-lane-scope` file (walks up from cwd) — `{ "id": "your-project-id" }`
+2. Git identity — normal repos use the repo root; linked Git worktrees use the main checkout/common Git directory as the project key so worktrees share memories by default
 3. Global scope (fallback — memories are visible everywhere)
 
-Scope files are never auto-created. Create one manually in a project root:
+Scope files are never auto-created. Create one manually in a project root when you want an explicit stable identity or need to override Git-derived identity:
 ```bash
 echo '{"id":"my-project-uuid"}' > .memory-lane-scope
 ```
+
+Existing memories saved under old worktree path keys are not migrated automatically. Use `memory-lane list --all` and existing review/delete/save commands if you want to clean up fragmented historical records.
 
 ## CLI Commands
 

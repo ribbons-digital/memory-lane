@@ -20,10 +20,39 @@ function findScopeFile(cwd: string): { id: string; root: string } | null {
   return null
 }
 
-function findGitRoot(cwd: string): string | null {
+function runGit(cwd: string, args: string[]): string | null {
   try {
-    return execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || null
+    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || null
   } catch { return null }
+}
+
+function realpathOrResolved(inputPath: string): string {
+  try {
+    return fs.realpathSync(inputPath)
+  } catch {
+    return path.resolve(inputPath)
+  }
+}
+
+function resolveGitPath(rawPath: string, cwd: string): string {
+  return path.isAbsolute(rawPath) ? rawPath : path.resolve(cwd, rawPath)
+}
+
+function canonicalKeyFromGitCommonDir(showTopLevel: string, gitCommonDirRaw: string): string {
+  const commonDir = realpathOrResolved(resolveGitPath(gitCommonDirRaw, showTopLevel))
+  if (path.basename(commonDir) === ".git") return path.dirname(commonDir)
+  return realpathOrResolved(showTopLevel)
+}
+
+function resolveGitScope(cwd: string): ProjectScope | null {
+  const showTopLevelRaw = runGit(cwd, ["rev-parse", "--show-toplevel"])
+  if (!showTopLevelRaw) return null
+
+  const root = realpathOrResolved(showTopLevelRaw)
+  const gitCommonDirRaw = runGit(cwd, ["rev-parse", "--git-common-dir"])
+  const key = gitCommonDirRaw ? canonicalKeyFromGitCommonDir(root, gitCommonDirRaw) : root
+
+  return { cwd, root, key }
 }
 
 /** Resolve project scope: scope file → git root → null. Never auto-creates scope files. */
@@ -31,7 +60,5 @@ export function resolveProjectScope(cwd?: string): ProjectScope | null {
   const resolvedCwd = path.resolve(cwd ?? process.cwd())
   const scope = findScopeFile(resolvedCwd)
   if (scope) return { cwd: resolvedCwd, root: scope.root, key: scope.id }
-  const gitRoot = findGitRoot(resolvedCwd)
-  if (gitRoot) return { cwd: resolvedCwd, root: gitRoot, key: gitRoot }
-  return null
+  return resolveGitScope(resolvedCwd)
 }

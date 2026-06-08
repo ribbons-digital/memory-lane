@@ -6,6 +6,19 @@ import assert from "node:assert/strict"
 import { resolveProjectScope } from "../src/project-scope.js"
 import { tempDir } from "./helpers.js"
 
+function git(args: string[], cwd: string): string {
+  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()
+}
+
+function configureGitRepo(cwd: string): void {
+  execFileSync("git", ["init"], { cwd, stdio: "ignore" })
+  execFileSync("git", ["config", "user.email", "memory-lane@example.invalid"], { cwd, stdio: "ignore" })
+  execFileSync("git", ["config", "user.name", "Memory Lane Tests"], { cwd, stdio: "ignore" })
+  fs.writeFileSync(path.join(cwd, "README.md"), "# test repo\n", "utf8")
+  execFileSync("git", ["add", "README.md"], { cwd, stdio: "ignore" })
+  execFileSync("git", ["commit", "-m", "initial"], { cwd, stdio: "ignore" })
+}
+
 describe("resolveProjectScope", () => {
   let dir: string
   beforeEach(() => { dir = tempDir() })
@@ -34,5 +47,20 @@ describe("resolveProjectScope", () => {
     execFileSync("git", ["init"], { cwd: dir, stdio: "ignore" })
     fs.writeFileSync(path.join(dir, ".memory-lane-scope"), JSON.stringify({ id: "scope-beats-git" }))
     assert.equal(resolveProjectScope(dir)!.key, "scope-beats-git")
+  })
+
+  it("uses the main checkout key for linked git worktrees", () => {
+    configureGitRepo(dir)
+    const linked = path.join(path.dirname(dir), `${path.basename(dir)}-linked`)
+    git(["worktree", "add", linked, "-b", "feature-memory-lane-test"], dir)
+
+    const mainScope = resolveProjectScope(dir)
+    const linkedScope = resolveProjectScope(linked)
+
+    assert.notEqual(mainScope, null)
+    assert.notEqual(linkedScope, null)
+    assert.equal(fs.realpathSync(mainScope!.key), fs.realpathSync(dir))
+    assert.equal(fs.realpathSync(linkedScope!.key), fs.realpathSync(dir))
+    assert.equal(fs.realpathSync(linkedScope!.root), fs.realpathSync(linked))
   })
 })
