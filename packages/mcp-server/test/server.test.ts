@@ -7,13 +7,41 @@ import * as path from "node:path"
 import { createMemoryLaneMcpServer, MEMORY_LANE_TOOL_NAMES } from "../src/server.ts"
 import { createMemoryLaneEngine } from "../src/engine.ts"
 
+const tempDirs = new Set<string>()
+let listenerRegistered = false
+
+function registerCleanup(): void {
+  if (listenerRegistered) return
+  listenerRegistered = true
+  process.setMaxListeners(100)
+  process.on("exit", () => {
+    for (const dir of tempDirs) {
+      try { fs.rmSync(dir, { recursive: true, force: true }) } catch {}
+    }
+  })
+}
+
+function tempDir(prefix = "memory-lane-mcp-server-"): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix))
+  tempDirs.add(dir)
+  registerCleanup()
+  return dir
+}
+
 function engineInTemp(): MemoryEngine {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-mcp-server-"))
+  const dir = tempDir()
   return new MemoryEngine({
     memoryPath: path.join(dir, "memory.jsonl"),
     embeddingsPath: path.join(dir, "embeddings.jsonl"),
     configPath: path.join(dir, "config.json"),
   })
+}
+
+function registeredToolNames(server: unknown): string[] {
+  const registeredTools = (server as { _registeredTools?: Record<string, unknown> })._registeredTools
+  assert.equal(typeof registeredTools, "object")
+  assert.notEqual(registeredTools, null)
+  return Object.keys(registeredTools).sort()
 }
 
 test("exports the five Phase 7 tool names", () => {
@@ -42,8 +70,20 @@ test("creates an MCP server without writing to stdout", () => {
   }
 })
 
+test("registers the five Phase 7 tools on the MCP server", () => {
+  const server = createMemoryLaneMcpServer({ engine: engineInTemp() })
+
+  assert.deepEqual(registeredToolNames(server), [
+    "memory_list",
+    "memory_recall",
+    "memory_review",
+    "memory_save",
+    "memory_suggest",
+  ])
+})
+
 test("createMemoryLaneEngine uses explicit environment paths", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-mcp-engine-"))
+  const dir = tempDir("memory-lane-mcp-engine-")
   const engine = createMemoryLaneEngine({
     cwd: dir,
     env: {
