@@ -1,3 +1,5 @@
+import type { IntegrationDiagnosticPaths } from "./integration-diagnostics.js"
+
 export type MemoryStatus = "pending" | "approved" | "rejected" | "deleted"
 export type MemoryCategory = "preference" | "personal" | "project"
 export type MemoryScopeType = "global" | "project"
@@ -154,6 +156,7 @@ export interface MemoryEngineConfig {
   configPath?: string
   embeddingProvider?: EmbeddingProvider
   hookDebugLogPath?: string
+  integrationPaths?: Partial<IntegrationDiagnosticPaths>
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>
 }
 

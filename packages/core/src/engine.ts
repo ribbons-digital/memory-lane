@@ -15,6 +15,7 @@ import { createEmbeddingStore } from "./embedding-store.js"
 import { defaultHookDebugLogPath, hookDebugEnabled } from "./hook-debug-log.js"
 import { retrieveSemanticMemories } from "./retrieval.js"
 import { compact as compactStores, shouldCompact } from "./compact.js"
+import { diagnoseIntegrations, type IntegrationDiagnosticPaths } from "./integration-diagnostics.js"
 import { validateSaveInput } from "./storage-validation.js"
 import {
   contentHash, createNewMemory, saveContext, shouldAutoEmbed, timestamp, visibleInScope,
@@ -60,6 +61,7 @@ export class MemoryEngine {
   private readonly memPath: string
   private readonly configPath?: string
   private readonly hookDebugLogPath: string
+  private readonly integrationPaths?: Partial<IntegrationDiagnosticPaths>
   private readonly env: NodeJS.ProcessEnv | Record<string, string | undefined>
 
   constructor(opts?: MemoryEngineConfig) {
@@ -70,6 +72,7 @@ export class MemoryEngine {
     this.config = loadConfig(this.configPath)
     this.embProvider = opts?.embeddingProvider
     this.hookDebugLogPath = opts?.hookDebugLogPath ?? defaultHookDebugLogPath()
+    this.integrationPaths = opts?.integrationPaths
     this.env = opts?.env ?? process.env
     this.refreshScope()
 
@@ -497,6 +500,7 @@ export class MemoryEngine {
       deadWeightRatio: total ? mems.filter((m) => m.status === "deleted" || m.status === "rejected").length / total : 0,
       activeProfileName: config.activeEmbeddingProfile,
       projectScope: this.scope?.key ?? "none",
+      integrations: diagnoseIntegrations({ cwd: this.scope?.cwd ?? null, paths: this.integrationPaths }),
       ...this.semanticDoctor(mems),
       ...this.hookDebugDoctor(),
       ...this.obsidianDoctor(),
