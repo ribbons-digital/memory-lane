@@ -5,12 +5,10 @@
 Memory Lane is on `main` at merge commit:
 
 ```text
-796462f merge: worktree-aware project scope
+2432e09 merge: mcp server mvp
 ```
 
-`main` is clean and aligned with `origin/main`. The worktree-aware project scope feature branch/worktree has been merged and removed. The older autosave meta-prompt filter worktree still exists under `~/.config/superpowers/worktrees/memory-lane/autosave-meta-prompt-filter`.
-
-This `mcp-server-mvp` worktree is a feature branch with the Phase 7 MCP Server MVP implementation complete; merge is pending final verification/review.
+`main` is clean and ahead of `origin/main` with the local MCP Server MVP merge and post-merge handoff refresh. The `mcp-server-mvp` feature branch/worktree is ready for cleanup after this refresh. The older autosave meta-prompt filter worktree still exists under `~/.config/superpowers/worktrees/memory-lane/autosave-meta-prompt-filter`.
 
 Recent completed work:
 
@@ -33,7 +31,7 @@ Recent completed work:
   - `memory_lane: true` opt-in;
   - generated mirror notes marked `memory_lane_mirror: true` are skipped;
   - source import notes are never rewritten.
-- Phase 7 MCP Server MVP is implemented on the `mcp-server-mvp` feature branch:
+- Phase 7 MCP Server MVP is implemented, reviewed, verified, and merged locally:
   - new `@memory-lane/mcp-server` package with `memory-lane-mcp` bin;
   - local stdio server for explicit MCP tools;
   - tools: `memory_save`, `memory_suggest`, `memory_recall`, `memory_list`, and `memory_review`;
@@ -198,7 +196,7 @@ status: pending
 - Hooks should remain silent and deterministic; do **not** prompt users from hooks to enable Obsidian.
 - Preferred onboarding is explicit CLI setup:
   - `memory-lane obsidian init --vault <path>`
-- MCP Server MVP support is implemented on the feature branch and should land only after final verification/review.
+- MCP Server MVP support is implemented and merged locally; push to origin is still needed if not already done.
 - Claude Desktop support is via the MCP server, not the Claude hook adapter.
 - Codex SessionStart baseline injection should wait until after the current Codex Desktop hook soak/testing period.
 - pi autosave/tool-outcome capture should wait until after pi read-only recall injection has soaked.
@@ -234,11 +232,12 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Complete final verification/review for the Phase 7 MCP Server MVP branch, then merge if approved. This is the next step because implementation is complete on the branch but not yet merged.
-2. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
-3. Continue pi read-only lifecycle recall soak before implementing pi autosave/tool-outcome capture.
-4. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
-5. Only schedule hardening backlog items from `ROADMAP.md` (such as import dry-run secret warnings or import snapshot type cleanup) after explicit user approval.
+1. Push `main` after this handoff refresh if it has not already been pushed. This is the next step because Phase 7 is merged locally but origin needs the merge and final docs refresh.
+2. Plan Phase 8 MCP + Hooks Coordination when you want the next roadmap feature. This is the next substantial roadmap item after Phase 7.
+3. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
+4. Continue pi read-only lifecycle recall soak before implementing pi autosave/tool-outcome capture.
+5. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
+6. Only schedule hardening backlog items from `ROADMAP.md` (such as import dry-run secret warnings or import snapshot type cleanup) after explicit user approval.
 
 ## Suggested skills for future agents
 

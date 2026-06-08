@@ -167,7 +167,7 @@ Todos:
 
 ## Phase 7 — MCP Server MVP
 
-**Status:** Implementation complete on feature branch; merge pending.
+**Status:** Complete and merged.
 
 **Goal:** Expose Memory Lane through MCP without changing the storage model.
 
