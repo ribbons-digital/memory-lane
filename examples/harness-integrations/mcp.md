@@ -63,5 +63,10 @@ Claude Code and Codex can continue using Memory Lane lifecycle hooks for automat
 - `memory_recall`
 - `memory_list`
 - `memory_review`
+- `memory_approve`
+- `memory_reject`
+- `memory_delete`
+
+Use `memory_review` to list pending memories, then `memory_approve` or `memory_reject` with a memory `id` to finish the review loop. Use `memory_delete` with a memory `id` to soft-delete an existing memory.
 
 Each tool accepts optional `projectPath` where project-scoped behavior should be resolved from a specific directory. If omitted, Memory Lane uses the MCP server process current working directory.

@@ -1,6 +1,6 @@
-import type { MemoryEngine, MemoryRecord, RecallResult, SaveResult } from "@memory-lane/core"
+import type { MemoryEngine, MemoryMutationResult, MemoryRecord, RecallResult, SaveResult } from "@memory-lane/core"
 import type {
-  ListToolInput, RecallToolInput, ReviewToolInput, SaveToolInput, SuggestToolInput, ToolEnvelope,
+  ListToolInput, MemoryIdToolInput, RecallToolInput, ReviewToolInput, SaveToolInput, SuggestToolInput, ToolEnvelope,
 } from "./types.js"
 
 type ToolResult<T> = {
@@ -38,6 +38,12 @@ function saveData(result: SaveResult): { status: "saved"; memory: MemoryRecord; 
   const warnings = result.warnings ? { warnings: result.warnings } : {}
   if (result.status === "saved") return { status: "saved", memory: result.memory, ...warnings }
   return { status: "skipped", reason: result.reason, ...warnings }
+}
+
+function mutationData(id: string, result: MemoryMutationResult | undefined): { status: "updated"; memory: MemoryRecord; warnings?: string[] } | { status: "not_found"; id: string } {
+  if (!result) return { status: "not_found", id }
+  const { warnings, ...memory } = result
+  return warnings ? { status: "updated", memory, warnings } : { status: "updated", memory }
 }
 
 export async function handleMemorySave(engine: MemoryEngine, input: SaveToolInput) {
@@ -92,6 +98,33 @@ export async function handleMemoryReview(engine: MemoryEngine, input: ReviewTool
     applyProjectPath(engine, input.projectPath)
     const memories = engine.reviewPending()
     return jsonContent(envelope(engine, { memories }, memories.length))
+  } catch (error) {
+    return jsonContent(errorEnvelope(error))
+  }
+}
+
+export async function handleMemoryApprove(engine: MemoryEngine, input: MemoryIdToolInput) {
+  try {
+    applyProjectPath(engine, input.projectPath)
+    return jsonContent(envelope(engine, mutationData(input.id, engine.approve(input.id))))
+  } catch (error) {
+    return jsonContent(errorEnvelope(error))
+  }
+}
+
+export async function handleMemoryReject(engine: MemoryEngine, input: MemoryIdToolInput) {
+  try {
+    applyProjectPath(engine, input.projectPath)
+    return jsonContent(envelope(engine, mutationData(input.id, engine.reject(input.id))))
+  } catch (error) {
+    return jsonContent(errorEnvelope(error))
+  }
+}
+
+export async function handleMemoryDelete(engine: MemoryEngine, input: MemoryIdToolInput) {
+  try {
+    applyProjectPath(engine, input.projectPath)
+    return jsonContent(envelope(engine, mutationData(input.id, engine.delete(input.id))))
   } catch (error) {
     return jsonContent(errorEnvelope(error))
   }

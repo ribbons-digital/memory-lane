@@ -2,7 +2,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { MemoryEngine } from "@memory-lane/core"
 import {
-  handleMemoryList, handleMemoryRecall, handleMemoryReview, handleMemorySave, handleMemorySuggest,
+  handleMemoryApprove,
+  handleMemoryDelete,
+  handleMemoryList,
+  handleMemoryRecall,
+  handleMemoryReject,
+  handleMemoryReview,
+  handleMemorySave,
+  handleMemorySuggest,
 } from "./handlers.js"
 
 export const MEMORY_LANE_TOOL_NAMES = [
@@ -11,6 +18,9 @@ export const MEMORY_LANE_TOOL_NAMES = [
   "memory_recall",
   "memory_list",
   "memory_review",
+  "memory_approve",
+  "memory_reject",
+  "memory_delete",
 ] as const
 
 const categorySchema = z.enum(["preference", "personal", "project"])
@@ -28,6 +38,7 @@ const kindSchema = z.enum([
 ])
 
 const projectPath = z.string().optional().describe("Optional directory to use for project-scoped Memory Lane operations")
+const memoryId = z.string().min(1).describe("Memory Lane memory id")
 
 export interface CreateMemoryLaneMcpServerOptions {
   engine: MemoryEngine
@@ -107,6 +118,45 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
       },
     },
     async (input) => handleMemoryReview(engine, input),
+  )
+
+  server.registerTool(
+    "memory_approve",
+    {
+      title: "Approve Memory",
+      description: "Approve a pending Memory Lane memory by id.",
+      inputSchema: {
+        id: memoryId,
+        projectPath,
+      },
+    },
+    async (input) => handleMemoryApprove(engine, input),
+  )
+
+  server.registerTool(
+    "memory_reject",
+    {
+      title: "Reject Memory",
+      description: "Reject a Memory Lane memory by id.",
+      inputSchema: {
+        id: memoryId,
+        projectPath,
+      },
+    },
+    async (input) => handleMemoryReject(engine, input),
+  )
+
+  server.registerTool(
+    "memory_delete",
+    {
+      title: "Delete Memory",
+      description: "Soft-delete a Memory Lane memory by id.",
+      inputSchema: {
+        id: memoryId,
+        projectPath,
+      },
+    },
+    async (input) => handleMemoryDelete(engine, input),
   )
 
   return server
