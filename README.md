@@ -1,14 +1,35 @@
 # Memory Lane
 
-A cross-harness, lightweight memory system for AI agent harnesses. Works across sessions, projects, and agents — no database, no MCP server, just files.
+Local-first memory for AI coding agents — CLI, hooks, pi extension, semantic recall, and optional Obsidian mirror/import, all backed by simple JSONL files.
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+  - [Build from source](#build-from-source)
+  - [Link the CLI globally](#link-the-cli-globally)
+  - [Install the pi extension](#install-the-pi-extension)
+- [Architecture](#architecture)
+- [Storage](#storage)
+- [Project Scoping](#project-scoping)
+- [CLI Commands](#cli-commands)
+  - [Obsidian mirror](#obsidian-mirror)
+  - [Import from Obsidian](#import-from-obsidian)
+- [Configuration](#configuration)
+  - [Semantic search config](#semantic-search-config)
+- [Environment Variables](#environment-variables)
+- [Programmatic Use](#programmatic-use)
+- [Memory Lifecycle](#memory-lifecycle)
+- [Harness Integrations](#harness-integrations)
+  - [pi adapter](#pi-adapter)
+  - [Claude Code hooks](#claude-code-hooks)
+  - [Codex hooks](#codex-hooks)
 
 ## Quick Start
 
 ```bash
-# Build
+# Build and optionally link the CLI
 git clone <repo> && cd memory-lane && pnpm install && pnpm build
-
-# Optionally link the CLI globally
 cd packages/cli && pnpm link --global
 
 # Start using
@@ -17,6 +38,48 @@ memory-lane list
 memory-lane recall "where did we leave off"
 memory-lane doctor
 ```
+
+## Installation
+
+### Build from source
+
+```bash
+git clone <repo>
+cd memory-lane
+pnpm install
+pnpm build
+```
+
+### Link the CLI globally
+
+```bash
+cd packages/cli
+pnpm link --global
+```
+
+After linking, `memory-lane` is available as a shell command:
+
+```bash
+memory-lane doctor
+```
+
+### Install the pi extension
+
+For local development, point pi at the built adapter from this checkout:
+
+```bash
+mkdir -p ~/.pi/agent/extensions/memory-lane
+cat > ~/.pi/agent/extensions/memory-lane/index.ts <<'EOF'
+export default async function memoryLaneExtension(pi: any) {
+  const mod = await import("file:///absolute/path/to/memory-lane/packages/pi-adapter/dist/index.js?reload=" + Date.now());
+  return mod.default(pi);
+}
+EOF
+```
+
+Replace `/absolute/path/to/memory-lane` with your checkout path, then run `/reload` in pi. The timestamp query avoids stale module caches while iterating locally. Re-run `pnpm build` after changing Memory Lane source, then `/reload` pi again.
+
+The pi adapter provides manual `memory_save`, `memory_suggest`, and `memory_recall` tools plus `/memory ...` commands. It also injects relevant approved memories through pi's `before_agent_start` event. pi autosave and tool-outcome capture are not enabled yet.
 
 ## Architecture
 
