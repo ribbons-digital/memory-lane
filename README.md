@@ -19,6 +19,7 @@ Local-first memory for AI coding agents — CLI, hooks, pi extension, semantic r
   - [Semantic search config](#semantic-search-config)
 - [Environment Variables](#environment-variables)
 - [Programmatic Use](#programmatic-use)
+- [MCP Server](#mcp-server)
 - [Memory Lifecycle](#memory-lifecycle)
 - [Harness Integrations](#harness-integrations)
   - [pi adapter](#pi-adapter)
@@ -83,13 +84,14 @@ The pi adapter provides manual `memory_save`, `memory_suggest`, and `memory_reca
 
 ## Architecture
 
-Eight packages in a monorepo:
+Nine packages in a monorepo:
 
 | Package | Purpose |
 |---|---|
 | `@memory-lane/core` | Pure Node.js library. Zero harness dependencies. |
 | `@memory-lane/lifecycle` | Shared harness-neutral memory automation policy for recall, autosave, context budgets, and tool outcomes. |
 | `@memory-lane/cli` | CLI wrapper. Works with any harness that can shell out. |
+| `@memory-lane/mcp-server` | Local stdio MCP server exposing explicit Memory Lane tools. |
 | `@memory-lane/obsidian-mirror` | Optional one-way JSONL → Obsidian Markdown mirror. |
 | `@memory-lane/obsidian-import` | Standalone parser/planner for explicit Obsidian Markdown → JSONL imports. |
 | `@memory-lane/claude-adapter` | Claude Code hook adapter exposed through `memory-lane claude ...`. |
@@ -317,6 +319,31 @@ const all = engine.list()
 const pending = engine.list("pending")
 ```
 
+## MCP Server
+
+Memory Lane includes a local stdio MCP server for clients that support explicit MCP tools, such as Claude Desktop and Cursor. The workspace package is `@memory-lane/mcp-server`, and its built bin is `memory-lane-mcp`.
+
+The MCP server exposes explicit tools only:
+
+- `memory_save` — save an approved memory
+- `memory_suggest` — queue a pending suggestion, or save approved when `status: "approved"`
+- `memory_recall` — recall relevant memories for a query
+- `memory_list` — list memories visible to the current project scope by default
+- `memory_review` — list pending memories for review
+
+MCP does not replace lifecycle hooks. Hooks provide automatic recall/save behavior for supported harnesses; MCP gives the model explicit tool access when the client asks for it. JSONL remains the source of truth, and Obsidian support remains optional.
+
+Example local stdio command after building this workspace:
+
+```bash
+pnpm --filter @memory-lane/mcp-server build
+node packages/mcp-server/dist/index.js
+```
+
+Do not wrap the server with commands that print banners to stdout. MCP stdio reserves stdout for JSON-RPC protocol messages.
+
+See `examples/harness-integrations/mcp.md` for client configuration examples.
+
 ## Memory Lifecycle
 
 ```
@@ -330,6 +357,7 @@ Compaction removes deleted + rejected tombstones. Trigger: `memory-lane compact`
 ## Harness Integrations
 
 See [`examples/harness-integrations/`](./examples/harness-integrations/) for integration snippets for:
+- MCP Server
 - Claude Code CLI
 - OpenAI Codex CLI
 - Cursor
@@ -355,7 +383,7 @@ memory-lane claude post-tool-use
 
 `UserPromptSubmit` injects a small relevant memory block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
 
-These commands are for Claude Code CLI hooks, not the Claude Desktop app. Claude Desktop would need a separate MCP-style integration.
+These commands are for Claude Code CLI hooks, not the Claude Desktop app. Use the MCP Server setup above for Claude Desktop.
 
 ### Codex hooks
 
