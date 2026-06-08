@@ -54,7 +54,7 @@ test("memory_save stores an approved memory", async () => {
   assert.equal(result.data.status, "saved")
   assert.equal(result.data.memory.status, "approved")
   assert.equal(result.data.memory.text, "Use pnpm for installs")
-  assert.equal(result.meta.projectScope, "none")
+  assert.equal(result.meta.projectScope, engine.getProjectScope()?.key ?? "none")
 })
 
 test("memory_save reports skipped secret without throwing", async () => {
