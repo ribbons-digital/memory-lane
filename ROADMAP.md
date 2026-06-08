@@ -167,23 +167,17 @@ Todos:
 
 ## Phase 7 — MCP Server MVP
 
+**Status:** Implementation complete on feature branch; merge pending.
+
 **Goal:** Expose Memory Lane through MCP without changing the storage model.
 
-Todos:
+Completed scope:
 
-1. Add package:
-   ```text
-   @memory-lane/mcp-server
-   ```
-2. Expose core tools:
-   - `memory_save`
-   - `memory_suggest`
-   - `memory_recall`
-   - `memory_list`
-   - `memory_review`
-3. Support stdio transport first.
-4. Reuse existing `MemoryEngine`, project scope, validation, and retrieval logic.
-5. Add setup docs for Claude Desktop, Claude Code, Codex, and Cursor.
+1. Added `@memory-lane/mcp-server` package with the `memory-lane-mcp` bin.
+2. Exposed stdio MCP tools: `memory_save`, `memory_suggest`, `memory_recall`, `memory_list`, and `memory_review`.
+3. Reused existing `MemoryEngine`, project scope, validation, and retrieval logic.
+4. Added local stdio setup docs for Claude Desktop, Cursor, Claude Code, and Codex boundaries.
+5. Kept MCP resources, prompts, HTTP transport, hook/MCP coordination diagnostics, and Obsidian status out of scope for Phase 8 or later.
 
 ## Phase 8 — MCP + Hooks Coordination
 
@@ -195,7 +189,7 @@ Todos:
    - hooks = automatic recall/save lifecycle
    - MCP = explicit model/tool access
 2. Add MCP resources for memory status/config.
-3. Add project-aware MCP behavior matching CLI `--project`.
+3. Expand project-aware MCP behavior beyond existing per-tool `projectPath` overrides if needed.
 4. Add optional Obsidian mirror status through MCP.
 5. Add diagnostics to detect duplicate or conflicting hook + MCP setups.
 

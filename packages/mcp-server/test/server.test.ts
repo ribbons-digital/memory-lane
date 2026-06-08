@@ -1,0 +1,99 @@
+import test from "node:test"
+import assert from "node:assert/strict"
+import { MemoryEngine } from "@memory-lane/core"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
+import { createMemoryLaneMcpServer, MEMORY_LANE_TOOL_NAMES } from "../src/server.ts"
+import { createMemoryLaneEngine } from "../src/engine.ts"
+
+const tempDirs = new Set<string>()
+let listenerRegistered = false
+
+function registerCleanup(): void {
+  if (listenerRegistered) return
+  listenerRegistered = true
+  process.setMaxListeners(100)
+  process.on("exit", () => {
+    for (const dir of tempDirs) {
+      try { fs.rmSync(dir, { recursive: true, force: true }) } catch {}
+    }
+  })
+}
+
+function tempDir(prefix = "memory-lane-mcp-server-"): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix))
+  tempDirs.add(dir)
+  registerCleanup()
+  return dir
+}
+
+function engineInTemp(): MemoryEngine {
+  const dir = tempDir()
+  return new MemoryEngine({
+    memoryPath: path.join(dir, "memory.jsonl"),
+    embeddingsPath: path.join(dir, "embeddings.jsonl"),
+    configPath: path.join(dir, "config.json"),
+  })
+}
+
+function registeredToolNames(server: unknown): string[] {
+  const registeredTools = (server as { _registeredTools?: Record<string, unknown> })._registeredTools
+  assert.equal(typeof registeredTools, "object")
+  assert.notEqual(registeredTools, null)
+  return Object.keys(registeredTools).sort()
+}
+
+test("exports the five Phase 7 tool names", () => {
+  assert.deepEqual(MEMORY_LANE_TOOL_NAMES, [
+    "memory_save",
+    "memory_suggest",
+    "memory_recall",
+    "memory_list",
+    "memory_review",
+  ])
+})
+
+test("creates an MCP server without writing to stdout", () => {
+  const originalWrite = process.stdout.write
+  let stdoutWrites = 0
+  ;(process.stdout.write as any) = (..._args: unknown[]) => {
+    stdoutWrites++
+    return true
+  }
+  try {
+    const server = createMemoryLaneMcpServer({ engine: engineInTemp() })
+    assert.equal(typeof server.connect, "function")
+    assert.equal(stdoutWrites, 0)
+  } finally {
+    process.stdout.write = originalWrite
+  }
+})
+
+test("registers the five Phase 7 tools on the MCP server", () => {
+  const server = createMemoryLaneMcpServer({ engine: engineInTemp() })
+
+  assert.deepEqual(registeredToolNames(server), [
+    "memory_list",
+    "memory_recall",
+    "memory_review",
+    "memory_save",
+    "memory_suggest",
+  ])
+})
+
+test("createMemoryLaneEngine uses explicit environment paths", () => {
+  const dir = tempDir("memory-lane-mcp-engine-")
+  const engine = createMemoryLaneEngine({
+    cwd: dir,
+    env: {
+      MEMORY_LANE_FILE: path.join(dir, "custom-memory.jsonl"),
+      MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "custom-embeddings.jsonl"),
+      MEMORY_LANE_CONFIG: path.join(dir, "custom-config.json"),
+    },
+  })
+
+  const result = engine.save({ text: "MCP engine path smoke", status: "approved", scopeType: "global" })
+  assert.equal(result.status, "saved")
+  assert.equal(fs.existsSync(path.join(dir, "custom-memory.jsonl")), true)
+})

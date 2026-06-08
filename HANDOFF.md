@@ -10,6 +10,8 @@ Memory Lane is on `main` at merge commit:
 
 `main` is clean and aligned with `origin/main`. The worktree-aware project scope feature branch/worktree has been merged and removed. The older autosave meta-prompt filter worktree still exists under `~/.config/superpowers/worktrees/memory-lane/autosave-meta-prompt-filter`.
 
+This `mcp-server-mvp` worktree is a feature branch with the Phase 7 MCP Server MVP implementation complete; merge is pending final verification/review.
+
 Recent completed work:
 
 - Phase 1 Codex hook integration is implemented and merged.
@@ -31,6 +33,12 @@ Recent completed work:
   - `memory_lane: true` opt-in;
   - generated mirror notes marked `memory_lane_mirror: true` are skipped;
   - source import notes are never rewritten.
+- Phase 7 MCP Server MVP is implemented on the `mcp-server-mvp` feature branch:
+  - new `@memory-lane/mcp-server` package with `memory-lane-mcp` bin;
+  - local stdio server for explicit MCP tools;
+  - tools: `memory_save`, `memory_suggest`, `memory_recall`, `memory_list`, and `memory_review`;
+  - reuses `MemoryEngine`, JSONL storage, and project scope behavior;
+  - docs cover Claude Desktop, Cursor, Claude Code, and Codex boundaries.
 
 Final reviews for recent feature work returned approved outcomes. Verification on merged `main` passed:
 
@@ -48,11 +56,16 @@ Current workspace packages:
 - `@memory-lane/core` — storage, validation, lifecycle operations, recall/search, embeddings, mirror integration hooks.
 - `@memory-lane/lifecycle` — harness-neutral memory automation policy.
 - `@memory-lane/cli` — command-line interface.
+- `@memory-lane/mcp-server` — local stdio MCP server exposing explicit Memory Lane tools.
 - `@memory-lane/obsidian-mirror` — optional JSONL → generated Markdown mirror.
 - `@memory-lane/obsidian-import` — standalone Markdown import parser/planner with no core dependency.
 - `@memory-lane/claude-adapter` — Claude Code CLI hook adapter.
 - `@memory-lane/codex-adapter` — OpenAI Codex CLI hook adapter.
 - `@memory-lane/pi-adapter` — pi extension adapter.
+
+## MCP server semantics
+
+The MCP server is explicit tool access, not lifecycle automation. It exposes `memory_save`, `memory_suggest`, `memory_recall`, `memory_list`, and `memory_review` over local stdio. It reuses JSONL storage, `MemoryEngine`, and project scope behavior. It does not add MCP resources, prompts, HTTP transport, Obsidian status tools, or automatic hook behavior. Stdio reserves stdout for JSON-RPC protocol messages, so diagnostics must avoid stdout.
 
 ## Project identity semantics
 
@@ -185,8 +198,8 @@ status: pending
 - Hooks should remain silent and deterministic; do **not** prompt users from hooks to enable Obsidian.
 - Preferred onboarding is explicit CLI setup:
   - `memory-lane obsidian init --vault <path>`
-- MCP support should be developed after Obsidian mirror/import foundations.
-- Claude Desktop support should be via future MCP server, not the Claude hook adapter.
+- MCP Server MVP support is implemented on the feature branch and should land only after final verification/review.
+- Claude Desktop support is via the MCP server, not the Claude hook adapter.
 - Codex SessionStart baseline injection should wait until after the current Codex Desktop hook soak/testing period.
 - pi autosave/tool-outcome capture should wait until after pi read-only recall injection has soaked.
 
@@ -205,6 +218,9 @@ status: pending
 - Memory Lane skill docs: `skills/memory-lane/SKILL.md`
 - Worktree-aware scope spec: `docs/superpowers/specs/2026-06-08-worktree-aware-project-scope.md`
 - Worktree-aware scope plan: `docs/superpowers/plans/2026-06-08-worktree-aware-project-scope.md`
+- MCP Server MVP spec: `docs/superpowers/specs/2026-06-08-mcp-server-mvp.md`
+- MCP Server MVP plan: `docs/superpowers/plans/2026-06-08-mcp-server-mvp.md`
+- MCP client setup docs: `examples/harness-integrations/mcp.md`
 - Obsidian mirror package: `packages/obsidian-mirror/`
 - Obsidian import package: `packages/obsidian-import/`
 - Core engine/config: `packages/core/src/engine.ts`, `packages/core/src/config.ts`
@@ -218,7 +234,7 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Plan Phase 7 MCP Server MVP for Claude Desktop and other clients. This is the next substantial roadmap item because Obsidian mirror/import, pi read-only recall, and worktree-aware project identity are complete, while Codex SessionStart and pi autosave/tool capture should continue soaking.
+1. Complete final verification/review for the Phase 7 MCP Server MVP branch, then merge if approved. This is the next step because implementation is complete on the branch but not yet merged.
 2. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
 3. Continue pi read-only lifecycle recall soak before implementing pi autosave/tool-outcome capture.
 4. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
