@@ -453,6 +453,41 @@ describe("MemoryEngine", () => {
     assert.equal(d.totalMemories, 2)
   })
 
+  it("doctor includes integration diagnostics from injected paths", () => {
+    const integrationRoot = path.join(dir, "integration-doctor")
+    const claudeDesktopConfig = path.join(integrationRoot, "Claude", "claude_desktop_config.json")
+    fs.mkdirSync(path.dirname(claudeDesktopConfig), { recursive: true })
+    fs.writeFileSync(claudeDesktopConfig, JSON.stringify({ mcpServers: { "memory-lane": { command: "node", args: ["server.js"] } } }), "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-integration.jsonl"),
+      embeddingsPath: path.join(dir, "emb-integration.jsonl"),
+      configPath: path.join(dir, "cfg-integration.json"),
+      integrationPaths: { claudeDesktopConfig },
+    })
+
+    const report = e.doctor() as any
+
+    assert.equal(report.integrations.claudeDesktopMcp.exists, true)
+    assert.equal(report.integrations.claudeDesktopMcp.configured, true)
+    assert.equal(report.integrations.summary.mcpExplicitToolsOnly, true)
+  })
+
+  it("doctor integration diagnostics do not create missing config folders", () => {
+    const integrationRoot = path.join(dir, "missing-integration-root")
+    const claudeDesktopConfig = path.join(integrationRoot, "Claude", "claude_desktop_config.json")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-integration-missing.jsonl"),
+      embeddingsPath: path.join(dir, "emb-integration-missing.jsonl"),
+      configPath: path.join(dir, "cfg-integration-missing.json"),
+      integrationPaths: { claudeDesktopConfig },
+    })
+
+    const report = e.doctor() as any
+
+    assert.equal(report.integrations.claudeDesktopMcp.exists, false)
+    assert.equal(fs.existsSync(integrationRoot), false)
+  })
+
   it("doctor reports missing hook debug log without creating it", () => {
     const hookDebugLogPath = path.join(dir, "missing-hook-root", ".memory-lane", "hooks-log.jsonl")
     const e = new MemoryEngine({

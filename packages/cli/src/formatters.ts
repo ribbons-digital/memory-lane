@@ -118,7 +118,10 @@ export function formatDoctor(report: Record<string, unknown>, json: boolean): st
   if (json) {
     return JSON.stringify({ ok: true, data: report, meta: meta() }, null, 2)
   }
-  return Object.entries(report).map(([k, v]) => `${k}: ${v}`).join("\n")
+  return Object.entries(report).map(([k, v]) => {
+    if (v && typeof v === "object") return `${k}: ${JSON.stringify(v, null, 2)}`
+    return `${k}: ${v}`
+  }).join("\n")
 }
 
 export function formatImportPlan(result: ObsidianImportPlan | ObsidianImportApplyResult, json: boolean, dryRun: boolean): string {

@@ -208,6 +208,20 @@ describe("CLI integration", () => {
     const parsed = JSON.parse(doc)
     assert.equal(parsed.ok, true)
     assert.equal(parsed.data.totalMemories, 2)
+    assert.equal(typeof parsed.data.integrations, "object")
+    assert.equal(parsed.data.integrations.summary.mcpExplicitToolsOnly, true)
+  })
+
+  it("doctor human output renders integration diagnostics readably", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const output = run(["doctor"], env)
+    assert.match(output, /integrations:/u)
+    assert.match(output, /mcpExplicitToolsOnly/u)
+    assert.doesNotMatch(output, /\[object Object\]/u)
   })
 
   it("codex unknown event returns usage error", () => {
