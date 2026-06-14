@@ -20,6 +20,13 @@ export const CODEX_MEMORY_INJECTION_LIMITS: MemoryInjectionLimits = {
   absoluteMaxChars: 6000,
 }
 
+export const CODEX_BASELINE_INJECTION_LIMITS: MemoryInjectionLimits = {
+  maxItems: 4,
+  targetChars: 1000,
+  hardMaxChars: 1600,
+  absoluteMaxChars: 2000,
+}
+
 const GENERIC_PROMPTS = new Set([
   "ok",
   "okay",
@@ -174,4 +181,43 @@ export function selectMemoriesForInjection(
 export function renderMemoryBlock(memories: MemoryRecord[]): string {
   if (!memories.length) return ""
   return ["## Relevant Memory", "", ...memories.map((memory) => `- ${memory.text}`)].join("\n")
+}
+
+function compareBaselineRelevance(a: MemoryRecord, b: MemoryRecord): number {
+  const dateCompare = b.updatedAt.localeCompare(a.updatedAt)
+  if (dateCompare !== 0) return dateCompare
+  const aProject = a.scope.type === "project" ? 1 : 0
+  const bProject = b.scope.type === "project" ? 1 : 0
+  return bProject - aProject
+}
+
+export function selectBaselineMemories(
+  memories: MemoryRecord[],
+  options?: Partial<MemoryInjectionLimits>,
+): MemoryRecord[] {
+  const limits = capLimits({ ...CODEX_BASELINE_INJECTION_LIMITS, ...options })
+  const seen = new Set<string>()
+  const selected: MemoryRecord[] = []
+  let chars = 0
+
+  const candidates = [...memories]
+    .filter((memory) => memory.status === "approved" && !containsLikelySecret(memory.text))
+    .sort(compareBaselineRelevance)
+
+  for (const memory of candidates) {
+    if (selected.length >= limits.maxItems) break
+
+    const key = normalizedMemoryKey(memory.text)
+    if (!key || seen.has(key)) continue
+
+    const remainingChars = limits.hardMaxChars - chars
+    const fitted = fitMemoryWithinBudget(memory, remainingChars)
+    if (!fitted) continue
+
+    selected.push(fitted)
+    seen.add(key)
+    chars += fitted.text.length
+  }
+
+  return selected
 }

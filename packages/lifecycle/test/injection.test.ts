@@ -4,6 +4,7 @@ import type { MemoryRecord, RecallResult } from "@memory-lane/core"
 import {
   shouldSkipAutomaticInjection,
   selectMemoriesForInjection,
+  selectBaselineMemories,
   renderMemoryBlock,
   CODEX_MEMORY_INJECTION_LIMITS,
 } from "../src/injection.ts"
@@ -87,4 +88,44 @@ test("deduplicates normalized text and skips likely secrets", () => {
 test("renders plain memory block without ids or labels", () => {
   const rendered = renderMemoryBlock([memory("abc123", "This repo uses pnpm")])
   assert.equal(rendered, "## Relevant Memory\n\n- This repo uses pnpm")
+})
+
+function memoryWithUpdatedAt(id: string, text: string, updatedAt: string): MemoryRecord {
+  return { ...memory(id, text), updatedAt }
+}
+
+test("selectBaselineMemories picks recent approved memories within budget", () => {
+  const memories = [
+    memoryWithUpdatedAt("1", "This repo uses pnpm for package management.", "2026-06-10T00:00:00.000Z"),
+    memoryWithUpdatedAt("2", "Run tests with `pnpm test`.", "2026-06-14T00:00:00.000Z"),
+    memoryWithUpdatedAt("3", "User prefers concise plans.", "2026-06-13T00:00:00.000Z"),
+    memoryWithUpdatedAt("4", "Build with `pnpm build`.", "2026-06-12T00:00:00.000Z"),
+    memoryWithUpdatedAt("5", "Legacy memory that should not appear.", "2026-06-01T00:00:00.000Z"),
+  ]
+
+  const selected = selectBaselineMemories(memories, {
+    maxItems: 3,
+    targetChars: 200,
+    hardMaxChars: 300,
+    absoluteMaxChars: 500,
+  })
+
+  assert.deepEqual(selected.map((m) => m.id), ["2", "3", "4"])
+})
+
+test("selectBaselineMemories skips secrets and deduplicates", () => {
+  const memories = [
+    memoryWithUpdatedAt("1", "API key is sk-1234567890abcdef1234567890abcdef", "2026-06-14T00:00:00.000Z"),
+    memoryWithUpdatedAt("2", "This repo uses pnpm.", "2026-06-13T00:00:00.000Z"),
+    memoryWithUpdatedAt("3", "This repo uses pnpm.", "2026-06-12T00:00:00.000Z"),
+  ]
+
+  const selected = selectBaselineMemories(memories, {
+    maxItems: 4,
+    targetChars: 500,
+    hardMaxChars: 1000,
+    absoluteMaxChars: 1000,
+  })
+
+  assert.deepEqual(selected.map((m) => m.id), ["2"])
 })

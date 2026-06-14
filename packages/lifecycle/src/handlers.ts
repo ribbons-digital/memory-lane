@@ -1,8 +1,8 @@
 import type { MemoryEngine, MemoryProvenance, MemorySource, SaveResult } from "@memory-lane/core"
-import { renderMemoryBlock, selectMemoriesForInjection, type MemoryInjectionLimits } from "./injection.js"
+import { renderMemoryBlock, selectBaselineMemories, selectMemoriesForInjection, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
 import { summarizeToolOutcome } from "./tool-outcomes.js"
-import type { LifecycleResult, MemoryCandidate, PostToolUseInput, StopInput, UserPromptInput } from "./types.js"
+import type { LifecycleResult, MemoryCandidate, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
 
 function createResult(additionalContext?: string): LifecycleResult {
   return { additionalContext, saved: [], discarded: [] }
@@ -69,6 +69,18 @@ export async function handleUserPromptSubmit(
   engine.refreshScope(input.cwd)
   const recalled = await engine.recall(input.prompt)
   const selected = selectMemoriesForInjection(input.prompt, recalled, options)
+  const rendered = renderMemoryBlock(selected)
+  return createResult(rendered || undefined)
+}
+
+export function handleSessionStart(
+  engine: MemoryEngine,
+  input: SessionStartInput,
+  options?: Partial<MemoryInjectionLimits>,
+): LifecycleResult {
+  engine.refreshScope(input.cwd)
+  const approved = engine.list({ status: "approved" })
+  const selected = selectBaselineMemories(approved, options)
   const rendered = renderMemoryBlock(selected)
   return createResult(rendered || undefined)
 }

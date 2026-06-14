@@ -23,6 +23,8 @@ export interface PostToolUseInput extends LifecycleContext {
   toolResponse: unknown
 }
 
+export interface SessionStartInput extends LifecycleContext {}
+
 export interface LifecycleResult {
   additionalContext?: string
   saved: SaveResult[]
