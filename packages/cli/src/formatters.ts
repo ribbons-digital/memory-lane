@@ -180,7 +180,7 @@ Commands:
                   Explicitly import user-authored notes from configured imports/; applies by default
   claude <user-prompt-submit|stop|post-tool-use>
                   Run a Claude Code hook adapter command; reads hook JSON from stdin
-  codex <user-prompt-submit|stop|post-tool-use>
+  codex <user-prompt-submit|stop|post-tool-use|session-start>
                   Run a Codex hook adapter command; reads hook JSON from stdin
 
 Flags:

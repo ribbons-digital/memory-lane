@@ -258,6 +258,29 @@ describe("CLI integration", () => {
     assert.equal(result.stdout.trim(), "{}")
   })
 
+  it("codex session-start accepts hook payload on stdin", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    run(["save", "This repo runs tests with pnpm test", "--status", "approved"], env)
+    const result = runProcess(["codex", "session-start"], {
+      env,
+      stdin: JSON.stringify({
+        hook_event_name: "SessionStart",
+        session_id: "session-1",
+        cwd: process.cwd(),
+        transcript_path: null,
+        model: "gpt-5-codex",
+        permission_mode: "default",
+      }),
+    })
+    assert.equal(result.status, 0)
+    const parsed = JSON.parse(result.stdout)
+    assert.equal(parsed.hookSpecificOutput.hookEventName, "SessionStart")
+  })
+
   it("claude unknown event returns usage error", () => {
     const result = runProcess(["claude", "unknown-event"], {
       env: {

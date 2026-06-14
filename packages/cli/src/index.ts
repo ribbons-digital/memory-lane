@@ -536,11 +536,12 @@ function handleConfig(ctx: CliContext): void {
 }
 
 const hookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use"])
+const codexHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start"])
 
 async function handleCodex(ctx: CliContext): Promise<void> {
   const event = ctx.rest[0]
-  if (!hookCommands.has(event)) {
-    console.log(formatError("Unknown Codex hook event. Usage: memory-lane codex user-prompt-submit|stop|post-tool-use", ctx.json))
+  if (!codexHookCommands.has(event)) {
+    console.log(formatError("Unknown Codex hook event. Usage: memory-lane codex user-prompt-submit|stop|post-tool-use|session-start", ctx.json))
     process.exit(2)
   }
   const payloadText = await readStdin()
