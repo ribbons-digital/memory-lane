@@ -1,8 +1,8 @@
 import {
   appendHookDebugLog, hookDebugEnabled, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
-import { handlePostToolUse, handleStop, handleUserPromptSubmit, type LifecycleResult } from "@memory-lane/lifecycle"
-import { lifecycleNoopOutput, noopOutput, userPromptSubmitOutput } from "./outputs.js"
+import { handlePostToolUse, handleSessionStart, handleStop, handleUserPromptSubmit, type LifecycleResult } from "@memory-lane/lifecycle"
+import { additionalContextOutput, lifecycleNoopOutput, noopOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseCodexPayload, type CodexCommand } from "./payloads.js"
 import { readLatestTurnFromTranscript } from "./transcript.js"
 
@@ -83,6 +83,12 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
       })
       log("ok", lifecycleCounts(result))
       return lifecycleNoopOutput(result, debug)
+    }
+
+    if (parsed.kind === "session-start") {
+      const result = handleSessionStart(options.engine, parsed.input)
+      log("ok", lifecycleCounts(result))
+      return additionalContextOutput(result, "SessionStart", debug)
     }
 
     const result = handlePostToolUse(options.engine, parsed.input)

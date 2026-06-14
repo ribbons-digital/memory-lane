@@ -43,3 +43,11 @@ test("returns invalid for malformed payload", () => {
   const parsed = parseCodexPayload({ hook_event_name: "Stop" })
   assert.equal(parsed.kind, "invalid")
 })
+
+test("parses SessionStart payload", () => {
+  const raw = JSON.parse(fs.readFileSync(path.join(fixtures, "session-start.json"), "utf8"))
+  const parsed = parseCodexPayload(raw)
+  assert.equal(parsed.kind, "session-start")
+  assert.equal(parsed.kind === "session-start" ? parsed.input.cwd : undefined, "/tmp/memory-lane-fixture")
+  assert.equal(parsed.kind === "session-start" ? parsed.input.sessionId : undefined, "session-1")
+})

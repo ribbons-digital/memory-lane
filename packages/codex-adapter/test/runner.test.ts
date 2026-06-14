@@ -328,3 +328,22 @@ test("debug log omits raw prompt transcript tool memory and injected context tex
     "Relevant Memory",
   ].join("|")))
 })
+
+test("session-start emits baseline additionalContext", async () => {
+  const engine = engineInTemp()
+  engine.save({ text: "This repo runs tests with pnpm test", category: "project", scopeType: "global", status: "approved" })
+  const output = await runCodexHookCommand("session-start", {
+    engine,
+    payloadText: JSON.stringify({
+      hook_event_name: "SessionStart",
+      session_id: "session-1",
+      cwd: process.cwd(),
+      transcript_path: null,
+      model: "gpt-5-codex",
+      permission_mode: "default",
+    }),
+  })
+  const parsed = JSON.parse(output)
+  assert.equal(parsed.hookSpecificOutput.hookEventName, "SessionStart")
+  assert.match(parsed.hookSpecificOutput.additionalContext, /Relevant Memory/)
+})
