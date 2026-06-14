@@ -2,17 +2,29 @@
 
 ## Current state
 
-Memory Lane is on `main` at merge commit:
+Memory Lane Codex SessionStart work is on branch:
 
 ```text
-021c2a3 merge: mcp memory status tool
+feature/codex-session-start
 ```
 
-`main` is clean and aligned with `origin/main`. The Phase 7 MCP Server MVP and Phase 8 Slice 1/2 follow-ups have been merged, verified, pushed, and their feature worktrees/branches removed. The older autosave meta-prompt filter worktree still exists under `~/.config/superpowers/worktrees/memory-lane/autosave-meta-prompt-filter`.
+The feature worktree is:
+
+```text
+/Users/shiang/.config/superpowers/worktrees/memory-lane/codex-session-start
+```
+
+The branch contains the completed Codex Phase 2 SessionStart baseline injection work on top of the previous `main` state, including the earlier docs commit `1f67af9 docs: add MCP prompting tip to skip CLI sandbox fallback`. The Phase 7 MCP Server MVP and Phase 8 Slice 1/2 follow-ups were already merged, verified, pushed, and their feature worktrees/branches removed. The older autosave meta-prompt filter worktree still exists under `~/.config/superpowers/worktrees/memory-lane/autosave-meta-prompt-filter`.
 
 Recent completed work:
 
 - Phase 1 Codex hook integration is implemented and merged.
+- Codex hook adapter Phase 2 SessionStart baseline injection is implemented, reviewed, verified, and ready to merge/push:
+  - added `memory-lane codex session-start`;
+  - added `SessionStart` payload parsing and Codex-compatible `hookSpecificOutput` with `hookEventName: "SessionStart"`;
+  - added `handleSessionStart` and strict baseline memory selection in `@memory-lane/lifecycle`;
+  - baseline injection selects a small recent approved/project-visible memory set and skips secrets/duplicates;
+  - docs now include the Codex `SessionStart` hook configuration.
 - Thin Claude Code CLI hook adapter is implemented and merged.
 - Claude adapter is for **Claude Code CLI hooks only**, not Claude Desktop.
 - Root roadmap/context/ADR docs were added for Obsidian mirror/import, MCP server, and future experimental Obsidian-backed storage.
@@ -64,6 +76,15 @@ memory_save,memory_suggest,memory_recall,memory_status,memory_list,memory_review
 
 Manual smoke for worktree-aware scope confirmed the main checkout and linked feature worktree had the same `key`, with the linked worktree's `root` remaining the linked worktree path.
 
+Codex SessionStart verification on the feature branch passed:
+
+```bash
+pnpm build
+pnpm test
+```
+
+Manual SessionStart smoke with a temp memory store returned a JSON hook output whose `hookSpecificOutput.hookEventName` was `"SessionStart"` and whose `additionalContext` contained `## Relevant Memory`.
+
 ## Package overview
 
 Current workspace packages:
@@ -83,6 +104,21 @@ Current workspace packages:
 The MCP server is explicit tool access, not lifecycle automation. It exposes `memory_save`, `memory_suggest`, `memory_recall`, `memory_status`, `memory_list`, `memory_review`, `memory_approve`, `memory_reject`, and `memory_delete` over local stdio. It reuses JSONL storage, `MemoryEngine`, and project scope behavior. It does not add MCP resources, prompts, HTTP transport, dedicated Obsidian MCP status tools, or automatic hook behavior. Stdio reserves stdout for JSON-RPC protocol messages, so diagnostics must avoid stdout.
 
 `memory_status` is a read-only MCP status surface backed by `MemoryEngine.doctor()`. It is intended for Claude Desktop, Codex Desktop, and other MCP clients to answer setup/status questions without terminal access. It reports counts/metadata/diagnostics, not raw memory text.
+
+## Codex hook semantics
+
+Codex hook support now includes:
+
+```bash
+memory-lane codex session-start
+memory-lane codex user-prompt-submit
+memory-lane codex stop
+memory-lane codex post-tool-use
+```
+
+`SessionStart` is read-only baseline injection for new sessions. It uses `handleSessionStart` in `@memory-lane/lifecycle`, selects a small set of recent approved memories visible to the current project scope, and enforces a stricter budget than prompt-specific `UserPromptSubmit` recall. It skips likely secrets, deduplicates normalized memory text, and emits Codex `hookSpecificOutput.additionalContext` with `hookEventName: "SessionStart"`.
+
+`SessionStart` does not save memories, create session scope, dump full project history, replace prompt-specific `UserPromptSubmit` recall, or change `Stop`/`PostToolUse` autosave behavior.
 
 ## Project identity semantics
 
@@ -217,8 +253,9 @@ status: pending
   - `memory-lane obsidian init --vault <path>`
 - MCP Server MVP and Phase 8 Slice 1/2 follow-ups are implemented, merged, verified, and pushed.
 - Claude Desktop support is via the MCP server, not the Claude hook adapter.
-- Codex SessionStart baseline injection should wait until after the current Codex Desktop hook soak/testing period.
-- pi autosave/tool-outcome capture should wait until after pi read-only recall injection has soaked.
+- MCP/Codex hook soak/testing has concluded enough to proceed with Codex Phase 2.
+- Codex SessionStart baseline injection is implemented as a small read-only session-opening context block, not lifecycle automation for writes.
+- pi autosave/tool-outcome capture remains the next automatic-write candidate if the user wants Phase 6 next.
 
 ## Important references
 
@@ -231,6 +268,9 @@ status: pending
 - Manual testing guide: `docs/manual-testing/obsidian-mirror-import.md`
 - Claude Code integration docs: `examples/harness-integrations/claude-code.md`
 - Codex integration docs: `examples/harness-integrations/codex-cli.md`
+- Codex SessionStart plan: `docs/superpowers/plans/2026-06-15-codex-session-start-baseline.md`
+- Codex SessionStart lifecycle code: `packages/lifecycle/src/handlers.ts`, `packages/lifecycle/src/injection.ts`
+- Codex SessionStart adapter/CLI code: `packages/codex-adapter/src/payloads.ts`, `packages/codex-adapter/src/runner.ts`, `packages/codex-adapter/src/outputs.ts`, `packages/cli/src/index.ts`
 - pi adapter package: `packages/pi-adapter/`
 - Memory Lane skill docs: `skills/memory-lane/SKILL.md`
 - Worktree-aware scope spec: `docs/superpowers/specs/2026-06-08-worktree-aware-project-scope.md`
@@ -255,13 +295,12 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Continue real-world MCP testing in Claude Desktop Chat and Codex Desktop. This is the next step because the current MCP tool loop is now complete enough to evaluate UX before adding more surfaces.
-2. For Codex Desktop MCP setup, use absolute paths only. In the custom MCP form, avoid `~` in Working directory; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
-3. Watch whether project scope is confusing in MCP clients. Claude Desktop normal Chat has no project cwd, so `projectScope: none` is expected unless the model passes `projectPath`. Codex Desktop working directory may provide a better default project scope if configured with an absolute path.
-4. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
-5. Continue pi read-only lifecycle recall soak before implementing pi autosave/tool-outcome capture.
-6. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
-7. Only schedule hardening backlog items from `ROADMAP.md` after explicit user approval or clear real-world user value.
+1. Merge and push `feature/codex-session-start` after final review if it has not already been merged. This is needed before treating the SessionStart phase as complete on `main`.
+2. Configure/enable the Codex `SessionStart` hook in real Codex Desktop usage and do a short real-world soak focused on whether the baseline block is helpful and not noisy.
+3. If the user wants the next implementation phase, Phase 6 pi lifecycle autosave/tool capture is the next roadmap candidate because pi read-only recall has already soaked.
+4. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
+5. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
+6. Only schedule hardening backlog items from `ROADMAP.md` after explicit user approval or clear real-world user value.
 
 ## Suggested skills for future agents
 

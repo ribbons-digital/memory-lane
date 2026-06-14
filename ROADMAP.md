@@ -153,6 +153,22 @@ Completed scope:
 4. Documented worktree-aware scoping, scope-file override behavior, and the fact that old fragmented worktree-path memories are not migrated automatically.
 5. Kept storage paths, Obsidian behavior, hook behavior, migration, alias, and glob config out of scope.
 
+## Codex Hook Adapter — Phase 2 SessionStart Baseline Injection
+
+**Status:** Complete.
+
+**Goal:** Add strict budgeted `SessionStart` baseline injection for Codex so a new session starts with a small set of recent, approved, project-visible memories without dumping project history.
+
+Completed scope:
+
+1. Added `handleSessionStart` in `@memory-lane/lifecycle`, backed by a smaller baseline budget than prompt-specific recall.
+2. Added deterministic baseline selection over approved visible memories with recency ordering, project-scope tie-breaking, duplicate removal, secret filtering, and truncation within budget.
+3. Added Codex `SessionStart` payload parsing, `memory-lane codex session-start`, and Codex-compatible `hookSpecificOutput` with `hookEventName: "SessionStart"`.
+4. Added lifecycle, Codex adapter, and CLI tests plus a SessionStart fixture.
+5. Updated Codex integration docs and README with the `SessionStart` hook configuration.
+
+Next useful step is either a short real-world SessionStart soak in Codex Desktop or Phase 6 pi lifecycle autosave/tool capture. Phase 6 should only start if the user wants automatic pi writes next.
+
 ## Phase 6 — pi Lifecycle Autosave and Tool Capture
 
 **Goal:** After pi recall injection has soaked, add automatic pi memory writes through the same shared lifecycle policy used by Codex and Claude Code.
