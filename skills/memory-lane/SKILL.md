@@ -218,6 +218,16 @@ engine.list({ status: "approved" })   // approved + scoped
 engine.list("approved")               // legacy: same as above
 ```
 
+## MCP vs CLI
+
+When running inside an MCP client that has Memory Lane MCP configured (Claude Desktop, Codex Desktop, Cursor, etc.), prefer the MCP tools. If the user asks you to save or recall a memory and does not specify the MCP, explicitly say you will use the Memory Lane MCP to avoid the model defaulting to the CLI, hitting a sandbox write restriction on `~/.memory-lane`, and only then falling back to MCP.
+
+Example phrasing:
+- "I'll use the Memory Lane MCP to save that."
+- "Using the Memory Lane MCP, here's what I recall: ..."
+
+If MCP is not available, fall back to the CLI commands below.
+
 ## Pi Harness Tools
 
 When used as a pi extension, three tools are available:

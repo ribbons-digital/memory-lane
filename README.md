@@ -339,6 +339,8 @@ The MCP server exposes explicit tools only:
 
 Use `memory_status` from MCP clients when you want the same kind of read-only setup/status overview that `memory-lane doctor` provides in a terminal. It reports counts and diagnostics only; it does not return raw memory text or run lifecycle hooks.
 
+**Tip for Claude Desktop and Codex Desktop:** if you ask the model to save or recall a memory without mentioning the MCP, it may first try the `memory-lane` CLI, fail because the sandbox cannot write to `~/.memory-lane`, and then fall back to MCP. To skip that error turn, explicitly say "use the Memory Lane MCP" in your request.
+
 MCP does not replace lifecycle hooks. Hooks provide automatic recall/save behavior for supported harnesses; MCP gives the model explicit tool access when the client asks for it. JSONL remains the source of truth, and Obsidian support remains optional.
 
 Example local stdio command after building this workspace:

@@ -56,6 +56,13 @@ Client configuration UI and file locations may vary by Cursor version; keep the 
 
 Claude Code and Codex can continue using Memory Lane lifecycle hooks for automatic recall/save behavior. MCP is separate: it gives explicit tool access when the client supports MCP tools. Do not configure MCP expecting it to run lifecycle hook events.
 
+## Prompting tip
+
+In clients such as Claude Desktop and Codex Desktop, the model may try the `memory-lane` CLI first. If the CLI runs inside a sandboxed environment without write access to `~/.memory-lane`, the model will usually fall back to the MCP tools automatically, but only after a visible error turn. To avoid that detour, explicitly ask the model to use the Memory Lane MCP, e.g.:
+
+> "Use the Memory Lane MCP to save that I prefer pnpm."
+> "Using the Memory Lane MCP, recall what we were working on."
+
 ## Tools
 
 - `memory_save`
