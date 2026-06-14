@@ -5,10 +5,10 @@
 Memory Lane is on `main` at merge commit:
 
 ```text
-2432e09 merge: mcp server mvp
+021c2a3 merge: mcp memory status tool
 ```
 
-`main` is clean and ahead of `origin/main` with the local MCP Server MVP merge and post-merge handoff refresh. The `mcp-server-mvp` feature branch/worktree is ready for cleanup after this refresh. The older autosave meta-prompt filter worktree still exists under `~/.config/superpowers/worktrees/memory-lane/autosave-meta-prompt-filter`.
+`main` is clean and aligned with `origin/main`. The Phase 7 MCP Server MVP and Phase 8 Slice 1/2 follow-ups have been merged, verified, pushed, and their feature worktrees/branches removed. The older autosave meta-prompt filter worktree still exists under `~/.config/superpowers/worktrees/memory-lane/autosave-meta-prompt-filter`.
 
 Recent completed work:
 
@@ -31,18 +31,35 @@ Recent completed work:
   - `memory_lane: true` opt-in;
   - generated mirror notes marked `memory_lane_mirror: true` are skipped;
   - source import notes are never rewritten.
-- Phase 7 MCP Server MVP is implemented, reviewed, verified, and merged locally:
+- Phase 7 MCP Server MVP is implemented, reviewed, verified, merged, and pushed:
   - new `@memory-lane/mcp-server` package with `memory-lane-mcp` bin;
   - local stdio server for explicit MCP tools;
-  - tools: `memory_save`, `memory_suggest`, `memory_recall`, `memory_list`, and `memory_review`;
+  - base tools: `memory_save`, `memory_suggest`, `memory_recall`, `memory_list`, and `memory_review`;
   - reuses `MemoryEngine`, JSONL storage, and project scope behavior;
   - docs cover Claude Desktop, Cursor, Claude Code, and Codex boundaries.
+- MCP review mutation follow-up is implemented, reviewed, verified, merged, pushed, and manually tested in Claude Desktop:
+  - added `memory_approve`, `memory_reject`, and `memory_delete`;
+  - deleting a pending memory from Claude Desktop worked in manual testing.
+- Phase 8 Slice 1 integration diagnostics is implemented, reviewed, verified, merged, and pushed:
+  - `memory-lane doctor` now reports read-only integration diagnostics for Claude Desktop MCP, Codex hooks, Claude Code hooks, and pi extension;
+  - diagnostics are config/entrypoint based and do not read prompts, transcripts, tool outputs, memory text, MCP traffic, or hook debug log contents.
+- Phase 8 Slice 2 MCP status tool is implemented, reviewed, verified, merged, and pushed:
+  - added read-only `memory_status` MCP tool;
+  - returns doctor/status data through MCP, including counts, config paths, semantic status, project scope, and integration diagnostics;
+  - does not return raw memory text or add lifecycle automation.
 
-Final reviews for recent feature work returned approved outcomes. Verification on merged `main` passed:
+Final reviews for recent feature work returned approved outcomes. Verification on merged `main` passed after the MCP status merge:
 
 ```bash
 pnpm build
 pnpm test
+pnpm --filter @memory-lane/mcp-server build
+```
+
+MCP tool smoke after the latest merge returned:
+
+```text
+memory_save,memory_suggest,memory_recall,memory_status,memory_list,memory_review,memory_approve,memory_reject,memory_delete
 ```
 
 Manual smoke for worktree-aware scope confirmed the main checkout and linked feature worktree had the same `key`, with the linked worktree's `root` remaining the linked worktree path.
@@ -63,7 +80,9 @@ Current workspace packages:
 
 ## MCP server semantics
 
-The MCP server is explicit tool access, not lifecycle automation. It exposes `memory_save`, `memory_suggest`, `memory_recall`, `memory_list`, and `memory_review` over local stdio. It reuses JSONL storage, `MemoryEngine`, and project scope behavior. It does not add MCP resources, prompts, HTTP transport, Obsidian status tools, or automatic hook behavior. Stdio reserves stdout for JSON-RPC protocol messages, so diagnostics must avoid stdout.
+The MCP server is explicit tool access, not lifecycle automation. It exposes `memory_save`, `memory_suggest`, `memory_recall`, `memory_status`, `memory_list`, `memory_review`, `memory_approve`, `memory_reject`, and `memory_delete` over local stdio. It reuses JSONL storage, `MemoryEngine`, and project scope behavior. It does not add MCP resources, prompts, HTTP transport, dedicated Obsidian MCP status tools, or automatic hook behavior. Stdio reserves stdout for JSON-RPC protocol messages, so diagnostics must avoid stdout.
+
+`memory_status` is a read-only MCP status surface backed by `MemoryEngine.doctor()`. It is intended for Claude Desktop, Codex Desktop, and other MCP clients to answer setup/status questions without terminal access. It reports counts/metadata/diagnostics, not raw memory text.
 
 ## Project identity semantics
 
@@ -196,7 +215,7 @@ status: pending
 - Hooks should remain silent and deterministic; do **not** prompt users from hooks to enable Obsidian.
 - Preferred onboarding is explicit CLI setup:
   - `memory-lane obsidian init --vault <path>`
-- MCP Server MVP support is implemented and merged locally; push to origin is still needed if not already done.
+- MCP Server MVP and Phase 8 Slice 1/2 follow-ups are implemented, merged, verified, and pushed.
 - Claude Desktop support is via the MCP server, not the Claude hook adapter.
 - Codex SessionStart baseline injection should wait until after the current Codex Desktop hook soak/testing period.
 - pi autosave/tool-outcome capture should wait until after pi read-only recall injection has soaked.
@@ -218,6 +237,10 @@ status: pending
 - Worktree-aware scope plan: `docs/superpowers/plans/2026-06-08-worktree-aware-project-scope.md`
 - MCP Server MVP spec: `docs/superpowers/specs/2026-06-08-mcp-server-mvp.md`
 - MCP Server MVP plan: `docs/superpowers/plans/2026-06-08-mcp-server-mvp.md`
+- Integration doctor diagnostics spec: `docs/superpowers/specs/2026-06-08-integration-doctor-diagnostics.md`
+- Integration doctor diagnostics plan: `docs/superpowers/plans/2026-06-08-integration-doctor-diagnostics.md`
+- MCP status tool spec: `docs/superpowers/specs/2026-06-08-mcp-status-tool.md`
+- MCP status tool plan: `docs/superpowers/plans/2026-06-08-mcp-status-tool.md`
 - MCP client setup docs: `examples/harness-integrations/mcp.md`
 - Obsidian mirror package: `packages/obsidian-mirror/`
 - Obsidian import package: `packages/obsidian-import/`
@@ -232,12 +255,13 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Push `main` after this handoff refresh if it has not already been pushed. This is the next step because Phase 7 is merged locally but origin needs the merge and final docs refresh.
-2. Plan Phase 8 MCP + Hooks Coordination when you want the next roadmap feature. This is the next substantial roadmap item after Phase 7.
-3. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
-4. Continue pi read-only lifecycle recall soak before implementing pi autosave/tool-outcome capture.
-5. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
-6. Only schedule hardening backlog items from `ROADMAP.md` (such as import dry-run secret warnings or import snapshot type cleanup) after explicit user approval.
+1. Continue real-world MCP testing in Claude Desktop Chat and Codex Desktop. This is the next step because the current MCP tool loop is now complete enough to evaluate UX before adding more surfaces.
+2. For Codex Desktop MCP setup, use absolute paths only. In the custom MCP form, avoid `~` in Working directory; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
+3. Watch whether project scope is confusing in MCP clients. Claude Desktop normal Chat has no project cwd, so `projectScope: none` is expected unless the model passes `projectPath`. Codex Desktop working directory may provide a better default project scope if configured with an absolute path.
+4. Continue real-world soak/testing of Codex Desktop hook integration before implementing `SessionStart` baseline injection.
+5. Continue pi read-only lifecycle recall soak before implementing pi autosave/tool-outcome capture.
+6. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
+7. Only schedule hardening backlog items from `ROADMAP.md` after explicit user approval or clear real-world user value.
 
 ## Suggested skills for future agents
 
