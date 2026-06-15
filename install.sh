@@ -119,17 +119,12 @@ VERSION="${VERSION:-latest}"
   data_dir="$HOME/.memory-lane"
   mkdir -p "$data_dir"
 
-  if [ -n "$MEMORY_LANE_INIT_YES" ]; then
-    say "running memory-lane init --yes"
-    unset MEMORY_LANE_INSTALL_BINARY
-    "$install_path" init --yes
-  else
-    say "running memory-lane init (interactive)"
-    unset MEMORY_LANE_INSTALL_BINARY
-    "$install_path" init
-  fi
-
-  say "done. Installed at $install_path"
+  printf "\n"
+  printf "memory-lane successfully installed!\n"
+  printf "  Location: %s\n" "$install_path"
+  printf "\n"
+  printf "Next: Run 'memory-lane init' to get started.\n"
+  printf "      Or 'memory-lane init --yes' to auto-configure detected harnesses.\n"
 }
 
 main "$@"

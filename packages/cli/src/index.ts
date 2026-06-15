@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { readFile } from "node:fs/promises"
@@ -93,6 +94,21 @@ interface CliContext {
 
 function resolveConfigPath(): string {
   return process.env.MEMORY_LANE_CONFIG || getDefaultConfigPath()
+}
+
+function isInitialized(): boolean {
+  try {
+    return fs.existsSync(path.join(os.homedir(), ".memory-lane", "install.json"))
+  } catch {
+    return false
+  }
+}
+
+function printInitPrompt(json: boolean): void {
+  if (json || isInitialized()) return
+  console.log("\nMemory Lane is installed but not initialized.")
+  console.log("Run 'memory-lane init' to configure harnesses,")
+  console.log("or 'memory-lane init --yes' to auto-configure detected ones.")
 }
 
 function createEmbeddingProvider(configPath: string): EmbeddingProvider | undefined {
@@ -225,6 +241,7 @@ function handleCompact(ctx: CliContext): void {
 
 function handleDoctor(ctx: CliContext): void {
   console.log(formatDoctor(ctx.engine.doctor(), ctx.json))
+  printInitPrompt(ctx.json)
 }
 
 function handleStatus(ctx: CliContext): void {
@@ -612,6 +629,7 @@ async function main(): Promise<void> {
 
   if (!command || command === "help" || hasFlag(argv, "help") || hasFlag(argv, "h")) {
     console.log(usage())
+    printInitPrompt(json)
     process.exit(command && command !== "help" ? 2 : 0)
   }
 

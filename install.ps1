@@ -67,12 +67,9 @@ if ($currentPath -notlike "*$installDir*") {
 $dataDir = "$env:USERPROFILE\.memory-lane"
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 
-if ($env:MEMORY_LANE_INIT_YES) {
-    Say "running memory-lane init --yes"
-    & $installPath init --yes
-} else {
-    Say "running memory-lane init (interactive)"
-    & $installPath init
-}
-
-Say "done. Installed at $installPath"
+Write-Host ""
+Write-Host "memory-lane successfully installed!"
+Write-Host "  Location: $installPath"
+Write-Host ""
+Write-Host "Next: Run 'memory-lane init' to get started."
+Write-Host "      Or 'memory-lane init --yes' to auto-configure detected harnesses."
