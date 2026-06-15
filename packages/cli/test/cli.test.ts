@@ -603,4 +603,11 @@ describe("CLI integration", () => {
     assert.match(result.stdout, /mcp\s+Run the bundled Memory Lane MCP server over stdio/)
   })
 
+  it("upgrade command is documented in help output", () => {
+    const result = runProcess(["help"])
+    assert.equal(result.status, 0)
+    assert.ok(result.stdout.includes("upgrade [--yes]"))
+    assert.ok(result.stdout.includes("Download latest binary and re-apply configs"))
+  })
+
 })

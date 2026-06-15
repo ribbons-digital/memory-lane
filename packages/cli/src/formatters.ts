@@ -174,6 +174,8 @@ Commands:
                   Initialize project-local storage
   uninstall [--yes]
                   Remove Memory Lane integration configs and binary
+  upgrade [--yes]
+                  Download latest binary and re-apply configs
   config [show|enable-semantic|disable-semantic|set <key> <value>]
   obsidian init --vault <path> [--folder "Memory Lane"]
                   Configure optional one-way Obsidian mirror

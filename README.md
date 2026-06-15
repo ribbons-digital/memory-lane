@@ -78,14 +78,22 @@ After installing, run `memory-lane init` again any time to reconfigure or add ne
 
 ### Upgrading
 
-Re-run the installer to download the latest binary, then run `memory-lane init --yes` to refresh integration configs:
+Run the built-in upgrade command to download the latest binary and re-apply only the harness configs you already had installed:
+
+```bash
+memory-lane upgrade
+```
+
+Use `memory-lane upgrade --yes` to run non-interactively. On macOS and Linux this re-runs the installer and then refreshes your existing configs. On Windows it downloads the new binary and prompts you to run `memory-lane init --yes` in a fresh terminal (because Windows locks the running executable).
+
+Your memory data in `~/.memory-lane/` is preserved.
+
+You can also upgrade manually by re-running the installer and then `memory-lane init --yes`:
 
 ```bash
 curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | sh
 memory-lane init --yes
 ```
-
-Your memory data in `~/.memory-lane/` is preserved. `memory-lane init --yes` overwrites hook, MCP, skill, and pi extension configs to point at the new binary location.
 
 ### Build from source
 

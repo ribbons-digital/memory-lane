@@ -260,6 +260,12 @@ curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/downlo
 memory-lane init
 ```
 
+To upgrade to the latest release while preserving existing harness configs and memory data:
+
+```bash
+memory-lane upgrade
+```
+
 ## Pi Harness Tools
 
 When used as a pi extension, three tools are available:

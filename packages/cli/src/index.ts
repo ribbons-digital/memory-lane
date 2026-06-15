@@ -9,6 +9,7 @@ import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapt
 import { handleMcp } from "./commands/mcp.js"
 import { handleInit } from "./commands/init.js"
 import { handleUninstall } from "./commands/uninstall.js"
+import { handleUpgrade } from "./commands/upgrade.js"
 import { discoverObsidianImportFiles, planObsidianImport } from "@memory-lane/obsidian-import"
 import { initObsidianMirror, statusObsidianMirror, syncObsidianMirror } from "@memory-lane/obsidian-mirror"
 import {
@@ -651,6 +652,17 @@ async function main(): Promise<void> {
   if (command === "uninstall") {
     try {
       await handleUninstall(argv)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.log(formatError(msg, json))
+      process.exit(1)
+    }
+    process.exit(0)
+  }
+
+  if (command === "upgrade") {
+    try {
+      await handleUpgrade(argv)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       console.log(formatError(msg, json))
