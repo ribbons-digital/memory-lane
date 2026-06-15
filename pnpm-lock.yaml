@@ -51,6 +51,9 @@ importers:
       '@memory-lane/obsidian-mirror':
         specifier: workspace:*
         version: link:../obsidian-mirror
+      '@memory-lane/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -118,6 +121,9 @@ importers:
       '@memory-lane/core':
         specifier: workspace:*
         version: link:../core
+      '@memory-lane/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
       '@modelcontextprotocol/sdk':
         specifier: ^1.18.0
         version: 1.29.0(zod@3.25.76)
@@ -170,6 +176,53 @@ importers:
       typebox:
         specifier: ^1.1.38
         version: 1.1.38
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.41
+      tsx:
+        specifier: ^4.19.0
+        version: 4.22.3
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+
+  packages/plugin-api:
+    dependencies:
+      '@memory-lane/core':
+        specifier: workspace:*
+        version: link:../core
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.18.0
+        version: 1.29.0(zod@3.25.76)
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.41
+      tsx:
+        specifier: ^4.19.0
+        version: 4.22.3
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+
+  packages/plugin-obsidian-wiki:
+    dependencies:
+      '@memory-lane/core':
+        specifier: workspace:*
+        version: link:../core
+      '@memory-lane/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.18.0
+        version: 1.29.0(zod@3.25.76)
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^20.0.0

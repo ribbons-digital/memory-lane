@@ -7,10 +7,14 @@ export interface McpToolDefinition {
   description: string
   inputSchema: z.ZodTypeAny | Record<string, unknown>
   handler: (input: Record<string, unknown>) => Promise<{
-    content: Array<{ type: string; text: string }>
+    content: Array<{ type: "text"; text: string }>
     details?: Record<string, unknown>
   }>
 }
+
+export type McpResourceContent =
+  | { uri: string; mimeType?: string; text: string }
+  | { uri: string; mimeType?: string; blob: string }
 
 export interface McpResourceDefinition {
   uri: string
@@ -18,12 +22,7 @@ export interface McpResourceDefinition {
   description: string
   mimeType?: string
   handler: (uri: URL) => Promise<{
-    contents: Array<{
-      uri: string
-      mimeType?: string
-      text?: string
-      blob?: string
-    }>
+    contents: McpResourceContent[]
   }>
 }
 
