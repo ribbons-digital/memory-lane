@@ -23,7 +23,8 @@ Completed scope:
 2. `install.sh` and `install.ps1` download binaries from GitHub Releases, verify checksums, place them on PATH, and prompt the user to run `memory-lane init`.
 3. `memory-lane init` is an interactive first-run wizard; `memory-lane init --yes` auto-configures detected harnesses.
 4. `memory-lane uninstall` removes configs and the binary while preserving memory data by default.
-5. Skills for slash command access: `~/.claude/skills/memory-lane/SKILL.md` (Claude Code CLI `/memory-lane`) and `~/.agents/skills/memory-lane/SKILL.md` (Codex `$memory-lane`).
+5. `memory-lane upgrade` downloads the latest binary and re-applies only the harness configs that were previously installed.
+6. Skills for slash command access: `~/.claude/skills/memory-lane/SKILL.md` (Claude Code CLI `/memory-lane`) and `~/.agents/skills/memory-lane/SKILL.md` (Codex `$memory-lane`).
 
 ## Phase 1 — Obsidian Mirror Foundation
 
