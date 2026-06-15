@@ -175,8 +175,20 @@ export async function handleUninstall(argv: string[]): Promise<void> {
     for (const integration of manifest.integrations) {
       const configPath = integration.configPath
       let ok = false
-      if (integration.harness === "claude-code-cli" || integration.harness === "codex-cli") {
+      if (integration.harness === "claude-code-cli") {
         ok = removeMemoryLaneHooks(configPath, integration.harness)
+        const skillDir = path.join(homeDir, ".claude/skills/memory-lane")
+        if (fs.existsSync(skillDir)) {
+          fs.rmSync(skillDir, { recursive: true, force: true })
+          ok = true
+        }
+      } else if (integration.harness === "codex-cli") {
+        ok = removeMemoryLaneHooks(configPath, integration.harness)
+        const skillDir = path.join(homeDir, ".agents/skills/memory-lane")
+        if (fs.existsSync(skillDir)) {
+          fs.rmSync(skillDir, { recursive: true, force: true })
+          ok = true
+        }
       } else if (integration.harness === "claude-desktop") {
         ok = removeMemoryLaneMcp(configPath)
       } else if (integration.harness === "codex-desktop") {

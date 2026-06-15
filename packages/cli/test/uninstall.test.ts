@@ -64,6 +64,9 @@ describe("uninstall", () => {
       }),
       "utf8",
     )
+    const skillPath = path.join(home, ".claude/skills/memory-lane/SKILL.md")
+    fs.mkdirSync(path.dirname(skillPath), { recursive: true })
+    fs.writeFileSync(skillPath, "---\nname: memory-lane\n---\n", "utf8")
     writeManifest([{ harness: "claude-code-cli", configPath }])
 
     run(["uninstall", "--yes"], { HOME: home })
@@ -71,6 +74,7 @@ describe("uninstall", () => {
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"))
     assert.equal(config.theme, "dark")
     assert.equal(config.hooks, undefined)
+    assert.equal(fs.existsSync(skillPath), false)
   })
 
   it("removes memory-lane MCP server while preserving others", () => {

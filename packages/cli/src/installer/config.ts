@@ -20,6 +20,40 @@ function writeJson(filePath: string, data: unknown): void {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + "\n", "utf8")
 }
 
+function skillContent(binaryPath: string): string {
+  return `---
+name: memory-lane
+description: Persistent project-specific memory with semantic retrieval. Use when the user wants to save, recall, search, or manage durable memories across sessions.
+---
+
+# Memory Lane
+
+You have access to Memory Lane, a local-first persistent memory system.
+
+Use it to:
+- Save durable memories explicitly requested by the user
+- Recall past context relevant to the current task
+- Suggest memories for later review
+
+When the user says things like "remember that...", "don't forget...", or asks "what were we working on?", use Memory Lane.
+
+Available CLI commands:
+- memory-lane save "<text>" --status approved
+- memory-lane suggest "<text>"
+- memory-lane recall "<query>"
+- memory-lane list
+- memory-lane review
+- memory-lane status
+- memory-lane doctor
+
+For explicit user requests, save as approved. For proactive observations, suggest as pending.
+
+When running inside an MCP client with Memory Lane MCP configured, prefer the MCP tools.
+If MCP is not available, fall back to the CLI commands above.
+The binary is available at: ${binaryPath}
+`
+}
+
 function mergeHooks(existing: Record<string, unknown>, harness: "claude" | "codex", binaryPath: string): Record<string, unknown> {
   const isClaude = harness === "claude"
   const timeoutKey = isClaude ? "timeout" : "timeoutSec"
@@ -88,6 +122,13 @@ export function installClaudeCodeCli(options: InitOptions): IntegrationResult {
   const existing = readJson(configPath)
   const merged = mergeHooks(existing, "claude", options.binaryPath)
   writeJson(configPath, merged)
+
+  if (!options.projectMode) {
+    const skillPath = path.join(options.homeDir, ".claude/skills/memory-lane/SKILL.md")
+    ensureDir(skillPath)
+    fs.writeFileSync(skillPath, skillContent(options.binaryPath), "utf8")
+  }
+
   return { harness: "claude-code-cli", configured: true, configPath }
 }
 
@@ -98,6 +139,13 @@ export function installCodexCli(options: InitOptions): IntegrationResult {
   const existing = readJson(configPath)
   const merged = mergeHooks(existing, "codex", options.binaryPath)
   writeJson(configPath, merged)
+
+  if (!options.projectMode) {
+    const skillPath = path.join(options.homeDir, ".agents/skills/memory-lane/SKILL.md")
+    ensureDir(skillPath)
+    fs.writeFileSync(skillPath, skillContent(options.binaryPath), "utf8")
+  }
+
   return { harness: "codex-cli", configured: true, configPath }
 }
 
@@ -162,6 +210,12 @@ export function hasExistingMemoryLaneConfig(harness: Harness, configPath: string
   if (!fs.existsSync(configPath)) return false
 
   if (harness === "claude-code-cli" || harness === "codex-cli") {
+    const homeDir = path.dirname(path.dirname(configPath))
+    const skillDir = harness === "claude-code-cli"
+      ? path.join(homeDir, ".claude/skills/memory-lane")
+      : path.join(homeDir, ".agents/skills/memory-lane")
+    if (fs.existsSync(path.join(skillDir, "SKILL.md"))) return true
+
     const data = readJson(configPath)
     const hooks = (data.hooks as Record<string, unknown[]>) ?? {}
     const prefix = harness === "claude-code-cli" ? "memory-lane claude" : "memory-lane codex"

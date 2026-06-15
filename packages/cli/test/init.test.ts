@@ -147,6 +147,32 @@ describe("init wizard", () => {
     assert.ok(config.hooks.SessionStart[0].hooks[0].command.includes(`${binaryPath} claude session-start`))
   })
 
+  it("installs Claude Code skill for slash command access", () => {
+    run(["init", "--yes"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    const skillPath = path.join(home, ".claude/skills/memory-lane/SKILL.md")
+    assert.ok(fs.existsSync(skillPath))
+    const content = fs.readFileSync(skillPath, "utf8")
+    assert.ok(content.includes("name: memory-lane"))
+    assert.ok(content.includes(binaryPath))
+  })
+
+  it("installs Codex skill for slash command access", () => {
+    run(["init", "--yes"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    const skillPath = path.join(home, ".agents/skills/memory-lane/SKILL.md")
+    assert.ok(fs.existsSync(skillPath))
+    const content = fs.readFileSync(skillPath, "utf8")
+    assert.ok(content.includes("name: memory-lane"))
+    assert.ok(content.includes(binaryPath))
+  })
+
   it("writes Codex Desktop TOML config in --yes mode", () => {
     fs.writeFileSync(path.join(home, ".codex/config.toml"), "model = \"gpt-5.5\"\n", "utf8")
 
