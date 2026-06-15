@@ -227,6 +227,22 @@ engine.list({ status: "approved" })   // approved + scoped
 engine.list("approved")               // legacy: same as above
 ```
 
+## Slash commands
+
+When Memory Lane is installed as a harness skill, you can invoke it directly:
+
+- **Claude Code CLI**: type `/memory-lane` followed by what you want to do.
+- **Codex CLI/Desktop/app**: type `$memory-lane` followed by what you want to do.
+
+Examples:
+- `/memory-lane save that we use pnpm for package management`
+- `/memory-lane recall what we were working on`
+- `$memory-lane suggest we should add CI linting`
+
+These skills are installed by `memory-lane init`:
+- Claude Code CLI skill: `~/.claude/skills/memory-lane/SKILL.md`
+- Codex skill: `~/.agents/skills/memory-lane/SKILL.md`
+
 ## MCP vs CLI
 
 When running inside an MCP client that has Memory Lane MCP configured (Claude Desktop, Codex Desktop, etc.), prefer the MCP tools. If the user asks you to save or recall a memory and does not specify the MCP, explicitly say you will use the Memory Lane MCP to avoid the model defaulting to the CLI, hitting a sandbox write restriction on `~/.memory-lane`, and only then falling back to MCP.

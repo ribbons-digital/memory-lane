@@ -12,6 +12,19 @@ The ordering is intentional: mirror/import gives users Obsidian value with low r
 
 Each phase lists a focused implementation slice of no more than five todos. If a phase needs more work, add the next slice only after the current slice is complete, keeping the todo order aligned with implementation dependencies.
 
+## Production Installer
+
+**Status:** Complete and merged.
+
+**Goal:** Make Memory Lane installable and configurable by first-time users without building from source.
+
+Completed scope:
+1. Bun `--compile` produces standalone binaries for macOS (arm64/x64), Linux (arm64/x64), and Windows (x64).
+2. `install.sh` and `install.ps1` download binaries from GitHub Releases, verify checksums, place them on PATH, and prompt the user to run `memory-lane init`.
+3. `memory-lane init` is an interactive first-run wizard; `memory-lane init --yes` auto-configures detected harnesses.
+4. `memory-lane uninstall` removes configs and the binary while preserving memory data by default.
+5. Skills for slash command access: `~/.claude/skills/memory-lane/SKILL.md` (Claude Code CLI `/memory-lane`) and `~/.agents/skills/memory-lane/SKILL.md` (Codex `$memory-lane`).
+
 ## Phase 1 — Obsidian Mirror Foundation
 
 **Status:** Complete and merged.

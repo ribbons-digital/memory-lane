@@ -1,6 +1,22 @@
 # Memory Lane Integration for OpenAI Codex CLI
 
-## Recommended setup: Codex hooks
+This integration covers the **Codex CLI**. Codex Desktop uses MCP instead.
+
+## Recommended setup: run `memory-lane init`
+
+The easiest way to configure Codex CLI is to run:
+
+```bash
+memory-lane init
+```
+
+This detects Codex CLI and installs:
+- Lifecycle hooks in `~/.codex/hooks.json`
+- A user skill at `~/.agents/skills/memory-lane/SKILL.md` so `$memory-lane` is available as a skill mention/slash command in Codex CLI, IDE, and Codex app
+
+Use `memory-lane init --yes` to auto-accept all detected harnesses.
+
+## Manual setup: Codex hooks
 
 Start with project-level `.codex/hooks.json` while testing Memory Lane in one repository. Move the same hooks to user-level `~/.codex/hooks.json` after you trust the behavior globally.
 

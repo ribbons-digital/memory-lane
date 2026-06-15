@@ -76,6 +76,17 @@ irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/inst
 
 After installing, run `memory-lane init` again any time to reconfigure or add new integrations.
 
+### Upgrading
+
+Re-run the installer to download the latest binary, then run `memory-lane init --yes` to refresh integration configs:
+
+```bash
+curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | sh
+memory-lane init --yes
+```
+
+Your memory data in `~/.memory-lane/` is preserved. `memory-lane init --yes` overwrites hook, MCP, skill, and pi extension configs to point at the new binary location.
+
 ### Build from source
 
 For development or custom builds:

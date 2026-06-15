@@ -1,10 +1,22 @@
 # Memory Lane Integration for Claude Code CLI
 
-This integration is for **Claude Code CLI hooks only**. It does **not** apply to the Claude Desktop app, which would need a separate MCP-style integration.
+This integration is for **Claude Code CLI hooks and slash commands only**. It does **not** apply to the Claude Desktop app, which uses MCP.
 
-## Recommended setup: Claude Code hooks
+## Recommended setup: run `memory-lane init`
 
-Start with project-level `.claude/settings.local.json` while testing Memory Lane in one repository. Move equivalent hooks to `~/.claude/settings.json` after you trust the behavior globally.
+The easiest way to configure Claude Code CLI is to run:
+
+```bash
+memory-lane init
+```
+
+This detects Claude Code CLI and installs:
+- Lifecycle hooks in `~/.claude/settings.json`
+- A personal skill at `~/.claude/skills/memory-lane/SKILL.md` so `/memory-lane` is available as a slash command
+
+Use `memory-lane init --yes` to auto-accept all detected harnesses.
+
+## Manual setup: Claude Code hooks
 
 ```json
 {

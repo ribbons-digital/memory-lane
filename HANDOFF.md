@@ -1,5 +1,14 @@
 # Memory Lane Handoff
 
+## Recent changes (since this handoff was last updated)
+
+- Production installer shipped: `install.sh` / `install.ps1` download a prebuilt Bun-compiled binary from GitHub Releases, place it on PATH, and prompt the user to run `memory-lane init`.
+- `memory-lane init` is an interactive wizard that detects and configures Claude Code CLI, Codex CLI, Claude Desktop, Codex Desktop, and pi.
+- `memory-lane init --yes` auto-configures all detected harnesses non-interactively.
+- `memory-lane uninstall` removes the binary and integration configs while preserving memory data by default.
+- Slash command / skill support: `memory-lane init` installs a personal skill at `~/.claude/skills/memory-lane/SKILL.md` (invoked as `/memory-lane` in Claude Code CLI) and `~/.agents/skills/memory-lane/SKILL.md` (invoked as `$memory-lane` in Codex CLI/Desktop/app).
+- To upgrade, re-run the installer and then `memory-lane init --yes`.
+
 ## Current state
 
 Memory Lane Codex SessionStart work is on branch:
