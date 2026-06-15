@@ -117,6 +117,38 @@ function removeMemoryLaneMcp(configPath: string): boolean {
   return false
 }
 
+function removeTomlSection(content: string, sectionName: string): string {
+  const lines = content.split("\n")
+  const startRegex = new RegExp(`^\\[${sectionName.replace(/\./g, "\\.")}\\]$`)
+  const startIndex = lines.findIndex((line) => startRegex.test(line.trim()))
+  if (startIndex === -1) return content
+
+  let endIndex = lines.length
+  for (let i = startIndex + 1; i < lines.length; i++) {
+    if (/^\[/.test(lines[i].trim())) {
+      endIndex = i
+      break
+    }
+  }
+
+  const before = lines.slice(0, startIndex)
+  const after = lines.slice(endIndex)
+  return before.concat(after).join("\n").replace(/\n{3,}/g, "\n\n")
+}
+
+function removeMemoryLaneCodexMcp(configPath: string): boolean {
+  if (!fs.existsSync(configPath)) return false
+  const content = fs.readFileSync(configPath, "utf8")
+  const cleaned = removeTomlSection(content, "mcp_servers.memory-lane")
+  if (cleaned === content) return false
+  if (cleaned.trim().length === 0) {
+    fs.unlinkSync(configPath)
+  } else {
+    fs.writeFileSync(configPath, cleaned, "utf8")
+  }
+  return true
+}
+
 function removePiExtension(piPath: string): boolean {
   if (!fs.existsSync(piPath)) return false
   fs.rmSync(path.dirname(piPath), { recursive: true, force: true })
@@ -148,7 +180,7 @@ export async function handleUninstall(argv: string[]): Promise<void> {
       } else if (integration.harness === "claude-desktop") {
         ok = removeMemoryLaneMcp(configPath)
       } else if (integration.harness === "codex-desktop") {
-        ok = removeMemoryLaneMcp(configPath)
+        ok = removeMemoryLaneCodexMcp(configPath)
       } else if (integration.harness === "pi") {
         ok = removePiExtension(configPath)
       }

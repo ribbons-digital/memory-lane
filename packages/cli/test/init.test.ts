@@ -146,4 +146,21 @@ describe("init wizard", () => {
     assert.ok(config.hooks.PostToolUse)
     assert.ok(config.hooks.SessionStart[0].hooks[0].command.includes(`${binaryPath} claude session-start`))
   })
+
+  it("writes Codex Desktop TOML config in --yes mode", () => {
+    fs.writeFileSync(path.join(home, ".codex/config.toml"), "model = \"gpt-5.5\"\n", "utf8")
+
+    run(["init", "--yes"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    const configPath = path.join(home, ".codex/config.toml")
+    const content = fs.readFileSync(configPath, "utf8")
+    assert.ok(content.includes("[mcp_servers.memory-lane]"))
+    assert.ok(content.includes(`command = "${binaryPath}"`))
+    assert.ok(content.includes('args = ["mcp"]'))
+    assert.ok(content.includes("enabled = true"))
+    assert.ok(content.includes('model = "gpt-5.5"'))
+  })
 })

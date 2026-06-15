@@ -117,13 +117,35 @@ export function installClaudeDesktop(options: InitOptions): IntegrationResult {
   return { harness: "claude-desktop", configured: true, configPath }
 }
 
+function tomlEscape(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+}
+
+function removeTomlSection(content: string, sectionName: string): string {
+  const lines = content.split("\n")
+  const startRegex = new RegExp(`^\\[${sectionName.replace(/\./g, "\\.")}\\]$`)
+  const startIndex = lines.findIndex((line) => startRegex.test(line.trim()))
+  if (startIndex === -1) return content
+
+  let endIndex = lines.length
+  for (let i = startIndex + 1; i < lines.length; i++) {
+    if (/^\[/.test(lines[i].trim())) {
+      endIndex = i
+      break
+    }
+  }
+
+  const before = lines.slice(0, startIndex)
+  const after = lines.slice(endIndex)
+  return before.concat(after).join("\n").replace(/\n{3,}/g, "\n\n")
+}
+
 export function installCodexDesktop(options: InitOptions): IntegrationResult {
   const configPath = path.join(options.homeDir, ".codex/config.toml")
-  // Codex Desktop uses TOML. For now we write a simple TOML snippet.
   ensureDir(configPath)
   const existing = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : ""
-  const section = `\n[mcpServers.memory-lane]\ncommand = "${options.binaryPath.replace(/"/g, '\\"')}"\nargs = ["mcp"]\n`
-  const withoutExisting = existing.replace(/\n?\[mcpServers\.memory-lane\][\s\S]*?(?=\n\[|$)/, "")
+  const withoutExisting = removeTomlSection(existing, "mcp_servers.memory-lane")
+  const section = `\n[mcp_servers.memory-lane]\nenabled = true\ncommand = "${tomlEscape(options.binaryPath)}"\nargs = ["mcp"]\n`
   fs.writeFileSync(configPath, withoutExisting + section, "utf8")
   return { harness: "codex-desktop", configured: true, configPath }
 }

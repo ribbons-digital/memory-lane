@@ -95,6 +95,36 @@ describe("uninstall", () => {
     assert.ok(config.mcpServers["other-server"])
   })
 
+  it("removes memory-lane MCP server from Codex Desktop TOML while preserving others", () => {
+    const configPath = path.join(home, ".codex/config.toml")
+    fs.mkdirSync(path.dirname(configPath), { recursive: true })
+    fs.writeFileSync(
+      configPath,
+      [
+        'model = "gpt-5.5"',
+        "",
+        "[mcp_servers.memory-lane]",
+        "enabled = true",
+        `command = "${binaryPath}"`,
+        'args = ["mcp"]',
+        "",
+        "[mcp_servers.other-server]",
+        'command = "other"',
+        "args = []",
+        "",
+      ].join("\n"),
+      "utf8",
+    )
+    writeManifest([{ harness: "codex-desktop", configPath }])
+
+    run(["uninstall", "--yes"], { HOME: home })
+
+    const content = fs.readFileSync(configPath, "utf8")
+    assert.equal(content.includes("[mcp_servers.memory-lane]"), false)
+    assert.ok(content.includes("[mcp_servers.other-server]"))
+    assert.ok(content.includes('model = "gpt-5.5"'))
+  })
+
   it("preserves data by default", () => {
     const memFile = path.join(dataDir, "memory.jsonl")
     fs.writeFileSync(memFile, '{"text":"keep me"}\n', "utf8")
