@@ -139,6 +139,32 @@ End users do not need this step — `memory-lane init` installs the pi extension
 
 The pi adapter provides manual `memory_save`, `memory_suggest`, and `memory_recall` tools plus `/memory ...` commands. It also injects relevant approved memories through pi's `before_agent_start` event. Automatic lifecycle writes are enabled for `input`, `turn_end`, and `tool_result` events: explicit memory requests, durable project statements, and successful workflow commands (e.g., `pnpm test`, `pnpm build`, `pnpm install`) are saved using the same shared lifecycle policy as Codex and Claude Code hooks.
 
+## Plugins
+
+Memory Lane supports lightweight opt-in plugins. Core features stay built-in; optional capabilities ship as separate packages that you activate in `~/.memory-lane/config.json`.
+
+```json
+{
+  "plugins": ["@memory-lane/plugin-obsidian-wiki"],
+  "pluginConfig": {
+    "@memory-lane/plugin-obsidian-wiki": {
+      "vaultPath": "/Users/alice/Documents/Obsidian",
+      "includeFolders": ["Garden"]
+    }
+  }
+}
+```
+
+### Obsidian Wiki plugin
+
+`@memory-lane/plugin-obsidian-wiki` lets LLM clients search and read selected Obsidian/Garden notes as source-backed knowledge without turning those notes into Memory Lane memories automatically.
+
+- MCP tools: `obsidian_wiki_search`, `obsidian_wiki_read`
+- MCP resource: `memory-lane://obsidian-wiki/notes`
+- CLI: `memory-lane obsidian-wiki status`
+
+Promotion of wiki-derived facts into Memory Lane remains explicit through the existing `memory_save` tool or `/memory` commands.
+
 ## Architecture
 
 Nine packages in a monorepo:

@@ -268,6 +268,8 @@ memory-lane upgrade
 
 In pi, Memory Lane also writes automatically during the lifecycle: `/memory` commands and tools save explicitly, while `input`, `turn_end`, and `tool_result` events can auto-save durable project facts and workflow rules. Use `/memory review` to inspect auto-saved pending suggestions.
 
+Optional Memory Lane plugins extend the CLI and MCP server. For example, `@memory-lane/plugin-obsidian-wiki` adds Obsidian/Garden knowledge-base search and reading. Enable plugins in `~/.memory-lane/config.json` under `plugins`.
+
 ## Pi Harness Tools
 
 When used as a pi extension, three tools are available:
