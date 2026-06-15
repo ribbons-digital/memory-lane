@@ -6,6 +6,7 @@ Local-first memory for AI coding agents — CLI, hooks, pi extension, semantic r
 
 - [Quick Start](#quick-start)
 - [Installation](#installation)
+  - [One-line installer](#one-line-installer-recommended)
   - [Build from source](#build-from-source)
   - [Link the CLI globally](#link-the-cli-globally)
   - [Install the pi extension](#install-the-pi-extension)
@@ -29,9 +30,9 @@ Local-first memory for AI coding agents — CLI, hooks, pi extension, semantic r
 ## Quick Start
 
 ```bash
-# Build and optionally link the CLI
-git clone <repo> && cd memory-lane && pnpm install && pnpm build
-cd packages/cli && pnpm link --global
+# Install the binary and configure your harnesses
+curl -fsSL https://memory-lane.dev/install.sh | sh
+memory-lane init
 
 # Start using
 memory-lane save "always use pnpm for package installation"
@@ -42,7 +43,27 @@ memory-lane doctor
 
 ## Installation
 
+### One-line installer (recommended)
+
+macOS / Linux:
+
+```bash
+curl -fsSL https://memory-lane.dev/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://memory-lane.dev/install.ps1 | iex
+```
+
+The installer downloads a prebuilt binary, places it on your PATH, and runs `memory-lane init` to detect and configure Claude Code, Codex, Claude Desktop, Codex Desktop, and pi.
+
+After installing, run `memory-lane init` again any time to reconfigure or add new integrations.
+
 ### Build from source
+
+For development or custom builds:
 
 ```bash
 git clone <repo>
@@ -366,12 +387,13 @@ Compaction removes deleted + rejected tombstones. Trigger: `memory-lane compact`
 
 ## Harness Integrations
 
-See [`examples/harness-integrations/`](./examples/harness-integrations/) for integration snippets for:
+Run `memory-lane init` to auto-detect and configure supported harnesses, or see [`examples/harness-integrations/`](./examples/harness-integrations/) for manual snippets for:
 - MCP Server
 - Claude Code CLI
 - OpenAI Codex CLI
 - Cursor
 - Windsurf
+- pi
 
 Lifecycle autosave intentionally filters transient reviewer, subagent, and task prompts such as commit review requests, “do not modify files” review tasks, and delegated status-report instructions. Those operational prompts are not durable memory. Explicit memory requests remain supported and authoritative: use `memory-lane save ...` or phrases like “Remember that ...” for durable workflow rules, preferences, or project facts.
 
@@ -397,18 +419,7 @@ These commands are for Claude Code CLI hooks, not the Claude Desktop app. Use th
 
 ### Codex hooks
 
-Claude Code CLI users can wire Memory Lane into lifecycle hooks:
-
-```bash
-memory-lane claude session-start
-memory-lane claude user-prompt-submit
-memory-lane claude stop
-memory-lane claude post-tool-use
-```
-
-`SessionStart` baseline injection is available for a small session-opening memory block. `UserPromptSubmit` injects a small relevant memory block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
-
-Codex users can wire the same lifecycle hooks:
+Codex CLI users can wire Memory Lane into lifecycle hooks:
 
 ```bash
 memory-lane codex session-start
@@ -417,4 +428,6 @@ memory-lane codex stop
 memory-lane codex post-tool-use
 ```
 
-See `examples/harness-integrations/claude-code.md` and `examples/harness-integrations/codex-cli.md` for setup details.
+`SessionStart` baseline injection is available for a small session-opening memory block. `UserPromptSubmit` injects a small relevant memory block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
+
+See `examples/harness-integrations/codex-cli.md` for setup details.
