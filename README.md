@@ -137,7 +137,7 @@ Replace `/absolute/path/to/memory-lane` with your checkout path, then run `/relo
 
 End users do not need this step — `memory-lane init` installs the pi extension automatically.
 
-The pi adapter provides manual `memory_save`, `memory_suggest`, and `memory_recall` tools plus `/memory ...` commands. It also injects relevant approved memories through pi's `before_agent_start` event. pi autosave and tool-outcome capture are not enabled yet.
+The pi adapter provides manual `memory_save`, `memory_suggest`, and `memory_recall` tools plus `/memory ...` commands. It also injects relevant approved memories through pi's `before_agent_start` event. Automatic lifecycle writes are enabled for `input`, `turn_end`, and `tool_result` events: explicit memory requests, durable project statements, and successful workflow commands (e.g., `pnpm test`, `pnpm build`, `pnpm install`) are saved using the same shared lifecycle policy as Codex and Claude Code hooks.
 
 ## Architecture
 
@@ -345,7 +345,7 @@ After configuring, run `memory-lane reindex` to embed existing memories.
 
 `memory-lane doctor` also reports hook debug log diagnostics: `hookDebugEnabledInCurrentEnv`, `hookDebugLogPath`, `hookDebugLogExists`, `hookDebugLogSizeBytes`, `hookDebugLogLastModified`, and `hookDebugWarnings`. These fields help confirm where `~/.memory-lane/hooks-log.jsonl` is, whether it exists, and its size/mtime. Doctor only stats the path; it does not create, read, rotate, truncate, or modify hook debug logs.
 
-`memory-lane doctor` also reports read-only integration diagnostics. It checks whether common local config files appear to contain Memory Lane setup for Claude Desktop MCP, Codex hooks, Claude Code hooks, and the pi extension. These checks inspect config/entrypoint files only; they do not read prompts, transcripts, tool outputs, memory text, MCP traffic, or hook debug log contents. MCP provides explicit tools; hooks provide automatic lifecycle recall/save where supported; pi currently has manual tools and read-only lifecycle recall.
+`memory-lane doctor` also reports read-only integration diagnostics. It checks whether common local config files appear to contain Memory Lane setup for Claude Desktop MCP, Codex hooks, Claude Code hooks, and the pi extension. These checks inspect config/entrypoint files only; they do not read prompts, transcripts, tool outputs, memory text, MCP traffic, or hook debug log contents. MCP provides explicit tools; hooks and pi provide automatic lifecycle recall/save where supported.
 
 ## Environment Variables
 
@@ -435,9 +435,15 @@ Lifecycle autosave intentionally filters transient reviewer, subagent, and task 
 
 ### pi adapter
 
-The pi adapter supports manual Memory Lane tools and commands (`memory_save`, `memory_suggest`, `memory_recall`, and `/memory ...`). It also performs read-only lifecycle recall injection through pi's documented `before_agent_start` event: relevant approved memories may be injected as hidden `memory-lane` context before the agent starts.
+The pi adapter supports manual Memory Lane tools and commands (`memory_save`, `memory_suggest`, `memory_recall`, and `/memory ...`). It performs read-only lifecycle recall injection through pi's documented `before_agent_start` event: relevant approved memories may be injected as hidden `memory-lane` context before the agent starts.
 
-pi lifecycle recall does not autosave new memories and does not capture tool outcomes yet. Codex and Claude Code hook adapters still own automatic stop/post-tool-use memory writes for those harnesses; pi autosave/tool capture is deferred to a later roadmap phase.
+pi also writes memories automatically through lifecycle events:
+
+- `input` — explicit memory requests ("Remember that...") and durable project statements are filtered through the shared stop-candidate policy.
+- `turn_end` — the last user and assistant messages are evaluated for memory-worthy candidates after a turn completes.
+- `tool_result` — successful shell workflow commands such as `pnpm test`, `pnpm build`, and `pnpm install` are captured as project workflow rules.
+
+Automatic writes skip secrets, transient imperatives, reviewer/subagent meta-prompts, and duplicates within a turn. Set `MEMORY_LANE_DEBUG=1` to append privacy-safe debug records to `~/.memory-lane/pi-debug.jsonl` (no prompts or tool outputs are logged).
 
 ### Claude Code hooks
 

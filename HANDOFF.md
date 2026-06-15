@@ -8,6 +8,7 @@
 - `memory-lane uninstall` removes the binary and integration configs while preserving memory data by default.
 - Slash command / skill support: `memory-lane init` installs a personal skill at `~/.claude/skills/memory-lane/SKILL.md` (invoked as `/memory-lane` in Claude Code CLI) and `~/.agents/skills/memory-lane/SKILL.md` (invoked as `$memory-lane` in Codex CLI/Desktop/app).
 - `memory-lane upgrade` downloads the latest release binary and re-applies only the harness configs that were previously installed.
+- pi lifecycle autosave and tool capture: `input`, `turn_end`, and `tool_result` events now write memories through shared `@memory-lane/lifecycle` handlers, with per-turn duplicate suppression and privacy-safe debug logging.
 - To upgrade manually, re-run the installer and then `memory-lane init --yes`.
 
 ## Current state

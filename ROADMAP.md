@@ -185,15 +185,17 @@ Next useful step is either a short real-world SessionStart soak in Codex Desktop
 
 ## Phase 6 — pi Lifecycle Autosave and Tool Capture
 
+**Status:** Complete and merged.
+
 **Goal:** After pi recall injection has soaked, add automatic pi memory writes through the same shared lifecycle policy used by Codex and Claude Code.
 
-Todos:
+Completed scope:
 
-1. Reassess pi event semantics after Phase 5, especially `agent_end`, `turn_end`, `tool_result`, and current `input` classifier behavior.
-2. Refactor pi autosave to use shared lifecycle stop-candidate filtering, including reviewer/subagent/task meta-prompt filtering.
-3. Add pi tool-outcome capture from `tool_result` using shared `handlePostToolUse`, with safeguards against duplicate saves.
-4. Add privacy-safe pi debug/diagnostic behavior if needed, matching hook debug principles without logging raw prompts/tool outputs.
-5. Update README and skill docs to clarify which pi lifecycle writes are automatic and how users can disable or inspect them.
+1. Reassessed pi event semantics: kept `input` for user-message auto-save, added `turn_end` for stop-candidate extraction over the last user/assistant messages, and added `tool_result` for shell workflow capture.
+2. Refactored pi autosave to use shared `handleStop` / `extractStopCandidates`, including reviewer/subagent/task meta-prompt filtering and checkpoint-save handling.
+3. Added pi tool-outcome capture from `tool_result` using shared `handlePostToolUse`, with per-turn duplicate suppression.
+4. Added privacy-safe pi debug logging to `~/.memory-lane/pi-debug.jsonl` when `MEMORY_LANE_DEBUG=1`; never logs raw prompts or tool outputs.
+5. Updated README and `skills/memory-lane/SKILL.md` to document automatic pi lifecycle writes and debug inspection.
 
 ## Phase 7 — MCP Server MVP
 

@@ -266,6 +266,8 @@ To upgrade to the latest release while preserving existing harness configs and m
 memory-lane upgrade
 ```
 
+In pi, Memory Lane also writes automatically during the lifecycle: `/memory` commands and tools save explicitly, while `input`, `turn_end`, and `tool_result` events can auto-save durable project facts and workflow rules. Use `/memory review` to inspect auto-saved pending suggestions.
+
 ## Pi Harness Tools
 
 When used as a pi extension, three tools are available:
