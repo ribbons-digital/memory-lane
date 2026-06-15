@@ -54,6 +54,9 @@ importers:
       '@memory-lane/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
+      '@memory-lane/plugin-obsidian-wiki':
+        specifier: workspace:*
+        version: link:../plugin-obsidian-wiki
     devDependencies:
       '@types/node':
         specifier: ^20.0.0

@@ -23,7 +23,7 @@ export function* discoverNotes(config: ObsidianWikiConfig): Generator<WikiNote> 
       if (entry.isDirectory()) {
         if (exclude.has(entry.name)) continue
         if (include && relPrefix === "" && !include.has(entry.name)) continue
-        walk(path.join(dir, entry.name), rel)
+        yield* walk(path.join(dir, entry.name), rel)
       } else if (entry.isFile() && entry.name.endsWith(".md")) {
         yield {
           relativePath: rel,
@@ -34,7 +34,7 @@ export function* discoverNotes(config: ObsidianWikiConfig): Generator<WikiNote> 
     }
   }
 
-  walk(root, "")
+  yield* walk(root, "")
 }
 
 export function readNote(note: WikiNote): { text: string; headings: string[] } {

@@ -14,6 +14,7 @@ import { discoverObsidianImportFiles, planObsidianImport } from "@memory-lane/ob
 import { initObsidianMirror, statusObsidianMirror, syncObsidianMirror } from "@memory-lane/obsidian-mirror"
 import { loadPlugins } from "@memory-lane/plugin-api"
 import type { LoadedPlugin } from "@memory-lane/plugin-api"
+import { resolveBundledPlugin } from "./plugins.js"
 import {
   formatMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
   formatCompact, formatDoctor, formatImportPlan, formatError, usage,
@@ -688,8 +689,13 @@ async function main(): Promise<void> {
   const config = loadConfig(configPath)
   let plugins: LoadedPlugin[] = []
   try {
+    const bundledPlugins = config.plugins?.length
+      ? config.plugins
+          .map(resolveBundledPlugin)
+          .filter((p): p is { name: string; default: (api: any) => void } => Boolean(p))
+      : []
     plugins = config.plugins?.length
-      ? await loadPlugins({ pluginNames: config.plugins, engine, config, context: "cli" })
+      ? await loadPlugins({ pluginNames: config.plugins, engine, config, context: "cli", bundledPlugins })
       : []
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)

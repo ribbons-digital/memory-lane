@@ -58,11 +58,17 @@ export interface LoadedPlugin {
   cliCommands: CliCommandDefinition[]
 }
 
+export interface BundledPluginModule {
+  name: string
+  default: (api: MemoryLanePluginAPI) => void
+}
+
 export interface LoadPluginsOptions {
   pluginNames: string[]
   engine: MemoryEngine
   config: SemanticMemoryConfig
   context: "cli" | "mcp"
+  bundledPlugins?: BundledPluginModule[]
 }
 
 export function createPluginAPI(
@@ -107,11 +113,17 @@ export async function loadPlugins(options: LoadPluginsOptions): Promise<LoadedPl
     if (seen.has(name)) continue
     seen.add(name)
 
-    let module: any
-    try {
-      module = await import(name)
-    } catch (err) {
-      throw new Error(`Failed to load plugin "${name}": ${err instanceof Error ? err.message : String(err)}`)
+    const bundled = options.bundledPlugins?.find((p) => p.name === name)
+
+    let module: { default?: (api: MemoryLanePluginAPI) => void }
+    if (bundled) {
+      module = bundled
+    } else {
+      try {
+        module = await import(name)
+      } catch (err) {
+        throw new Error(`Failed to load plugin "${name}": ${err instanceof Error ? err.message : String(err)}`)
+      }
     }
 
     if (typeof module.default !== "function") {

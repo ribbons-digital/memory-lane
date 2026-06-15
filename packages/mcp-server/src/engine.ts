@@ -2,11 +2,12 @@ import {
   MemoryEngine, createOpenAIEmbeddingProvider, loadConfig, resolveWritableMemoryPaths,
   type MemoryEngineConfig,
 } from "@memory-lane/core"
-import { loadPlugins, type LoadedPlugin } from "@memory-lane/plugin-api"
+import { loadPlugins, type BundledPluginModule, type LoadedPlugin } from "@memory-lane/plugin-api"
 
 export interface CreateMemoryLaneEngineOptions {
   cwd?: string
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>
+  bundledPlugins?: BundledPluginModule[]
 }
 
 function createEmbeddingProvider(
@@ -43,7 +44,7 @@ export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOpti
   engine.refreshScope(cwd)
 
   const plugins = config.plugins?.length
-    ? await loadPlugins({ pluginNames: config.plugins, engine, config, context: "mcp" })
+    ? await loadPlugins({ pluginNames: config.plugins, engine, config, context: "mcp", bundledPlugins: options.bundledPlugins })
     : []
 
   return { engine, plugins }

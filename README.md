@@ -155,6 +155,8 @@ Memory Lane supports lightweight opt-in plugins. Core features stay built-in; op
 }
 ```
 
+See [`docs/plugins/README.md`](docs/plugins/README.md) for installation methods, plugin development, and distribution options.
+
 ### Obsidian Wiki plugin
 
 `@memory-lane/plugin-obsidian-wiki` lets LLM clients search and read selected Obsidian/Garden notes as source-backed knowledge without turning those notes into Memory Lane memories automatically.
@@ -164,6 +166,12 @@ Memory Lane supports lightweight opt-in plugins. Core features stay built-in; op
 - CLI: `memory-lane obsidian-wiki status`
 
 Promotion of wiki-derived facts into Memory Lane remains explicit through the existing `memory_save` tool or `/memory` commands.
+
+**Installing the Obsidian Wiki plugin:**
+
+- If you build Memory Lane from source: `sfw pnpm add @memory-lane/plugin-obsidian-wiki` in the repository root.
+- If you use the standalone binary: the plugin is bundled in official `v0.2.0+` releases; just add it to `plugins` in your config.
+- For a custom checkout: add `@memory-lane/plugin-obsidian-wiki` to `pnpm-workspace.yaml` and reference it by name.
 
 ## Architecture
 
