@@ -1,10 +1,10 @@
 import { Type } from "typebox"
-import { handleUserPromptSubmit } from "@memory-lane/lifecycle"
+import { handlePostToolUse, handleStop, handleUserPromptSubmit } from "@memory-lane/lifecycle"
+import type { PostToolUseInput } from "@memory-lane/lifecycle"
 import {
-  MemoryEngine, parseExplicitMemoryRequest, detectUserMemorySuggestion,
-  isCheckpointMemorySaveRequest, inferCategory, inferMemoryKind,
-  normalizeMemoryText, initProjectLocalStorage, resolveWritableMemoryPaths, type SaveResult,
+  MemoryEngine, inferMemoryKind, initProjectLocalStorage, resolveWritableMemoryPaths, type SaveResult,
 } from "@memory-lane/core"
+import { isPiDebugEnabled, piDebugPath, writePiDebugLog } from "./debug.js"
 
 // ── pi ExtensionAPI / ExtensionContext interfaces (shim) ──────
 // These are the interfaces we expect from the pi harness. The adapter
@@ -13,7 +13,6 @@ import {
 export interface ExtensionContext {
   cwd: string
   ui?: { notify(message: string, level?: "info" | "warning" | "error"): void }
-  llmProvider?: { generate(prompt: string, options?: any): Promise<string> }
   sessionManager?: { getSessionFile?(): string | undefined }
 }
 
@@ -42,6 +41,28 @@ export interface ExtensionAPI {
 
 let engine: MemoryEngine | null = null
 let engineKey: string | null = null
+
+let lastProcessedTurnId: string | undefined
+let savedThisTurn = new Set<string>()
+
+function resetTurnState(turnId?: string): void {
+  if (turnId && turnId !== lastProcessedTurnId) {
+    lastProcessedTurnId = turnId
+    savedThisTurn = new Set<string>()
+  }
+}
+
+function normalizeForDedupe(text: string): string {
+  return text.trim().toLowerCase().replace(/\s+/gu, " ")
+}
+
+function markSaved(text: string): void {
+  savedThisTurn.add(normalizeForDedupe(text))
+}
+
+function wasSaved(text: string): boolean {
+  return savedThisTurn.has(normalizeForDedupe(text))
+}
 
 function memoryEnv(): NodeJS.ProcessEnv {
   return {
@@ -115,47 +136,6 @@ function formatMemory(m: { id: string; scope: { type: string }; category: string
 function formatSaveResult(r: SaveResult): string {
   if (r.status === "saved") return `Saved memory ${formatMemory(r.memory)}`
   return `Memory not saved: ${r.reason}`
-}
-
-// ── LLM intent classifier (fallback if LLM provider unavailable) ──
-
-interface IntentResult {
-  intent: "save" | "recall" | "none"
-  text?: string
-  category?: string
-  confidence?: number
-}
-
-async function classifyIntent(text: string, ctx: ExtensionContext): Promise<IntentResult> {
-  // Try regex detection first
-  const explicit = parseExplicitMemoryRequest(text)
-  if (explicit) return { intent: "save", text: explicit }
-
-  const suggestion = detectUserMemorySuggestion(text)
-  if (suggestion) return { intent: "save", text: suggestion.text, category: suggestion.category }
-
-  const checkpoint = isCheckpointMemorySaveRequest(text)
-  if (checkpoint) return { intent: "save", text: normalizeMemoryText(text) }
-
-  // LLM fallback
-  if (!ctx.llmProvider) return { intent: "none" }
-
-  try {
-    const prompt = `Analyze this user message. Determine if the user wants to:
-- Save a memory ("save")
-- Recall a memory ("recall") 
-- Neither ("none")
-
-Message: "${text}"
-
-Reply ONLY with JSON: {"intent": "save|recall|none", "text": "extracted memory text if save", "confidence": 0-1}`
-    const response = await ctx.llmProvider.generate(prompt, { maxTokens: 100 })
-    const result = JSON.parse(response)
-    if (result.intent === "save" || result.intent === "recall") return result
-    return { intent: "none" }
-  } catch {
-    return { intent: "none" }
-  }
 }
 
 // ── Main extension ───────────────────────────────────────────
@@ -345,6 +325,38 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     }
   })
 
+  // ── Shared lifecycle write helper ─────────────────────────
+
+  function isSaved(result: SaveResult): result is Extract<SaveResult, { status: "saved" }> {
+    return result.status === "saved"
+  }
+
+  async function runLifecycleWrite(
+    eventName: string,
+    ctx: ExtensionContext,
+    turnId: string | undefined,
+    result: { saved: SaveResult[]; discarded: Array<{ text: string; reason: string }> },
+  ): Promise<void> {
+    resetTurnState(turnId)
+
+    const newlySaved = result.saved.filter(isSaved).filter((s) => !wasSaved(s.memory.text))
+    for (const save of newlySaved) markSaved(save.memory.text)
+
+    if (isPiDebugEnabled()) {
+      writePiDebugLog(piDebugPath(), {
+        event: eventName,
+        sessionId: piSessionId(ctx),
+        turnId,
+        savedCount: newlySaved.length,
+        discardedCount: result.discarded.length,
+      })
+    }
+
+    for (const save of newlySaved) {
+      notify(ctx, `Auto-saved memory: ${formatMemory(save.memory)}`, "info")
+    }
+  }
+
   // ── Input event handler (auto-save / suggest on user input) ──
 
   pi.on("input", async (event, ctx) => {
@@ -354,23 +366,64 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     const text = typeof event.text === "string" ? event.text.trim() : ""
     if (!text) return { action: "continue" }
 
-    const intent = await classifyIntent(text, ctx)
+    try {
+      const e = getEngine(ctx.cwd)
+      const result = handleStop(e, {
+        cwd: ctx.cwd,
+        sessionId: piSessionId(ctx),
+        turnId: event.turnId ?? piSessionId(ctx),
+        lastUserMessage: text,
+      }, { adapter: "pi" })
 
-    if (intent.intent === "save" && intent.text) {
-      try {
-        const e = getEngine(ctx.cwd)
-        const category = (intent.category as any) ?? inferCategory(intent.text)
-        const kind = inferMemoryKind(intent.text, category)
-        const result = e.save({ text: intent.text, category, status: "approved", kind })
-        if (result.status === "saved") {
-          notify(ctx, `Auto-saved memory: ${formatMemory(result.memory)}`, "info")
-        }
-      } catch (err) {
-        notify(ctx, storageGuidance(err), "warning")
-      }
+      await runLifecycleWrite("input", ctx, event.turnId ?? piSessionId(ctx), result)
+    } catch (err) {
+      notify(ctx, storageGuidance(err), "warning")
     }
 
     return { action: "continue" }
+  })
+
+  // ── Turn end handler ───────────────────────────────────────
+
+  pi.on("turn_end", async (event, ctx) => {
+    const turnId = event.turnId ?? piSessionId(ctx)
+
+    try {
+      const e = getEngine(ctx.cwd)
+      const result = handleStop(e, {
+        cwd: ctx.cwd,
+        sessionId: piSessionId(ctx),
+        turnId,
+        lastUserMessage: event.lastUserMessage,
+        lastAssistantMessage: event.lastAssistantMessage,
+      }, { adapter: "pi" })
+
+      await runLifecycleWrite("turn_end", ctx, turnId, result)
+    } catch (err) {
+      notify(ctx, storageGuidance(err), "warning")
+    }
+  })
+
+  // ── Tool result handler ────────────────────────────────────
+
+  pi.on("tool_result", async (event, ctx) => {
+    const turnId = event.turnId ?? piSessionId(ctx)
+
+    try {
+      const e = getEngine(ctx.cwd)
+      const result = handlePostToolUse(e, {
+        cwd: ctx.cwd,
+        sessionId: piSessionId(ctx),
+        turnId,
+        toolName: event.toolName,
+        toolInput: event.toolInput,
+        toolResponse: event.toolResponse,
+      } as PostToolUseInput, { adapter: "pi" })
+
+      await runLifecycleWrite("tool_result", ctx, turnId, result)
+    } catch (err) {
+      notify(ctx, storageGuidance(err), "warning")
+    }
   })
 }
 

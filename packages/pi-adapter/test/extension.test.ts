@@ -84,6 +84,12 @@ async function runBeforeAgentStart(pi: FakePi, event: any, ctx: ExtensionContext
   return handlers[0](event, ctx)
 }
 
+async function runEvent(pi: FakePi, eventName: string, event: any, ctx: ExtensionContext): Promise<any> {
+  const handlers = pi.events.get(eventName) ?? []
+  if (handlers.length === 0) return undefined
+  return handlers[0](event, ctx)
+}
+
 let cleanup: (() => void) | undefined
 
 afterEach(() => {
@@ -104,6 +110,8 @@ test("registers pi commands tools input and before_agent_start handlers", () => 
   assert.ok(pi.tools.has("memory_suggest"))
   assert.ok(pi.tools.has("memory_recall"))
   assert.equal(pi.events.get("input")?.length, 1)
+  assert.equal(pi.events.get("turn_end")?.length, 1)
+  assert.equal(pi.events.get("tool_result")?.length, 1)
   assert.equal(pi.events.get("before_agent_start")?.length, 1)
 })
 
@@ -144,4 +152,79 @@ test("before_agent_start injects shared lifecycle memory block for relevant appr
     },
   })
   assert.equal(fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8"), before)
+})
+
+test("input auto-save delegates to shared lifecycle filtering", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const ctx = baseCtx(env.dir)
+
+  await runEvent(pi, "input", { text: "This repo uses pnpm test" }, ctx)
+
+  const lines = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8").trim().split("\n")
+  assert.equal(lines.length, 1)
+  const mem = JSON.parse(lines[0])
+  assert.equal(mem.text, "This repo uses pnpm test")
+})
+
+test("input filters questions through shared lifecycle", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const ctx = baseCtx(env.dir)
+
+  await runEvent(pi, "input", { text: "How do I run tests?" }, ctx)
+
+  assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
+})
+
+test("turn_end saves stop candidates from the last user message", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const ctx = baseCtx(env.dir)
+
+  await runEvent(pi, "turn_end", { lastUserMessage: "This repo uses pnpm test for verification" }, ctx)
+
+  const lines = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8").trim().split("\n")
+  assert.equal(lines.length, 1)
+  const mem = JSON.parse(lines[0])
+  assert.equal(mem.text, "This repo uses pnpm test for verification")
+})
+
+test("tool_result saves successful pnpm test workflow memory", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const ctx = baseCtx(env.dir)
+
+  await runEvent(pi, "tool_result", {
+    toolName: "bash",
+    toolInput: { command: "pnpm test" },
+    toolResponse: { exit_code: 0, stdout: "passing" },
+  }, ctx)
+
+  const lines = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8").trim().split("\n")
+  assert.equal(lines.length, 1)
+  const mem = JSON.parse(lines[0])
+  assert.equal(mem.text, "`pnpm test` is the test command for this repo.")
+})
+
+test("duplicate saves across input and turn_end are suppressed", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const ctx = baseCtx(env.dir)
+
+  await runEvent(pi, "input", { text: "This repo uses pnpm test", turnId: "t1" }, ctx)
+  await runEvent(pi, "turn_end", { lastUserMessage: "This repo uses pnpm test", turnId: "t1" }, ctx)
+
+  const lines = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8").trim().split("\n")
+  assert.equal(lines.length, 1)
 })
