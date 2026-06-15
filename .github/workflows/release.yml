@@ -48,4 +48,6 @@ jobs:
             dist-binaries/*.tar.gz
             dist-binaries/*.zip
             dist-binaries/SHA256SUMS
+            install.sh
+            install.ps1
           generate_release_notes: true
