@@ -3,6 +3,7 @@ import {
   detectUserMemorySuggestion,
   inferCategory,
   inferMemoryKind,
+  isCheckpointMemorySaveRequest,
   normalizeMemoryText,
   parseExplicitMemoryRequest,
 } from "@memory-lane/core"
@@ -78,6 +79,23 @@ export function extractStopCandidates(input: StopInput): MemoryCandidate[] {
   if (explicit) {
     const candidate = candidateFromText(explicit, true)
     return candidate ? [candidate] : []
+  }
+
+  if (isCheckpointMemorySaveRequest(userMessage)) {
+    const normalized = normalizeMemoryText(userMessage)
+    if (normalized && !containsLikelySecret(normalized)) {
+      return [{
+        text: normalized,
+        category: "project",
+        scopeType: "project",
+        kind: "project_checkpoint",
+        confidence: 0.85,
+        decision: "save-approved",
+        reason: "checkpoint save request",
+        source: "user-suggested",
+      }]
+    }
+    return []
   }
 
   if (isQuestion(userMessage)) return []

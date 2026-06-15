@@ -100,3 +100,16 @@ test("explicit memory requests about reviewer behavior are preserved", () => {
   assert.equal(candidates[0].text, "reviewer agents must not modify files")
   assert.equal(candidates[0].decision, "save-approved")
 })
+
+test("checkpoint save request becomes approved project checkpoint", () => {
+  const candidates = extractStopCandidates({
+    cwd: process.cwd(),
+    lastUserMessage: "Save our current progress so we can resume later",
+    lastAssistantMessage: "I'll checkpoint the context.",
+  })
+
+  assert.equal(candidates.length, 1)
+  assert.equal(candidates[0].kind, "project_checkpoint")
+  assert.equal(candidates[0].category, "project")
+  assert.equal(candidates[0].decision, "save-approved")
+})
