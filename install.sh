@@ -119,9 +119,15 @@ VERSION="${VERSION:-latest}"
   data_dir="$HOME/.memory-lane"
   mkdir -p "$data_dir"
 
-  say "running memory-lane init --yes"
-  unset MEMORY_LANE_INSTALL_BINARY
-  "$install_path" init --yes
+  if [ -n "$MEMORY_LANE_INIT_YES" ]; then
+    say "running memory-lane init --yes"
+    unset MEMORY_LANE_INSTALL_BINARY
+    "$install_path" init --yes
+  else
+    say "running memory-lane init (interactive)"
+    unset MEMORY_LANE_INSTALL_BINARY
+    "$install_path" init
+  fi
 
   say "done. Installed at $install_path"
 }

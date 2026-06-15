@@ -25,8 +25,17 @@ Make Memory Lane installable and configurable by first-time users with a single 
 
 Use a **shell installer + standalone binary** model.
 
+Interactive install (save the script first so prompts work):
+
 ```bash
-curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | sh
+curl -fsSL -o install.sh https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh
+sh install.sh
+```
+
+Non-interactive install (e.g. CI or automation):
+
+```bash
+curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | MEMORY_LANE_INIT_YES=1 sh
 ```
 
 The installer downloads a prebuilt binary from GitHub Releases, verifies its checksum, places it on the user's PATH, and creates the data directory. We chose this over npm/global install because it avoids forcing a Node toolchain on end users and gives us full control over the installation layout.
@@ -52,13 +61,16 @@ If we later add native dependencies, we will re-evaluate `tsup` + Node SEA.
 ### Installation
 
 ```bash
-curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | sh
+curl -fsSL -o install.sh https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh
+sh install.sh
 ```
 
-After the script finishes, the user runs:
+The installer downloads the binary, verifies its checksum, places it on PATH, and then runs `memory-lane init` interactively.
+
+For non-interactive installs (CI/automation), set `MEMORY_LANE_INIT_YES=1`:
 
 ```bash
-memory-lane init
+curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | MEMORY_LANE_INIT_YES=1 sh
 ```
 
 ### First-Run Wizard

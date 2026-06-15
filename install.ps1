@@ -67,7 +67,12 @@ if ($currentPath -notlike "*$installDir*") {
 $dataDir = "$env:USERPROFILE\.memory-lane"
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 
-Say "running memory-lane init --yes"
-& $installPath init --yes
+if ($env:MEMORY_LANE_INIT_YES) {
+    Say "running memory-lane init --yes"
+    & $installPath init --yes
+} else {
+    Say "running memory-lane init (interactive)"
+    & $installPath init
+}
 
 Say "done. Installed at $installPath"

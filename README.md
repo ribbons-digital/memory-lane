@@ -31,8 +31,8 @@ Local-first memory for AI coding agents — CLI, hooks, pi extension, semantic r
 
 ```bash
 # Install the binary and configure your harnesses
-curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | sh
-memory-lane init
+curl -fsSL -o install.sh https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh
+sh install.sh
 
 # Start using
 memory-lane save "always use pnpm for package installation"
@@ -45,19 +45,31 @@ memory-lane doctor
 
 ### One-line installer (recommended)
 
-macOS / Linux:
+macOS / Linux (interactive — save the script first so prompts work):
 
 ```bash
-curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | sh
+curl -fsSL -o install.sh https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh
+sh install.sh
 ```
 
-Windows (PowerShell):
+Windows (PowerShell, interactive — save the script first):
 
 ```powershell
-irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.ps1 | iex
+irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.ps1 -OutFile install.ps1
+.\install.ps1
 ```
 
 The installer downloads a prebuilt binary, places it on your PATH, and runs `memory-lane init` to detect and configure Claude Code, Codex, Claude Desktop, Codex Desktop, and pi.
+
+For a non-interactive install (e.g. CI or automation), set `MEMORY_LANE_INIT_YES=1`:
+
+```bash
+curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | MEMORY_LANE_INIT_YES=1 sh
+```
+
+```powershell
+$env:MEMORY_LANE_INIT_YES = "1"; irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.ps1 | iex
+```
 
 After installing, run `memory-lane init` again any time to reconfigure or add new integrations.
 
