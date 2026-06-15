@@ -9,7 +9,7 @@ Local-first memory for AI coding agents — CLI, hooks, pi extension, semantic r
   - [One-line installer](#one-line-installer-recommended)
   - [Build from source](#build-from-source)
   - [Link the CLI globally](#link-the-cli-globally)
-  - [Install the pi extension](#install-the-pi-extension)
+  - [Development: install the pi extension manually](#development-install-the-pi-extension-manually)
 - [Architecture](#architecture)
 - [Storage](#storage)
 - [Project Scoping](#project-scoping)
@@ -85,9 +85,9 @@ After linking, `memory-lane` is available as a shell command:
 memory-lane doctor
 ```
 
-### Install the pi extension
+### Development: install the pi extension manually
 
-For local development, point pi at the built adapter from this checkout:
+If you are building Memory Lane from source and want pi to load your local checkout, run:
 
 ```bash
 mkdir -p ~/.pi/agent/extensions/memory-lane
@@ -100,6 +100,8 @@ EOF
 ```
 
 Replace `/absolute/path/to/memory-lane` with your checkout path, then run `/reload` in pi. The timestamp query avoids stale module caches while iterating locally. Re-run `pnpm build` after changing Memory Lane source, then `/reload` pi again.
+
+End users do not need this step — `memory-lane init` installs the pi extension automatically.
 
 The pi adapter provides manual `memory_save`, `memory_suggest`, and `memory_recall` tools plus `/memory ...` commands. It also injects relevant approved memories through pi's `before_agent_start` event. pi autosave and tool-outcome capture are not enabled yet.
 
