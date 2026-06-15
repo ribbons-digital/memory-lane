@@ -627,7 +627,7 @@ async function main(): Promise<void> {
       console.log(formatError(msg, json))
       process.exit(1)
     }
-    return
+    process.exit(0)
   }
 
   if (command === "uninstall") {
@@ -638,7 +638,7 @@ async function main(): Promise<void> {
       console.log(formatError(msg, json))
       process.exit(1)
     }
-    return
+    process.exit(0)
   }
 
   const projPath = flag(argv, "project")
@@ -666,6 +666,8 @@ async function main(): Promise<void> {
     console.log(formatError(msg, json))
     process.exit(1)
   }
+  // Force clean exit in case any dependency leaves handles alive (e.g. compiled binary).
+  process.exit(0)
 }
 
 main()
