@@ -7,6 +7,7 @@ import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-ad
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import { handleMcp } from "./commands/mcp.js"
 import { handleInit } from "./commands/init.js"
+import { handleUninstall } from "./commands/uninstall.js"
 import { discoverObsidianImportFiles, planObsidianImport } from "@memory-lane/obsidian-import"
 import { initObsidianMirror, statusObsidianMirror, syncObsidianMirror } from "@memory-lane/obsidian-mirror"
 import {
@@ -621,6 +622,17 @@ async function main(): Promise<void> {
       } else {
         await handleInit(argv)
       }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.log(formatError(msg, json))
+      process.exit(1)
+    }
+    return
+  }
+
+  if (command === "uninstall") {
+    try {
+      await handleUninstall(argv)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       console.log(formatError(msg, json))
