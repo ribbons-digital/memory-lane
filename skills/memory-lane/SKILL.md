@@ -68,7 +68,12 @@ memory-lane status                # quick stats
 memory-lane doctor                # full diagnostic report
 memory-lane compact               # remove deleted/rejected entries
 memory-lane reindex               # (re)build embeddings for all approved memories
+memory-lane init                  # first-time setup wizard for harnesses
+memory-lane init --yes            # auto-configure all detected harnesses
 memory-lane init --project-local  # initialize sandbox-friendly project-local storage
+memory-lane uninstall             # remove binary and integration configs
+memory-lane uninstall --yes       # non-interactive uninstall
+memory-lane mcp                   # run the bundled MCP server over stdio
 ```
 
 ### Obsidian mirror
@@ -128,15 +133,19 @@ Memory Lane includes lifecycle hook commands for supported CLI harnesses:
 
 ```bash
 # Claude Code CLI hooks, not Claude Desktop
+memory-lane claude session-start
 memory-lane claude user-prompt-submit
 memory-lane claude stop
 memory-lane claude post-tool-use
 
 # OpenAI Codex CLI hooks
+memory-lane codex session-start
 memory-lane codex user-prompt-submit
 memory-lane codex stop
 memory-lane codex post-tool-use
 ```
+
+`session-start` performs baseline memory injection for new sessions. `user-prompt-submit` recalls relevant approved memories. `stop` and `post-tool-use` save useful memories externally and are silent by default.
 
 `UserPromptSubmit` recalls relevant approved memories and injects a small context block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
 
@@ -220,13 +229,20 @@ engine.list("approved")               // legacy: same as above
 
 ## MCP vs CLI
 
-When running inside an MCP client that has Memory Lane MCP configured (Claude Desktop, Codex Desktop, Cursor, etc.), prefer the MCP tools. If the user asks you to save or recall a memory and does not specify the MCP, explicitly say you will use the Memory Lane MCP to avoid the model defaulting to the CLI, hitting a sandbox write restriction on `~/.memory-lane`, and only then falling back to MCP.
+When running inside an MCP client that has Memory Lane MCP configured (Claude Desktop, Codex Desktop, etc.), prefer the MCP tools. If the user asks you to save or recall a memory and does not specify the MCP, explicitly say you will use the Memory Lane MCP to avoid the model defaulting to the CLI, hitting a sandbox write restriction on `~/.memory-lane`, and only then falling back to MCP.
 
 Example phrasing:
 - "I'll use the Memory Lane MCP to save that."
 - "Using the Memory Lane MCP, here's what I recall: ..."
 
 If MCP is not available, fall back to the CLI commands below.
+
+For end users, the recommended setup is the installer from GitHub Releases followed by `memory-lane init`:
+
+```bash
+curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | sh
+memory-lane init
+```
 
 ## Pi Harness Tools
 
