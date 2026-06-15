@@ -153,11 +153,11 @@ Completed scope:
 4. Documented worktree-aware scoping, scope-file override behavior, and the fact that old fragmented worktree-path memories are not migrated automatically.
 5. Kept storage paths, Obsidian behavior, hook behavior, migration, alias, and glob config out of scope.
 
-## Codex Hook Adapter — Phase 2 SessionStart Baseline Injection
+## Codex / Claude Code Hook Adapter — Phase 2 SessionStart Baseline Injection
 
 **Status:** Complete.
 
-**Goal:** Add strict budgeted `SessionStart` baseline injection for Codex so a new session starts with a small set of recent, approved, project-visible memories without dumping project history.
+**Goal:** Add strict budgeted `SessionStart` baseline injection for Codex and Claude Code CLI so a new session starts with a small set of recent, approved, project-visible memories without dumping project history.
 
 Completed scope:
 

@@ -20,11 +20,11 @@ Recent completed work:
 
 - Phase 1 Codex hook integration is implemented and merged.
 - Codex hook adapter Phase 2 SessionStart baseline injection is implemented, reviewed, verified, and ready to merge/push:
-  - added `memory-lane codex session-start`;
-  - added `SessionStart` payload parsing and Codex-compatible `hookSpecificOutput` with `hookEventName: "SessionStart"`;
+  - added `memory-lane codex session-start` and `memory-lane claude session-start`;
+  - added `SessionStart` payload parsing and Codex/Claude-compatible `hookSpecificOutput` with `hookEventName: "SessionStart"`;
   - added `handleSessionStart` and strict baseline memory selection in `@memory-lane/lifecycle`;
   - baseline injection selects a small recent approved/project-visible memory set and skips secrets/duplicates;
-  - docs now include the Codex `SessionStart` hook configuration.
+  - docs now include the Codex and Claude Code `SessionStart` hook configuration.
 - Thin Claude Code CLI hook adapter is implemented and merged.
 - Claude adapter is for **Claude Code CLI hooks only**, not Claude Desktop.
 - Root roadmap/context/ADR docs were added for Obsidian mirror/import, MCP server, and future experimental Obsidian-backed storage.
@@ -105,18 +105,23 @@ The MCP server is explicit tool access, not lifecycle automation. It exposes `me
 
 `memory_status` is a read-only MCP status surface backed by `MemoryEngine.doctor()`. It is intended for Claude Desktop, Codex Desktop, and other MCP clients to answer setup/status questions without terminal access. It reports counts/metadata/diagnostics, not raw memory text.
 
-## Codex hook semantics
+## Codex and Claude Code hook semantics
 
-Codex hook support now includes:
+Codex and Claude Code CLI hook support now includes:
 
 ```bash
 memory-lane codex session-start
 memory-lane codex user-prompt-submit
 memory-lane codex stop
 memory-lane codex post-tool-use
+
+memory-lane claude session-start
+memory-lane claude user-prompt-submit
+memory-lane claude stop
+memory-lane claude post-tool-use
 ```
 
-`SessionStart` is read-only baseline injection for new sessions. It uses `handleSessionStart` in `@memory-lane/lifecycle`, selects a small set of recent approved memories visible to the current project scope, and enforces a stricter budget than prompt-specific `UserPromptSubmit` recall. It skips likely secrets, deduplicates normalized memory text, and emits Codex `hookSpecificOutput.additionalContext` with `hookEventName: "SessionStart"`.
+`SessionStart` is read-only baseline injection for new sessions. It uses `handleSessionStart` in `@memory-lane/lifecycle`, selects a small set of recent approved memories visible to the current project scope, and enforces a stricter budget than prompt-specific `UserPromptSubmit` recall. It skips likely secrets, deduplicates normalized memory text, and emits `hookSpecificOutput.additionalContext` with `hookEventName: "SessionStart"`.
 
 `SessionStart` does not save memories, create session scope, dump full project history, replace prompt-specific `UserPromptSubmit` recall, or change `Stop`/`PostToolUse` autosave behavior.
 
