@@ -2,7 +2,7 @@
 set -e
 
 # Memory Lane installer
-# Usage: curl -fsSL https://memory-lane.dev/install.sh | sh
+# Usage: curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | sh
 
 REPO="ribbons-digital/memory-lane"
 VERSION="${VERSION:-latest}"

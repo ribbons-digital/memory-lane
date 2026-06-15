@@ -1,5 +1,5 @@
 # Memory Lane installer for Windows
-# Usage: irm https://memory-lane.dev/install.ps1 | iex
+# Usage: irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 

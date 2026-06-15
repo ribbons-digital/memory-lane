@@ -26,7 +26,7 @@ Make Memory Lane installable and configurable by first-time users with a single 
 Use a **shell installer + standalone binary** model.
 
 ```bash
-curl -fsSL https://memory-lane.dev/install.sh | sh
+curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | sh
 ```
 
 The installer downloads a prebuilt binary from GitHub Releases, verifies its checksum, places it on the user's PATH, and creates the data directory. We chose this over npm/global install because it avoids forcing a Node toolchain on end users and gives us full control over the installation layout.
@@ -52,7 +52,7 @@ If we later add native dependencies, we will re-evaluate `tsup` + Node SEA.
 ### Installation
 
 ```bash
-curl -fsSL https://memory-lane.dev/install.sh | sh
+curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | sh
 ```
 
 After the script finishes, the user runs:
@@ -217,7 +217,7 @@ For pi, the wizard writes `~/.pi/agent/extensions/memory-lane/index.ts` that dyn
 3. CI builds binaries for all supported platforms using `bun build --compile`.
 4. CI packages each binary into a `.tar.gz` and computes SHA-256 checksums.
 5. CI creates a GitHub Release and uploads assets + `SHA256SUMS`.
-6. The `install.sh` script hosted at `https://memory-lane.dev/install.sh` fetches the `latest` release by default, or a specific `VERSION` if set.
+6. The `install.sh` script hosted at `https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh` fetches the `latest` release by default, or a specific `VERSION` if set.
 
 ## Testing Strategy
 

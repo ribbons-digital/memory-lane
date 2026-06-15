@@ -31,7 +31,7 @@ Local-first memory for AI coding agents — CLI, hooks, pi extension, semantic r
 
 ```bash
 # Install the binary and configure your harnesses
-curl -fsSL https://memory-lane.dev/install.sh | sh
+curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | sh
 memory-lane init
 
 # Start using
@@ -48,13 +48,13 @@ memory-lane doctor
 macOS / Linux:
 
 ```bash
-curl -fsSL https://memory-lane.dev/install.sh | sh
+curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | sh
 ```
 
 Windows (PowerShell):
 
 ```powershell
-irm https://memory-lane.dev/install.ps1 | iex
+irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.ps1 | iex
 ```
 
 The installer downloads a prebuilt binary, places it on your PATH, and runs `memory-lane init` to detect and configure Claude Code, Codex, Claude Desktop, Codex Desktop, and pi.
