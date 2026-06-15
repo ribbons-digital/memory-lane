@@ -235,6 +235,8 @@ Todos:
 
 ## Phase 9 — Obsidian LLM Wiki / Knowledge Base Integration
 
+**Status:** In progress. Implemented as the first Memory Lane plugin: `@memory-lane/plugin-obsidian-wiki`.
+
 **Goal:** Let LLM clients search and read selected Obsidian/Garden notes as source-backed knowledge without turning those notes into Memory Lane memories automatically.
 
 This is separate from Obsidian mirror/import:
@@ -244,13 +246,18 @@ This is separate from Obsidian mirror/import:
 - Answers should be grounded in source notes with citations or file references.
 - Promotion from a wiki note/fact into Memory Lane should be explicit, not automatic.
 
+The feature ships as an opt-in plugin rather than a built-in capability:
+
+- Core Memory Lane stays lean for users who do not need Obsidian knowledge-base access.
+- The plugin exercises the new lightweight plugin system before it is used for other optional features.
+
 Todos:
 
-1. Define the boundary between Memory Lane memories and Obsidian/Garden knowledge-base notes, including naming, source-of-truth rules, and citation expectations.
-2. Add MCP resources/tools for listing, searching, and reading selected Obsidian/Garden notes without scanning private or generated folders by default.
-3. Add source-backed answer support with citations to note paths/headings/blocks where practical.
-4. Add an explicit "promote to Memory Lane" workflow that saves selected wiki-derived facts only after user/model action, preserving normal validation and review semantics.
-5. Document setup, privacy boundaries, ignored folders, and how this differs from mirror/import and Obsidian-backed storage.
+1. Define the lightweight plugin API (`@memory-lane/plugin-api`) with MCP tool/resource and CLI command registration.
+2. Add `plugins` and `pluginConfig` to `MemoryLaneConfig` in `@memory-lane/core`.
+3. Load plugins in the CLI and MCP server and register their contributions alongside built-in features.
+4. Implement `@memory-lane/plugin-obsidian-wiki` with MCP tools (`obsidian_wiki_search`, `obsidian_wiki_read`), an MCP resource (`memory-lane://obsidian-wiki/notes`), and a CLI status command.
+5. Document plugin installation, configuration, privacy boundaries, ignored folders, and how this differs from mirror/import and Obsidian-backed storage.
 
 ## Phase 10 — Obsidian-Backed Storage Prototype
 
