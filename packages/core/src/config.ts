@@ -111,7 +111,21 @@ export function validateConfig(config: unknown): SemanticMemoryConfig {
   bool(r.fallbackToAllVisibleOnMiss, "semantic.retrieval.fallbackToAllVisibleOnMiss")
   bool(obj(s.privacy, "semantic.privacy").allowRemoteEmbeddings, "semantic.privacy.allowRemoteEmbeddings")
   validateObsidianConfig(root.obsidian)
+  validatePluginsConfig(root.plugins, root.pluginConfig)
   return config as SemanticMemoryConfig
+}
+
+function validatePluginsConfig(plugins: unknown, pluginConfig: unknown): void {
+  if (plugins !== undefined) {
+    if (!Array.isArray(plugins) || !plugins.every((p) => typeof p === "string")) {
+      throw new ConfigError("plugins must be an array of strings")
+    }
+  }
+  if (pluginConfig !== undefined) {
+    if (!plain(pluginConfig)) {
+      throw new ConfigError("pluginConfig must be an object")
+    }
+  }
 }
 
 export function loadConfig(configPath?: string): SemanticMemoryConfig {

@@ -148,6 +148,8 @@ export interface SemanticMemoryConfig {
     privacy: { allowRemoteEmbeddings: boolean }
   }
   obsidian?: ObsidianMirrorConfig
+  plugins?: string[]
+  pluginConfig?: Record<string, unknown>
 }
 
 export interface MemoryEngineConfig {
