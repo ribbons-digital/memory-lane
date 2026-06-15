@@ -151,7 +151,17 @@ export function formatError(message: string, json: boolean): string {
   return `Error: ${message}`
 }
 
-export function usage(): string {
+export interface PluginUsageCommand {
+  name: string
+  usage: string
+  description: string
+}
+
+export function usage(pluginCommands: PluginUsageCommand[] = []): string {
+  const pluginLines = pluginCommands.length
+    ? "\nPlugin commands:\n" + pluginCommands.map((c) => `  ${c.usage}\n                  ${c.description}`).join("\n")
+    : ""
+
   return `memory-lane <command> [args...] [--json] [--project <path>]
 
 Commands:
@@ -189,7 +199,7 @@ Commands:
   claude <user-prompt-submit|stop|post-tool-use|session-start>
                   Run a Claude Code hook adapter command; reads hook JSON from stdin
   codex <user-prompt-submit|stop|post-tool-use|session-start>
-                  Run a Codex hook adapter command; reads hook JSON from stdin
+                  Run a Codex hook adapter command; reads hook JSON from stdin${pluginLines}
 
 Flags:
   --json           Output JSON instead of human-readable text

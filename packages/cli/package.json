@@ -16,7 +16,8 @@
     "@memory-lane/core": "workspace:*",
     "@memory-lane/mcp-server": "workspace:*",
     "@memory-lane/obsidian-import": "workspace:*",
-    "@memory-lane/obsidian-mirror": "workspace:*"
+    "@memory-lane/obsidian-mirror": "workspace:*",
+    "@memory-lane/plugin-api": "workspace:*"
   },
   "devDependencies": {
     "ts-node": "^10.9.2",

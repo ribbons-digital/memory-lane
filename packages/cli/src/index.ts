@@ -12,6 +12,8 @@ import { handleUninstall } from "./commands/uninstall.js"
 import { handleUpgrade } from "./commands/upgrade.js"
 import { discoverObsidianImportFiles, planObsidianImport } from "@memory-lane/obsidian-import"
 import { initObsidianMirror, statusObsidianMirror, syncObsidianMirror } from "@memory-lane/obsidian-mirror"
+import { loadPlugins } from "@memory-lane/plugin-api"
+import type { LoadedPlugin } from "@memory-lane/plugin-api"
 import {
   formatMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
   formatCompact, formatDoctor, formatImportPlan, formatError, usage,
@@ -681,6 +683,24 @@ async function main(): Promise<void> {
     const msg = err instanceof Error ? err.message : String(err)
     console.log(formatError(`Failed to initialize engine: ${msg}`, json))
     process.exit(1)
+  }
+
+  const config = loadConfig(configPath)
+  let plugins: LoadedPlugin[] = []
+  try {
+    plugins = config.plugins?.length
+      ? await loadPlugins({ pluginNames: config.plugins, engine, config, context: "cli" })
+      : []
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.log(formatError(`Failed to load plugins: ${msg}`, json))
+    process.exit(1)
+  }
+
+  for (const plugin of plugins) {
+    for (const cmd of plugin.cliCommands) {
+      commandHandlers[cmd.name] = cmd.handler
+    }
   }
 
   try {
