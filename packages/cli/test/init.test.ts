@@ -1,4 +1,4 @@
-import { describe, it, beforeEach } from "node:test"
+import { describe, it, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
 import * as fs from "node:fs"
@@ -9,21 +9,33 @@ import { tempDir } from "../../core/test/helpers.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-function run(args: string[], env?: NodeJS.ProcessEnv, cwd?: string) {
-  const cli = path.resolve(__dirname, "../dist/index.js")
-  return execFileSync("node", [cli, ...args], {
-    encoding: "utf8",
-    env: { ...process.env, ...env },
-    cwd,
-  }).trim()
+function createFakeBinDir(): string {
+  const dir = tempDir()
+  for (const cmd of ["claude", "codex"]) {
+    const file = path.join(dir, cmd)
+    fs.writeFileSync(file, "#!/bin/sh\necho fake\n", "utf8")
+    fs.chmodSync(file, 0o755)
+  }
+  return dir
 }
 
 describe("init wizard", () => {
   let home: string
   let binaryPath: string
+  let fakeBinDir: string
+
+  function run(args: string[], env?: NodeJS.ProcessEnv, cwd?: string) {
+    const cli = path.resolve(__dirname, "../dist/index.js")
+    return execFileSync("node", [cli, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH}`, ...env },
+      cwd,
+    }).trim()
+  }
 
   beforeEach(() => {
     home = tempDir()
+    fakeBinDir = createFakeBinDir()
     binaryPath = path.resolve(__dirname, "../dist/index.js")
     fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true })
     fs.mkdirSync(path.join(home, ".claude"), { recursive: true })
@@ -32,6 +44,10 @@ describe("init wizard", () => {
     fs.writeFileSync(path.join(home, ".config", "claude", "settings.json"), "{}", "utf8")
     fs.mkdirSync(path.join(home, "Library", "Application Support", "Claude"), { recursive: true })
     fs.writeFileSync(path.join(home, "Library", "Application Support", "Claude", "settings.json"), "{}", "utf8")
+  })
+
+  afterEach(() => {
+    fs.rmSync(fakeBinDir, { recursive: true, force: true })
   })
 
   it("writes pi extension in --yes mode", () => {
