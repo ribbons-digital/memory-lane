@@ -168,7 +168,10 @@ Commands:
   doctor
   reindex [--force]
   status
+  init [--yes] [--project]
+                  Run the first-time setup wizard
   init --project-local [--project <path>]
+                  Initialize project-local storage
   config [show|enable-semantic|disable-semantic|set <key> <value>]
   obsidian init --vault <path> [--folder "Memory Lane"]
                   Configure optional one-way Obsidian mirror
