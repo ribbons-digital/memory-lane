@@ -293,6 +293,30 @@ describe("CLI integration", () => {
     assert.match(result.stdout + result.stderr, /Unknown Claude hook event/)
   })
 
+  it("claude session-start accepts hook payload on stdin", () => {
+    runProcess(["save", "This repo runs tests with pnpm test", "--status", "approved"], {
+      env: { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile },
+    })
+    const result = runProcess(["claude", "session-start"], {
+      env: {
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+      stdin: JSON.stringify({
+        hook_event_name: "SessionStart",
+        session_id: "session-1",
+        cwd: process.cwd(),
+        transcript_path: null,
+        permission_mode: "default",
+        source: "startup",
+      }),
+    })
+    assert.equal(result.status, 0)
+    const parsed = JSON.parse(result.stdout)
+    assert.equal(parsed.hookSpecificOutput.hookEventName, "SessionStart")
+  })
+
   it("claude user-prompt-submit accepts hook payload on stdin", () => {
     const result = runProcess(["claude", "user-prompt-submit"], {
       env: {

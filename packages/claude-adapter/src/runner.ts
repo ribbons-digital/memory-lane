@@ -1,8 +1,8 @@
 import {
   appendHookDebugLog, hookDebugEnabled, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
-import { handlePostToolUse, handleStop, handleUserPromptSubmit, type LifecycleResult } from "@memory-lane/lifecycle"
-import { lifecycleNoopOutput, noopOutput, userPromptSubmitOutput } from "./outputs.js"
+import { handlePostToolUse, handleSessionStart, handleStop, handleUserPromptSubmit, type LifecycleResult } from "@memory-lane/lifecycle"
+import { lifecycleNoopOutput, noopOutput, sessionStartOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseClaudePayload, type ClaudeCommand } from "./payloads.js"
 import { readLatestTurnFromTranscript } from "./transcript.js"
 
@@ -68,6 +68,12 @@ export async function runClaudeHookCommand(command: ClaudeCommand, options: RunC
   }
 
   try {
+    if (parsed.kind === "session-start") {
+      const result = handleSessionStart(options.engine, parsed.input)
+      log("ok", lifecycleCounts(result))
+      return sessionStartOutput(result, debug)
+    }
+
     if (parsed.kind === "user-prompt-submit") {
       const result = await handleUserPromptSubmit(options.engine, parsed.input)
       log("ok", lifecycleCounts(result))

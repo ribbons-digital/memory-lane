@@ -178,7 +178,7 @@ Commands:
                   Reconcile generated mirror files and indexes
   obsidian import [--dry-run]
                   Explicitly import user-authored notes from configured imports/; applies by default
-  claude <user-prompt-submit|stop|post-tool-use>
+  claude <user-prompt-submit|stop|post-tool-use|session-start>
                   Run a Claude Code hook adapter command; reads hook JSON from stdin
   codex <user-prompt-submit|stop|post-tool-use|session-start>
                   Run a Codex hook adapter command; reads hook JSON from stdin

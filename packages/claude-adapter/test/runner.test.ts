@@ -64,6 +64,32 @@ function postToolUsePayload(toolResponse: unknown = { exit_code: 0, stdout: "pas
   })
 }
 
+function sessionStartPayload(): string {
+  return JSON.stringify({
+    hook_event_name: "SessionStart",
+    session_id: "session-1",
+    cwd: process.cwd(),
+    transcript_path: null,
+    permission_mode: "default",
+    source: "startup",
+    model: "claude-sonnet-4-6",
+  })
+}
+
+test("session-start emits Claude additionalContext output", async () => {
+  const engine = engineInTemp()
+  engine.save({ text: "This repo runs tests with pnpm test", category: "project", scopeType: "global", status: "approved" })
+
+  const output = await runClaudeHookCommand("session-start", {
+    engine,
+    payloadText: sessionStartPayload(),
+  })
+
+  const parsed = JSON.parse(output)
+  assert.equal(parsed.hookSpecificOutput.hookEventName, "SessionStart")
+  assert.match(parsed.hookSpecificOutput.additionalContext, /Relevant Memory/)
+})
+
 test("user-prompt-submit emits Claude additionalContext output", async () => {
   const engine = engineInTemp()
   engine.save({ text: "This repo runs tests with pnpm test", category: "project", scopeType: "global", status: "approved" })

@@ -535,7 +535,7 @@ function handleConfig(ctx: CliContext): void {
   else console.log(formatError("Usage: memory-lane config [show | enable-semantic | disable-semantic | set <key> <value>]", ctx.json))
 }
 
-const hookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use"])
+const claudeHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start"])
 const codexHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start"])
 
 async function handleCodex(ctx: CliContext): Promise<void> {
@@ -555,8 +555,8 @@ async function handleCodex(ctx: CliContext): Promise<void> {
 
 async function handleClaude(ctx: CliContext): Promise<void> {
   const event = ctx.rest[0]
-  if (!hookCommands.has(event)) {
-    console.log(formatError("Unknown Claude hook event. Usage: memory-lane claude user-prompt-submit|stop|post-tool-use", ctx.json))
+  if (!claudeHookCommands.has(event)) {
+    console.log(formatError("Unknown Claude hook event. Usage: memory-lane claude user-prompt-submit|stop|post-tool-use|session-start", ctx.json))
     process.exit(2)
   }
   const payloadText = await readStdin()

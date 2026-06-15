@@ -397,7 +397,18 @@ These commands are for Claude Code CLI hooks, not the Claude Desktop app. Use th
 
 ### Codex hooks
 
-Codex users can wire Memory Lane into lifecycle hooks:
+Claude Code CLI users can wire Memory Lane into lifecycle hooks:
+
+```bash
+memory-lane claude session-start
+memory-lane claude user-prompt-submit
+memory-lane claude stop
+memory-lane claude post-tool-use
+```
+
+`SessionStart` baseline injection is available for a small session-opening memory block. `UserPromptSubmit` injects a small relevant memory block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
+
+Codex users can wire the same lifecycle hooks:
 
 ```bash
 memory-lane codex session-start
@@ -406,4 +417,4 @@ memory-lane codex stop
 memory-lane codex post-tool-use
 ```
 
-`SessionStart` baseline injection is available for a small session-opening memory block and is documented in `examples/harness-integrations/codex-cli.md`. `UserPromptSubmit` injects a small relevant memory block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
+See `examples/harness-integrations/claude-code.md` and `examples/harness-integrations/codex-cli.md` for setup details.

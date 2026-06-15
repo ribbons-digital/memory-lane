@@ -1,11 +1,12 @@
-import type { PostToolUseInput, StopInput, UserPromptInput } from "@memory-lane/lifecycle"
+import type { PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "@memory-lane/lifecycle"
 
-export type ClaudeCommand = "user-prompt-submit" | "stop" | "post-tool-use"
+export type ClaudeCommand = "user-prompt-submit" | "stop" | "post-tool-use" | "session-start"
 
 export type ParsedClaudePayload =
   | { kind: "user-prompt-submit"; hookEventName: "UserPromptSubmit"; input: UserPromptInput }
   | { kind: "stop"; hookEventName: "Stop"; input: StopInput; transcriptPath?: string }
   | { kind: "post-tool-use"; hookEventName: "PostToolUse"; input: PostToolUseInput }
+  | { kind: "session-start"; hookEventName: "SessionStart"; input: SessionStartInput }
   | { kind: "invalid"; reason: string }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -71,6 +72,14 @@ export function parseClaudePayload(value: unknown): ParsedClaudePayload {
         toolInput: obj.tool_input,
         toolResponse: obj.tool_response,
       },
+    }
+  }
+
+  if (event === "SessionStart") {
+    return {
+      kind: "session-start",
+      hookEventName: event,
+      input: context,
     }
   }
 

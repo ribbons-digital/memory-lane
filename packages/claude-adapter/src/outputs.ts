@@ -9,15 +9,27 @@ export function noopOutput(message?: string, debug = debugEnabled()): string {
   return "{}"
 }
 
-export function userPromptSubmitOutput(result: LifecycleResult, debug = debugEnabled()): string {
+export function additionalContextOutput(
+  result: LifecycleResult,
+  hookEventName: "UserPromptSubmit" | "SessionStart",
+  debug = debugEnabled(),
+): string {
   if (!result.additionalContext) return noopOutput(undefined, debug)
   return JSON.stringify({
     hookSpecificOutput: {
-      hookEventName: "UserPromptSubmit",
+      hookEventName,
       additionalContext: result.additionalContext,
     },
     ...(debug ? { systemMessage: "Memory Lane: injected relevant memories." } : {}),
   })
+}
+
+export function userPromptSubmitOutput(result: LifecycleResult, debug = debugEnabled()): string {
+  return additionalContextOutput(result, "UserPromptSubmit", debug)
+}
+
+export function sessionStartOutput(result: LifecycleResult, debug = debugEnabled()): string {
+  return additionalContextOutput(result, "SessionStart", debug)
 }
 
 export function lifecycleNoopOutput(result: LifecycleResult, debug = debugEnabled()): string {

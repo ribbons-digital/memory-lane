@@ -9,6 +9,19 @@ Start with project-level `.claude/settings.local.json` while testing Memory Lane
 ```json
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane claude session-start",
+            "timeout": 10,
+            "statusMessage": "Loading baseline memory"
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [
@@ -53,6 +66,8 @@ Start with project-level `.claude/settings.local.json` while testing Memory Lane
 Use `/hooks` in Claude Code to inspect active hooks and verify the settings file they came from.
 
 ## What each hook does
+
+`SessionStart` injects a small baseline of recent, approved project memories when a new Claude Code session begins. It uses a stricter budget than `UserPromptSubmit` and does not dump the full project history. It is safe to leave enabled alongside `UserPromptSubmit`.
 
 `UserPromptSubmit` recalls relevant approved memories and injects them via `hookSpecificOutput.additionalContext` before Claude processes the prompt.
 
