@@ -92,6 +92,28 @@ describe("init wizard", () => {
     assert.ok(config.mcpServers["memory-lane"])
   })
 
+  it("overwrites existing config in --yes mode", () => {
+    const configPath = path.join(home, ".claude/settings.json")
+    fs.mkdirSync(path.dirname(configPath), { recursive: true })
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        hooks: {
+          SessionStart: [{ hooks: [{ type: "command", command: `${binaryPath} claude session-start` }] }],
+        },
+      }),
+      "utf8",
+    )
+
+    run(["init", "--yes"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"))
+    assert.ok(config.hooks.UserPromptSubmit)
+  })
+
   it("writes project-level Claude Code hooks with --project", () => {
     const project = tempDir()
     run(["init", "--yes", "--project", project], {

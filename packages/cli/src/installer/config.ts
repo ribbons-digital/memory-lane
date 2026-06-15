@@ -136,6 +136,34 @@ export function installPi(options: InitOptions): IntegrationResult {
   return { harness: "pi", configured: true, configPath }
 }
 
+export function hasExistingMemoryLaneConfig(harness: Harness, configPath: string): boolean {
+  if (!fs.existsSync(configPath)) return false
+
+  if (harness === "claude-code-cli" || harness === "codex-cli") {
+    const data = readJson(configPath)
+    const hooks = (data.hooks as Record<string, unknown[]>) ?? {}
+    const prefix = harness === "claude-code-cli" ? "memory-lane claude" : "memory-lane codex"
+    for (const hookList of Object.values(hooks)) {
+      for (const hook of hookList as unknown[]) {
+        const command = (hook as any)?.hooks?.[0]?.command ?? ""
+        if (typeof command === "string" && command.includes(prefix)) return true
+      }
+    }
+    return false
+  }
+
+  if (harness === "claude-desktop" || harness === "codex-desktop") {
+    const data = readJson(configPath)
+    return !!(data.mcpServers as Record<string, unknown> | undefined)?.["memory-lane"]
+  }
+
+  if (harness === "pi") {
+    return fs.existsSync(configPath)
+  }
+
+  return false
+}
+
 export function installHarness(harness: Harness, options: InitOptions): IntegrationResult {
   switch (harness) {
     case "claude-code-cli":

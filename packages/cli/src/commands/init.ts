@@ -3,7 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import * as readline from "node:readline"
 import { detectHarnesses, findDetected, harnessName } from "../installer/detect.js"
-import { installHarness } from "../installer/config.js"
+import { hasExistingMemoryLaneConfig, installHarness } from "../installer/config.js"
 import type { DetectedHarness, Harness, InitOptions, InitResult, IntegrationResult } from "../installer/types.js"
 
 async function prompt(question: string, defaultValue: string = ""): Promise<string> {
@@ -105,6 +105,16 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
   const integrations: IntegrationResult[] = []
   for (const harness of selected) {
     try {
+      const detected = findDetected(harnesses).find((h) => h.harness === harness)
+      const configPath = detected?.configPath
+      if (!options.yes && configPath && hasExistingMemoryLaneConfig(harness, configPath)) {
+        const ok = await confirm(`${harnessName(harness)} already has a Memory Lane configuration. Overwrite?`, true)
+        if (!ok) {
+          integrations.push({ harness, configured: false, message: "skipped by user" })
+          console.log(`  - ${harnessName(harness)} skipped`)
+          continue
+        }
+      }
       integrations.push(installHarness(harness, options))
       console.log(`  ✓ ${harnessName(harness)} configured`)
     } catch (err: unknown) {
