@@ -2,6 +2,7 @@ import {
   MemoryEngine, createOpenAIEmbeddingProvider, loadConfig, resolveWritableMemoryPaths,
   type MemoryEngineConfig,
 } from "@memory-lane/core"
+import { loadPlugins, type LoadedPlugin } from "@memory-lane/plugin-api"
 
 export interface CreateMemoryLaneEngineOptions {
   cwd?: string
@@ -22,10 +23,16 @@ function createEmbeddingProvider(
   }
 }
 
-export function createMemoryLaneEngine(options: CreateMemoryLaneEngineOptions = {}): MemoryEngine {
+export interface MemoryLaneEngineResult {
+  engine: MemoryEngine
+  plugins: LoadedPlugin[]
+}
+
+export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOptions = {}): Promise<MemoryLaneEngineResult> {
   const env = options.env ?? process.env
   const cwd = options.cwd ?? process.cwd()
   const paths = resolveWritableMemoryPaths({ cwd, env, autoInitProjectLocalOnHomeFailure: true })
+  const config = loadConfig(paths.configPath)
   const engine = new MemoryEngine({
     memoryPath: paths.memoryPath,
     embeddingsPath: paths.embeddingsPath,
@@ -34,5 +41,10 @@ export function createMemoryLaneEngine(options: CreateMemoryLaneEngineOptions = 
     env,
   })
   engine.refreshScope(cwd)
-  return engine
+
+  const plugins = config.plugins?.length
+    ? await loadPlugins({ pluginNames: config.plugins, engine, config, context: "mcp" })
+    : []
+
+  return { engine, plugins }
 }

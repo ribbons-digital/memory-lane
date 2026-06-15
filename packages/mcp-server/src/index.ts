@@ -4,7 +4,8 @@ import { createMemoryLaneEngine } from "./engine.js"
 import { createMemoryLaneMcpServer } from "./server.js"
 
 export async function main(): Promise<void> {
-  const server = createMemoryLaneMcpServer({ engine: createMemoryLaneEngine() })
+  const { engine, plugins } = await createMemoryLaneEngine()
+  const server = createMemoryLaneMcpServer({ engine, plugins })
   const transport = new StdioServerTransport()
   await server.connect(transport)
 }

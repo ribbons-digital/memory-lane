@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { MemoryEngine } from "@memory-lane/core"
+import type { LoadedPlugin, McpResourceDefinition, McpToolDefinition } from "@memory-lane/plugin-api"
 import {
   handleMemoryApprove,
   handleMemoryDelete,
@@ -44,6 +45,7 @@ const memoryId = z.string().min(1).describe("Memory Lane memory id")
 
 export interface CreateMemoryLaneMcpServerOptions {
   engine: MemoryEngine
+  plugins?: LoadedPlugin[]
 }
 
 export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOptions): McpServer {
@@ -173,5 +175,35 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
     async (input) => handleMemoryDelete(engine, input),
   )
 
+  for (const plugin of options.plugins ?? []) {
+    for (const tool of plugin.mcpTools) {
+      registerPluginTool(server, tool)
+    }
+    for (const resource of plugin.mcpResources) {
+      registerPluginResource(server, resource)
+    }
+  }
+
   return server
+}
+
+function registerPluginTool(server: McpServer, tool: McpToolDefinition): void {
+  server.registerTool(
+    tool.name,
+    {
+      title: tool.title,
+      description: tool.description,
+      inputSchema: tool.inputSchema as any,
+    },
+    async (input: Record<string, unknown>) => tool.handler(input),
+  )
+}
+
+function registerPluginResource(server: McpServer, resource: McpResourceDefinition): void {
+  server.resource(
+    resource.name,
+    resource.uri,
+    { description: resource.description, mimeType: resource.mimeType },
+    async (uri) => resource.handler(uri),
+  )
 }

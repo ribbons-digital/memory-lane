@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@memory-lane/core": "workspace:*",
+    "@memory-lane/plugin-api": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.18.0",
     "zod": "^3.25.0"
   },

@@ -74,6 +74,27 @@ test("creates an MCP server without writing to stdout", () => {
   }
 })
 
+test("registers plugin MCP tools", () => {
+  const server = createMemoryLaneMcpServer({
+    engine: engineInTemp(),
+    plugins: [{
+      name: "fake",
+      mcpTools: [{
+        name: "fake_tool",
+        title: "Fake",
+        description: "...",
+        inputSchema: {},
+        async handler() { return { content: [{ type: "text" as const, text: "ok" }] } },
+      }],
+      mcpResources: [],
+      cliCommands: [],
+    }],
+  })
+
+  const names = registeredToolNames(server)
+  assert.ok(names.includes("fake_tool"))
+})
+
 test("registers status and review-complete tools on the MCP server", () => {
   const server = createMemoryLaneMcpServer({ engine: engineInTemp() })
 
@@ -90,9 +111,9 @@ test("registers status and review-complete tools on the MCP server", () => {
   ])
 })
 
-test("createMemoryLaneEngine uses explicit environment paths", () => {
+test("createMemoryLaneEngine uses explicit environment paths", async () => {
   const dir = tempDir("memory-lane-mcp-engine-")
-  const engine = createMemoryLaneEngine({
+  const { engine } = await createMemoryLaneEngine({
     cwd: dir,
     env: {
       MEMORY_LANE_FILE: path.join(dir, "custom-memory.jsonl"),
