@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises"
 import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, resolveWritableMemoryPaths, type MemoryPaths } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
+import { handleMcp } from "./commands/mcp.js"
 import { discoverObsidianImportFiles, planObsidianImport } from "@memory-lane/obsidian-import"
 import { initObsidianMirror, statusObsidianMirror, syncObsidianMirror } from "@memory-lane/obsidian-mirror"
 import {
@@ -588,6 +589,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   obsidian: handleObsidian,
   claude: handleClaude,
   codex: handleCodex,
+  mcp: handleMcp,
 }
 
 async function dispatch(command: string, ctx: CliContext): Promise<void> {

@@ -178,6 +178,7 @@ Commands:
                   Reconcile generated mirror files and indexes
   obsidian import [--dry-run]
                   Explicitly import user-authored notes from configured imports/; applies by default
+  mcp              Run the bundled Memory Lane MCP server over stdio
   claude <user-prompt-submit|stop|post-tool-use|session-start>
                   Run a Claude Code hook adapter command; reads hook JSON from stdin
   codex <user-prompt-submit|stop|post-tool-use|session-start>

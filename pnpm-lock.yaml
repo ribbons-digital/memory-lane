@@ -42,6 +42,9 @@ importers:
       '@memory-lane/core':
         specifier: workspace:*
         version: link:../core
+      '@memory-lane/mcp-server':
+        specifier: workspace:*
+        version: link:../mcp-server
       '@memory-lane/obsidian-import':
         specifier: workspace:*
         version: link:../obsidian-import

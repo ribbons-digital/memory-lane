@@ -597,4 +597,10 @@ describe("CLI integration", () => {
     assert.equal(list.data.memories[0].text, "Valid memory")
   })
 
+  it("mcp command is documented in help output", () => {
+    const result = runProcess(["help"])
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /mcp\s+Run the bundled Memory Lane MCP server over stdio/)
+  })
+
 })
