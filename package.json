@@ -5,7 +5,8 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "test:core": "pnpm --filter @memory-lane/core test",
-    "test:cli": "pnpm --filter @memory-lane/cli test"
+    "test:cli": "pnpm --filter @memory-lane/cli test",
+    "build:binary": "bun scripts/build-binaries.ts --current"
   },
   "engines": {
     "node": ">=18"
