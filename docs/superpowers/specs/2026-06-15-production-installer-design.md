@@ -45,7 +45,7 @@ If we later add native dependencies, we will re-evaluate `tsup` + Node SEA.
 | `memory-lane init` | Interactive first-run wizard. Detects harnesses, asks user which to enable, writes config files, installs pi extension. |
 | `memory-lane uninstall` | Reads install manifest, removes binary, reverts hook/MCP/pi configs, optionally deletes data. |
 | `memory-lane mcp` | Single stdio MCP server entrypoint used by Claude/Codex Desktop configs. |
-| GitHub Releases | Publishes prebuilt binaries + checksums for macOS (arm64/x64) and Linux (arm64/x64). Windows support is deferred. |
+| GitHub Releases | Publishes prebuilt binaries + checksums for macOS (arm64/x64), Linux (arm64/x64), and Windows (x64). |
 
 ## User Journey
 
@@ -100,7 +100,7 @@ Supported matrix:
 | Linux | aarch64 | `memory-lane-linux-arm64.tar.gz` |
 | Linux | x86_64 | `memory-lane-linux-x64.tar.gz` |
 
-Windows is out of scope for the first release; the installer will print a friendly "Windows support coming soon" message with manual install instructions.
+Windows is supported via a separate PowerShell installer (`install.ps1`) that downloads the `memory-lane-windows-x64.zip` asset and places it in a user-local directory on PATH.
 
 ### Binary Placement
 
@@ -233,11 +233,11 @@ For pi, the wizard writes `~/.pi/agent/extensions/memory-lane/index.ts` that dyn
 - The installer must never run with elevated privileges; if `~/.local/bin` is not writable, it falls back to a user-owned directory.
 - Hook and MCP configs use absolute paths to the binary so injected commands cannot be hijacked by a malicious PATH.
 
-## Open Questions
+## Open Questions — Resolved
 
-1. Should `memory-lane init` support a `--yes` flag for non-interactive CI installs?
-2. Should the wizard prompt the user before overwriting existing Claude/Codex hook configs?
-3. Do we want a Windows installer (PowerShell) in the first release or defer it?
+1. **`memory-lane init` should support `--yes`**: Yes. In `--yes` mode the wizard auto-selects all detected integrations, accepts defaults, and does not prompt. This is required for CI and automated testing.
+2. **Prompt before overwriting existing configs**: Yes. If a target settings file already contains Memory Lane hooks or an MCP server entry, the wizard shows a diff summary and asks for confirmation before modifying it.
+3. **Windows support**: Yes. Complexity is moderate: we need a PowerShell installer (`install.ps1`), Windows-specific config paths, and a CI build target. It does not change the core architecture. We will ship `install.ps1` alongside `install.sh` and add a Windows x64 binary to the release matrix.
 
 ## Approval
 
