@@ -199,7 +199,9 @@ Commands:
   claude <user-prompt-submit|stop|post-tool-use|session-start>
                   Run a Claude Code hook adapter command; reads hook JSON from stdin
   codex <user-prompt-submit|stop|post-tool-use|session-start>
-                  Run a Codex hook adapter command; reads hook JSON from stdin${pluginLines}
+                  Run a Codex hook adapter command; reads hook JSON from stdin
+  session-end [--confirm]
+                  Generate a session-end summary from stdin JSON; saves as pending memory${pluginLines}
 
 Flags:
   --json           Output JSON instead of human-readable text

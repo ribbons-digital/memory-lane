@@ -10,6 +10,7 @@ export type ImportMemoryKind =
   | "project_checkpoint"
   | "workflow_rule"
   | "decision"
+  | "session_summary"
   | "misc"
 
 export interface ImportMemoryScope {
