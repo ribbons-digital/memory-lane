@@ -47,9 +47,9 @@ If the plugin is another workspace package in your checkout, add it to `pnpm-wor
 
 ### When using the standalone binary
 
-The standalone `memory-lane` binary is produced with Bun `--compile`. It does **not** resolve npm packages at runtime. For binary users, plugins must be:
+The standalone `memory-lane` binary is produced with Bun `--compile`. It does **not** resolve npm packages at runtime, and it cannot `npm install` plugins for you. For binary users, plugins must be:
 
-1. **Compiled into the binary.** The official Memory Lane releases bundle first-party plugins such as `@memory-lane/plugin-obsidian-wiki`.
+1. **Bundled into the binary.** Official Memory Lane releases bundle selected first-party plugins (for example, `@memory-lane/plugin-obsidian-wiki`). The plugin code is present, but it is **not enabled by default** — you still must add its name to `plugins` in `config.json`.
 2. **Referenced by absolute file path.** You can write a plugin as a local `.js` file and configure it with its absolute path:
 
 ```json
@@ -58,7 +58,7 @@ The standalone `memory-lane` binary is produced with Bun `--compile`. It does **
 }
 ```
 
-> **Current limitation:** Binary users cannot `npm install` arbitrary plugins today. If you need that workflow, build Memory Lane from source or request that the plugin be bundled in an official release.
+> **Current limitation:** Binary users cannot dynamically install arbitrary npm plugins. If you need that workflow, build Memory Lane from source or request that the plugin be bundled in an official release.
 
 ## Developing a plugin
 

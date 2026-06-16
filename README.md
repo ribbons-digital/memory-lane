@@ -169,9 +169,9 @@ Promotion of wiki-derived facts into Memory Lane remains explicit through the ex
 
 **Installing the Obsidian Wiki plugin:**
 
-- If you build Memory Lane from source: `sfw pnpm add @memory-lane/plugin-obsidian-wiki` in the repository root.
-- If you use the standalone binary: the plugin is bundled in official `v0.2.0+` releases; just add it to `plugins` in your config.
-- For a custom checkout: add `@memory-lane/plugin-obsidian-wiki` to `pnpm-workspace.yaml` and reference it by name.
+- If you use the standalone binary: the plugin is bundled in official `v0.2.1+` releases, but you must still enable it by adding `"@memory-lane/plugin-obsidian-wiki"` to `plugins` in `~/.memory-lane/config.json`.
+- If you build Memory Lane from source: `sfw pnpm add @memory-lane/plugin-obsidian-wiki` in the repository root, then enable it in `config.json`.
+- For a custom checkout: add `@memory-lane/plugin-obsidian-wiki` to `pnpm-workspace.yaml`, enable it in `config.json`, and reference it by name.
 
 ## Architecture
 
