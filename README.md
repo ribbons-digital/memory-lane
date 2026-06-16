@@ -9,7 +9,7 @@ Local-first memory for AI coding agents — CLI, hooks, pi extension, semantic r
   - [One-line installer](#one-line-installer-recommended)
   - [Build from source](#build-from-source)
   - [Link the CLI globally](#link-the-cli-globally)
-  - [Development: install the pi extension manually](#development-install-the-pi-extension-manually)
+  - [Development setup: local checkout + manual harness config](#development-setup-local-checkout--manual-harness-config)
 - [Architecture](#architecture)
 - [Storage](#storage)
 - [Project Scoping](#project-scoping)
@@ -62,6 +62,8 @@ irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/inst
 ```
 
 The installer downloads a prebuilt binary and places it on your PATH. After installation, run `memory-lane init` to configure Claude Code, Codex, Claude Desktop, Codex Desktop, and pi. Use `memory-lane init --yes` to auto-configure all detected harnesses without prompting.
+
+If you are an end user, this installer + `memory-lane init` path is the recommended setup. If you are developing Memory Lane and also using it on the same machine, prefer the [development setup](#development-setup-local-checkout--manual-harness-config) below instead of `memory-lane init --yes`; release-style init can replace local dev shims and hand-edited harness config.
 
 If you prefer to review the script first, save it and run locally:
 
@@ -120,9 +122,25 @@ After linking, `memory-lane` is available as a shell command:
 memory-lane doctor
 ```
 
-### Development: install the pi extension manually
+### Development setup: local checkout + manual harness config
 
-If you are building Memory Lane from source and want pi to load your local checkout, run:
+If you are developing Memory Lane and using it on the same machine, avoid `memory-lane init --yes` unless you intentionally want release-style harness config. The init wizard is safe for end users, but on a development machine it can overwrite local shims or hand-edited settings that point at your checkout. Prefer manual config so each harness loads the code you just built.
+
+Recommended development loop:
+
+```bash
+cd /absolute/path/to/memory-lane
+pnpm install
+pnpm build
+cd packages/cli
+pnpm link --global
+```
+
+After source changes, run `pnpm build` again and reload/restart the harness you are testing.
+
+#### pi: load the local adapter
+
+Create or replace `~/.pi/agent/extensions/memory-lane/index.ts` with a shim that imports your checkout:
 
 ```bash
 mkdir -p ~/.pi/agent/extensions/memory-lane
@@ -136,9 +154,162 @@ EOF
 
 Replace `/absolute/path/to/memory-lane` with your checkout path, then run `/reload` in pi. The timestamp query avoids stale module caches while iterating locally. Re-run `pnpm build` after changing Memory Lane source, then `/reload` pi again.
 
-End users do not need this step — `memory-lane init` installs the pi extension automatically.
-
 The pi adapter provides manual `memory_save`, `memory_suggest`, and `memory_recall` tools plus `/memory ...` commands. It also injects relevant approved memories through pi's `before_agent_start` event. Automatic lifecycle writes are enabled for `input`, `turn_end`, and `tool_result` events: explicit memory requests, durable project statements, and successful workflow commands (e.g., `pnpm test`, `pnpm build`, `pnpm install`) are saved using the same shared lifecycle policy as Codex and Claude Code hooks. For session summaries, pi uses the explicit `/memory session-summary` command: it reads the current branch through pi's session manager, asks for interactive confirmation, and saves any generated summary as a pending `session_summary` memory with pi `session_end` provenance. It does not automatically summarize on `agent_end`, `session_shutdown`, or compaction.
+
+#### Claude Code CLI: paste hooks manually
+
+For local development, paste hooks into `~/.claude/settings.json` or a project-local `.claude/settings.local.json` instead of letting init own the file. Merge this `hooks` object into any existing settings:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane claude session-start",
+            "timeout": 10,
+            "statusMessage": "Loading baseline memory"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane claude user-prompt-submit",
+            "timeout": 10,
+            "statusMessage": "Retrieving relevant memory"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane claude stop",
+            "timeout": 10,
+            "statusMessage": "Saving useful memory"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane claude session-end",
+            "timeout": 20,
+            "statusMessage": "Summarizing session memory"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane claude post-tool-use",
+            "timeout": 10,
+            "statusMessage": "Capturing useful tool outcome"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Use `/hooks` in Claude Code to verify which settings file supplied the hooks. `SessionEnd` only saves summaries when `memory.sessionEndSummary` is enabled and provider-configured; by default it still requires confirmation unless `requireConfirmation` is set to `false`.
+
+#### Codex CLI: paste supported hooks manually
+
+For Codex CLI, paste hooks into a project-level `.codex/hooks.json` while testing, then move them to `~/.codex/hooks.json` if you want global behavior. Do **not** add a Codex `SessionEnd` hook; current Codex hooks do not support that event.
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane codex session-start",
+            "timeoutSec": 10,
+            "statusMessage": "Loading baseline memory"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane codex user-prompt-submit",
+            "timeoutSec": 10,
+            "statusMessage": "Retrieving relevant memory"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane codex stop",
+            "timeoutSec": 10,
+            "statusMessage": "Saving useful memory"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|shell:*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane codex post-tool-use",
+            "timeoutSec": 10,
+            "statusMessage": "Capturing useful tool outcome"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Codex `Stop` can produce a session summary only when the latest user message explicitly asks for it, such as "remember this session" or "summarize this session to memory".
+
+#### MCP clients: point at the local server
+
+For Claude Desktop, Codex Desktop, and other MCP clients, point the MCP server at your built checkout with absolute paths. Do not use `~` in client config fields that expect paths. A typical command is:
+
+```text
+/Users/you/.nvm/versions/node/v22.22.3/bin/node
+```
+
+with argument:
+
+```text
+/absolute/path/to/memory-lane/packages/mcp-server/dist/index.js
+```
+
+Set the working directory to the project you want Memory Lane to scope against, for example `/absolute/path/to/your/project`.
+
+End users do not need these manual development shims — `memory-lane init` installs release-style integrations automatically.
 
 ## Plugins
 
