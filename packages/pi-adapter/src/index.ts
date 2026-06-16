@@ -1,5 +1,5 @@
 import { Type } from "typebox"
-import { handlePostToolUse, handleStop, handleUserPromptSubmit } from "@memory-lane/lifecycle"
+import { createOpenAICompatibleProvider, handlePostToolUse, handleSessionEnd, handleStop, handleUserPromptSubmit } from "@memory-lane/lifecycle"
 import type { PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
 import {
   MemoryEngine, inferMemoryKind, initProjectLocalStorage, loadConfig, resolveWritableMemoryPaths, type SaveResult,
@@ -215,7 +215,43 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
       return
     }
 
-    notify(ctx, "Session summary generation is not available until the save path is enabled in the next implementation slice.", "warning")
+    notify(ctx, "Generating session summary...", "info")
+    const e = getEngine(ctx.cwd)
+    const provider = createOpenAICompatibleProvider({
+      provider: "openai-compatible",
+      baseUrl: summaryConfig.baseUrl,
+      apiKeyEnv: summaryConfig.apiKeyEnv,
+      model: summaryConfig.model,
+    }, memoryEnv())
+    const candidates = await handleSessionEnd(e, {
+      cwd: ctx.cwd,
+      sessionId: piSessionId(ctx),
+      messages,
+    }, {
+      provider,
+      promptTemplate: summaryConfig.promptTemplate ?? undefined,
+      maxTokens: summaryConfig.maxTokens,
+      requireConfirmation: false,
+      confirmed: true,
+      includeToolOutputs: summaryConfig.includeToolOutputs,
+    }, memoryEnv())
+    const saved = candidates
+      .map((candidate) => e.save({
+        text: candidate.text,
+        category: candidate.category,
+        scopeType: candidate.scopeType,
+        status: candidate.status,
+        source: candidate.source,
+        kind: candidate.kind,
+        provenance: { ...candidate.provenance, adapter: "pi" },
+      }))
+      .filter((result): result is Extract<SaveResult, { status: "saved" }> => result.status === "saved")
+
+    if (!saved.length) {
+      notify(ctx, "No durable session summary was generated.", "info")
+      return
+    }
+    notify(ctx, `Saved ${saved.length} pending session summary${saved.length === 1 ? "" : "ies"}. Run /memory review to inspect.`, "info")
   }
 
   pi.registerCommand("remember", {

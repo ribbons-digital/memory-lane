@@ -1,5 +1,6 @@
 import * as assert from "node:assert/strict"
 import * as fs from "node:fs"
+import * as http from "node:http"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, test } from "node:test"
@@ -120,6 +121,28 @@ async function runMemoryCommand(pi: FakePi, args: string, ctx: ExtensionContext)
   const command = pi.commands.get("memory")
   assert.ok(command)
   await command.handler(args, ctx)
+}
+
+async function withMockSummaryServer(summary: string, fn: (baseUrl: string, prompts: string[]) => Promise<void>): Promise<void> {
+  const prompts: string[] = []
+  const server = http.createServer((req, res) => {
+    let body = ""
+    req.setEncoding("utf8")
+    req.on("data", (chunk) => { body += chunk })
+    req.on("end", () => {
+      prompts.push(body)
+      res.writeHead(200, { "content-type": "application/json" })
+      res.end(JSON.stringify({ choices: [{ message: { content: summary } }] }))
+    })
+  })
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  assert.ok(address && typeof address === "object")
+  try {
+    await fn(`http://127.0.0.1:${address.port}/v1`, prompts)
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()))
+  }
 }
 
 async function runBeforeAgentStart(pi: FakePi, event: any, ctx: ExtensionContext): Promise<any> {
@@ -397,4 +420,44 @@ test("memory session-summary cancellation saves nothing", async () => {
 
   assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
   assert.ok(notifications.some((n) => n.message.includes("cancelled")))
+})
+
+test("memory session-summary saves pending pi session summary without raw branch text", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  await withMockSummaryServer("## Decisions made\n- Provider summary survived.", async (baseUrl, prompts) => {
+    fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
+      semantic: { enabled: false },
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-summary" } },
+    }))
+    const pi = createFakePi()
+    memoryLaneExtension(pi)
+    const notifications: FakeNotification[] = []
+    const ctx = ctxWithUi(env.dir, {
+      confirmResult: true,
+      notifications,
+      branch: [
+        { type: "message", message: { role: "user", content: [{ type: "text", text: "RAW_USER_SENTINEL remember this" }] } },
+        { type: "message", message: { role: "assistant", content: [{ type: "text", text: "RAW_ASSISTANT_SENTINEL acknowledged" }] } },
+        { type: "message", message: { role: "tool", content: [{ type: "text", text: "RAW_TOOL_SENTINEL" }] } },
+      ],
+    })
+
+    await runMemoryCommand(pi, "session-summary", ctx)
+
+    assert.equal(prompts.length, 1)
+    const rawMemory = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8")
+    assert.doesNotMatch(rawMemory, /RAW_USER_SENTINEL|RAW_ASSISTANT_SENTINEL|RAW_TOOL_SENTINEL/)
+    const lines = rawMemory.trim().split("\n")
+    assert.equal(lines.length, 1)
+    const mem = JSON.parse(lines[0])
+    assert.equal(mem.status, "pending")
+    assert.equal(mem.source, "session-summary")
+    assert.equal(mem.kind, "session_summary")
+    assert.equal(mem.provenance.adapter, "pi")
+    assert.equal(mem.provenance.lifecycleEvent, "session_end")
+    assert.equal(mem.provenance.sessionId, path.join(env.dir, ".pi-session.jsonl"))
+    assert.match(mem.text, /Provider summary survived/)
+    assert.ok(notifications.some((n) => n.message.includes("Saved 1 pending session summary")))
+  })
 })
