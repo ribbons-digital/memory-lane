@@ -318,7 +318,7 @@ Todos:
 
 ## Phase 13 — Session-End Summarization
 
-**Status:** In progress. Slice 1 implements the shared data model, opt-in config, LLM summarization handler, and manual `memory-lane session-end --confirm` command. A Codex-shaped `session-end` adapter path exists for tests/future compatibility, but current Codex CLI hooks do not expose a supported `SessionEnd` event. Real Codex/Claude Code/pi session-end automation remains follow-up work.
+**Status:** In progress. Slice 1 implements the shared data model, opt-in config, LLM summarization handler, and manual `memory-lane session-end --confirm` command. Slice 2 adds supported Codex automation through `Stop` only when the latest user message explicitly requests a session summary. A Codex-shaped `session-end` adapter path exists for tests/future compatibility, but current Codex CLI hooks do not expose a supported `SessionEnd` event. Claude Code/pi session-end automation remains follow-up work.
 
 **Goal:** Let Memory Lane optionally capture a structured summary at the end of an agent session so the next session can start with project state instead of from scratch.
 
@@ -335,14 +335,20 @@ Completed Slice 1 scope:
 7. Added tests for config validation, LLM provider behavior, session-end handler behavior, CLI gating, and the future-compatible Codex-shaped path.
 8. Documented the feature, the opt-in requirement, privacy boundaries, review/approval workflow, and current Codex `SessionEnd` hook limitation.
 
+Completed Slice 2 scope:
+
+1. Added Codex `Stop` explicit session-summary intent detection for the latest user message only.
+2. Kept ordinary `Stop` autosave behavior unchanged when no explicit summary intent is present.
+3. Reused bounded transcript reading to build session-summary input without storing raw transcripts.
+4. Treated the explicit user request as confirmation for this supported-hook path, saved provider summaries as pending `session_summary` memories with Codex provenance, and added disabled/missing-provider no-save feedback.
+5. Added Codex adapter tests for no-intent preservation, assistant-text non-triggering, disabled and missing-provider no-save paths, provider save, and raw transcript marker non-persistence.
+
 Remaining follow-up scope:
 
-1. Use `docs/superpowers/specs/2026-06-16-supported-session-summary-hooks.md` as the source of truth for supported-hook follow-ups.
-2. Manually smoke `memory-lane session-end --confirm` with the user's preferred provider and evaluate summary quality before adding automation.
-3. For Codex, design around supported events only. The recommended first automation candidate is `Stop` with explicit user intent (for example, "remember this session"), not unsupported `SessionEnd`.
-4. For Claude Code, `SessionEnd` is documented and can be a later adapter after exact payload/confirmation behavior is captured.
-5. For pi, prefer an explicit interactive command using `ctx.sessionManager`/`ctx.ui` before automatic `agent_end` or compaction hooks.
-6. Consider a stricter structured `SessionSummary` schema if real summaries need machine-readable subsections beyond the Markdown pending-memory format.
+1. Manually smoke Codex `Stop` explicit-intent summaries and `memory-lane session-end --confirm` with the user's preferred provider, then evaluate summary quality before adding broader automation.
+2. For Claude Code, `SessionEnd` is documented and can be a later adapter after exact payload/confirmation behavior is captured.
+3. For pi, prefer an explicit interactive command using `ctx.sessionManager`/`ctx.ui` before automatic `agent_end` or compaction hooks.
+4. Consider a stricter structured `SessionSummary` schema if real summaries need machine-readable subsections beyond the Markdown pending-memory format.
 
 ## Phase 14 — Auto-Memory Review and Memory Dashboard
 

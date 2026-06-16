@@ -275,9 +275,9 @@ memory-lane review
 memory-lane approve <id>
 ```
 
-Codex CLI does not currently expose a supported `SessionEnd` hook event. Do not add `SessionEnd` to `.codex/hooks.json`; Codex will ignore it. For Codex today, use the manual `memory-lane session-end --confirm` command when you explicitly want to summarize a session. The codebase contains a future-compatible Codex-shaped `session-end` adapter path, but it is not a real Codex hook until OpenAI ships a matching event.
+Codex CLI does not currently expose a supported `SessionEnd` hook event. Do not add `SessionEnd` to `.codex/hooks.json`; Codex will ignore it. For Codex today, use either the manual `memory-lane session-end --confirm` command or the supported `Stop` hook explicit-intent path: when the latest user message says something like "remember this session", "save a session summary", or "summarize this session to memory", `memory-lane codex stop` treats that request as confirmation, summarizes a bounded transcript through the configured provider, and saves the result as a pending session-summary memory. Ordinary `Stop` turns keep the existing silent autosave behavior and do not run the summarizer.
 
-Tool messages are excluded unless `includeToolOutputs` is true. Lines that look like secrets are redacted before the transcript is sent to the configured model. Claude Code, pi, and any real Codex session-end automation remain follow-up work.
+Tool messages are excluded unless `includeToolOutputs` is true. Lines that look like secrets are redacted before the transcript is sent to the configured model. Claude Code, pi, and unsupported Codex `SessionEnd` automation remain follow-up work.
 
 ### Obsidian mirror
 
@@ -542,6 +542,6 @@ memory-lane codex stop
 memory-lane codex post-tool-use
 ```
 
-`SessionStart` baseline injection is available for a small session-opening memory block. `UserPromptSubmit` injects a small relevant memory block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
+`SessionStart` baseline injection is available for a small session-opening memory block. `UserPromptSubmit` injects a small relevant memory block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. If the latest user message explicitly asks to summarize the session (for example, "remember this session"), the supported `Stop` hook path uses `memory.sessionEndSummary` to save a pending session summary; do not configure an unsupported Codex `SessionEnd` hook. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
 
 See `examples/harness-integrations/codex-cli.md` for setup details.
