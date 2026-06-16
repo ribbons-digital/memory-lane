@@ -50,6 +50,7 @@ export interface IntegrationDiagnostics {
   codexHooks: {
     user: SingleHookConfigDiagnostic
     project: SingleHookConfigDiagnostic
+    warnings: string[]
   }
   claudeCodeHooks: {
     user: MultiHookConfigDiagnostic
@@ -133,6 +134,25 @@ function anyCommand(commands: HookCommandStatus): boolean {
   return commands.userPromptSubmit || commands.stop || commands.postToolUse
 }
 
+function commandLabel(command: keyof HookCommandStatus): string {
+  switch (command) {
+    case "userPromptSubmit": return "user-prompt-submit"
+    case "postToolUse": return "post-tool-use"
+    case "stop": return "stop"
+  }
+}
+
+function duplicateCodexHookWarnings(user: SingleHookConfigDiagnostic, project: SingleHookConfigDiagnostic): string[] {
+  if (!user.checkedPath || !project.checkedPath) return []
+  const warnings: string[] = []
+  const commands: Array<keyof HookCommandStatus> = ["userPromptSubmit", "stop", "postToolUse"]
+  for (const command of commands) {
+    if (!user.commands[command] || !project.commands[command]) continue
+    warnings.push(`Memory Lane Codex ${commandLabel(command)} hook is configured in both user (${user.checkedPath}) and project (${project.checkedPath}) scopes; both hooks may run and create duplicate saves. Keep only one scope enabled unless this is intentional.`)
+  }
+  return warnings
+}
+
 function diagnoseJsonHookFile(file: string | null, adapter: "codex" | "claude"): SingleHookConfigDiagnostic {
   if (!file) return missingSingle(null)
   const parsed = parseJson(file)
@@ -178,12 +198,15 @@ function diagnosePiExtension(file: string): IntegrationDiagnostics["piExtension"
 
 export function diagnoseIntegrations(options: DiagnoseIntegrationsOptions = {}): IntegrationDiagnostics {
   const paths = mergePaths(options.cwd, options.paths)
+  const codexUserHooks = diagnoseJsonHookFile(paths.codexUserHooks, "codex")
+  const codexProjectHooks = diagnoseJsonHookFile(paths.codexProjectHooks, "codex")
   return {
     summary: { mcpExplicitToolsOnly: true, hooksAutomaticLifecycle: true, piAutosaveEnabled: false },
     claudeDesktopMcp: diagnoseClaudeDesktopMcp(paths.claudeDesktopConfig),
     codexHooks: {
-      user: diagnoseJsonHookFile(paths.codexUserHooks, "codex"),
-      project: diagnoseJsonHookFile(paths.codexProjectHooks, "codex"),
+      user: codexUserHooks,
+      project: codexProjectHooks,
+      warnings: duplicateCodexHookWarnings(codexUserHooks, codexProjectHooks),
     },
     claudeCodeHooks: {
       user: diagnoseJsonHookFiles(paths.claudeCodeUserSettings, "claude"),

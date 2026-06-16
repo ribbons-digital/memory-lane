@@ -80,8 +80,34 @@ test("detects Codex and Claude Code hook commands", () => {
 
   assert.deepEqual(report.codexHooks.user.commands, { userPromptSubmit: true, stop: false, postToolUse: false })
   assert.deepEqual(report.codexHooks.project.commands, { userPromptSubmit: false, stop: true, postToolUse: true })
+  assert.deepEqual(report.codexHooks.warnings, [])
   assert.deepEqual(report.claudeCodeHooks.user.commands, { userPromptSubmit: true, stop: true, postToolUse: false })
   assert.deepEqual(report.claudeCodeHooks.project.commands, { userPromptSubmit: false, stop: false, postToolUse: true })
+})
+
+test("warns when Codex user and project hooks both run the same Memory Lane command", () => {
+  const root = tempDir()
+  const project = path.join(root, "project")
+  const codexUser = path.join(root, ".codex", "hooks.json")
+  const codexProject = path.join(project, ".codex", "hooks.json")
+  for (const file of [codexUser, codexProject]) fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(codexUser, JSON.stringify({
+    hooks: {
+      Stop: [{ hooks: [{ command: "memory-lane codex stop" }] }],
+      UserPromptSubmit: [{ hooks: [{ command: "memory-lane codex user-prompt-submit" }] }],
+    },
+  }), "utf8")
+  fs.writeFileSync(codexProject, JSON.stringify({
+    hooks: {
+      Stop: [{ hooks: [{ command: "MEMORY_LANE_HOOK_DEBUG=1 memory-lane codex stop" }] }],
+    },
+  }), "utf8")
+
+  const report = diagnoseIntegrations({ cwd: project, paths: { codexUserHooks: codexUser, codexProjectHooks: codexProject } })
+
+  assert.deepEqual(report.codexHooks.warnings, [
+    `Memory Lane Codex stop hook is configured in both user (${codexUser}) and project (${codexProject}) scopes; both hooks may run and create duplicate saves. Keep only one scope enabled unless this is intentional.`,
+  ])
 })
 
 test("detects pi extension and reports malformed JSON warnings without throwing", () => {
