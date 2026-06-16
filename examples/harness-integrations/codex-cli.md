@@ -86,6 +86,20 @@ Codex tool matcher names can vary by version. If `PostToolUse` does not fire, ad
 
 `Stop` and `PostToolUse` do not inject context. They save concise memories externally and are silent by default.
 
+## Session-end summarization
+
+Session-end summarization is opt-in and currently exposed through the manual `memory-lane session-end --confirm` command, not through Codex hooks. This keeps the first slice explicit while real Codex confirmation behavior is evaluated.
+
+After enabling `memory.sessionEndSummary` in `~/.memory-lane/config.json`, pass a compact transcript JSON on stdin:
+
+```bash
+echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant","content":"Done."}]}' \
+  | memory-lane session-end --confirm
+memory-lane review
+```
+
+Generated summaries are saved as pending memories. Approve them with `memory-lane approve <id>` before they affect future recall. Tool messages are excluded unless `includeToolOutputs` is true, and likely secret lines are redacted before sending content to the configured model.
+
 ## Sandboxed storage
 
 Memory Lane prefers global storage at `~/.memory-lane/`. If Codex asks for permission to write there, approving it keeps memories global across projects.

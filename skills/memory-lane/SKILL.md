@@ -71,10 +71,23 @@ memory-lane reindex               # (re)build embeddings for all approved memori
 memory-lane init                  # first-time setup wizard for harnesses
 memory-lane init --yes            # auto-configure all detected harnesses
 memory-lane init --project-local  # initialize sandbox-friendly project-local storage
+memory-lane session-end --confirm # generate a pending session-summary memory from stdin JSON
 memory-lane uninstall             # remove binary and integration configs
 memory-lane uninstall --yes       # non-interactive uninstall
 memory-lane mcp                   # run the bundled MCP server over stdio
 ```
+
+### Session-end summarization
+
+Use `memory-lane session-end --confirm` only when the user explicitly wants to generate a session summary and `memory.sessionEndSummary` is configured. It reads stdin JSON with a `messages` array, sends the compact transcript to the configured OpenAI-compatible chat model, and saves the result as a pending memory with `source: "session-summary"` and `kind: "session_summary"`.
+
+```bash
+echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant","content":"Done."}]}' \
+  | memory-lane session-end --confirm
+memory-lane review
+```
+
+Do not imply this is fully automatic handoff-free mode. Approve or reject generated summaries through the normal review queue before they affect future recall. Tool messages are excluded unless `includeToolOutputs` is configured, and likely secret lines are redacted before the transcript is sent to the configured model.
 
 ### Obsidian mirror
 
