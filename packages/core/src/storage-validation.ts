@@ -6,7 +6,7 @@ import type {
 export const VALID_STATUSES = new Set<MemoryStatus>(["pending", "approved", "rejected", "deleted"])
 export const VALID_CATEGORIES = new Set<MemoryCategory>(["preference", "personal", "project"])
 export const VALID_SCOPE_TYPES = new Set<MemoryScopeType>(["global", "project"])
-export const VALID_SOURCES = new Set<MemorySource>(["manual", "user-suggested", "agent-suggested"])
+export const VALID_SOURCES = new Set<MemorySource>(["manual", "user-suggested", "agent-suggested", "session-summary"])
 export const VALID_KINDS = new Set<MemoryKind>([
   "preference",
   "personal_context",
@@ -14,6 +14,7 @@ export const VALID_KINDS = new Set<MemoryKind>([
   "project_checkpoint",
   "workflow_rule",
   "decision",
+  "session_summary",
   "misc",
 ])
 export const VALID_LIFECYCLE_EVENTS = new Set<MemoryLifecycleEvent>([
@@ -21,6 +22,7 @@ export const VALID_LIFECYCLE_EVENTS = new Set<MemoryLifecycleEvent>([
   "turn_stop",
   "post_tool_use",
   "session_start",
+  "session_end",
   "pre_compact",
 ])
 

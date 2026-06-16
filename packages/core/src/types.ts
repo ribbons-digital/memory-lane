@@ -3,13 +3,14 @@ import type { IntegrationDiagnosticPaths } from "./integration-diagnostics.js"
 export type MemoryStatus = "pending" | "approved" | "rejected" | "deleted"
 export type MemoryCategory = "preference" | "personal" | "project"
 export type MemoryScopeType = "global" | "project"
-export type MemorySource = "manual" | "user-suggested" | "agent-suggested"
+export type MemorySource = "manual" | "user-suggested" | "agent-suggested" | "session-summary"
 
 export type MemoryLifecycleEvent =
   | "user_prompt"
   | "turn_stop"
   | "post_tool_use"
   | "session_start"
+  | "session_end"
   | "pre_compact"
 
 export interface MemoryProvenance {
@@ -27,6 +28,7 @@ export type MemoryKind =
   | "project_checkpoint"
   | "workflow_rule"
   | "decision"
+  | "session_summary"
   | "misc"
 
 export interface MemoryScope {
@@ -132,6 +134,18 @@ export interface ObsidianMirrorConfig {
   mode?: "mirror"
 }
 
+export interface SessionEndSummaryConfig {
+  enabled?: boolean
+  provider?: "openai-compatible"
+  baseUrl?: string
+  apiKeyEnv?: string | null
+  model?: string
+  promptTemplate?: string
+  maxTokens?: number
+  requireConfirmation?: boolean
+  includeToolOutputs?: boolean
+}
+
 export interface SemanticMemoryConfig {
   semantic: {
     enabled: boolean
@@ -150,6 +164,9 @@ export interface SemanticMemoryConfig {
   obsidian?: ObsidianMirrorConfig
   plugins?: string[]
   pluginConfig?: Record<string, unknown>
+  memory?: {
+    sessionEndSummary?: SessionEndSummaryConfig
+  }
 }
 
 export interface MemoryEngineConfig {
