@@ -31,6 +31,16 @@ test("returns empty when LLM reports NO_DURABLE_MEMORY", async () => {
   assert.deepStrictEqual(result, [])
 })
 
+test("returns empty when LLM reports lowercase no durable memory with punctuation", async () => {
+  const engine = makeEngine()
+  const provider: LLMProvider = { complete: async () => "no_durable_memory." }
+  const result = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    messages: [{ role: "user", content: "hello" }],
+  }, { requireConfirmation: false, provider })
+  assert.deepStrictEqual(result, [])
+})
+
 test("returns a pending session-summary candidate", async () => {
   const engine = makeEngine()
   const provider: LLMProvider = { complete: async () => "- Decided to use pnpm.\n- Next: update docs." }

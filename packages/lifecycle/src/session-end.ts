@@ -80,7 +80,7 @@ export async function handleSessionEnd(
   const prompt = createPrompt(options.promptTemplate ?? DEFAULT_SESSION_END_PROMPT, transcript)
   const raw = await provider.complete(prompt, { maxTokens: options.maxTokens })
 
-  if (raw.includes("NO_DURABLE_MEMORY")) return []
+  if (/^NO_DURABLE_MEMORY[.\s]*$/iu.test(raw.trim())) return []
 
   const heading = `## Session Summary (${new Date().toISOString().slice(0, 10)})`
   const text = [heading, "", raw].join("\n")
