@@ -337,10 +337,12 @@ Completed Slice 1 scope:
 
 Remaining follow-up scope:
 
-1. Identify real supported lifecycle events for Codex, Claude Code, and pi before adding hook automation. For Codex, current docs list `Stop`, `PreCompact`, and `PostCompact` but not `SessionEnd`.
-2. Hook only supported events, and only generate a summary after an explicit user prompt such as "Remember this session" or a confirmation dialog; never auto-generate by default.
-3. Consider a stricter structured `SessionSummary` schema if real summaries need machine-readable subsections beyond the Markdown pending-memory format.
-4. Add end-to-end harness-specific smoke tests once real hook confirmation behavior is known.
+1. Use `docs/superpowers/specs/2026-06-16-supported-session-summary-hooks.md` as the source of truth for supported-hook follow-ups.
+2. Manually smoke `memory-lane session-end --confirm` with the user's preferred provider and evaluate summary quality before adding automation.
+3. For Codex, design around supported events only. The recommended first automation candidate is `Stop` with explicit user intent (for example, "remember this session"), not unsupported `SessionEnd`.
+4. For Claude Code, `SessionEnd` is documented and can be a later adapter after exact payload/confirmation behavior is captured.
+5. For pi, prefer an explicit interactive command using `ctx.sessionManager`/`ctx.ui` before automatic `agent_end` or compaction hooks.
+6. Consider a stricter structured `SessionSummary` schema if real summaries need machine-readable subsections beyond the Markdown pending-memory format.
 
 ## Phase 14 — Auto-Memory Review and Memory Dashboard
 
