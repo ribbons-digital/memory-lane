@@ -29,3 +29,45 @@ test("parses SessionEnd payload with messages and confirmation", () => {
     { role: "tool", content: "TOOL_MARKER", toolName: "Bash", timestamp: "2026-06-16T00:00:00.000Z" },
   ])
 })
+
+test("parses SessionEnd edge cases for confirmation and messages", () => {
+  const parsed = parseClaudePayload({
+    hook_event_name: "SessionEnd",
+    session_id: "session-1",
+    cwd: "/tmp/memory-lane-fixture",
+    confirmed: false,
+    messages: [
+      { role: "tool", content: "shell output", tool_name: "Bash" },
+      { role: "invalid", content: "ignored role" },
+      { role: "user", content: "" },
+      { role: "assistant" },
+      "not an object",
+      null,
+    ],
+  })
+
+  assert.equal(parsed.kind, "session-end")
+  assert.equal(parsed.kind === "session-end" ? parsed.confirmed : undefined, false)
+  assert.deepEqual(parsed.kind === "session-end" ? parsed.input.messages : undefined, [
+    { role: "tool", content: "shell output", toolName: "Bash" },
+  ])
+})
+
+test("parses SessionEnd missing or non-array messages as empty", () => {
+  const missingMessages = parseClaudePayload({
+    hook_event_name: "SessionEnd",
+    session_id: "session-1",
+    cwd: "/tmp/memory-lane-fixture",
+  })
+  const nonArrayMessages = parseClaudePayload({
+    hook_event_name: "SessionEnd",
+    session_id: "session-1",
+    cwd: "/tmp/memory-lane-fixture",
+    messages: { role: "user", content: "not an array" },
+  })
+
+  assert.equal(missingMessages.kind, "session-end")
+  assert.deepEqual(missingMessages.kind === "session-end" ? missingMessages.input.messages : undefined, [])
+  assert.equal(nonArrayMessages.kind, "session-end")
+  assert.deepEqual(nonArrayMessages.kind === "session-end" ? nonArrayMessages.input.messages : undefined, [])
+})
