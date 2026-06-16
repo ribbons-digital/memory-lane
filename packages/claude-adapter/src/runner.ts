@@ -1,16 +1,17 @@
 import {
-  appendHookDebugLog, hookDebugEnabled, type HookDebugLogStatus, type MemoryEngine,
+  appendHookDebugLog, hookDebugEnabled, loadConfig, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
-import { handlePostToolUse, handleSessionStart, handleStop, handleUserPromptSubmit, type LifecycleResult } from "@memory-lane/lifecycle"
+import { createOpenAICompatibleProvider, handlePostToolUse, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, type LifecycleResult } from "@memory-lane/lifecycle"
 import { lifecycleNoopOutput, noopOutput, sessionStartOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseClaudePayload, type ClaudeCommand } from "./payloads.js"
-import { readLatestTurnFromTranscript } from "./transcript.js"
+import { readLatestTurnFromTranscript, readSessionMessagesFromTranscript } from "./transcript.js"
 
 export interface RunClaudeHookOptions {
   engine: MemoryEngine
   payloadText: string
   env?: NodeJS.ProcessEnv
   hookDebugLogPath?: string
+  configPath?: string
 }
 
 function parseJson(text: string): unknown {
@@ -30,6 +31,42 @@ function lifecycleCounts(result: LifecycleResult): {
     discarded: result.discarded.length,
     additionalContext: Boolean(result.additionalContext),
     warningCount: result.saved.reduce((count, saveResult) => count + (saveResult.warnings?.length ?? 0), 0),
+  }
+}
+
+function systemMessageOutput(message: string): string {
+  return JSON.stringify({ systemMessage: `Memory Lane: ${message}` })
+}
+
+function createSessionEndSummaryProvider(configPath: string | undefined, env: NodeJS.ProcessEnv | undefined) {
+  const config = loadConfig(configPath)
+  const summaryConfig = config.memory?.sessionEndSummary
+  if (!summaryConfig?.enabled) return { status: "disabled" as const }
+  if (!summaryConfig.baseUrl || !summaryConfig.model) return { status: "missing-provider" as const, config: summaryConfig }
+  return {
+    status: "configured" as const,
+    config: summaryConfig,
+    provider: createOpenAICompatibleProvider({
+      provider: "openai-compatible",
+      baseUrl: summaryConfig.baseUrl,
+      apiKeyEnv: summaryConfig.apiKeyEnv,
+      model: summaryConfig.model,
+    }, env),
+  }
+}
+
+function saveSessionEndCandidates(engine: MemoryEngine, candidates: Awaited<ReturnType<typeof handleSessionEnd>>): LifecycleResult {
+  return {
+    saved: candidates.map((candidate) => engine.save({
+      text: candidate.text,
+      category: candidate.category,
+      scopeType: candidate.scopeType,
+      status: candidate.status,
+      source: candidate.source,
+      kind: candidate.kind,
+      provenance: { ...candidate.provenance, adapter: "claude" },
+    })),
+    discarded: [],
   }
 }
 
@@ -89,6 +126,39 @@ export async function runClaudeHookCommand(command: ClaudeCommand, options: RunC
       }, { adapter: "claude" })
       log("ok", lifecycleCounts(result))
       return lifecycleNoopOutput(result, debug)
+    }
+
+    if (parsed.kind === "session-end") {
+      const summaryProvider = createSessionEndSummaryProvider(options.configPath, options.env)
+      if (summaryProvider.status === "disabled") {
+        log("noop", { reason: "session-end summarization disabled" })
+        return systemMessageOutput("Session-end summarization is not enabled.")
+      }
+      if (summaryProvider.status === "missing-provider") {
+        log("noop", { reason: "session-end summary provider not configured" })
+        return systemMessageOutput("Session-end summarization requires memory.sessionEndSummary.baseUrl and model.")
+      }
+      const requireConfirmation = summaryProvider.config.requireConfirmation !== false
+      if (requireConfirmation && !parsed.confirmed) {
+        log("noop", { reason: "session-end confirmation required" })
+        return systemMessageOutput("Session-end summarization requires confirmation. Rerun the Claude SessionEnd payload with confirmed: true or set memory.sessionEndSummary.requireConfirmation to false.")
+      }
+
+      const transcriptMessages = parsed.input.messages.length ? parsed.input.messages : readSessionMessagesFromTranscript(parsed.input.transcriptPath)
+      const candidates = await handleSessionEnd(options.engine, {
+        ...parsed.input,
+        messages: transcriptMessages,
+      }, {
+        provider: summaryProvider.provider,
+        promptTemplate: summaryProvider.config.promptTemplate ?? undefined,
+        maxTokens: summaryProvider.config.maxTokens,
+        requireConfirmation: false,
+        confirmed: true,
+        includeToolOutputs: summaryProvider.config.includeToolOutputs,
+      }, options.env)
+      const result = saveSessionEndCandidates(options.engine, candidates)
+      log("ok", lifecycleCounts(result))
+      return lifecycleNoopOutput(result, true)
     }
 
     const result = handlePostToolUse(options.engine, parsed.input, { adapter: "claude" })

@@ -1,18 +1,27 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import * as fs from "node:fs"
+import * as http from "node:http"
 import * as os from "node:os"
 import * as path from "node:path"
 import { MemoryEngine } from "@memory-lane/core"
 import { runClaudeHookCommand } from "../src/runner.ts"
 
 function engineInTemp(): MemoryEngine {
+  return engineWithConfigInTemp().engine
+}
+
+function engineWithConfigInTemp(): { engine: MemoryEngine; configPath: string } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-claude-"))
-  return new MemoryEngine({
-    memoryPath: path.join(dir, "memory.jsonl"),
-    embeddingsPath: path.join(dir, "embeddings.jsonl"),
-    configPath: path.join(dir, "config.json"),
-  })
+  const configPath = path.join(dir, "config.json")
+  return {
+    engine: new MemoryEngine({
+      memoryPath: path.join(dir, "memory.jsonl"),
+      embeddingsPath: path.join(dir, "embeddings.jsonl"),
+      configPath,
+    }),
+    configPath,
+  }
 }
 
 function debugLogPath(): string {
@@ -73,6 +82,40 @@ function sessionStartPayload(): string {
     permission_mode: "default",
     source: "startup",
     model: "claude-sonnet-4-6",
+  })
+}
+
+async function withMockSummaryProvider<T>(summary: string, fn: (baseUrl: string) => Promise<T>): Promise<T> {
+  const server = http.createServer((req, res) => {
+    req.resume()
+    res.writeHead(200, { "content-type": "application/json" })
+    res.end(JSON.stringify({ choices: [{ message: { content: summary } }] }))
+  })
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  assert.equal(typeof address, "object")
+  assert.ok(address)
+  const baseUrl = `http://127.0.0.1:${address.port}/v1`
+  try {
+    return await fn(baseUrl)
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+  }
+}
+
+function sessionEndPayload(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    hook_event_name: "SessionEnd",
+    session_id: "session-1",
+    cwd: process.cwd(),
+    transcript_path: null,
+    permission_mode: "default",
+    messages: [
+      { role: "user", content: "RAW_USER_SENTINEL remember this session" },
+      { role: "assistant", content: "RAW_ASSISTANT_SENTINEL I will summarize it." },
+      { role: "tool", content: "RAW_TOOL_SENTINEL", toolName: "Bash" },
+    ],
+    ...overrides,
   })
 }
 
@@ -161,6 +204,81 @@ test("post-tool-use saves with claude tool provenance", async () => {
   assert.equal(saved[0].provenance?.adapter, "claude")
   assert.equal(saved[0].provenance?.lifecycleEvent, "post_tool_use")
   assert.equal(saved[0].provenance?.toolName, "Bash")
+})
+
+test("session-end returns no-op when summarization is disabled", async () => {
+  const { engine, configPath } = engineWithConfigInTemp()
+
+  const output = await runClaudeHookCommand("session-end", {
+    engine,
+    env: { MEMORY_LANE_HOOK_DEBUG: "1" } as NodeJS.ProcessEnv,
+    configPath,
+    payloadText: sessionEndPayload({ confirmed: true }),
+  })
+
+  assert.match(JSON.parse(output).systemMessage, /Session-end summarization is not enabled/)
+  assert.equal(engine.list({ all: true }).length, 0)
+})
+
+test("session-end reports missing provider config before asking for confirmation", async () => {
+  const { engine, configPath } = engineWithConfigInTemp()
+  fs.writeFileSync(configPath, JSON.stringify({ memory: { sessionEndSummary: { enabled: true } } }), "utf8")
+
+  const output = await runClaudeHookCommand("session-end", {
+    engine,
+    env: { MEMORY_LANE_HOOK_DEBUG: "1" } as NodeJS.ProcessEnv,
+    configPath,
+    payloadText: sessionEndPayload(),
+  })
+
+  assert.match(JSON.parse(output).systemMessage, /requires memory\.sessionEndSummary\.baseUrl and model/)
+  assert.equal(engine.list({ all: true }).length, 0)
+})
+
+test("session-end asks for confirmation without saving when required", async () => {
+  await withMockSummaryProvider("## Session Summary\n\nSHOULD_NOT_SAVE", async (baseUrl) => {
+    const { engine, configPath } = engineWithConfigInTemp()
+    fs.writeFileSync(configPath, JSON.stringify({
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-model", requireConfirmation: true } },
+    }), "utf8")
+
+    const output = await runClaudeHookCommand("session-end", {
+      engine,
+      env: { MEMORY_LANE_HOOK_DEBUG: "1" } as NodeJS.ProcessEnv,
+      configPath,
+      payloadText: sessionEndPayload(),
+    })
+
+    assert.match(JSON.parse(output).systemMessage, /requires confirmation/)
+    assert.equal(engine.list({ all: true }).length, 0)
+  })
+})
+
+test("session-end saves confirmed provider summary without raw transcript", async () => {
+  await withMockSummaryProvider("## Session Summary\n\nSanitized Claude summary", async (baseUrl) => {
+    const { engine, configPath } = engineWithConfigInTemp()
+    fs.writeFileSync(configPath, JSON.stringify({
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-model", requireConfirmation: true } },
+    }), "utf8")
+
+    const output = await runClaudeHookCommand("session-end", {
+      engine,
+      env: { MEMORY_LANE_HOOK_DEBUG: "1" } as NodeJS.ProcessEnv,
+      configPath,
+      payloadText: sessionEndPayload({ confirmed: true }),
+    })
+
+    assert.match(JSON.parse(output).systemMessage, /saved 1, skipped 0, discarded 0/)
+    const saved = engine.list({ all: true })
+    assert.equal(saved.length, 1)
+    assert.equal(saved[0].status, "pending")
+    assert.equal(saved[0].source, "session-summary")
+    assert.equal(saved[0].kind, "session_summary")
+    assert.equal(saved[0].provenance?.adapter, "claude")
+    assert.equal(saved[0].provenance?.lifecycleEvent, "session_end")
+    assert.match(saved[0].text, /Sanitized Claude summary/)
+    assert.doesNotMatch(saved[0].text, /RAW_USER_SENTINEL|RAW_ASSISTANT_SENTINEL|RAW_TOOL_SENTINEL/)
+  })
 })
 
 test("invalid payload returns debug no-op", async () => {
