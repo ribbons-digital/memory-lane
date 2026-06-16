@@ -75,7 +75,8 @@ Recent completed work:
   - added manual `memory-lane session-end --confirm` CLI command and docs;
   - added a future-compatible Codex-shaped `SessionEnd` payload parser/runner path with disabled/missing-provider no-op handling, confirmation gating, confirmed save path, and raw-transcript non-persistence tests.
   - added supported Codex `Stop` explicit-intent automation: prompts like "remember this session" or "summarize this session to memory" trigger a bounded-transcript summary when `memory.sessionEndSummary` is enabled and provider-configured, while ordinary `Stop` autosave remains unchanged.
-  - Important correction: current Codex CLI hooks do not expose a supported `SessionEnd` event, so `.codex/hooks.json` must not include `SessionEnd`; Claude Code/pi session-end automation remains follow-up work after identifying supported events.
+  - added Claude Code `SessionEnd` adapter support through `memory-lane claude session-end`; it remains opt-in and confirmation-gated unless `memory.sessionEndSummary.requireConfirmation` is explicitly set to `false`, and confirmed summaries save as pending `session_summary` memories with Claude provenance.
+  - Important correction: current Codex CLI hooks do not expose a supported `SessionEnd` event, so `.codex/hooks.json` must not include `SessionEnd`; pi session-end automation remains follow-up work after identifying the right explicit/session lifecycle UX.
 
 Final reviews for recent feature work returned approved outcomes. Verification on merged `main` passed after the MCP status merge:
 
@@ -138,9 +139,12 @@ memory-lane claude session-start
 memory-lane claude user-prompt-submit
 memory-lane claude stop
 memory-lane claude post-tool-use
+memory-lane claude session-end
 ```
 
 `SessionStart` is read-only baseline injection for new sessions. It uses `handleSessionStart` in `@memory-lane/lifecycle`, selects a small set of recent approved memories visible to the current project scope, and enforces a stricter budget than prompt-specific `UserPromptSubmit` recall. It skips likely secrets, deduplicates normalized memory text, and emits `hookSpecificOutput.additionalContext` with `hookEventName: "SessionStart"`.
+
+Claude Code's documented `SessionEnd` hook can run `memory-lane claude session-end` to generate pending session summaries when `memory.sessionEndSummary.enabled` and provider settings are configured. By default, the Claude adapter still requires confirmation and will not save from a bare hook unless `memory.sessionEndSummary.requireConfirmation` is set to `false` or a manual/test payload includes `confirmed: true`.
 
 `SessionStart` does not save memories, create session scope, dump full project history, replace prompt-specific `UserPromptSubmit` recall, or change `Stop`/`PostToolUse` autosave behavior.
 
@@ -325,8 +329,8 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Manually try Codex `Stop` explicit-intent summaries (for example, "remember this session") and `memory-lane session-end --confirm` with the user's preferred local/remote OpenAI-compatible model, then review whether the generated pending memory is useful enough to approve.
-2. For Claude Code, `SessionEnd` is documented, but capture exact payload/confirmation behavior before implementing.
+1. Manually smoke Claude Code `SessionEnd` with a real captured Claude payload to confirm the documented hook payload shape and shutdown-time output behavior.
+2. Continue evaluating Codex `Stop` explicit-intent summaries and `memory-lane session-end --confirm` with the user's preferred local/remote OpenAI-compatible model, then approve only useful pending summaries.
 3. For pi, prefer an explicit interactive command using `ctx.sessionManager`/`ctx.ui` before automatic `agent_end` or compaction hooks.
 4. Keep Phase 13 follow-ups focused on user-confirmed session continuity; do not start Phase 14 review/dashboard or Phase 15 staleness work until the basic summary flow proves useful.
 5. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.

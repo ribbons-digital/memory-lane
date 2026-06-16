@@ -351,6 +351,29 @@ describe("CLI integration", () => {
     assert.equal(result.stdout.trim(), "{}")
   })
 
+  it("claude session-end accepts hook payload on stdin and uses temp config", () => {
+    fs.writeFileSync(cfgFile, JSON.stringify({ memory: { sessionEndSummary: { enabled: true } } }), "utf8")
+    const result = runProcess(["claude", "session-end"], {
+      env: {
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+      stdin: JSON.stringify({
+        hook_event_name: "SessionEnd",
+        session_id: "session-1",
+        cwd: process.cwd(),
+        transcript_path: null,
+        permission_mode: "default",
+        messages: [{ role: "user", content: "remember this session" }],
+        confirmed: true,
+      }),
+    })
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /requires memory\.sessionEndSummary\.baseUrl and model/)
+    assert.equal(fs.existsSync(memFile) ? fs.readFileSync(memFile, "utf8") : "", "")
+  })
+
   it("obsidian status reports unconfigured mirror", () => {
     const result = runProcess(["obsidian", "status"], {
       env: {

@@ -58,6 +58,18 @@ Use `memory-lane init --yes` to auto-accept all detected harnesses.
         ]
       }
     ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane claude session-end",
+            "timeout": 20,
+            "statusMessage": "Summarizing session memory"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Bash",
@@ -84,6 +96,8 @@ Use `/hooks` in Claude Code to inspect active hooks and verify the settings file
 `UserPromptSubmit` recalls relevant approved memories and injects them via `hookSpecificOutput.additionalContext` before Claude processes the prompt.
 
 `Stop` does not inject context. It can save durable turn-level memories after Claude finishes responding.
+
+`SessionEnd` is supported by Claude Code and can generate pending `session_summary` memories when `memory.sessionEndSummary.enabled` is configured. By default, Memory Lane still requires confirmation; a bare hook will not save unless `memory.sessionEndSummary.requireConfirmation` is set to `false` or the payload is invoked with `confirmed: true` for manual testing.
 
 `PostToolUse` does not inject context. It can save durable tool-outcome memories, such as successful test commands or package-manager workflow rules.
 
