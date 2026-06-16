@@ -18,19 +18,7 @@
 
 ## Current state
 
-Memory Lane Codex SessionStart work is on branch:
-
-```text
-feature/codex-session-start
-```
-
-The feature worktree is:
-
-```text
-/Users/shiang/.config/superpowers/worktrees/memory-lane/codex-session-start
-```
-
-The branch contains the completed Codex Phase 2 SessionStart baseline injection work on top of the previous `main` state, including the earlier docs commit `1f67af9 docs: add MCP prompting tip to skip CLI sandbox fallback`. The Phase 7 MCP Server MVP and Phase 8 Slice 1/2 follow-ups were already merged, verified, pushed, and their feature worktrees/branches removed. The older autosave meta-prompt filter worktree still exists under `~/.config/superpowers/worktrees/memory-lane/autosave-meta-prompt-filter`.
+Codex Phase 2 SessionStart baseline injection has been merged to `main` and the feature branch/worktree removed. The current `main` checkout contains the completed SessionStart work on top of the previous state, including the earlier docs commit `1f67af9 docs: add MCP prompting tip to skip CLI sandbox fallback`. The Phase 7 MCP Server MVP and Phase 8 Slice 1/2 follow-ups were already merged, verified, pushed, and their feature worktrees/branches removed. The older autosave meta-prompt filter worktree still exists under `~/.config/superpowers/worktrees/memory-lane/autosave-meta-prompt-filter`.
 
 Recent completed work:
 

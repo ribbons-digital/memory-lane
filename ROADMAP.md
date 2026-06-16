@@ -169,7 +169,7 @@ Completed scope:
 
 ## Codex / Claude Code Hook Adapter — Phase 2 SessionStart Baseline Injection
 
-**Status:** Complete.
+**Status:** Complete and merged.
 
 **Goal:** Add strict budgeted `SessionStart` baseline injection for Codex and Claude Code CLI so a new session starts with a small set of recent, approved, project-visible memories without dumping project history.
 
@@ -177,11 +177,12 @@ Completed scope:
 
 1. Added `handleSessionStart` in `@memory-lane/lifecycle`, backed by a smaller baseline budget than prompt-specific recall.
 2. Added deterministic baseline selection over approved visible memories with recency ordering, project-scope tie-breaking, duplicate removal, secret filtering, and truncation within budget.
-3. Added Codex `SessionStart` payload parsing, `memory-lane codex session-start`, and Codex-compatible `hookSpecificOutput` with `hookEventName: "SessionStart"`.
-4. Added lifecycle, Codex adapter, and CLI tests plus a SessionStart fixture.
-5. Updated Codex integration docs and README with the `SessionStart` hook configuration.
+3. Added Codex and Claude `SessionStart` payload parsing, `memory-lane codex session-start`, `memory-lane claude session-start`, and Codex/Claude-compatible `hookSpecificOutput` with `hookEventName: "SessionStart"`.
+4. Added lifecycle, Codex adapter, Claude adapter, and CLI tests plus a SessionStart fixture.
+5. Updated Codex and Claude Code integration docs and README with the `SessionStart` hook configuration.
+6. Verified end-to-end in Codex Desktop; debug logs confirm `event: "session-start"`, `status: "ok"`, and `additionalContext: true`.
 
-Next useful step is either a short real-world SessionStart soak in Codex Desktop or Phase 6 pi lifecycle autosave/tool capture. Phase 6 should only start if the user wants automatic pi writes next.
+The next high-value implementation phase is **Phase 13 Session-End Summarization**. Phase 6 pi lifecycle autosave/tool capture remains a candidate if the user wants automatic pi writes next, but Phase 13 has higher strategic value for cross-session continuity.
 
 ## Phase 6 — pi Lifecycle Autosave and Tool Capture
 
@@ -235,7 +236,7 @@ Todos:
 
 ## Phase 9 — Obsidian LLM Wiki / Knowledge Base Integration
 
-**Status:** In progress. Implemented as the first Memory Lane plugin: `@memory-lane/plugin-obsidian-wiki`.
+**Status:** Complete and merged. Shipped as the first Memory Lane plugin in `v0.2.1`: `@memory-lane/plugin-obsidian-wiki`.
 
 **Goal:** Let LLM clients search and read selected Obsidian/Garden notes as source-backed knowledge without turning those notes into Memory Lane memories automatically.
 
@@ -251,13 +252,16 @@ The feature ships as an opt-in plugin rather than a built-in capability:
 - Core Memory Lane stays lean for users who do not need Obsidian knowledge-base access.
 - The plugin exercises the new lightweight plugin system before it is used for other optional features.
 
-Todos:
+Completed scope:
 
-1. Define the lightweight plugin API (`@memory-lane/plugin-api`) with MCP tool/resource and CLI command registration.
-2. Add `plugins` and `pluginConfig` to `MemoryLaneConfig` in `@memory-lane/core`.
-3. Load plugins in the CLI and MCP server and register their contributions alongside built-in features.
-4. Implement `@memory-lane/plugin-obsidian-wiki` with MCP tools (`obsidian_wiki_search`, `obsidian_wiki_read`), an MCP resource (`memory-lane://obsidian-wiki/notes`), and a CLI status command.
-5. Document plugin installation, configuration, privacy boundaries, ignored folders, and how this differs from mirror/import and Obsidian-backed storage.
+1. Defined the lightweight plugin API (`@memory-lane/plugin-api`) with MCP tool/resource and CLI command registration.
+2. Added `plugins` and `pluginConfig` to `MemoryLaneConfig` in `@memory-lane/core`.
+3. Loaded plugins in the CLI and MCP server and registered their contributions alongside built-in features.
+4. Implemented `@memory-lane/plugin-obsidian-wiki` with MCP tools (`obsidian_wiki_search`, `obsidian_wiki_read`), an MCP resource (`memory-lane://obsidian-wiki/notes`), and a CLI status command.
+5. Bundled first-party plugins into the standalone binary via a static registry in `packages/cli/src/plugins.ts`; bundled plugins remain inactive unless enabled in config.
+6. Documented plugin installation, configuration, privacy boundaries, ignored folders, and how this differs from mirror/import and Obsidian-backed storage.
+
+Phase 12 will add explicit `memory-lane plugin install/list/enable/disable/uninstall` commands for users of the standalone binary.
 
 ## Phase 10 — Obsidian-Backed Storage Prototype
 
