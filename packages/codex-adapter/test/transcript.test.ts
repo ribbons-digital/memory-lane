@@ -34,6 +34,35 @@ test("returns partial messages for mixed transcript shapes", () => {
   assert.equal(turn.lastAssistantMessage, "Acknowledged")
 })
 
+test("reads Codex Desktop response_item payload messages", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-transcript-"))
+  const file = path.join(dir, "transcript.jsonl")
+  fs.writeFileSync(file, [
+    JSON.stringify({
+      timestamp: "2026-06-16T04:59:57.746Z",
+      type: "response_item",
+      payload: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: "remember this session\n" }],
+      },
+    }),
+    JSON.stringify({
+      timestamp: "2026-06-16T05:00:21.711Z",
+      type: "response_item",
+      payload: {
+        type: "message",
+        role: "assistant",
+        content: [{ type: "output_text", text: "Saved a checkpoint." }],
+      },
+    }),
+  ].join("\n"), "utf8")
+
+  const turn = readLatestTurnFromTranscript(file, 4096)
+  assert.equal(turn.lastUserMessage, "remember this session\n")
+  assert.equal(turn.lastAssistantMessage, "Saved a checkpoint.")
+})
+
 test("returns empty object for missing transcript", () => {
   assert.deepEqual(readLatestTurnFromTranscript("/path/that/does/not/exist"), {})
 })

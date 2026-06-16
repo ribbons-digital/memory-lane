@@ -32,13 +32,22 @@ function contentToText(content: unknown): string | undefined {
   return undefined
 }
 
+function transcriptMessageObject(obj: Record<string, unknown>): Record<string, unknown> {
+  if (obj.type === "response_item" && obj.payload && typeof obj.payload === "object" && !Array.isArray(obj.payload)) {
+    return obj.payload as Record<string, unknown>
+  }
+  return obj
+}
+
 function roleFromObject(obj: Record<string, unknown>): string | undefined {
-  const role = obj.role ?? obj.type ?? obj.author
+  const message = transcriptMessageObject(obj)
+  const role = message.role ?? message.type ?? message.author
   return typeof role === "string" ? role.toLowerCase() : undefined
 }
 
 function textFromObject(obj: Record<string, unknown>): string | undefined {
-  return contentToText(obj.content ?? obj.message ?? obj.text)
+  const message = transcriptMessageObject(obj)
+  return contentToText(message.content ?? message.message ?? message.text)
 }
 
 function sessionMessageRole(role: string): SessionMessage["role"] | undefined {
