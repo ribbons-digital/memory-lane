@@ -206,6 +206,66 @@ describe("validateConfig", () => {
     }
     assert.throws(() => validateConfig(cfg), ConfigError)
   })
+
+  it("sessionEndSummary defaults to disabled on load", () => {
+    const dir = tempDir()
+    const f = path.join(dir, "c.json")
+    fs.writeFileSync(f, JSON.stringify({
+      semantic: {
+        enabled: false,
+        activeEmbeddingProfile: "local-example",
+        embeddings: { profiles: {} },
+        retrieval: { topK: 8, minSimilarity: 0.25, semanticWeight: 0.65, lexicalWeight: 0.25, recencyWeight: 0.1, fallbackToAllVisibleOnMiss: true },
+        privacy: { allowRemoteEmbeddings: false },
+      },
+    }))
+    const config = loadConfig(f)
+    assert.equal(config.memory?.sessionEndSummary?.enabled, false)
+    assert.equal(config.memory?.sessionEndSummary?.requireConfirmation, true)
+    assert.equal(config.memory?.sessionEndSummary?.includeToolOutputs, false)
+    assert.equal(config.memory?.sessionEndSummary?.maxTokens, 800)
+  })
+
+  it("accepts enabled sessionEndSummary config", () => {
+    const config = validateConfig({
+      semantic: {
+        enabled: false,
+        activeEmbeddingProfile: "local-example",
+        embeddings: { profiles: {} },
+        retrieval: { topK: 8, minSimilarity: 0.25, semanticWeight: 0.65, lexicalWeight: 0.25, recencyWeight: 0.1, fallbackToAllVisibleOnMiss: true },
+        privacy: { allowRemoteEmbeddings: false },
+      },
+      memory: {
+        sessionEndSummary: {
+          enabled: true,
+          provider: "openai-compatible",
+          baseUrl: "http://localhost:11434/v1",
+          apiKeyEnv: "MEMORY_LANE_SUMMARY_API_KEY",
+          model: "gpt-4.1-mini",
+          maxTokens: 800,
+          requireConfirmation: true,
+          includeToolOutputs: false,
+        },
+      },
+    })
+    assert.equal(config.memory?.sessionEndSummary?.enabled, true)
+    assert.equal(config.memory?.sessionEndSummary?.model, "gpt-4.1-mini")
+  })
+
+  it("rejects unknown sessionEndSummary provider", () => {
+    assert.throws(() => validateConfig({
+      semantic: {
+        enabled: false,
+        activeEmbeddingProfile: "local-example",
+        embeddings: { profiles: {} },
+        retrieval: { topK: 8, minSimilarity: 0.25, semanticWeight: 0.65, lexicalWeight: 0.25, recencyWeight: 0.1, fallbackToAllVisibleOnMiss: true },
+        privacy: { allowRemoteEmbeddings: false },
+      },
+      memory: {
+        sessionEndSummary: { enabled: true, provider: "unknown" },
+      },
+    }), /provider/)
+  })
 })
 
 describe("isLocalBaseUrl", () => {

@@ -19,6 +19,14 @@ export const DEFAULT_CONFIG: SemanticMemoryConfig = {
     privacy: { allowRemoteEmbeddings: false },
   },
   obsidian: { enabled: false },
+  memory: {
+    sessionEndSummary: {
+      enabled: false,
+      requireConfirmation: true,
+      includeToolOutputs: false,
+      maxTokens: 800,
+    },
+  },
 }
 
 export function getDefaultConfigPath(): string {
@@ -111,8 +119,26 @@ export function validateConfig(config: unknown): SemanticMemoryConfig {
   bool(r.fallbackToAllVisibleOnMiss, "semantic.retrieval.fallbackToAllVisibleOnMiss")
   bool(obj(s.privacy, "semantic.privacy").allowRemoteEmbeddings, "semantic.privacy.allowRemoteEmbeddings")
   validateObsidianConfig(root.obsidian)
+  validateSessionEndSummaryConfig((root.memory as Record<string, unknown> | undefined)?.sessionEndSummary)
   validatePluginsConfig(root.plugins, root.pluginConfig)
   return config as SemanticMemoryConfig
+}
+
+function validateSessionEndSummaryConfig(v: unknown): void {
+  if (v === undefined) return
+  const o = obj(v, "memory.sessionEndSummary")
+  const enabled = o.enabled === undefined ? false : bool(o.enabled, "memory.sessionEndSummary.enabled")
+  if (!enabled) return
+  if (o.provider !== undefined && o.provider !== "openai-compatible") {
+    throw new ConfigError("memory.sessionEndSummary.provider must be openai-compatible")
+  }
+  if (o.baseUrl !== undefined) str(o.baseUrl, "memory.sessionEndSummary.baseUrl")
+  if (o.apiKeyEnv !== undefined && o.apiKeyEnv !== null) str(o.apiKeyEnv, "memory.sessionEndSummary.apiKeyEnv")
+  if (o.model !== undefined) str(o.model, "memory.sessionEndSummary.model")
+  if (o.promptTemplate !== undefined && o.promptTemplate !== null) str(o.promptTemplate, "memory.sessionEndSummary.promptTemplate")
+  if (o.maxTokens !== undefined) num(o.maxTokens, "memory.sessionEndSummary.maxTokens")
+  if (o.requireConfirmation !== undefined) bool(o.requireConfirmation, "memory.sessionEndSummary.requireConfirmation")
+  if (o.includeToolOutputs !== undefined) bool(o.includeToolOutputs, "memory.sessionEndSummary.includeToolOutputs")
 }
 
 function validatePluginsConfig(plugins: unknown, pluginConfig: unknown): void {

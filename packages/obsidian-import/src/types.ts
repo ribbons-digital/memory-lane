@@ -1,7 +1,7 @@
 export type ImportMemoryStatus = "pending" | "approved" | "rejected" | "deleted"
 export type ImportMemoryCategory = "preference" | "personal" | "project"
 export type ImportMemoryScopeType = "global" | "project"
-export type ImportMemorySource = "manual" | "user-suggested" | "agent-suggested"
+export type ImportMemorySource = "manual" | "user-suggested" | "agent-suggested" | "session-summary"
 
 export type ImportMemoryKind =
   | "preference"
@@ -10,6 +10,7 @@ export type ImportMemoryKind =
   | "project_checkpoint"
   | "workflow_rule"
   | "decision"
+  | "session_summary"
   | "misc"
 
 export interface ImportMemoryScope {

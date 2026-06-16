@@ -35,7 +35,7 @@ export function inferMemoryKind(text: string, category: MemoryCategory): MemoryK
 }
 
 export function effectiveMemoryKind(memory: { text: string; category: MemoryCategory; kind?: unknown }): MemoryKind {
-  const kinds = new Set(["preference","personal_context","project_fact","project_checkpoint","workflow_rule","decision","misc"])
+  const kinds = new Set(["preference","personal_context","project_fact","project_checkpoint","workflow_rule","decision","session_summary","misc"])
   if (typeof memory.kind === "string" && kinds.has(memory.kind)) return memory.kind as MemoryKind
   return inferMemoryKind(memory.text, memory.category)
 }

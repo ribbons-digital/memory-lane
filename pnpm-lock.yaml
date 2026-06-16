@@ -42,6 +42,9 @@ importers:
       '@memory-lane/core':
         specifier: workspace:*
         version: link:../core
+      '@memory-lane/lifecycle':
+        specifier: workspace:^
+        version: link:../lifecycle
       '@memory-lane/mcp-server':
         specifier: workspace:*
         version: link:../mcp-server

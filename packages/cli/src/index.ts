@@ -6,6 +6,7 @@ import { readFile } from "node:fs/promises"
 import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, resolveWritableMemoryPaths, type MemoryPaths } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
+import { handleSessionEnd, createOpenAICompatibleProvider } from "@memory-lane/lifecycle"
 import { handleMcp } from "./commands/mcp.js"
 import { handleInit } from "./commands/init.js"
 import { handleUninstall } from "./commands/uninstall.js"
@@ -257,6 +258,95 @@ function handleStatus(ctx: CliContext): void {
   }
   const r = report as any
   console.log(`Total: ${r.totalMemories}, Approved: ${r.approvedMemories}, Pending: ${r.pendingMemories}, Embeddings: ${r.embeddingCount}`)
+}
+
+function createSummaryProvider(config: ReturnType<typeof loadConfig>):
+  | { provider: ReturnType<typeof createOpenAICompatibleProvider>; config: NonNullable<NonNullable<ReturnType<typeof loadConfig>["memory"]>["sessionEndSummary"]> }
+  | undefined {
+  const summaryConfig = config.memory?.sessionEndSummary
+  if (!summaryConfig?.enabled) return undefined
+  if (!summaryConfig.baseUrl || !summaryConfig.model) return undefined
+  return {
+    provider: createOpenAICompatibleProvider({
+      provider: "openai-compatible",
+      baseUrl: summaryConfig.baseUrl,
+      apiKeyEnv: summaryConfig.apiKeyEnv,
+      model: summaryConfig.model,
+    }),
+    config: summaryConfig,
+  }
+}
+
+async function handleSessionEndCommand(ctx: CliContext): Promise<void> {
+  const cfg = loadConfig(ctx.configPath)
+  const summaryConfig = cfg.memory?.sessionEndSummary
+  if (!summaryConfig?.enabled) {
+    console.log(formatError("Session-end summarization is not enabled. Set memory.sessionEndSummary.enabled in config.", ctx.json))
+    process.exit(1)
+  }
+  if (!summaryConfig.baseUrl || !summaryConfig.model) {
+    console.log(formatError("Session-end summarization requires memory.sessionEndSummary.baseUrl and model.", ctx.json))
+    process.exit(1)
+  }
+  const confirmed = hasFlag(ctx.argv, "confirm")
+  if (summaryConfig.requireConfirmation && !confirmed) {
+    console.log(formatError("Session-end summarization requires confirmation. Run with --confirm or configure requireConfirmation: false.", ctx.json))
+    process.exit(1)
+  }
+
+  const payloadText = await readStdin()
+  let payload: { messages?: Array<{ role: string; content: string; timestamp?: string; toolName?: string }>; sessionId?: string }
+  try {
+    payload = JSON.parse(payloadText)
+  } catch {
+    console.log(formatError("Invalid JSON on stdin. Expected { messages: [...], sessionId? }", ctx.json))
+    process.exit(2)
+  }
+  if (!Array.isArray(payload.messages)) {
+    console.log(formatError("Missing messages array in stdin payload.", ctx.json))
+    process.exit(2)
+  }
+
+  const provider = createSummaryProvider(cfg)
+  if (!provider) {
+    console.log(formatError("Failed to create summary provider.", ctx.json))
+    process.exit(1)
+  }
+
+  const candidates = await handleSessionEnd(ctx.engine, {
+    cwd: process.cwd(),
+    sessionId: payload.sessionId,
+    messages: payload.messages.map((m) => ({
+      role: m.role === "user" || m.role === "assistant" || m.role === "tool" ? m.role : "user",
+      content: m.content,
+      timestamp: m.timestamp,
+      toolName: m.toolName,
+    })),
+  }, {
+    provider: provider.provider,
+    promptTemplate: provider.config.promptTemplate ?? undefined,
+    maxTokens: provider.config.maxTokens,
+    requireConfirmation: false,
+    includeToolOutputs: provider.config.includeToolOutputs,
+  })
+
+  if (candidates.length === 0) {
+    console.log(ctx.json ? JSON.stringify({ ok: true, saved: false, reason: "no durable memory" }) : "No durable session memory generated.")
+    return
+  }
+
+  const candidate = candidates[0]
+  const saved = ctx.engine.save({
+    text: candidate.text,
+    category: candidate.category,
+    scopeType: candidate.scopeType,
+    status: candidate.status,
+    source: candidate.source,
+    kind: candidate.kind,
+    provenance: candidate.provenance,
+  })
+
+  console.log(formatSaveResult(saved, ctx.json))
 }
 
 function handleInitCommand(argv: string[], json: boolean): void {
@@ -561,12 +651,12 @@ function handleConfig(ctx: CliContext): void {
 }
 
 const claudeHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start"])
-const codexHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start"])
+const codexHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start", "session-end"])
 
 async function handleCodex(ctx: CliContext): Promise<void> {
   const event = ctx.rest[0]
   if (!codexHookCommands.has(event)) {
-    console.log(formatError("Unknown Codex hook event. Usage: memory-lane codex user-prompt-submit|stop|post-tool-use|session-start", ctx.json))
+    console.log(formatError("Unknown Codex hook event. Usage: memory-lane codex user-prompt-submit|stop|post-tool-use|session-start|session-end", ctx.json))
     process.exit(2)
   }
   const payloadText = await readStdin()
@@ -574,6 +664,7 @@ async function handleCodex(ctx: CliContext): Promise<void> {
     engine: ctx.engine,
     payloadText,
     env: process.env,
+    configPath: ctx.configPath,
   })
   console.log(output)
 }
@@ -614,6 +705,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   claude: handleClaude,
   codex: handleCodex,
   mcp: handleMcp,
+  "session-end": handleSessionEndCommand,
 }
 
 async function dispatch(command: string, ctx: CliContext): Promise<void> {

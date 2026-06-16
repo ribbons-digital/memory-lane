@@ -224,6 +224,20 @@ describe("CLI integration", () => {
     assert.doesNotMatch(output, /\[object Object\]/u)
   })
 
+  it("session-end errors when summarization is not configured", () => {
+    const result = runProcess(["session-end"], {
+      env: {
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+      stdin: JSON.stringify({ messages: [] }),
+    })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout + result.stderr, /Session-end summarization is not enabled/)
+  })
+
   it("codex unknown event returns usage error", () => {
     const result = runProcess(["codex", "unknown-event"], {
       env: {

@@ -14,6 +14,7 @@ Local-first memory for AI coding agents — CLI, hooks, pi extension, semantic r
 - [Storage](#storage)
 - [Project Scoping](#project-scoping)
 - [CLI Commands](#cli-commands)
+  - [Session-end summarization](#session-end-summarization)
   - [Obsidian mirror](#obsidian-mirror)
   - [Import from Obsidian](#import-from-obsidian)
 - [Configuration](#configuration)
@@ -236,10 +237,54 @@ memory-lane doctor                Diagnostic report
 memory-lane status                Quick stats
 memory-lane reindex [--force]     Rebuild embeddings
 memory-lane init --project-local  Initialize sandbox-friendly project-local storage
+memory-lane session-end --confirm Generate a pending session summary from stdin JSON
+memory-lane codex session-end     Handle Codex SessionEnd summarization hook payloads
 memory-lane obsidian ...          Manage optional Obsidian mirror/import workflows
 ```
 
 All commands support `--json` for machine-readable output and `--project <path>` to set the project scope.
+
+### Session-end summarization
+
+Session-end summarization is opt-in and disabled by default. It sends a compact session transcript to an explicitly configured OpenAI-compatible chat model, then saves the generated summary as a **pending** memory with `source: "session-summary"`, `kind: "session_summary"`, and `provenance.lifecycleEvent: "session_end"`. The transcript itself is not stored in Memory Lane.
+
+Configure it in `~/.memory-lane/config.json`:
+
+```json
+{
+  "memory": {
+    "sessionEndSummary": {
+      "enabled": true,
+      "provider": "openai-compatible",
+      "baseUrl": "http://localhost:11434/v1",
+      "apiKeyEnv": "MEMORY_LANE_SUMMARY_API_KEY",
+      "model": "gpt-4.1-mini",
+      "maxTokens": 800,
+      "requireConfirmation": true,
+      "includeToolOutputs": false
+    }
+  }
+}
+```
+
+Run it manually with explicit confirmation:
+
+```bash
+echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant","content":"Done."}]}' \
+  | memory-lane session-end --confirm
+memory-lane review
+memory-lane approve <id>
+```
+
+Codex CLI can also call the hook adapter:
+
+```bash
+memory-lane codex session-end
+```
+
+When `requireConfirmation` is true, an unconfirmed Codex `SessionEnd` payload returns a message asking the user to rerun/confirm before a pending summary is saved. Confirmed payloads save only the generated summary, not the raw transcript.
+
+Tool messages are excluded unless `includeToolOutputs` is true. Lines that look like secrets are redacted before the transcript is sent to the configured model. Claude Code and pi `SessionEnd` adapters remain follow-up work.
 
 ### Obsidian mirror
 

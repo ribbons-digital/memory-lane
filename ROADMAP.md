@@ -318,19 +318,28 @@ Todos:
 
 ## Phase 13 — Session-End Summarization
 
+**Status:** In progress. Slice 1 implements the shared data model, opt-in config, LLM summarization handler, manual `memory-lane session-end --confirm` command, and Codex `memory-lane codex session-end` hook support with confirmation gating. Claude Code and pi `SessionEnd` adapters remain follow-up slices.
+
 **Goal:** Let Memory Lane optionally capture a structured summary at the end of an agent session so the next session can start with project state instead of from scratch.
 
 This phase is the foundation for replacing manual `HANDOFF.md` notes. It is **opt-in and disabled by default** because it sends session content to an LLM for summarization and may produce imperfect memories.
 
-Todos:
+Completed Slice 1 scope:
 
-1. Add `memory.sessionEndSummary` config section with `enabled: false`, `model`/`provider`, `promptTemplate`, and privacy flags.
-2. Define a `SessionSummary` schema: decisions made, blockers, open questions, next steps, key facts, and a raw transcript reference hash (not the transcript itself).
-3. Add a `handleSessionEnd` lifecycle handler in `@memory-lane/lifecycle` that takes the session transcript/messages and returns candidate memory entries.
-4. Hook `agent_end`/`session_end` events in pi, Codex, and Claude Code adapters, but only generate a summary after an explicit user prompt such as "Remember this session" or a confirmation dialog; never auto-generate by default.
-5. Save generated summaries as `pending` memories with `source: "session-summary"` and `provenance.lifecycleEvent: "session_end"` so they enter the normal review queue.
-6. Add tests for the summarization handler, schema validation, and opt-in gating.
-7. Document the feature, the opt-in requirement, the privacy implications, and how to approve/reject session summaries.
+1. Added `memory.sessionEndSummary` config section with `enabled: false`, OpenAI-compatible provider settings, `promptTemplate`, `maxTokens`, `requireConfirmation`, and `includeToolOutputs`.
+2. Added `session_summary` memory kind, `session-summary` source, and `session_end` lifecycle provenance event.
+3. Added an OpenAI-compatible chat provider and `handleSessionEnd` lifecycle handler in `@memory-lane/lifecycle`.
+4. Added secret-line redaction, default tool-output exclusion, `NO_DURABLE_MEMORY` handling, and pending session-summary candidate creation.
+5. Added manual `memory-lane session-end --confirm` CLI support for stdin transcript JSON.
+6. Added Codex `SessionEnd` payload parsing and `memory-lane codex session-end` handling with disabled/missing-provider no-op behavior, confirmation gating, confirmed save path, and tests that raw transcript content is not persisted.
+7. Added tests for config validation, LLM provider behavior, session-end handler behavior, CLI gating, and Codex hook behavior.
+8. Documented the feature, the opt-in requirement, privacy boundaries, and review/approval workflow.
+
+Remaining follow-up scope:
+
+1. Hook `agent_end`/`session_end` events in pi and Claude Code adapters, but only generate a summary after an explicit user prompt such as "Remember this session" or a confirmation dialog; never auto-generate by default.
+2. Consider a stricter structured `SessionSummary` schema if real summaries need machine-readable subsections beyond the Markdown pending-memory format.
+3. Add end-to-end harness-specific smoke tests once real hook confirmation behavior is known.
 
 ## Phase 14 — Auto-Memory Review and Memory Dashboard
 

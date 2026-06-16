@@ -1,18 +1,29 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import * as fs from "node:fs"
+import * as http from "node:http"
 import * as os from "node:os"
 import * as path from "node:path"
-import { MemoryEngine } from "@memory-lane/core"
+import { MemoryEngine, writeConfig } from "@memory-lane/core"
 import { runCodexHookCommand } from "../src/runner.ts"
 
 function engineInTemp(): MemoryEngine {
+  return engineFixture().engine
+}
+
+function engineFixture(): { engine: MemoryEngine; configPath: string; memoryPath: string } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-codex-"))
-  return new MemoryEngine({
-    memoryPath: path.join(dir, "memory.jsonl"),
-    embeddingsPath: path.join(dir, "embeddings.jsonl"),
-    configPath: path.join(dir, "config.json"),
-  })
+  const memoryPath = path.join(dir, "memory.jsonl")
+  const configPath = path.join(dir, "config.json")
+  return {
+    engine: new MemoryEngine({
+      memoryPath,
+      embeddingsPath: path.join(dir, "embeddings.jsonl"),
+      configPath,
+    }),
+    configPath,
+    memoryPath,
+  }
 }
 
 function stopPayload(): string {
@@ -70,6 +81,59 @@ function postToolUsePayload(toolResponse: unknown = { exit_code: 0, stdout: "tes
   })
 }
 
+function sessionEndPayload(confirmed?: boolean): string {
+  return JSON.stringify({
+    hook_event_name: "SessionEnd",
+    session_id: "session-1",
+    cwd: process.cwd(),
+    transcript_path: null,
+    model: "gpt-5-codex",
+    confirmed,
+    messages: [
+      { role: "user", content: "RAW_TRANSCRIPT_SHOULD_NOT_BE_SAVED" },
+      { role: "assistant", content: "I will summarize the durable outcome." },
+    ],
+  })
+}
+
+async function withMockSummaryServer<T>(summary: string, fn: (baseUrl: string, requests: unknown[]) => Promise<T>): Promise<T> {
+  const requests: unknown[] = []
+  const server = http.createServer((req, res) => {
+    let body = ""
+    req.setEncoding("utf8")
+    req.on("data", (chunk) => { body += chunk })
+    req.on("end", () => {
+      requests.push(JSON.parse(body))
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ choices: [{ message: { content: summary } }] }))
+    })
+  })
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  assert.ok(address && typeof address === "object")
+  try {
+    return await fn(`http://127.0.0.1:${address.port}/v1`, requests)
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+  }
+}
+
+function enableSessionEndSummary(configPath: string, baseUrl: string, requireConfirmation = true): void {
+  writeConfig(configPath, {
+    memory: {
+      sessionEndSummary: {
+        enabled: true,
+        provider: "openai-compatible",
+        baseUrl,
+        model: "summary-model",
+        requireConfirmation,
+        includeToolOutputs: false,
+        maxTokens: 200,
+      },
+    },
+  } as any)
+}
+
 test("user-prompt-submit emits additionalContext", async () => {
   const engine = engineInTemp()
   engine.save({ text: "This repo runs tests with pnpm test", category: "project", scopeType: "global", status: "approved" })
@@ -104,6 +168,83 @@ test("mismatched event returns no-op", async () => {
     payloadText: stopPayload(),
   })
   assert.equal(output, "{}")
+})
+
+test("session-end returns no-op when summarization is disabled", async () => {
+  const { engine, configPath } = engineFixture()
+  const output = await runCodexHookCommand("session-end", {
+    engine,
+    configPath,
+    payloadText: sessionEndPayload(true),
+  })
+  assert.equal(output, "{}")
+  assert.equal(engine.list({ all: true }).length, 0)
+})
+
+test("session-end asks for confirmation without saving when required", async () => {
+  const { engine, configPath } = engineFixture()
+  enableSessionEndSummary(configPath, "http://127.0.0.1:1/v1", true)
+  const output = await runCodexHookCommand("session-end", {
+    engine,
+    configPath,
+    payloadText: sessionEndPayload(false),
+  })
+  const parsed = JSON.parse(output)
+  assert.match(parsed.systemMessage, /requires confirmation/i)
+  assert.match(parsed.systemMessage, /confirmed: true/i)
+  assert.equal(engine.list({ all: true }).length, 0)
+})
+
+test("session-end reports missing provider config before asking for confirmation", async () => {
+  const { engine, configPath } = engineFixture()
+  writeConfig(configPath, {
+    memory: {
+      sessionEndSummary: {
+        enabled: true,
+        provider: "openai-compatible",
+        model: "summary-model",
+        requireConfirmation: true,
+      },
+    },
+  } as any)
+  const output = await runCodexHookCommand("session-end", {
+    engine,
+    configPath,
+    env: { MEMORY_LANE_HOOK_DEBUG: "1" } as NodeJS.ProcessEnv,
+    payloadText: sessionEndPayload(false),
+  })
+  const parsed = JSON.parse(output)
+  assert.match(parsed.systemMessage, /requires memory\.sessionEndSummary\.baseUrl and model/i)
+  assert.doesNotMatch(parsed.systemMessage, /requires confirmation/i)
+  assert.equal(engine.list({ all: true }).length, 0)
+})
+
+test("session-end saves confirmed provider summary without raw transcript", async () => {
+  await withMockSummaryServer("- Decisions made: use pnpm.", async (baseUrl, requests) => {
+    const { engine, configPath, memoryPath } = engineFixture()
+    enableSessionEndSummary(configPath, baseUrl, true)
+
+    const output = await runCodexHookCommand("session-end", {
+      engine,
+      configPath,
+      env: { MEMORY_LANE_HOOK_DEBUG: "1" } as NodeJS.ProcessEnv,
+      payloadText: sessionEndPayload(true),
+    })
+
+    const parsed = JSON.parse(output)
+    assert.match(parsed.systemMessage, /saved 1, skipped 0, discarded 0/)
+    assert.equal(requests.length, 1)
+    const saved = engine.list({ all: true })
+    assert.equal(saved.length, 1)
+    assert.equal(saved[0].status, "pending")
+    assert.equal(saved[0].source, "session-summary")
+    assert.equal(saved[0].kind, "session_summary")
+    assert.equal(saved[0].provenance?.adapter, "codex")
+    assert.equal(saved[0].provenance?.lifecycleEvent, "session_end")
+    assert.match(saved[0].text, /use pnpm/)
+    assert.doesNotMatch(saved[0].text, /RAW_TRANSCRIPT_SHOULD_NOT_BE_SAVED/)
+    assert.doesNotMatch(fs.readFileSync(memoryPath, "utf8"), /RAW_TRANSCRIPT_SHOULD_NOT_BE_SAVED/)
+  })
 })
 
 test("handler failure returns no-op", async () => {

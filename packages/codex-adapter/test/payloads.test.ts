@@ -51,3 +51,28 @@ test("parses SessionStart payload", () => {
   assert.equal(parsed.kind === "session-start" ? parsed.input.cwd : undefined, "/tmp/memory-lane-fixture")
   assert.equal(parsed.kind === "session-start" ? parsed.input.sessionId : undefined, "session-1")
 })
+
+test("parses SessionEnd payload with messages and confirmation", () => {
+  const parsed = parseCodexPayload({
+    hook_event_name: "SessionEnd",
+    session_id: "session-1",
+    cwd: "/tmp/memory-lane-fixture",
+    transcript_path: null,
+    model: "gpt-5-codex",
+    confirmed: true,
+    messages: [
+      { role: "user", content: "Use pnpm", timestamp: "2026-06-16T00:00:00Z" },
+      { role: "assistant", content: "Done." },
+      { role: "tool", tool_name: "Bash", content: "pnpm test" },
+    ],
+  })
+  assert.equal(parsed.kind, "session-end")
+  assert.equal(parsed.kind === "session-end" ? parsed.confirmed : undefined, true)
+  assert.equal(parsed.kind === "session-end" ? parsed.input.cwd : undefined, "/tmp/memory-lane-fixture")
+  assert.equal(parsed.kind === "session-end" ? parsed.input.sessionId : undefined, "session-1")
+  assert.deepEqual(parsed.kind === "session-end" ? parsed.input.messages : undefined, [
+    { role: "user", content: "Use pnpm", timestamp: "2026-06-16T00:00:00Z", toolName: undefined },
+    { role: "assistant", content: "Done.", timestamp: undefined, toolName: undefined },
+    { role: "tool", content: "pnpm test", timestamp: undefined, toolName: "Bash" },
+  ])
+})
