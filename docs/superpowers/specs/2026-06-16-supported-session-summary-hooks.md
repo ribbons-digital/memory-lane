@@ -216,7 +216,9 @@ Recommended design:
 3. If interactive confirmation is not reliable at shutdown, require explicit config `requireConfirmation: false` or an earlier explicit user command/prompt marker.
 4. Add tests with fixture payloads from the Claude Code docs and local manual capture.
 
-This is a good second automation target, after Codex explicit `Stop` or after a manual quality smoke, because the event is supported and semantically correct.
+Implementation and smoke status as of 2026-06-16: this slice is implemented through `memory-lane claude session-end` and was real-world smoked in Claude Code CLI from the Sitewright project using isolated temp storage. The debug log showed `adapter: "claude"`, `event: "session-end"`, `cwd: "/Users/shiang/projects/ribbons-digital/sitewright"`, `status: "ok"`, and `saved: 1`; the saved memory was pending with `source: "session-summary"`, `kind: "session_summary"`, and Claude `session_end` provenance. A first smoke run saved `0`, which is acceptable when the provider returns no durable summary candidate.
+
+This was the second automation target after Codex explicit `Stop` because the event is supported and semantically correct.
 
 ### Candidate F — pi `agent_end`, `session_before_compact`, or `session_shutdown`
 
@@ -254,9 +256,10 @@ Recommended design:
    - Preserve current stop autosave behavior when no summary is requested.
 
 3. **Claude Code `SessionEnd` adapter**
-   - Use the real documented Claude Code `SessionEnd` event.
-   - Verify exact payload locally before implementation.
-   - Handle confirmation carefully because shutdown may not support interactive prompts.
+   - Completed through `memory-lane claude session-end`.
+   - Uses the real documented Claude Code `SessionEnd` event.
+   - Real-world smoke confirmed the hook fires from Claude Code CLI and saves a pending summary with Claude provenance when enabled and configured.
+   - Confirmation remains careful because shutdown may not support interactive prompts.
 
 4. **pi explicit command**
    - Add an interactive pi command using `ctx.sessionManager` and `ctx.ui`.

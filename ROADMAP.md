@@ -318,7 +318,7 @@ Todos:
 
 ## Phase 13 — Session-End Summarization
 
-**Status:** In progress. Slice 1 implements the shared data model, opt-in config, LLM summarization handler, and manual `memory-lane session-end --confirm` command. Slice 2 adds supported Codex automation through `Stop` only when the latest user message explicitly requests a session summary. Slice 3 adds Claude Code automation through Claude's documented `SessionEnd` hook. A Codex-shaped `session-end` adapter path exists for tests/future compatibility, but current Codex CLI hooks do not expose a supported `SessionEnd` event. pi session-end automation remains follow-up work.
+**Status:** In progress. Slice 1 implements the shared data model, opt-in config, LLM summarization handler, and manual `memory-lane session-end --confirm` command. Slice 2 adds supported Codex automation through `Stop` only when the latest user message explicitly requests a session summary. Slice 3 adds Claude Code automation through Claude's documented `SessionEnd` hook and has been real-world smoked in Claude Code CLI. A Codex-shaped `session-end` adapter path exists for tests/future compatibility, but current Codex CLI hooks do not expose a supported `SessionEnd` event. pi session-end automation remains follow-up work.
 
 **Goal:** Let Memory Lane optionally capture a structured summary at the end of an agent session so the next session can start with project state instead of from scratch.
 
@@ -349,11 +349,12 @@ Completed Slice 3 scope:
 2. Kept summarization opt-in and confirmation-gated unless `requireConfirmation: false` is explicitly configured.
 3. Saved confirmed summaries as pending `session_summary` memories with Claude provenance.
 4. Added parser, runner, CLI, privacy, and docs tests for the Claude path.
+5. Real-world smoked Claude Code `SessionEnd` in Sitewright with isolated temp storage: debug logs showed `adapter: "claude"`, `event: "session-end"`, `cwd: "/Users/shiang/projects/ribbons-digital/sitewright"`, `status: "ok"`, and `saved: 1`; the generated memory was pending with `source: "session-summary"`, `kind: "session_summary"`, and Claude `session_end` provenance.
 
 Remaining follow-up scope:
 
 1. Manually smoke Codex `Stop` explicit-intent summaries and `memory-lane session-end --confirm` with the user's preferred provider, then evaluate summary quality before adding broader automation.
-2. For pi, prefer an explicit interactive command using `ctx.sessionManager`/`ctx.ui` before automatic `agent_end` or compaction hooks.
+2. Next supported automation slice: for pi, prefer an explicit interactive command using `ctx.sessionManager`/`ctx.ui` before automatic `agent_end` or compaction hooks.
 3. Consider a stricter structured `SessionSummary` schema if real summaries need machine-readable subsections beyond the Markdown pending-memory format.
 
 ## Phase 14 — Auto-Memory Review and Memory Dashboard

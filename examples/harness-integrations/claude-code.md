@@ -89,6 +89,35 @@ Use `memory-lane init --yes` to auto-accept all detected harnesses.
 
 Use `/hooks` in Claude Code to inspect active hooks and verify the settings file they came from.
 
+## Real-world `SessionEnd` smoke test
+
+A real Claude Code CLI smoke test in Sitewright confirmed that `SessionEnd` fires and can save a pending session summary when configured with an OpenAI-compatible provider and `memory.sessionEndSummary.requireConfirmation: false` for the test run. The debug log entry had:
+
+```json
+{
+  "adapter": "claude",
+  "event": "session-end",
+  "cwd": "/Users/shiang/projects/ribbons-digital/sitewright",
+  "status": "ok",
+  "saved": 1
+}
+```
+
+The saved memory was pending, scoped to the Sitewright project, and included:
+
+```json
+{
+  "source": "session-summary",
+  "kind": "session_summary",
+  "provenance": {
+    "adapter": "claude",
+    "lifecycleEvent": "session_end"
+  }
+}
+```
+
+For isolated testing, prefer absolute temp paths in hook commands, for example `MEMORY_LANE_FILE=/tmp/ml-claude-sitewright.xxxxxx/memory.jsonl`. Do not use shell variables such as `$tmp` inside `settings.local.json`; Claude runs hook commands in its own shell and will not inherit your interactive variable.
+
 ## What each hook does
 
 `SessionStart` injects a small baseline of recent, approved project memories when a new Claude Code session begins. It uses a stricter budget than `UserPromptSubmit` and does not dump the full project history. It is safe to leave enabled alongside `UserPromptSubmit`.
