@@ -298,3 +298,16 @@ Todos:
 3. Add index/cache for fast recall over Markdown.
 4. Add comprehensive docs comparing `jsonl`, `mirror`, and `obsidian` backend modes.
 5. Decide whether Obsidian-backed storage graduates from experimental or remains advanced-only.
+
+## Phase 12 — Plugin Installation and Management
+
+**Goal:** Make plugins installable and manageable for users of the standalone binary, not just source builds.
+
+The Phase 9 plugin system lets users activate plugins by name in `~/.memory-lane/config.json`, but the standalone Bun-compiled binary cannot resolve npm packages at runtime. Phase 12 closes that gap with explicit, user-initiated plugin management while keeping security boundaries clear.
+
+Todos:
+
+1. **Default plugin directory.** Support `~/.memory-lane/plugins/` as a convention and resolve plugin names like `"my-plugin.js"` against that directory before falling back to dynamic import.
+2. **`memory-lane plugin install`.** Add a CLI command that downloads a plugin `.js` file or npm tarball into `~/.memory-lane/plugins/` and validates that it exports the required default function.
+3. **`memory-lane plugin` subcommands.** Add `list`, `enable`, `disable`, and `uninstall` commands so users can manage plugins without hand-editing `config.json`.
+4. **Bundled first-party plugins.** Continue expanding the static registry in `packages/cli/src/plugins.ts` for official plugins that ship with the binary, so common features work out of the box after being enabled in config.
