@@ -311,3 +311,71 @@ Todos:
 2. **`memory-lane plugin install`.** Add a CLI command that downloads a plugin `.js` file or npm tarball into `~/.memory-lane/plugins/` and validates that it exports the required default function.
 3. **`memory-lane plugin` subcommands.** Add `list`, `enable`, `disable`, and `uninstall` commands so users can manage plugins without hand-editing `config.json`.
 4. **Bundled first-party plugins.** Continue expanding the static registry in `packages/cli/src/plugins.ts` for official plugins that ship with the binary, so common features work out of the box after being enabled in config.
+
+## Phase 13 — Session-End Summarization
+
+**Goal:** Let Memory Lane optionally capture a structured summary at the end of an agent session so the next session can start with project state instead of from scratch.
+
+This phase is the foundation for replacing manual `HANDOFF.md` notes. It is **opt-in and disabled by default** because it sends session content to an LLM for summarization and may produce imperfect memories.
+
+Todos:
+
+1. Add `memory.sessionEndSummary` config section with `enabled: false`, `model`/`provider`, `promptTemplate`, and privacy flags.
+2. Define a `SessionSummary` schema: decisions made, blockers, open questions, next steps, key facts, and a raw transcript reference hash (not the transcript itself).
+3. Add a `handleSessionEnd` lifecycle handler in `@memory-lane/lifecycle` that takes the session transcript/messages and returns candidate memory entries.
+4. Hook `agent_end`/`session_end` events in pi, Codex, and Claude Code adapters, but only generate a summary after an explicit user prompt such as "Remember this session" or a confirmation dialog; never auto-generate by default.
+5. Save generated summaries as `pending` memories with `source: "session-summary"` and `provenance.lifecycleEvent: "session_end"` so they enter the normal review queue.
+6. Add tests for the summarization handler, schema validation, and opt-in gating.
+7. Document the feature, the opt-in requirement, the privacy implications, and how to approve/reject session summaries.
+
+## Phase 14 — Auto-Memory Review and Memory Dashboard
+
+**Goal:** Give users visibility and control over automatically generated memories before they affect future sessions.
+
+Session-end summarization (Phase 13) will produce a stream of candidate memories. This phase builds the review surface so users can trust the system.
+
+Todos:
+
+1. Extend `memory-lane review` to group pending memories by source (e.g., `session-summary`, `agent-suggested`, `user-suggested`).
+2. Add a memory dashboard command: `memory-lane memory dashboard` (or `memory-lane dashboard`) that prints a human-readable summary of what Memory Lane knows per project and globally.
+3. Add MCP/CLI tools to list, inspect, and bulk-approve/reject pending session summaries.
+4. Add a "dismiss stale" helper that flags or removes session summaries that no longer match current project state.
+5. Document how to use the review queue and dashboard to keep memory accurate.
+
+## Phase 15 — Time-Aware Memory
+
+**Goal:** Prevent memories from going stale and misleading future sessions.
+
+Time-sensitive statements like "I'm traveling next week" or "The build is broken" become wrong as time passes. This phase adds expiration and revision semantics.
+
+Todos:
+
+1. Add optional `expiresAt` and `staleAfterDays` fields to memory records and the save/suggest APIs.
+2. Add a `memory-lane refresh` command that scans approved memories, uses an LLM or heuristics to identify stale entries, and presents them as pending revisions or deletions.
+3. Update recall/injection to deprioritize or skip memories that are past their expiration.
+4. Add time metadata to session summaries so later refreshes can reason about temporal context.
+5. Add tests and docs for expiration, refresh, and recall behavior.
+
+## Phase 16 — Handoff-Free Sessions
+
+**Goal:** Enable fully automatic cross-session continuity for users who have validated their memory pipeline.
+
+This phase turns Phase 13–15 into a cohesive experience: the agent starts a new session already aware of where things left off, without a manual `HANDOFF.md`.
+
+Todos:
+
+1. Add a `memory.handoffMode` config flag with values `manual`, `review`, and `automatic`. Default to `manual` so users opt in explicitly.
+2. In `manual` mode, do nothing new; users keep writing handoffs.
+3. In `review` mode, session summaries are generated and saved as pending; users must approve them before the next session uses them.
+4. In `automatic` mode, approved session summaries are automatically injected at the next `SessionStart` alongside baseline memories.
+5. Add a confidence threshold: low-confidence summaries stay pending even in automatic mode.
+6. Add safeguards so users can disable handoff-free mode per project or globally.
+7. Update docs to explain the three modes, risks of automatic mode, and how to switch back to manual.
+
+## Deferred improvements
+
+These items are intentionally not in the numbered phases above. Add them only after the corresponding phase is complete and real-world usage justifies the work.
+
+- **Multi-session narrative compression.** Combine many session summaries into a higher-level project chronicle.
+- **Cross-project memory inheritance.** Allow memories to be marked reusable across projects (e.g., coding style preferences).
+- **Automatic preference learning.** Infer implicit preferences from chat history beyond explicit saves and session summaries.

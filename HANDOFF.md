@@ -9,7 +9,11 @@
 - Slash command / skill support: `memory-lane init` installs a personal skill at `~/.claude/skills/memory-lane/SKILL.md` (invoked as `/memory-lane` in Claude Code CLI) and `~/.agents/skills/memory-lane/SKILL.md` (invoked as `$memory-lane` in Codex CLI/Desktop/app).
 - `memory-lane upgrade` downloads the latest release binary and re-applies only the harness configs that were previously installed.
 - pi lifecycle autosave and tool capture: `input`, `turn_end`, and `tool_result` events now write memories through shared `@memory-lane/lifecycle` handlers, with per-turn duplicate suppression and privacy-safe debug logging.
-- Plugin system design started: Phase 9 (Obsidian LLM Wiki / Knowledge Base Integration) ships as the first opt-in plugin via a lightweight plugin API. First-party plugins are bundled into the standalone binary but remain inactive unless added to `~/.memory-lane/config.json`. Phase 12 is planned for binary-friendly plugin installation and management (`memory-lane plugin install/list/enable/disable/uninstall`).
+- Plugin system implemented and released in `v0.2.1`: Phase 9 (Obsidian LLM Wiki / Knowledge Base Integration) ships as the first opt-in plugin via a lightweight plugin API. First-party plugins are bundled into the standalone binary but remain inactive unless added to `~/.memory-lane/config.json`. Phase 12 is planned for binary-friendly plugin installation and management (`memory-lane plugin install/list/enable/disable/uninstall`).
+- v0.2.1 includes bundled plugin fixes so first-party plugins actually work in the standalone binary, plus config error handling and cross-platform vault paths for the Obsidian Wiki plugin.
+- Strategic review concluded: Memory Lane is practical for short explicit agent preferences and project facts, but not yet for long-running project continuity because it lacks automatic session synthesis and staleness handling.
+- Roadmap extended with Phases 13–16 for session-end summarization, auto-memory review/dashboard, time-aware memory, and handoff-free sessions. All are opt-in and disabled by default.
+- Session-end summarization design spec is at `docs/superpowers/specs/2026-06-16-session-end-summarization-design.md`. It requires user confirmation before generating a summary and saves summaries as pending memories for review.
 - To upgrade manually, re-run the installer and then `memory-lane init --yes`.
 
 ## Current state
@@ -110,6 +114,8 @@ Current workspace packages:
 - `@memory-lane/claude-adapter` — Claude Code CLI hook adapter.
 - `@memory-lane/codex-adapter` — OpenAI Codex CLI hook adapter.
 - `@memory-lane/pi-adapter` — pi extension adapter.
+- `@memory-lane/plugin-api` — lightweight plugin API for MCP tools/resources and CLI commands.
+- `@memory-lane/plugin-obsidian-wiki` — first-party plugin for Obsidian/Garden knowledge-base access.
 
 ## MCP server semantics
 
@@ -299,8 +305,14 @@ status: pending
 - MCP status tool spec: `docs/superpowers/specs/2026-06-08-mcp-status-tool.md`
 - MCP status tool plan: `docs/superpowers/plans/2026-06-08-mcp-status-tool.md`
 - MCP client setup docs: `examples/harness-integrations/mcp.md`
+- Plugin system design spec: `docs/superpowers/specs/2026-06-15-plugin-system-design.md`
+- Plugin system implementation plan: `docs/superpowers/plans/2026-06-15-plugin-system.md`
+- Plugin installation/development docs: `docs/plugins/README.md`
+- Session-end summarization design spec: `docs/superpowers/specs/2026-06-16-session-end-summarization-design.md`
 - Obsidian mirror package: `packages/obsidian-mirror/`
 - Obsidian import package: `packages/obsidian-import/`
+- Plugin API package: `packages/plugin-api/`
+- Obsidian Wiki plugin package: `packages/plugin-obsidian-wiki/`
 - Core engine/config: `packages/core/src/engine.ts`, `packages/core/src/config.ts`
 - CLI entrypoint/formatters: `packages/cli/src/index.ts`, `packages/cli/src/formatters.ts`
 
@@ -312,12 +324,13 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Merge and push `feature/codex-session-start` after final review if it has not already been merged. This is needed before treating the SessionStart phase as complete on `main`.
+1. Push `main` and the `v0.2.1` tag to origin so the plugin system and bundled Obsidian Wiki plugin are available through the installer.
 2. Configure/enable the Codex `SessionStart` hook in real Codex Desktop usage and do a short real-world soak focused on whether the baseline block is helpful and not noisy.
-3. If the user wants the next implementation phase, Phase 6 pi lifecycle autosave/tool capture is the next roadmap candidate because pi read-only recall has already soaked.
-4. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
-5. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
-6. Only schedule hardening backlog items from `ROADMAP.md` after explicit user approval or clear real-world user value.
+3. The next high-value implementation phase is **Phase 13 Session-End Summarization**, per the design spec at `docs/superpowers/specs/2026-06-16-session-end-summarization-design.md`. It is opt-in, requires user confirmation before generating summaries, and saves summaries as pending memories for review. This is the foundation for reducing manual `HANDOFF.md` work.
+4. If the user wants to continue with automatic agent memory first, Phase 6 pi lifecycle autosave/tool capture remains a candidate, but Phase 13 has higher strategic value for cross-session continuity.
+5. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
+6. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
+7. Only schedule hardening backlog items or deferred improvements from `ROADMAP.md` after explicit user approval or clear real-world user value.
 
 ## Suggested skills for future agents
 
