@@ -1,12 +1,13 @@
-import type { PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "@memory-lane/lifecycle"
+import type { PostToolUseInput, SessionEndInput, SessionMessage, SessionStartInput, StopInput, UserPromptInput } from "@memory-lane/lifecycle"
 
-export type CodexCommand = "user-prompt-submit" | "stop" | "post-tool-use" | "session-start"
+export type CodexCommand = "user-prompt-submit" | "stop" | "post-tool-use" | "session-start" | "session-end"
 
 export type ParsedCodexPayload =
   | { kind: "user-prompt-submit"; hookEventName: "UserPromptSubmit"; input: UserPromptInput }
   | { kind: "stop"; hookEventName: "Stop"; input: StopInput; transcriptPath?: string }
   | { kind: "post-tool-use"; hookEventName: "PostToolUse"; input: PostToolUseInput }
   | { kind: "session-start"; hookEventName: "SessionStart"; input: SessionStartInput }
+  | { kind: "session-end"; hookEventName: "SessionEnd"; input: SessionEndInput; confirmed?: boolean }
   | { kind: "invalid"; reason: string }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -19,6 +20,29 @@ function stringField(obj: Record<string, unknown>, key: string): string | undefi
 
 function nullableStringField(obj: Record<string, unknown>, key: string): string | undefined {
   return typeof obj[key] === "string" ? obj[key] as string : undefined
+}
+
+function booleanField(obj: Record<string, unknown>, key: string): boolean | undefined {
+  return typeof obj[key] === "boolean" ? obj[key] as boolean : undefined
+}
+
+function parseSessionMessages(value: unknown): SessionMessage[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const messages: SessionMessage[] = []
+  for (const item of value) {
+    const message = asRecord(item)
+    if (!message) return undefined
+    const content = stringField(message, "content")
+    if (content === undefined) return undefined
+    const role = stringField(message, "role")
+    messages.push({
+      role: role === "assistant" || role === "tool" ? role : "user",
+      content,
+      timestamp: stringField(message, "timestamp"),
+      toolName: stringField(message, "toolName") ?? stringField(message, "tool_name"),
+    })
+  }
+  return messages
 }
 
 function baseContext(obj: Record<string, unknown>) {
@@ -80,6 +104,20 @@ export function parseCodexPayload(value: unknown): ParsedCodexPayload {
       kind: "session-start",
       hookEventName: event,
       input: context,
+    }
+  }
+
+  if (event === "SessionEnd") {
+    const messages = parseSessionMessages(obj.messages)
+    if (!messages) return { kind: "invalid", reason: "SessionEnd missing messages" }
+    return {
+      kind: "session-end",
+      hookEventName: event,
+      confirmed: booleanField(obj, "confirmed"),
+      input: {
+        ...context,
+        messages,
+      },
     }
   }
 

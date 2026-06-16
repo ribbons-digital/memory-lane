@@ -1,7 +1,7 @@
 import {
-  appendHookDebugLog, hookDebugEnabled, type HookDebugLogStatus, type MemoryEngine,
+  appendHookDebugLog, hookDebugEnabled, loadConfig, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
-import { handlePostToolUse, handleSessionStart, handleStop, handleUserPromptSubmit, type LifecycleResult } from "@memory-lane/lifecycle"
+import { createOpenAICompatibleProvider, handlePostToolUse, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, type LifecycleResult } from "@memory-lane/lifecycle"
 import { additionalContextOutput, lifecycleNoopOutput, noopOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseCodexPayload, type CodexCommand } from "./payloads.js"
 import { readLatestTurnFromTranscript } from "./transcript.js"
@@ -11,6 +11,7 @@ export interface RunCodexHookOptions {
   payloadText: string
   env?: NodeJS.ProcessEnv
   hookDebugLogPath?: string
+  configPath?: string
 }
 
 function parseJson(text: string): unknown {
@@ -30,6 +31,29 @@ function lifecycleCounts(result: LifecycleResult): {
     discarded: result.discarded.length,
     additionalContext: Boolean(result.additionalContext),
     warningCount: result.saved.reduce((count, saveResult) => count + (saveResult.warnings?.length ?? 0), 0),
+  }
+}
+
+function confirmationRequiredOutput(): string {
+  return JSON.stringify({
+    systemMessage: "Memory Lane: Session-end summarization requires confirmation. Rerun the Codex SessionEnd hook with confirmed: true to save a pending summary.",
+  })
+}
+
+function createSessionEndSummaryProvider(configPath: string | undefined, env: NodeJS.ProcessEnv | undefined) {
+  const config = loadConfig(configPath)
+  const summaryConfig = config.memory?.sessionEndSummary
+  if (!summaryConfig?.enabled) return { status: "disabled" as const }
+  if (!summaryConfig.baseUrl || !summaryConfig.model) return { status: "missing-provider" as const, config: summaryConfig }
+  return {
+    status: "configured" as const,
+    config: summaryConfig,
+    provider: createOpenAICompatibleProvider({
+      provider: "openai-compatible",
+      baseUrl: summaryConfig.baseUrl,
+      apiKeyEnv: summaryConfig.apiKeyEnv,
+      model: summaryConfig.model,
+    }, env),
   }
 }
 
@@ -89,6 +113,46 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
       const result = handleSessionStart(options.engine, parsed.input)
       log("ok", lifecycleCounts(result))
       return additionalContextOutput(result, "SessionStart", debug)
+    }
+
+    if (parsed.kind === "session-end") {
+      const summaryProvider = createSessionEndSummaryProvider(options.configPath, options.env)
+      if (summaryProvider.status === "disabled") {
+        log("noop", { reason: "session-end summarization disabled" })
+        return noopOutput("Session-end summarization is not enabled.", debug)
+      }
+      if (summaryProvider.status === "missing-provider") {
+        log("noop", { reason: "session-end summary provider not configured" })
+        return noopOutput("Session-end summarization requires memory.sessionEndSummary.baseUrl and model.", debug)
+      }
+      const requireConfirmation = summaryProvider.config.requireConfirmation !== false
+      if (requireConfirmation && !parsed.confirmed) {
+        log("noop", { reason: "session-end confirmation required" })
+        return confirmationRequiredOutput()
+      }
+      const candidates = await handleSessionEnd(options.engine, parsed.input, {
+        provider: summaryProvider.provider,
+        promptTemplate: summaryProvider.config.promptTemplate ?? undefined,
+        maxTokens: summaryProvider.config.maxTokens,
+        // The Codex adapter performs confirmation gating above.
+        requireConfirmation: false,
+        confirmed: true,
+        includeToolOutputs: summaryProvider.config.includeToolOutputs,
+      }, options.env)
+      const result: LifecycleResult = {
+        saved: candidates.map((candidate) => options.engine.save({
+          text: candidate.text,
+          category: candidate.category,
+          scopeType: candidate.scopeType,
+          status: candidate.status,
+          source: candidate.source,
+          kind: candidate.kind,
+          provenance: { ...candidate.provenance, adapter: "codex" },
+        })),
+        discarded: [],
+      }
+      log("ok", lifecycleCounts(result))
+      return lifecycleNoopOutput(result, debug)
     }
 
     const result = handlePostToolUse(options.engine, parsed.input)
