@@ -84,13 +84,16 @@ Codex tool matcher names can vary by version. If `PostToolUse` does not fire, ad
 
 `UserPromptSubmit` injects only approved memories that are relevant to the current prompt. It has strict item and character limits, and generic prompts such as `ok`, `continue`, or `thanks` inject nothing.
 
-`Stop` and `PostToolUse` do not inject context. They save concise memories externally and are silent by default.
+`Stop` and `PostToolUse` do not inject context. They save concise memories externally and are silent by default. `Stop` only runs session-summary automation when the latest user message explicitly asks for it, such as "remember this session", "save a session summary", or "summarize this session to memory".
 
 ## Session-end summarization
 
-Session-end summarization is opt-in, but current Codex CLI hooks do **not** include a supported `SessionEnd` event. Do not add `SessionEnd` to `.codex/hooks.json`; Codex will ignore unsupported hook names.
+Session-end summarization is opt-in, and current Codex CLI hooks do **not** include a supported `SessionEnd` event. Do not add `SessionEnd` to `.codex/hooks.json`; Codex will ignore unsupported hook names.
 
-For Codex today, use the manual command when you explicitly want to summarize a session. After enabling `memory.sessionEndSummary` in `~/.memory-lane/config.json`, pass a compact transcript JSON on stdin:
+For Codex today, there are two supported explicit-intent options after enabling `memory.sessionEndSummary` in `~/.memory-lane/config.json`:
+
+1. Ask in your latest Codex prompt: "remember this session", "save a session summary", or "summarize this session to memory". The existing `Stop` hook treats that prompt as confirmation, reads a bounded transcript tail, sends it to the configured summary provider, and saves the result as a pending memory. Ordinary `Stop` turns keep the existing autosave behavior and do not summarize sessions.
+2. Use the manual command and pass a compact transcript JSON on stdin:
 
 ```bash
 echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant","content":"Done."}]}' \

@@ -1,10 +1,10 @@
 import {
   appendHookDebugLog, hookDebugEnabled, loadConfig, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
-import { createOpenAICompatibleProvider, handlePostToolUse, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, type LifecycleResult } from "@memory-lane/lifecycle"
+import { createOpenAICompatibleProvider, handlePostToolUse, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, type LifecycleResult, type SessionEndInput, type SessionMessage, type StopInput } from "@memory-lane/lifecycle"
 import { additionalContextOutput, lifecycleNoopOutput, noopOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseCodexPayload, type CodexCommand } from "./payloads.js"
-import { readLatestTurnFromTranscript } from "./transcript.js"
+import { readLatestTurnFromTranscript, readSessionMessagesFromTranscript } from "./transcript.js"
 
 export interface RunCodexHookOptions {
   engine: MemoryEngine
@@ -34,10 +34,12 @@ function lifecycleCounts(result: LifecycleResult): {
   }
 }
 
+function systemMessageOutput(message: string): string {
+  return JSON.stringify({ systemMessage: `Memory Lane: ${message}` })
+}
+
 function confirmationRequiredOutput(): string {
-  return JSON.stringify({
-    systemMessage: "Memory Lane: Session-end summarization requires confirmation. Rerun the Codex-shaped session-end payload with confirmed: true to save a pending summary.",
-  })
+  return systemMessageOutput("Session-end summarization requires confirmation. Rerun the Codex-shaped session-end payload with confirmed: true to save a pending summary.")
 }
 
 function createSessionEndSummaryProvider(configPath: string | undefined, env: NodeJS.ProcessEnv | undefined) {
@@ -54,6 +56,48 @@ function createSessionEndSummaryProvider(configPath: string | undefined, env: No
       apiKeyEnv: summaryConfig.apiKeyEnv,
       model: summaryConfig.model,
     }, env),
+  }
+}
+
+function hasExplicitSessionSummaryIntent(message?: string): boolean {
+  if (!message) return false
+  return [
+    /\bremember\s+(?:this|the|our)\s+session\b/iu,
+    /\bsave\s+(?:a|the|this|our)?\s*session\s+summary\b/iu,
+    /\bsummar(?:ize|ise)\s+(?:this|the|our)\s+session(?:\s+(?:to|in|into|for)\s+memory)?\b/iu,
+    /\bsave\s+(?:this|the|our)\s+session\s+(?:to|in|into)\s+memory\b/iu,
+  ].some((pattern) => pattern.test(message))
+}
+
+function fallbackSessionMessages(input: StopInput): SessionMessage[] {
+  const messages: SessionMessage[] = []
+  if (input.lastUserMessage) messages.push({ role: "user", content: input.lastUserMessage })
+  if (input.lastAssistantMessage) messages.push({ role: "assistant", content: input.lastAssistantMessage })
+  return messages
+}
+
+function sessionEndInputFromStop(input: StopInput, transcriptPath?: string): SessionEndInput {
+  const transcriptMessages = readSessionMessagesFromTranscript(transcriptPath)
+  return {
+    cwd: input.cwd,
+    sessionId: input.sessionId,
+    transcriptPath: input.transcriptPath,
+    messages: transcriptMessages.length ? transcriptMessages : fallbackSessionMessages(input),
+  }
+}
+
+function saveSessionEndCandidates(engine: MemoryEngine, candidates: Awaited<ReturnType<typeof handleSessionEnd>>): LifecycleResult {
+  return {
+    saved: candidates.map((candidate) => engine.save({
+      text: candidate.text,
+      category: candidate.category,
+      scopeType: candidate.scopeType,
+      status: candidate.status,
+      source: candidate.source,
+      kind: candidate.kind,
+      provenance: { ...candidate.provenance, adapter: "codex" },
+    })),
+    discarded: [],
   }
 }
 
@@ -100,13 +144,40 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
 
     if (parsed.kind === "stop") {
       const latest = readLatestTurnFromTranscript(parsed.transcriptPath)
-      const result = handleStop(options.engine, {
+      const stopInput = {
         ...parsed.input,
         lastUserMessage: parsed.input.lastUserMessage ?? latest.lastUserMessage,
         lastAssistantMessage: parsed.input.lastAssistantMessage ?? latest.lastAssistantMessage,
-      })
+      }
+
+      if (!hasExplicitSessionSummaryIntent(stopInput.lastUserMessage)) {
+        const result = handleStop(options.engine, stopInput)
+        log("ok", lifecycleCounts(result))
+        return lifecycleNoopOutput(result, debug)
+      }
+
+      const summaryProvider = createSessionEndSummaryProvider(options.configPath, options.env)
+      if (summaryProvider.status === "disabled") {
+        log("noop", { reason: "session-end summarization disabled" })
+        return systemMessageOutput("Session summary was requested, but memory.sessionEndSummary.enabled is not enabled.")
+      }
+      if (summaryProvider.status === "missing-provider") {
+        log("noop", { reason: "session-end summary provider not configured" })
+        return systemMessageOutput("Session-end summarization requires memory.sessionEndSummary.baseUrl and model.")
+      }
+
+      const candidates = await handleSessionEnd(options.engine, sessionEndInputFromStop(stopInput, parsed.transcriptPath), {
+        provider: summaryProvider.provider,
+        promptTemplate: summaryProvider.config.promptTemplate ?? undefined,
+        maxTokens: summaryProvider.config.maxTokens,
+        // Explicit latest-user-message summary intent is the confirmation for this supported Stop path.
+        requireConfirmation: false,
+        confirmed: true,
+        includeToolOutputs: summaryProvider.config.includeToolOutputs,
+      }, options.env)
+      const result = saveSessionEndCandidates(options.engine, candidates)
       log("ok", lifecycleCounts(result))
-      return lifecycleNoopOutput(result, debug)
+      return systemMessageOutput(`saved ${lifecycleCounts(result).saved}, skipped ${lifecycleCounts(result).skipped}, discarded ${lifecycleCounts(result).discarded}.`)
     }
 
     if (parsed.kind === "session-start") {
@@ -139,18 +210,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         confirmed: true,
         includeToolOutputs: summaryProvider.config.includeToolOutputs,
       }, options.env)
-      const result: LifecycleResult = {
-        saved: candidates.map((candidate) => options.engine.save({
-          text: candidate.text,
-          category: candidate.category,
-          scopeType: candidate.scopeType,
-          status: candidate.status,
-          source: candidate.source,
-          kind: candidate.kind,
-          provenance: { ...candidate.provenance, adapter: "codex" },
-        })),
-        discarded: [],
-      }
+      const result = saveSessionEndCandidates(options.engine, candidates)
       log("ok", lifecycleCounts(result))
       return lifecycleNoopOutput(result, debug)
     }

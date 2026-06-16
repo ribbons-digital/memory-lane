@@ -26,7 +26,7 @@ function engineFixture(): { engine: MemoryEngine; configPath: string; memoryPath
   }
 }
 
-function stopPayload(): string {
+function stopPayload(fields: Record<string, unknown> = {}): string {
   return JSON.stringify({
     hook_event_name: "Stop",
     cwd: process.cwd(),
@@ -37,6 +37,7 @@ function stopPayload(): string {
     permission_mode: "default",
     stop_hook_active: false,
     last_assistant_message: "done",
+    ...fields,
   })
 }
 
@@ -286,6 +287,119 @@ test("stop reads latest turn from transcript", async () => {
   assert.match(saved[0].text, /Codex transcript tests use jsonl/)
   assert.equal(saved[0].provenance?.adapter, "codex")
   assert.equal(saved[0].provenance?.lifecycleEvent, "turn_stop")
+})
+
+test("stop without session-summary intent preserves autosave behavior", async () => {
+  const engine = engineInTemp()
+  const output = await runCodexHookCommand("stop", {
+    engine,
+    payloadText: stopPayload({
+      last_user_message: "remember that Codex Stop autosave still saves explicit memory facts",
+      last_assistant_message: "Got it.",
+    }),
+  })
+
+  assert.equal(output, "{}")
+  const saved = engine.list({ all: true })
+  assert.equal(saved.length, 1)
+  assert.match(saved[0].text, /Codex Stop autosave still saves explicit memory facts/)
+  assert.equal(saved[0].source, "user-suggested")
+  assert.equal(saved[0].provenance?.lifecycleEvent, "turn_stop")
+})
+
+test("stop session-summary intent does not trigger from assistant text", async () => {
+  const { engine, configPath } = engineFixture()
+  enableSessionEndSummary(configPath, "http://127.0.0.1:1/v1", true)
+  const output = await runCodexHookCommand("stop", {
+    engine,
+    configPath,
+    payloadText: stopPayload({
+      last_user_message: "thanks",
+      last_assistant_message: "I can remember this session if asked.",
+    }),
+  })
+
+  assert.equal(output, "{}")
+  assert.equal(engine.list({ all: true }).length, 0)
+})
+
+test("stop session-summary intent returns disabled no-save message", async () => {
+  const { engine, configPath } = engineFixture()
+  const output = await runCodexHookCommand("stop", {
+    engine,
+    configPath,
+    payloadText: stopPayload({
+      last_user_message: "please remember this session",
+      last_assistant_message: "I will save a summary.",
+    }),
+  })
+
+  const parsed = JSON.parse(output)
+  assert.match(parsed.systemMessage, /Session summary was requested/i)
+  assert.match(parsed.systemMessage, /not enabled/i)
+  assert.equal(engine.list({ all: true }).length, 0)
+})
+
+test("stop session-summary intent reports missing provider without saving", async () => {
+  const { engine, configPath } = engineFixture()
+  writeConfig(configPath, {
+    memory: {
+      sessionEndSummary: {
+        enabled: true,
+        provider: "openai-compatible",
+        model: "summary-model",
+        requireConfirmation: true,
+      },
+    },
+  } as any)
+
+  const output = await runCodexHookCommand("stop", {
+    engine,
+    configPath,
+    payloadText: stopPayload({ last_user_message: "save a session summary" }),
+  })
+
+  const parsed = JSON.parse(output)
+  assert.match(parsed.systemMessage, /requires memory\.sessionEndSummary\.baseUrl and model/i)
+  assert.equal(engine.list({ all: true }).length, 0)
+})
+
+test("stop session-summary intent saves provider summary without raw transcript", async () => {
+  await withMockSummaryServer("- Decisions made: keep Codex summaries explicit.", async (baseUrl, requests) => {
+    const { engine, configPath, memoryPath } = engineFixture()
+    enableSessionEndSummary(configPath, baseUrl, true)
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-codex-session-summary-"))
+    const transcriptPath = path.join(dir, "transcript.jsonl")
+    fs.writeFileSync(transcriptPath, [
+      JSON.stringify({ role: "user", content: "We decided Codex summaries require explicit intent." }),
+      JSON.stringify({ role: "assistant", content: "RAW_TRANSCRIPT_MARKER_SHOULD_NOT_BE_SAVED" }),
+      JSON.stringify({ role: "user", content: "summarize this session to memory" }),
+      JSON.stringify({ role: "assistant", content: "I'll create a concise summary." }),
+    ].join("\n"), "utf8")
+
+    const output = await runCodexHookCommand("stop", {
+      engine,
+      configPath,
+      payloadText: stopPayload({
+        transcript_path: transcriptPath,
+        last_assistant_message: undefined,
+      }),
+    })
+
+    const parsed = JSON.parse(output)
+    assert.match(parsed.systemMessage, /saved 1, skipped 0, discarded 0/)
+    assert.equal(requests.length, 1)
+    const saved = engine.list({ all: true })
+    assert.equal(saved.length, 1)
+    assert.equal(saved[0].status, "pending")
+    assert.equal(saved[0].source, "session-summary")
+    assert.equal(saved[0].kind, "session_summary")
+    assert.equal(saved[0].provenance?.adapter, "codex")
+    assert.equal(saved[0].provenance?.lifecycleEvent, "session_end")
+    assert.match(saved[0].text, /Codex summaries explicit/)
+    assert.doesNotMatch(saved[0].text, /RAW_TRANSCRIPT_MARKER_SHOULD_NOT_BE_SAVED/)
+    assert.doesNotMatch(fs.readFileSync(memoryPath, "utf8"), /RAW_TRANSCRIPT_MARKER_SHOULD_NOT_BE_SAVED/)
+  })
 })
 
 test("debug output emits concise systemMessage", async () => {

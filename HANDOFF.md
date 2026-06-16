@@ -14,7 +14,7 @@
 - Strategic review concluded: Memory Lane is practical for short explicit agent preferences and project facts, but not yet for long-running project continuity because it lacks automatic session synthesis and staleness handling.
 - Roadmap extended with Phases 13–16 for session-end summarization, auto-memory review/dashboard, time-aware memory, and handoff-free sessions. All are opt-in and disabled by default.
 - Session-end summarization design spec is at `docs/superpowers/specs/2026-06-16-session-end-summarization-design.md`. It requires user confirmation before generating a summary and saves summaries as pending memories for review.
-- Phase 13 Session-End Summarization is merged to main through `688ef52`. Implemented and verified: core data model/config, lifecycle LLM provider, `handleSessionEnd`, manual `memory-lane session-end --confirm` CLI command, docs, full build/test, and manual mock-provider smoke. Correction: current Codex CLI docs do not expose a supported `SessionEnd` hook event, so Codex real-hook automation is not complete; the Codex-shaped session-end adapter path is future-compatible/manual-test only. Follow-up supported-hook design is documented at `docs/superpowers/specs/2026-06-16-supported-session-summary-hooks.md`.
+- Phase 13 Session-End Summarization is merged to main through `688ef52`. Implemented and verified: core data model/config, lifecycle LLM provider, `handleSessionEnd`, manual `memory-lane session-end --confirm` CLI command, docs, full build/test, and manual mock-provider smoke. Correction: current Codex CLI docs do not expose a supported `SessionEnd` hook event; the Codex-shaped session-end adapter path is future-compatible/manual-test only. Follow-up supported-hook design is documented at `docs/superpowers/specs/2026-06-16-supported-session-summary-hooks.md`. Current feature work adds real Codex automation through the supported `Stop` hook only when the latest user message explicitly requests a session summary.
 - To upgrade manually, re-run the installer and then `memory-lane init --yes`.
 
 ## Current state
@@ -74,7 +74,8 @@ Recent completed work:
   - summaries are pending memories, tool messages are excluded by default, and likely secret lines are redacted before LLM input;
   - added manual `memory-lane session-end --confirm` CLI command and docs;
   - added a future-compatible Codex-shaped `SessionEnd` payload parser/runner path with disabled/missing-provider no-op handling, confirmation gating, confirmed save path, and raw-transcript non-persistence tests.
-  - Important correction: current Codex CLI hooks do not expose a supported `SessionEnd` event, so `.codex/hooks.json` must not include `SessionEnd`; real Codex/Claude Code/pi session-end automation remains follow-up work after identifying supported events.
+  - added supported Codex `Stop` explicit-intent automation: prompts like "remember this session" or "summarize this session to memory" trigger a bounded-transcript summary when `memory.sessionEndSummary` is enabled and provider-configured, while ordinary `Stop` autosave remains unchanged.
+  - Important correction: current Codex CLI hooks do not expose a supported `SessionEnd` event, so `.codex/hooks.json` must not include `SessionEnd`; Claude Code/pi session-end automation remains follow-up work after identifying supported events.
 
 Final reviews for recent feature work returned approved outcomes. Verification on merged `main` passed after the MCP status merge:
 
@@ -324,10 +325,9 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Manually try `memory-lane session-end --confirm` with the user's preferred local/remote OpenAI-compatible model and review whether the generated pending memory is useful enough to approve.
-2. If manual summaries are useful, use `docs/superpowers/specs/2026-06-16-supported-session-summary-hooks.md` to plan the next automation slice. Recommended first candidate: Codex `Stop` with explicit user intent, preserving existing stop autosave behavior.
-3. For Claude Code, `SessionEnd` is documented, but capture exact payload/confirmation behavior before implementing.
-4. For pi, prefer an explicit interactive command using `ctx.sessionManager`/`ctx.ui` before automatic `agent_end` or compaction hooks.
+1. Manually try Codex `Stop` explicit-intent summaries (for example, "remember this session") and `memory-lane session-end --confirm` with the user's preferred local/remote OpenAI-compatible model, then review whether the generated pending memory is useful enough to approve.
+2. For Claude Code, `SessionEnd` is documented, but capture exact payload/confirmation behavior before implementing.
+3. For pi, prefer an explicit interactive command using `ctx.sessionManager`/`ctx.ui` before automatic `agent_end` or compaction hooks.
 4. Keep Phase 13 follow-ups focused on user-confirmed session continuity; do not start Phase 14 review/dashboard or Phase 15 staleness work until the basic summary flow proves useful.
 5. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
 6. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.

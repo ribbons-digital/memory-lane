@@ -1,4 +1,5 @@
 import * as fs from "node:fs"
+import type { SessionMessage } from "@memory-lane/lifecycle"
 
 export interface TranscriptTurn {
   lastUserMessage?: string
@@ -40,8 +41,19 @@ function textFromObject(obj: Record<string, unknown>): string | undefined {
   return contentToText(obj.content ?? obj.message ?? obj.text)
 }
 
-export function readLatestTurnFromTranscript(filePath?: string, maxBytes = DEFAULT_MAX_BYTES): TranscriptTurn {
-  if (!filePath) return {}
+function sessionMessageRole(role: string): SessionMessage["role"] | undefined {
+  if (role.includes("user")) return "user"
+  if (role.includes("assistant")) return "assistant"
+  if (role.includes("tool")) return "tool"
+  return undefined
+}
+
+function stringField(obj: Record<string, unknown>, key: string): string | undefined {
+  return typeof obj[key] === "string" ? obj[key] as string : undefined
+}
+
+function readBoundedTranscriptLines(filePath?: string, maxBytes = DEFAULT_MAX_BYTES): string[] {
+  if (!filePath) return []
   try {
     const stat = fs.statSync(filePath)
     const safeMaxBytes = Math.max(0, maxBytes)
@@ -51,29 +63,58 @@ export function readLatestTurnFromTranscript(filePath?: string, maxBytes = DEFAU
     try {
       const buffer = Buffer.alloc(length)
       fs.readSync(fd, buffer, 0, length, start)
-      const lines = buffer.toString("utf8").split(/\r?\n/u).filter((line) => line.trim())
-      const turn: TranscriptTurn = {}
-
-      for (const line of lines) {
-        try {
-          const parsed = JSON.parse(line) as unknown
-          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue
-          const obj = parsed as Record<string, unknown>
-          const role = roleFromObject(obj)
-          const text = textFromObject(obj)
-          if (!role || !text) continue
-          if (role.includes("user")) turn.lastUserMessage = text
-          if (role.includes("assistant")) turn.lastAssistantMessage = text
-        } catch {
-          // Transcript formats are best-effort and may contain non-JSON lines.
-        }
-      }
-
-      return turn
+      return buffer.toString("utf8").split(/\r?\n/u).filter((line) => line.trim())
     } finally {
       fs.closeSync(fd)
     }
   } catch {
-    return {}
+    return []
   }
+}
+
+export function readLatestTurnFromTranscript(filePath?: string, maxBytes = DEFAULT_MAX_BYTES): TranscriptTurn {
+  const turn: TranscriptTurn = {}
+
+  for (const line of readBoundedTranscriptLines(filePath, maxBytes)) {
+    try {
+      const parsed = JSON.parse(line) as unknown
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue
+      const obj = parsed as Record<string, unknown>
+      const role = roleFromObject(obj)
+      const text = textFromObject(obj)
+      if (!role || !text) continue
+      if (role.includes("user")) turn.lastUserMessage = text
+      if (role.includes("assistant")) turn.lastAssistantMessage = text
+    } catch {
+      // Transcript formats are best-effort and may contain non-JSON lines.
+    }
+  }
+
+  return turn
+}
+
+export function readSessionMessagesFromTranscript(filePath?: string, maxBytes = DEFAULT_MAX_BYTES): SessionMessage[] {
+  const messages: SessionMessage[] = []
+
+  for (const line of readBoundedTranscriptLines(filePath, maxBytes)) {
+    try {
+      const parsed = JSON.parse(line) as unknown
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue
+      const obj = parsed as Record<string, unknown>
+      const role = roleFromObject(obj)
+      const messageRole = role ? sessionMessageRole(role) : undefined
+      const content = textFromObject(obj)
+      if (!messageRole || !content) continue
+      messages.push({
+        role: messageRole,
+        content,
+        timestamp: stringField(obj, "timestamp"),
+        toolName: stringField(obj, "toolName") ?? stringField(obj, "tool_name"),
+      })
+    } catch {
+      // Transcript formats are best-effort and may contain non-JSON lines.
+    }
+  }
+
+  return messages
 }

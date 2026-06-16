@@ -79,7 +79,7 @@ memory-lane mcp                   # run the bundled MCP server over stdio
 
 ### Session-end summarization
 
-Use `memory-lane session-end --confirm` only when the user explicitly wants to generate a manual session summary and `memory.sessionEndSummary` is configured. It reads stdin JSON with a `messages` array, sends the compact transcript to the configured OpenAI-compatible chat model, and saves the result as a pending memory with `source: "session-summary"` and `kind: "session_summary"`. Current Codex CLI hooks do not include a supported `SessionEnd` event, so do not suggest adding `SessionEnd` to `.codex/hooks.json`.
+Use `memory-lane session-end --confirm` only when the user explicitly wants to generate a manual session summary and `memory.sessionEndSummary` is configured. It reads stdin JSON with a `messages` array, sends the compact transcript to the configured OpenAI-compatible chat model, and saves the result as a pending memory with `source: "session-summary"` and `kind: "session_summary"`. Codex CLI also supports explicit-intent automation through the real `Stop` hook: when the latest user prompt says something like "remember this session", "save a session summary", or "summarize this session to memory", `memory-lane codex stop` treats that as confirmation and saves a pending summary if the provider is configured. Current Codex CLI hooks do not include a supported `SessionEnd` event, so do not suggest adding `SessionEnd` to `.codex/hooks.json`.
 
 ```bash
 echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant","content":"Done."}]}' \
@@ -87,7 +87,7 @@ echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant
 memory-lane review
 ```
 
-Do not imply this is fully automatic handoff-free mode. Approve or reject generated summaries through the normal review queue before they affect future recall. Raw transcripts are not stored; tool messages are excluded unless `includeToolOutputs` is configured, and likely secret lines are redacted before the transcript is sent to the configured model.
+Do not imply this is fully automatic handoff-free mode or that every Codex `Stop` turn creates a summary. Approve or reject generated summaries through the normal review queue before they affect future recall. Raw transcripts are not stored; tool messages are excluded unless `includeToolOutputs` is configured, and likely secret lines are redacted before the transcript is sent to the configured model.
 
 ### Obsidian mirror
 
@@ -158,7 +158,7 @@ memory-lane codex stop
 memory-lane codex post-tool-use
 ```
 
-`session-start` performs baseline memory injection for new sessions. `user-prompt-submit` recalls relevant approved memories. `stop` and `post-tool-use` save useful memories externally and are silent by default. Current Codex CLI hooks do not expose a `SessionEnd` event; use manual `memory-lane session-end --confirm` for session summaries.
+`session-start` performs baseline memory injection for new sessions. `user-prompt-submit` recalls relevant approved memories. `stop` and `post-tool-use` save useful memories externally and are silent by default. Current Codex CLI hooks do not expose a `SessionEnd` event; use manual `memory-lane session-end --confirm` or the Codex `Stop` explicit-intent path for session summaries.
 
 `UserPromptSubmit` recalls relevant approved memories and injects a small context block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
 
