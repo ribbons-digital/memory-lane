@@ -36,7 +36,7 @@ function lifecycleCounts(result: LifecycleResult): {
 
 function confirmationRequiredOutput(): string {
   return JSON.stringify({
-    systemMessage: "Memory Lane: Session-end summarization requires confirmation. Rerun the Codex SessionEnd hook with confirmed: true to save a pending summary.",
+    systemMessage: "Memory Lane: Session-end summarization requires confirmation. Rerun the Codex-shaped session-end payload with confirmed: true to save a pending summary.",
   })
 }
 

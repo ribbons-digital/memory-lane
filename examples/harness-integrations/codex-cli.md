@@ -71,18 +71,6 @@ Start with project-level `.codex/hooks.json` while testing Memory Lane in one re
           }
         ]
       }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "memory-lane codex session-end",
-            "timeoutSec": 30,
-            "statusMessage": "Summarizing session memory"
-          }
-        ]
-      }
     ]
   }
 }
@@ -100,9 +88,9 @@ Codex tool matcher names can vary by version. If `PostToolUse` does not fire, ad
 
 ## Session-end summarization
 
-Session-end summarization is opt-in. After enabling `memory.sessionEndSummary` in `~/.memory-lane/config.json`, Codex CLI can call `memory-lane codex session-end` from its `SessionEnd` hook.
+Session-end summarization is opt-in, but current Codex CLI hooks do **not** include a supported `SessionEnd` event. Do not add `SessionEnd` to `.codex/hooks.json`; Codex will ignore unsupported hook names.
 
-When `requireConfirmation` is true, an unconfirmed `SessionEnd` payload returns a message asking the user to rerun/confirm before Memory Lane sends the transcript to the configured summary model. Confirmed payloads generate a summary and save it as a pending memory. If you want to test the flow manually, pass a compact transcript JSON on stdin:
+For Codex today, use the manual command when you explicitly want to summarize a session. After enabling `memory.sessionEndSummary` in `~/.memory-lane/config.json`, pass a compact transcript JSON on stdin:
 
 ```bash
 echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant","content":"Done."}]}' \
@@ -111,6 +99,8 @@ memory-lane review
 ```
 
 Generated summaries are saved as pending memories. Approve them with `memory-lane approve <id>` before they affect future recall. Raw transcripts are not stored; tool messages are excluded unless `includeToolOutputs` is true, and likely secret lines are redacted before sending content to the configured model.
+
+Memory Lane includes a future-compatible Codex-shaped `session-end` adapter path for tests/manual payload experiments, but it is not wired to any real Codex lifecycle event until OpenAI ships one.
 
 ## Sandboxed storage
 

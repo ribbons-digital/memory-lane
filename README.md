@@ -238,7 +238,6 @@ memory-lane status                Quick stats
 memory-lane reindex [--force]     Rebuild embeddings
 memory-lane init --project-local  Initialize sandbox-friendly project-local storage
 memory-lane session-end --confirm Generate a pending session summary from stdin JSON
-memory-lane codex session-end     Handle Codex SessionEnd summarization hook payloads
 memory-lane obsidian ...          Manage optional Obsidian mirror/import workflows
 ```
 
@@ -276,15 +275,9 @@ memory-lane review
 memory-lane approve <id>
 ```
 
-Codex CLI can also call the hook adapter:
+Codex CLI does not currently expose a supported `SessionEnd` hook event. Do not add `SessionEnd` to `.codex/hooks.json`; Codex will ignore it. For Codex today, use the manual `memory-lane session-end --confirm` command when you explicitly want to summarize a session. The codebase contains a future-compatible Codex-shaped `session-end` adapter path, but it is not a real Codex hook until OpenAI ships a matching event.
 
-```bash
-memory-lane codex session-end
-```
-
-When `requireConfirmation` is true, an unconfirmed Codex `SessionEnd` payload returns a message asking the user to rerun/confirm before a pending summary is saved. Confirmed payloads save only the generated summary, not the raw transcript.
-
-Tool messages are excluded unless `includeToolOutputs` is true. Lines that look like secrets are redacted before the transcript is sent to the configured model. Claude Code and pi `SessionEnd` adapters remain follow-up work.
+Tool messages are excluded unless `includeToolOutputs` is true. Lines that look like secrets are redacted before the transcript is sent to the configured model. Claude Code, pi, and any real Codex session-end automation remain follow-up work.
 
 ### Obsidian mirror
 

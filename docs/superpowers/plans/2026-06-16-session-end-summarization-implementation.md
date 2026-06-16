@@ -4,7 +4,9 @@
 
 **Goal:** Add opt-in, user-confirmed session-end summarization to Memory Lane so a structured summary of a finished agent session can be saved as a pending memory for later review.
 
-**Architecture:** The work is concentrated in `@memory-lane/core` (config and data-model extensions) and `@memory-lane/lifecycle` (a new `handleSessionEnd` handler and a small OpenAI-compatible chat provider). A manual `memory-lane session-end` CLI command is added first; Codex/Claude/pi `SessionEnd` hook adapters will follow in a second slice once harness confirmation behavior is settled. Generated summaries are saved through the existing `MemoryEngine.save` path as `pending` memories with `source: "session-summary"`, `kind: "session_summary"`, and `provenance.lifecycleEvent: "session_end"`.
+> **Correction after implementation:** Current OpenAI Codex hooks documentation does **not** expose a supported `SessionEnd` event. The Codex-shaped `session-end` parser/runner path added by this plan is future-compatible/manual-test only, not a real Codex hook integration. Do not add `SessionEnd` to `.codex/hooks.json`; Codex ignores unsupported hook names. Future Codex automation must be redesigned around supported events such as `Stop`, `PreCompact`, or `PostCompact`, after confirming exact payload semantics.
+
+**Architecture:** The work is concentrated in `@memory-lane/core` (config and data-model extensions) and `@memory-lane/lifecycle` (a new `handleSessionEnd` handler and a small OpenAI-compatible chat provider). A manual `memory-lane session-end` CLI command is added first; real Codex/Claude/pi hook adapters must follow only after verifying supported lifecycle events and confirmation behavior for each harness. Generated summaries are saved through the existing `MemoryEngine.save` path as `pending` memories with `source: "session-summary"`, `kind: "session_summary"`, and `provenance.lifecycleEvent: "session_end"`.
 
 **Tech Stack:** TypeScript, Node built-in `fetch`, existing JSONL storage and `MemoryEngine`, existing test style (`node --test --import tsx`).
 
@@ -840,6 +842,8 @@ git commit -m "feat(cli): add manual memory-lane session-end command"
 
 ## Task 6: Add Codex/Claude/pi SessionEnd hook adapter support (Slice 2)
 
+**Correction:** This task assumed Codex had a `SessionEnd` hook. Current Codex docs do not. Treat the Codex-specific instructions below as historical/future-compatible only; do not configure or document a real Codex `SessionEnd` hook unless OpenAI adds that event. A replacement Codex automation slice should first evaluate supported `Stop`, `PreCompact`, and `PostCompact` events.
+
 **Note:** This slice is intentionally separate because harness confirmation behavior differs. Implement only after Slice 1 is merged and the manual command is proven.
 
 **Files:**
@@ -947,7 +951,7 @@ Summaries are saved with `source: session-summary` and `kind: session_summary`.
 
 - [ ] **Step 2: Update Codex integration docs**
 
-In `examples/harness-integrations/codex-cli.md`, note that `SessionEnd` hook support is experimental and requires harness confirmation; recommend the manual command for now.
+In `examples/harness-integrations/codex-cli.md`, note that current Codex CLI hooks do not expose a supported `SessionEnd` event; recommend the manual command for now and avoid documenting `.codex/hooks.json` `SessionEnd` entries.
 
 - [ ] **Step 3: Update skill docs**
 

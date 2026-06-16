@@ -72,7 +72,6 @@ memory-lane init                  # first-time setup wizard for harnesses
 memory-lane init --yes            # auto-configure all detected harnesses
 memory-lane init --project-local  # initialize sandbox-friendly project-local storage
 memory-lane session-end --confirm # generate a pending session-summary memory from stdin JSON
-memory-lane codex session-end     # handle Codex SessionEnd summarization hook payloads
 memory-lane uninstall             # remove binary and integration configs
 memory-lane uninstall --yes       # non-interactive uninstall
 memory-lane mcp                   # run the bundled MCP server over stdio
@@ -80,7 +79,7 @@ memory-lane mcp                   # run the bundled MCP server over stdio
 
 ### Session-end summarization
 
-Use `memory-lane session-end --confirm` only when the user explicitly wants to generate a manual session summary and `memory.sessionEndSummary` is configured. It reads stdin JSON with a `messages` array, sends the compact transcript to the configured OpenAI-compatible chat model, and saves the result as a pending memory with `source: "session-summary"` and `kind: "session_summary"`. Codex CLI may also invoke `memory-lane codex session-end` from a `SessionEnd` hook; when confirmation is required, unconfirmed payloads ask the user to confirm before saving.
+Use `memory-lane session-end --confirm` only when the user explicitly wants to generate a manual session summary and `memory.sessionEndSummary` is configured. It reads stdin JSON with a `messages` array, sends the compact transcript to the configured OpenAI-compatible chat model, and saves the result as a pending memory with `source: "session-summary"` and `kind: "session_summary"`. Current Codex CLI hooks do not include a supported `SessionEnd` event, so do not suggest adding `SessionEnd` to `.codex/hooks.json`.
 
 ```bash
 echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant","content":"Done."}]}' \
@@ -157,12 +156,11 @@ memory-lane codex session-start
 memory-lane codex user-prompt-submit
 memory-lane codex stop
 memory-lane codex post-tool-use
-memory-lane codex session-end
 ```
 
-`session-start` performs baseline memory injection for new sessions. `user-prompt-submit` recalls relevant approved memories. `stop` and `post-tool-use` save useful memories externally and are silent by default. Codex `session-end` can generate a pending session summary when opt-in summarization is configured and confirmed.
+`session-start` performs baseline memory injection for new sessions. `user-prompt-submit` recalls relevant approved memories. `stop` and `post-tool-use` save useful memories externally and are silent by default. Current Codex CLI hooks do not expose a `SessionEnd` event; use manual `memory-lane session-end --confirm` for session summaries.
 
-`UserPromptSubmit` recalls relevant approved memories and injects a small context block. `Stop`, `PostToolUse`, and unconfirmed/disabled `SessionEnd` are silent or return concise hook messages by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
+`UserPromptSubmit` recalls relevant approved memories and injects a small context block. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
 
 Lifecycle autosave filters transient reviewer, subagent, and task prompts such as commit review requests, “do not modify files” review tasks, and delegated status-report instructions. Do not rely on those operational prompts becoming memories. When a durable workflow rule, preference, or project fact should be saved, make it explicit with `memory_save`, `memory-lane save`, or wording like “Remember that ...”. Explicit memory requests remain supported even when they mention reviewer/subagent behavior.
 
