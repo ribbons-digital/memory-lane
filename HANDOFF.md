@@ -14,7 +14,7 @@
 - Strategic review concluded: Memory Lane is practical for short explicit agent preferences and project facts, but not yet for long-running project continuity because it lacks automatic session synthesis and staleness handling.
 - Roadmap extended with Phases 13–16 for session-end summarization, auto-memory review/dashboard, time-aware memory, and handoff-free sessions. All are opt-in and disabled by default.
 - Session-end summarization design spec is at `docs/superpowers/specs/2026-06-16-session-end-summarization-design.md`. It requires user confirmation before generating a summary and saves summaries as pending memories for review.
-- Phase 13 Session-End Summarization Slice 1 is in progress on branch `feature/session-end-summarization` in worktree `~/.config/superpowers/worktrees/memory-lane/session-end-summarization`. Completed so far: core data model/config, lifecycle LLM provider, `handleSessionEnd`, and manual `memory-lane session-end --confirm` CLI command.
+- Phase 13 Session-End Summarization Slice 1 is in progress on branch `feature/session-end-summarization` in worktree `~/.config/superpowers/worktrees/memory-lane/session-end-summarization`. Implemented and verified: core data model/config, lifecycle LLM provider, `handleSessionEnd`, manual `memory-lane session-end --confirm` CLI command, docs, full build/test, and manual mock-provider smoke.
 - To upgrade manually, re-run the installer and then `memory-lane init --yes`.
 
 ## Current state
@@ -327,10 +327,10 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Finish Phase 13 Slice 1 verification in the active feature worktree: run full `pnpm build`, `pnpm test`, and a manual `memory-lane session-end --confirm` smoke with a temporary OpenAI-compatible mock server/config.
-2. Request review for Phase 13 Slice 1, then merge/push `feature/session-end-summarization` if approved.
-3. After merge, manually try session-end summarization with the user's preferred local/remote OpenAI-compatible model and review whether the generated pending memory is useful enough to approve.
-4. Only after the manual flow is proven, plan the hook-based `SessionEnd` follow-up for pi/Codex/Claude Code confirmation behavior.
+1. Request review for Phase 13 Slice 1, then merge/push `feature/session-end-summarization` if approved.
+2. After merge, manually try session-end summarization with the user's preferred local/remote OpenAI-compatible model and review whether the generated pending memory is useful enough to approve.
+3. Only after the manual flow is proven, plan the hook-based `SessionEnd` follow-up for pi/Codex/Claude Code confirmation behavior.
+4. Keep Phase 13 follow-ups focused on user-confirmed session continuity; do not start Phase 14 review/dashboard or Phase 15 staleness work until the basic summary flow proves useful.
 5. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
 6. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
 7. Only schedule hardening backlog items or deferred improvements from `ROADMAP.md` after explicit user approval or clear real-world user value.
