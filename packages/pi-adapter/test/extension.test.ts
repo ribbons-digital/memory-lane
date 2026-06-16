@@ -78,6 +78,50 @@ function baseCtx(cwd: string): ExtensionContext {
   }
 }
 
+type FakeNotification = { message: string; level?: "info" | "warning" | "error" }
+
+type FakeBranchEntry = {
+  type: string
+  message?: {
+    role?: string
+    content?: unknown
+  }
+}
+
+function ctxWithUi(cwd: string, options: {
+  confirmResult?: boolean
+  includeConfirm?: boolean
+  branch?: FakeBranchEntry[]
+  notifications?: FakeNotification[]
+} = {}): ExtensionContext {
+  const notifications = options.notifications ?? []
+  const ui: {
+    notify(message: string, level?: "info" | "warning" | "error"): void
+    confirm?: () => Promise<boolean>
+  } = {
+    notify(message: string, level?: "info" | "warning" | "error") {
+      notifications.push({ message, level })
+    },
+  }
+  if (options.includeConfirm !== false) {
+    ui.confirm = async () => options.confirmResult ?? false
+  }
+  return {
+    cwd,
+    ui,
+    sessionManager: {
+      getSessionFile: () => path.join(cwd, ".pi-session.jsonl"),
+      getBranch: () => options.branch ?? [],
+    },
+  } as ExtensionContext
+}
+
+async function runMemoryCommand(pi: FakePi, args: string, ctx: ExtensionContext): Promise<void> {
+  const command = pi.commands.get("memory")
+  assert.ok(command)
+  await command.handler(args, ctx)
+}
+
 async function runBeforeAgentStart(pi: FakePi, event: any, ctx: ExtensionContext): Promise<any> {
   const handlers = pi.events.get("before_agent_start") ?? []
   assert.equal(handlers.length, 1)
@@ -227,4 +271,130 @@ test("duplicate saves across input and turn_end are suppressed", async () => {
 
   const lines = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8").trim().split("\n")
   assert.equal(lines.length, 1)
+})
+
+test("memory session-summary reports disabled summarization without saving", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const notifications: FakeNotification[] = []
+  const ctx = ctxWithUi(env.dir, {
+    confirmResult: true,
+    notifications,
+    branch: [
+      { type: "message", message: { role: "user", content: [{ type: "text", text: "Summarize this later" }] } },
+    ],
+  })
+
+  await runMemoryCommand(pi, "session-summary", ctx)
+
+  assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
+  assert.ok(notifications.some((n) => n.message.includes("Session-end summarization is not enabled")))
+})
+
+test("memory summarize-session reports disabled summarization without saving", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const notifications: FakeNotification[] = []
+  const ctx = ctxWithUi(env.dir, {
+    confirmResult: true,
+    notifications,
+    branch: [
+      { type: "message", message: { role: "user", content: [{ type: "text", text: "Summarize this later" }] } },
+    ],
+  })
+
+  await runMemoryCommand(pi, "summarize-session", ctx)
+
+  assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
+  assert.ok(notifications.some((n) => n.message.includes("Session-end summarization is not enabled")))
+})
+
+test("memory session-summary reports missing provider before confirmation", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
+    semantic: { enabled: false },
+    memory: { sessionEndSummary: { enabled: true, requireConfirmation: false } },
+  }))
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const notifications: FakeNotification[] = []
+  let confirmCalled = false
+  const ctx = ctxWithUi(env.dir, {
+    notifications,
+    branch: [{ type: "message", message: { role: "user", content: [{ type: "text", text: "Important decision" }] } }],
+  }) as any
+  ctx.ui.confirm = async () => { confirmCalled = true; return true }
+
+  await runMemoryCommand(pi, "session-summary", ctx)
+
+  assert.equal(confirmCalled, false)
+  assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
+  assert.ok(notifications.some((n) => n.message.includes("baseUrl") && n.message.includes("model")))
+})
+
+test("memory session-summary reports empty branch without saving", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
+    semantic: { enabled: false },
+    memory: { sessionEndSummary: { enabled: true, baseUrl: "http://127.0.0.1:9/v1", model: "mock" } },
+  }))
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const notifications: FakeNotification[] = []
+  const ctx = ctxWithUi(env.dir, { confirmResult: true, notifications, branch: [] })
+
+  await runMemoryCommand(pi, "session-summary", ctx)
+
+  assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
+  assert.ok(notifications.some((n) => n.message.includes("No conversation text found")))
+})
+
+test("memory session-summary requires interactive confirmation", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
+    semantic: { enabled: false },
+    memory: { sessionEndSummary: { enabled: true, baseUrl: "http://127.0.0.1:9/v1", model: "mock" } },
+  }))
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const notifications: FakeNotification[] = []
+  const ctx = ctxWithUi(env.dir, {
+    includeConfirm: false,
+    notifications,
+    branch: [{ type: "message", message: { role: "user", content: [{ type: "text", text: "Important decision" }] } }],
+  })
+
+  await runMemoryCommand(pi, "session-summary", ctx)
+
+  assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
+  assert.ok(notifications.some((n) => n.message.includes("requires interactive confirmation")))
+})
+
+test("memory session-summary cancellation saves nothing", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
+    semantic: { enabled: false },
+    memory: { sessionEndSummary: { enabled: true, baseUrl: "http://127.0.0.1:9/v1", model: "mock" } },
+  }))
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const notifications: FakeNotification[] = []
+  const ctx = ctxWithUi(env.dir, {
+    confirmResult: false,
+    notifications,
+    branch: [{ type: "message", message: { role: "user", content: [{ type: "text", text: "Important decision" }] } }],
+  })
+
+  await runMemoryCommand(pi, "session-summary", ctx)
+
+  assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
+  assert.ok(notifications.some((n) => n.message.includes("cancelled")))
 })

@@ -1,8 +1,8 @@
 import { Type } from "typebox"
 import { handlePostToolUse, handleStop, handleUserPromptSubmit } from "@memory-lane/lifecycle"
-import type { PostToolUseInput } from "@memory-lane/lifecycle"
+import type { PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
 import {
-  MemoryEngine, inferMemoryKind, initProjectLocalStorage, resolveWritableMemoryPaths, type SaveResult,
+  MemoryEngine, inferMemoryKind, initProjectLocalStorage, loadConfig, resolveWritableMemoryPaths, type SaveResult,
 } from "@memory-lane/core"
 import { isPiDebugEnabled, piDebugPath, writePiDebugLog } from "./debug.js"
 
@@ -12,8 +12,20 @@ import { isPiDebugEnabled, piDebugPath, writePiDebugLog } from "./debug.js"
 
 export interface ExtensionContext {
   cwd: string
-  ui?: { notify(message: string, level?: "info" | "warning" | "error"): void }
-  sessionManager?: { getSessionFile?(): string | undefined }
+  ui?: {
+    notify(message: string, level?: "info" | "warning" | "error"): void
+    confirm?(title: string, message?: string): Promise<boolean> | boolean
+  }
+  sessionManager?: {
+    getSessionFile?(): string | undefined
+    getBranch?(): Array<{
+      type: string
+      message?: {
+        role?: string
+        content?: unknown
+      }
+    }>
+  }
 }
 
 export interface ExtensionAPI {
@@ -138,10 +150,73 @@ function formatSaveResult(r: SaveResult): string {
   return `Memory not saved: ${r.reason}`
 }
 
+type PiBranchEntry = NonNullable<ExtensionContext["sessionManager"]> extends { getBranch?: () => infer Entries }
+  ? Entries extends Array<infer Entry> ? Entry : never
+  : never
+
+function textPartsFromContent(content: unknown): string[] {
+  if (typeof content === "string") return [content]
+  if (!Array.isArray(content)) return []
+  const parts: string[] = []
+  for (const part of content) {
+    if (!part || typeof part !== "object") continue
+    const block = part as { type?: string; text?: unknown }
+    if (block.type === "text" && typeof block.text === "string") parts.push(block.text)
+  }
+  return parts
+}
+
+function sessionMessagesFromPiBranch(branch: PiBranchEntry[]): SessionMessage[] {
+  const messages: SessionMessage[] = []
+  for (const entry of branch) {
+    if (!entry || entry.type !== "message") continue
+    const role = entry.message?.role
+    if (role !== "user" && role !== "assistant") continue
+    const content = textPartsFromContent(entry.message?.content).join("\n").trim()
+    if (!content) continue
+    messages.push({ role, content })
+  }
+  return messages
+}
+
 // ── Main extension ───────────────────────────────────────────
 
 export default function memoryLaneExtension(pi: ExtensionAPI) {
   // ── Commands ─────────────────────────────────────────────
+
+  async function runPiSessionSummaryCommand(ctx: ExtensionContext): Promise<void> {
+    const config = loadConfig(process.env.PI_MEMORY_CONFIG_FILE ?? process.env.MEMORY_LANE_CONFIG)
+    const summaryConfig = config.memory?.sessionEndSummary
+
+    if (!summaryConfig?.enabled) {
+      notify(ctx, "Session-end summarization is not enabled. Configure memory.sessionEndSummary.enabled first.", "warning")
+      return
+    }
+    if (!summaryConfig.baseUrl || !summaryConfig.model) {
+      notify(ctx, "Session-end summarization requires memory.sessionEndSummary.baseUrl and model.", "warning")
+      return
+    }
+
+    const branch = ctx.sessionManager?.getBranch?.() ?? []
+    const messages = sessionMessagesFromPiBranch(branch as PiBranchEntry[])
+    if (!messages.length) {
+      notify(ctx, "No conversation text found to summarize.", "warning")
+      return
+    }
+
+    if (!ctx.ui?.confirm) {
+      notify(ctx, "/memory session-summary requires interactive confirmation in pi.", "warning")
+      return
+    }
+
+    const ok = await ctx.ui.confirm("Summarize this pi session?", "Memory Lane will send a compact transcript to your configured session summary provider and save the result as a pending memory.")
+    if (!ok) {
+      notify(ctx, "Session summary cancelled.", "info")
+      return
+    }
+
+    notify(ctx, "Session summary generation is not available until the save path is enabled in the next implementation slice.", "warning")
+  }
 
   pi.registerCommand("remember", {
     description: "Save an approved persistent memory",
@@ -173,6 +248,15 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         return
       }
 
+      if (cmd === "session-summary" || cmd === "summarize-session") {
+        try {
+          await runPiSessionSummaryCommand(ctx)
+        } catch (err) {
+          notify(ctx, err instanceof Error ? `Session summary failed: ${err.message}` : "Session summary failed", "warning")
+        }
+        return
+      }
+
       try {
         const e = getEngine(ctx.cwd)
         if (cmd === "list") {
@@ -199,7 +283,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         const d = e.doctor()
         notify(ctx, Object.entries(d).map(([k, v]) => `${k}: ${v}`).join("\n"))
         } else {
-          notify(ctx, "Usage: /memory list [--all] | search <q> | delete <id> | use [q] | review | compact | status | init-project-local")
+          notify(ctx, "Usage: /memory list [--all] | search <q> | delete <id> | use [q] | review | compact | status | session-summary | init-project-local")
         }
       } catch (err) {
         notify(ctx, storageGuidance(err), "warning")
