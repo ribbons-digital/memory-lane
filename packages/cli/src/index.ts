@@ -13,7 +13,8 @@ import { handleUpgrade } from "./commands/upgrade.js"
 import { discoverObsidianImportFiles, planObsidianImport } from "@memory-lane/obsidian-import"
 import { initObsidianMirror, statusObsidianMirror, syncObsidianMirror } from "@memory-lane/obsidian-mirror"
 import { loadPlugins } from "@memory-lane/plugin-api"
-import type { LoadedPlugin } from "@memory-lane/plugin-api"
+import type { BundledPluginModule, LoadedPlugin } from "@memory-lane/plugin-api"
+import type { SemanticMemoryConfig } from "@memory-lane/core"
 import { resolveBundledPlugin } from "./plugins.js"
 import {
   formatMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
@@ -686,13 +687,21 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  const config = loadConfig(configPath)
+  let config: SemanticMemoryConfig
+  try {
+    config = loadConfig(configPath)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.log(formatError(`Failed to load config: ${msg}`, json))
+    process.exit(1)
+  }
+
   let plugins: LoadedPlugin[] = []
   try {
     const bundledPlugins = config.plugins?.length
       ? config.plugins
           .map(resolveBundledPlugin)
-          .filter((p): p is { name: string; default: (api: any) => void } => Boolean(p))
+          .filter((p): p is BundledPluginModule => Boolean(p))
       : []
     plugins = config.plugins?.length
       ? await loadPlugins({ pluginNames: config.plugins, engine, config, context: "cli", bundledPlugins })

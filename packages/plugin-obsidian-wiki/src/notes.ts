@@ -1,5 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { posix } from "node:path"
 import type { ObsidianWikiConfig } from "./config.js"
 
 export interface WikiNote {
@@ -19,7 +20,7 @@ export function* discoverNotes(config: ObsidianWikiConfig): Generator<WikiNote> 
 
   function* walk(dir: string, relPrefix: string): Generator<WikiNote, void, unknown> {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const rel = path.join(relPrefix, entry.name)
+      const rel = posix.join(relPrefix, entry.name)
       if (entry.isDirectory()) {
         if (exclude.has(entry.name)) continue
         if (include && relPrefix === "" && !include.has(entry.name)) continue

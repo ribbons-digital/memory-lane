@@ -5,12 +5,32 @@ import * as path from "node:path"
 import { afterEach, test } from "node:test"
 import type { MemoryLanePluginAPI, McpResourceDefinition, McpToolDefinition, CliCommandDefinition } from "@memory-lane/plugin-api"
 import obsidianWikiPlugin from "../src/index.js"
+import { discoverNotes } from "../src/notes.js"
 
 let cleanup: (() => void) | undefined
 
 afterEach(() => {
   cleanup?.()
   cleanup = undefined
+})
+
+test("discovers notes inside included folders", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ml-wiki-discover-test-"))
+  cleanup = () => fs.rmSync(dir, { recursive: true, force: true })
+  fs.mkdirSync(path.join(dir, "Garden"))
+  fs.writeFileSync(path.join(dir, "Garden", "Hello.md"), "# Hello\n\nWorld.")
+  fs.mkdirSync(path.join(dir, "Private"))
+  fs.writeFileSync(path.join(dir, "Private", "Secret.md"), "# Secret")
+
+  const notes = Array.from(discoverNotes({
+    vaultPath: dir,
+    includeFolders: ["Garden"],
+    excludeFolders: ["Private", "Daily"],
+  }))
+
+  assert.equal(notes.length, 1)
+  assert.equal(notes[0].relativePath, "Garden/Hello.md")
+  assert.equal(notes[0].title, "Hello")
 })
 
 test("registers MCP tools, resource, and CLI command", () => {

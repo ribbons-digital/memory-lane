@@ -95,6 +95,53 @@ test("registers plugin MCP tools", () => {
   assert.ok(names.includes("fake_tool"))
 })
 
+test("createMemoryLaneEngine loads bundled plugins", async () => {
+  const dir = tempDir("memory-lane-mcp-engine-")
+  const configPath = path.join(dir, "config.json")
+  fs.writeFileSync(configPath, JSON.stringify({
+    semantic: {
+      enabled: false,
+      activeEmbeddingProfile: "local-example",
+      embeddings: { profiles: {} },
+      retrieval: {
+        topK: 8,
+        minSimilarity: 0.25,
+        semanticWeight: 0.65,
+        lexicalWeight: 0.25,
+        recencyWeight: 0.1,
+        fallbackToAllVisibleOnMiss: true,
+      },
+      privacy: { allowRemoteEmbeddings: false },
+    },
+    plugins: ["fake-bundled"],
+    pluginConfig: {},
+  }))
+
+  const { plugins } = await createMemoryLaneEngine({
+    cwd: dir,
+    env: {
+      MEMORY_LANE_FILE: path.join(dir, "memory.jsonl"),
+      MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"),
+      MEMORY_LANE_CONFIG: configPath,
+    },
+    bundledPlugins: [{
+      name: "fake-bundled",
+      default(api) {
+        api.registerMcpTool({
+          name: "fake_bundled_tool",
+          title: "Fake Bundled",
+          description: "...",
+          inputSchema: {},
+          async handler() { return { content: [{ type: "text" as const, text: "ok" }] } },
+        })
+      },
+    }],
+  })
+
+  assert.equal(plugins.length, 1)
+  assert.equal(plugins[0].mcpTools[0].name, "fake_bundled_tool")
+})
+
 test("registers status and review-complete tools on the MCP server", () => {
   const server = createMemoryLaneMcpServer({ engine: engineInTemp() })
 
