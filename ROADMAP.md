@@ -318,7 +318,7 @@ Todos:
 
 ## Phase 13 — Session-End Summarization
 
-**Status:** In progress. Slice 1 implements the shared data model, opt-in config, LLM summarization handler, and manual `memory-lane session-end --confirm` command. Hook-based `SessionEnd` integration remains a follow-up slice after the manual flow is proven.
+**Status:** In progress. Slice 1 implements the shared data model, opt-in config, LLM summarization handler, manual `memory-lane session-end --confirm` command, and Codex `memory-lane codex session-end` hook support with confirmation gating. Claude Code and pi `SessionEnd` adapters remain follow-up slices.
 
 **Goal:** Let Memory Lane optionally capture a structured summary at the end of an agent session so the next session can start with project state instead of from scratch.
 
@@ -331,12 +331,13 @@ Completed Slice 1 scope:
 3. Added an OpenAI-compatible chat provider and `handleSessionEnd` lifecycle handler in `@memory-lane/lifecycle`.
 4. Added secret-line redaction, default tool-output exclusion, `NO_DURABLE_MEMORY` handling, and pending session-summary candidate creation.
 5. Added manual `memory-lane session-end --confirm` CLI support for stdin transcript JSON.
-6. Added tests for config validation, LLM provider behavior, session-end handler behavior, and CLI gating.
-7. Documented the feature, the opt-in requirement, privacy boundaries, and review/approval workflow.
+6. Added Codex `SessionEnd` payload parsing and `memory-lane codex session-end` handling with disabled/missing-provider no-op behavior, confirmation gating, confirmed save path, and tests that raw transcript content is not persisted.
+7. Added tests for config validation, LLM provider behavior, session-end handler behavior, CLI gating, and Codex hook behavior.
+8. Documented the feature, the opt-in requirement, privacy boundaries, and review/approval workflow.
 
 Remaining follow-up scope:
 
-1. Hook `agent_end`/`session_end` events in pi, Codex, and Claude Code adapters, but only generate a summary after an explicit user prompt such as "Remember this session" or a confirmation dialog; never auto-generate by default.
+1. Hook `agent_end`/`session_end` events in pi and Claude Code adapters, but only generate a summary after an explicit user prompt such as "Remember this session" or a confirmation dialog; never auto-generate by default.
 2. Consider a stricter structured `SessionSummary` schema if real summaries need machine-readable subsections beyond the Markdown pending-memory format.
 3. Add end-to-end harness-specific smoke tests once real hook confirmation behavior is known.
 
