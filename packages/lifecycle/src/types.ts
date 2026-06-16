@@ -43,3 +43,38 @@ export interface MemoryCandidate {
   reason: string
   source?: MemorySource
 }
+
+export interface LLMProvider {
+  complete(prompt: string, options?: { maxTokens?: number; model?: string }): Promise<string>
+}
+
+export interface LLMProviderConfig {
+  provider: "openai-compatible"
+  baseUrl: string
+  apiKeyEnv?: string | null
+  model: string
+}
+
+export interface SessionMessage {
+  role: "user" | "assistant" | "tool"
+  content: string
+  timestamp?: string
+  toolName?: string
+}
+
+export interface SessionEndInput {
+  cwd: string
+  sessionId?: string
+  messages: SessionMessage[]
+  transcriptPath?: string
+}
+
+export interface SessionEndOptions {
+  provider?: LLMProvider
+  providerConfig?: LLMProviderConfig
+  promptTemplate?: string
+  maxTokens?: number
+  requireConfirmation?: boolean
+  confirmed?: boolean
+  includeToolOutputs?: boolean
+}
