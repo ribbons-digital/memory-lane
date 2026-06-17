@@ -258,6 +258,9 @@ describe("CLI integration", () => {
     const parsed = JSON.parse(doc)
     assert.equal(parsed.ok, true)
     assert.equal(parsed.data.totalMemories, 2)
+    assert.equal(parsed.data.contextPolicyMode, "selective")
+    assert.equal(parsed.data.contextPolicyPromptMaxItems, 6)
+    assert.equal(parsed.data.contextPolicySessionStartMaxItems, 4)
     assert.equal(typeof parsed.data.integrations, "object")
     assert.equal(parsed.data.integrations.summary.mcpExplicitToolsOnly, true)
   })
@@ -269,6 +272,9 @@ describe("CLI integration", () => {
       MEMORY_LANE_CONFIG: cfgFile,
     }
     const output = run(["doctor"], env)
+    assert.match(output, /Context policy:/u)
+    assert.match(output, /mode: selective/u)
+    assert.match(output, /prompt budget: 6 items \/ 3000 chars/u)
     assert.match(output, /integrations:/u)
     assert.match(output, /mcpExplicitToolsOnly/u)
     assert.doesNotMatch(output, /\[object Object\]/u)

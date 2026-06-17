@@ -475,6 +475,34 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(d.totalMemories, 2)
   })
 
+  it("doctor reports context policy config without memory text", () => {
+    fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({
+      memory: {
+        contextPolicy: {
+          mode: "policy-only",
+          maxItems: { sessionStart: 2, prompt: 3 },
+          maxChars: { sessionStart: 400, prompt: 900 },
+          includePending: false,
+          fallbackToSearch: true,
+        },
+      },
+    }), "utf8")
+    const e = engine()
+    e.save({ text: "Do not leak this memory text", status: "approved" })
+
+    const report = e.doctor()
+    const serialized = JSON.stringify(report)
+
+    assert.equal(report.contextPolicyMode, "policy-only")
+    assert.equal(report.contextPolicyPromptMaxItems, 3)
+    assert.equal(report.contextPolicySessionStartMaxItems, 2)
+    assert.equal(report.contextPolicyPromptMaxChars, 900)
+    assert.equal(report.contextPolicySessionStartMaxChars, 400)
+    assert.equal(report.contextPolicyIncludePending, false)
+    assert.equal(report.contextPolicyFallbackToSearch, true)
+    assert.doesNotMatch(serialized, /Do not leak this memory text/u)
+  })
+
   it("doctor includes integration diagnostics from injected paths", () => {
     const integrationRoot = path.join(dir, "integration-doctor")
     const claudeDesktopConfig = path.join(integrationRoot, "Claude", "claude_desktop_config.json")

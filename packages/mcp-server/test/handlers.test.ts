@@ -210,6 +210,8 @@ test("memory_status returns doctor counts without memory text", async () => {
   assert.equal(result.data.status.approvedMemories, 1)
   assert.equal(result.data.status.pendingMemories, 1)
   assert.equal(result.data.status.semanticEnabled, false)
+  assert.equal(result.data.status.contextPolicyMode, "selective")
+  assert.equal(result.data.status.contextPolicyPromptMaxItems, 6)
   const expectedScope = engine.getProjectScope()?.key ?? "none"
   assert.equal(result.data.status.projectScope, expectedScope)
   assert.equal(result.meta.projectScope, expectedScope)

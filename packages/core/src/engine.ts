@@ -411,6 +411,19 @@ export class MemoryEngine {
     }
   }
 
+  private contextPolicyDoctor(): Record<string, unknown> {
+    const policy = this.config.memory?.contextPolicy
+    return {
+      contextPolicyMode: policy?.mode ?? "selective",
+      contextPolicySessionStartMaxItems: policy?.maxItems?.sessionStart ?? 4,
+      contextPolicyPromptMaxItems: policy?.maxItems?.prompt ?? 6,
+      contextPolicySessionStartMaxChars: policy?.maxChars?.sessionStart ?? 1600,
+      contextPolicyPromptMaxChars: policy?.maxChars?.prompt ?? 3000,
+      contextPolicyIncludePending: policy?.includePending ?? false,
+      contextPolicyFallbackToSearch: policy?.fallbackToSearch ?? true,
+    }
+  }
+
   private hookDebugDoctor(): Record<string, unknown> {
     const warnings: string[] = []
     const base = {
@@ -510,6 +523,7 @@ export class MemoryEngine {
       projectScope: this.scope?.key ?? "none",
       integrations: diagnoseIntegrations({ cwd: this.scope?.cwd ?? null, paths: this.integrationPaths }),
       ...this.semanticDoctor(mems),
+      ...this.contextPolicyDoctor(),
       ...this.hookDebugDoctor(),
       ...this.obsidianDoctor(),
     }

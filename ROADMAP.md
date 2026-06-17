@@ -372,7 +372,7 @@ Remaining follow-up scope:
 
 ## Phase 14 — Token-Aware Context Policy
 
-**Status:** Slice 1 complete: shared context policy config, guarded context rendering, and policy-only/off/selective lifecycle routing are implemented. Slice 2 complete: lifecycle results and Claude/Codex hook debug logs include privacy-safe context decision metadata. Doctor summaries and richer kind prioritization remain follow-up work.
+**Status:** Slice 1 complete: shared context policy config, guarded context rendering, and policy-only/off/selective lifecycle routing are implemented. Slice 2 complete: lifecycle results and Claude/Codex hook debug logs include privacy-safe context decision metadata. Slice 3 complete: doctor/status surfaces report active context policy config. Richer kind prioritization remains follow-up work.
 
 **Goal:** Prevent Memory Lane from polluting or exploding context windows across all harnesses before adding broader automatic learning.
 
@@ -393,12 +393,17 @@ Completed Slice 2 scope:
 3. Added safe context decision fields to hook debug JSONL records for Claude and Codex when `MEMORY_LANE_HOOK_DEBUG=1`.
 4. Kept hook debug logs privacy-safe: no raw prompts, transcripts, tool outputs, memory text, or injected context text.
 
+Completed Slice 3 scope:
+
+1. Added active context policy config fields to `MemoryEngine.doctor()` and therefore CLI `memory-lane doctor`, `memory-lane status --json`, and MCP `memory_status`.
+2. Reported policy mode, prompt/session-start item budgets, prompt/session-start character budgets, pending-memory inclusion, and fallback-to-search behavior.
+3. Kept doctor/status read-only and memory-text-free.
+
 Remaining follow-up scope:
 
-1. Surface context decision summaries through `memory-lane doctor` or a dedicated debug/status command without reading raw log contents by default.
-2. Add kind preference/deprioritization once real usage shows which memory kinds should be favored or suppressed per lifecycle event.
-3. Consider token-estimation rather than character budgets only if character budgets prove insufficient across target harnesses.
-4. Update MCP/future-adapter guidance as new harnesses consume the shared context policy.
+1. Add kind preference/deprioritization once real usage shows which memory kinds should be favored or suppressed per lifecycle event.
+2. Consider token-estimation rather than character budgets only if character budgets prove insufficient across target harnesses.
+3. Update MCP/future-adapter guidance as new harnesses consume the shared context policy.
 
 ## Phase 15 — Auto-Memory Review and Memory Dashboard
 

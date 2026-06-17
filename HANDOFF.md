@@ -2,6 +2,11 @@
 
 ## Recent changes (since this handoff was last updated)
 
+- Phase 14 Token-Aware Context Policy is complete through Slice 3. See `ROADMAP.md#phase-14--token-aware-context-policy` for the detailed slice breakdown.
+- Slice 1 commit `537b441` added shared context policy injection modes (`selective`, `policy-only`, `off`) with guarded context rendering across Claude/Codex/pi lifecycle injection.
+- Slice 2 commit `1e02a5b` added privacy-safe context decision metadata to lifecycle results and Claude/Codex hook debug logs without logging raw prompts, transcripts, tool output, memory text, or injected context.
+- Current Slice 3 work exposes active context policy config through `MemoryEngine.doctor()`, CLI `memory-lane doctor`, CLI `memory-lane status --json`, and MCP `memory_status`, with readable CLI human output and memory-text-free tests.
+- Full verification for Slice 3 passed with `pnpm test && pnpm build`.
 - Production installer shipped: `install.sh` / `install.ps1` download a prebuilt Bun-compiled binary from GitHub Releases, place it on PATH, and prompt the user to run `memory-lane init`.
 - `memory-lane init` is an interactive wizard that detects and configures Claude Code CLI, Codex CLI, Claude Desktop, Codex Desktop, and pi.
 - `memory-lane init --yes` auto-configures all detected harnesses non-interactively.
@@ -25,6 +30,8 @@
 - To upgrade manually, re-run the installer and then `memory-lane init --yes`.
 
 ## Current state
+
+Phase 14 Slice 3 is implemented and verified locally. It should be committed before the next implementation slice if not already present in `git log`.
 
 Phase 13 Session-End Summarization manual flow is merged to `main`. The former feature worktree `~/.config/superpowers/worktrees/memory-lane/session-end-summarization` has been removed after merge.
 

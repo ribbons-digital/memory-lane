@@ -132,14 +132,40 @@ export function formatCompact(report: CompactReport, json: boolean): string {
   return `Compacted: removed ${report.removedMemories} memories, ${report.removedEmbeddings} embeddings`
 }
 
+const contextPolicyDoctorKeys = new Set([
+  "contextPolicyMode",
+  "contextPolicySessionStartMaxItems",
+  "contextPolicyPromptMaxItems",
+  "contextPolicySessionStartMaxChars",
+  "contextPolicyPromptMaxChars",
+  "contextPolicyIncludePending",
+  "contextPolicyFallbackToSearch",
+])
+
+function formatContextPolicyDoctor(report: Record<string, unknown>): string[] {
+  if (!("contextPolicyMode" in report)) return []
+  return [
+    "Context policy:",
+    `  mode: ${report.contextPolicyMode}`,
+    `  prompt budget: ${report.contextPolicyPromptMaxItems} items / ${report.contextPolicyPromptMaxChars} chars`,
+    `  session-start budget: ${report.contextPolicySessionStartMaxItems} items / ${report.contextPolicySessionStartMaxChars} chars`,
+    `  include pending: ${report.contextPolicyIncludePending}`,
+    `  fallback to search: ${report.contextPolicyFallbackToSearch}`,
+  ]
+}
+
 export function formatDoctor(report: Record<string, unknown>, json: boolean): string {
   if (json) {
     return JSON.stringify({ ok: true, data: report, meta: meta() }, null, 2)
   }
-  return Object.entries(report).map(([k, v]) => {
-    if (v && typeof v === "object") return `${k}: ${JSON.stringify(v, null, 2)}`
-    return `${k}: ${v}`
-  }).join("\n")
+  const contextLines = formatContextPolicyDoctor(report)
+  const detailLines = Object.entries(report)
+    .filter(([k]) => !contextPolicyDoctorKeys.has(k))
+    .map(([k, v]) => {
+      if (v && typeof v === "object") return `${k}: ${JSON.stringify(v, null, 2)}`
+      return `${k}: ${v}`
+    })
+  return [...contextLines, ...detailLines].join("\n")
 }
 
 export function formatImportPlan(result: ObsidianImportPlan | ObsidianImportApplyResult, json: boolean, dryRun: boolean): string {
