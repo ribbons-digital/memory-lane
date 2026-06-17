@@ -204,6 +204,8 @@ describe("init wizard", () => {
     const content = fs.readFileSync(skillPath, "utf8")
     assert.ok(content.includes("name: memory-lane"))
     assert.ok(content.includes(binaryPath))
+    assert.ok(content.includes("authoritative list"))
+    assert.ok(content.includes("memory-lane list --json"))
   })
 
   it("installs Codex skill for slash command access", () => {

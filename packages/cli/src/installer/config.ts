@@ -48,6 +48,8 @@ Available CLI commands:
 
 For explicit user requests, save as approved. For proactive observations, suggest as pending.
 
+For requests to list, show, review, or count current Memory Lane memories, use the authoritative list/status/review surface instead of answering from injected relevant-memory context. Prefer \`memory-lane list --json\` for the authoritative list, \`memory-lane review --json\` for pending memories, and \`memory-lane status --json\` for counts/scope.
+
 When running inside an MCP client with Memory Lane MCP configured, prefer the MCP tools.
 If MCP is not available, fall back to the CLI commands above.
 The binary is available at: ${binaryPath}

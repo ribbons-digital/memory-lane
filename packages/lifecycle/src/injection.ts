@@ -178,6 +178,27 @@ export function selectMemoriesForInjection(
   return selected
 }
 
+export function isMemoryManagementListIntent(prompt: string): boolean {
+  const normalized = normalizedPrompt(prompt)
+  if (!normalized) return false
+  const asksForMemory = /\b(?:memory|memories|memory lane)\b/u.test(normalized)
+  if (!asksForMemory) return false
+  return /\b(?:list|show|current|review|status|all|pending|approved)\b/u.test(normalized)
+}
+
+export function renderMemoryManagementListGuidance(): string {
+  return [
+    "## Memory Lane command guidance",
+    "",
+    "The user is asking for an authoritative Memory Lane list/status/review, not a relevance-filtered memory injection.",
+    "Use the authoritative Memory Lane surface instead of answering from injected Relevant Memory:",
+    "- CLI: `memory-lane list --json` for visible current-scope memories.",
+    "- CLI: `memory-lane review --json` for pending review items.",
+    "- CLI: `memory-lane status --json` for counts and project scope.",
+    "- MCP clients: use `memory_list`, `memory_review`, or `memory_status`; pass `projectPath` for project-scoped results.",
+  ].join("\n")
+}
+
 export function renderMemoryBlock(memories: MemoryRecord[]): string {
   if (!memories.length) return ""
   return ["## Relevant Memory", "", ...memories.map((memory) => `- ${memory.text}`)].join("\n")

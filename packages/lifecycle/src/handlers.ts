@@ -1,5 +1,5 @@
 import type { MemoryEngine, MemoryProvenance, MemorySource, SaveResult } from "@memory-lane/core"
-import { renderMemoryBlock, selectBaselineMemories, selectMemoriesForInjection, type MemoryInjectionLimits } from "./injection.js"
+import { isMemoryManagementListIntent, renderMemoryBlock, renderMemoryManagementListGuidance, selectBaselineMemories, selectMemoriesForInjection, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
 import { summarizeToolOutcome } from "./tool-outcomes.js"
 import type { LifecycleResult, MemoryCandidate, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
@@ -67,6 +67,7 @@ export async function handleUserPromptSubmit(
   options?: Partial<MemoryInjectionLimits>,
 ): Promise<LifecycleResult> {
   engine.refreshScope(input.cwd)
+  if (isMemoryManagementListIntent(input.prompt)) return createResult(renderMemoryManagementListGuidance())
   const recalled = await engine.recall(input.prompt)
   const selected = selectMemoriesForInjection(input.prompt, recalled, options)
   const rendered = renderMemoryBlock(selected)
