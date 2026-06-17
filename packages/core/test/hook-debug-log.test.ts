@@ -38,6 +38,13 @@ describe("hook debug log", () => {
       discarded: 3,
       additionalContext: false,
       warningCount: 4,
+      contextPolicyMode: "selective",
+      contextEvent: "prompt",
+      contextSelected: 1,
+      contextOmitted: 2,
+      contextMaxItems: 6,
+      contextMaxChars: 3000,
+      contextOmittedReasons: ["budget-or-filter"],
       durationMs: 5,
     }, { filePath: file })
 
@@ -54,6 +61,13 @@ describe("hook debug log", () => {
       discarded: 3,
       additionalContext: false,
       warningCount: 4,
+      contextPolicyMode: "selective",
+      contextEvent: "prompt",
+      contextSelected: 1,
+      contextOmitted: 2,
+      contextMaxItems: 6,
+      contextMaxChars: 3000,
+      contextOmittedReasons: ["budget-or-filter"],
       durationMs: 5,
     })
   })

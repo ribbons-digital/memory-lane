@@ -2,10 +2,19 @@ import type { MemoryEngine, MemoryProvenance, MemorySource, SaveResult } from "@
 import { isMemoryManagementListIntent, limitsFromContextPolicy, renderMemoryContext, renderMemoryManagementListGuidance, resolveContextPolicy, selectBaselineMemories, selectMemoriesForInjection, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
 import { summarizeToolOutcome } from "./tool-outcomes.js"
-import type { LifecycleResult, MemoryCandidate, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
+import type { LifecycleResult, MemoryCandidate, MemoryContextDecision, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
 
-function createResult(additionalContext?: string): LifecycleResult {
-  return { additionalContext, saved: [], discarded: [] }
+function createResult(additionalContext?: string, contextDecision?: MemoryContextDecision): LifecycleResult {
+  return { additionalContext, saved: [], discarded: [], contextDecision }
+}
+
+function contextDecision(input: Omit<MemoryContextDecision, "omittedReasons"> & { omittedReasons?: string[] }): MemoryContextDecision {
+  return { ...input, omittedReasons: input.omittedReasons ?? (input.omitted > 0 ? ["budget-or-filter"] : []) }
+}
+
+function contextBudget(event: "prompt" | "sessionStart", policy: ReturnType<typeof resolveContextPolicy>): { maxItems: number; maxChars: number } {
+  const key = event === "sessionStart" ? "sessionStart" : "prompt"
+  return { maxItems: policy.maxItems[key], maxChars: policy.maxChars[key] }
 }
 
 function candidateSource(candidate: MemoryCandidate, fallback: MemorySource): MemorySource {
@@ -69,12 +78,13 @@ export async function handleUserPromptSubmit(
   engine.refreshScope(input.cwd)
   if (isMemoryManagementListIntent(input.prompt)) return createResult(renderMemoryManagementListGuidance())
   const policy = resolveContextPolicy(engine.getContextPolicy())
-  if (policy.mode === "off") return createResult()
-  if (policy.mode === "policy-only") return createResult(renderMemoryContext({ event: "prompt", memories: [], policy }))
+  const budget = contextBudget("prompt", policy)
+  if (policy.mode === "off") return createResult(undefined, contextDecision({ event: "prompt", mode: policy.mode, ...budget, selected: 0, omitted: 0, omittedReasons: ["off"] }))
+  if (policy.mode === "policy-only") return createResult(renderMemoryContext({ event: "prompt", memories: [], policy }), contextDecision({ event: "prompt", mode: policy.mode, ...budget, selected: 0, omitted: 0, omittedReasons: ["policy-only"] }))
   const recalled = await engine.recall(input.prompt)
   const selected = selectMemoriesForInjection(input.prompt, recalled, limitsFromContextPolicy("prompt", policy, options))
   const rendered = renderMemoryContext({ event: "prompt", memories: selected, policy })
-  return createResult(rendered || undefined)
+  return createResult(rendered || undefined, contextDecision({ event: "prompt", mode: policy.mode, ...budget, selected: selected.length, omitted: Math.max(0, recalled.memories.length - selected.length) }))
 }
 
 export function handleSessionStart(
@@ -84,12 +94,13 @@ export function handleSessionStart(
 ): LifecycleResult {
   engine.refreshScope(input.cwd)
   const policy = resolveContextPolicy(engine.getContextPolicy())
-  if (policy.mode === "off") return createResult()
-  if (policy.mode === "policy-only") return createResult(renderMemoryContext({ event: "sessionStart", memories: [], policy }))
+  const budget = contextBudget("sessionStart", policy)
+  if (policy.mode === "off") return createResult(undefined, contextDecision({ event: "sessionStart", mode: policy.mode, ...budget, selected: 0, omitted: 0, omittedReasons: ["off"] }))
+  if (policy.mode === "policy-only") return createResult(renderMemoryContext({ event: "sessionStart", memories: [], policy }), contextDecision({ event: "sessionStart", mode: policy.mode, ...budget, selected: 0, omitted: 0, omittedReasons: ["policy-only"] }))
   const approved = engine.list({ status: "approved" })
   const selected = selectBaselineMemories(approved, limitsFromContextPolicy("sessionStart", policy, options))
   const rendered = renderMemoryContext({ event: "sessionStart", memories: selected, policy })
-  return createResult(rendered || undefined)
+  return createResult(rendered || undefined, contextDecision({ event: "sessionStart", mode: policy.mode, ...budget, selected: selected.length, omitted: Math.max(0, approved.length - selected.length) }))
 }
 
 export function handleStop(engine: MemoryEngine, input: StopInput, options?: LifecycleHandlerOptions): LifecycleResult {

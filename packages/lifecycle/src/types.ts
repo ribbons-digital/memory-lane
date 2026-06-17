@@ -25,10 +25,21 @@ export interface PostToolUseInput extends LifecycleContext {
 
 export interface SessionStartInput extends LifecycleContext {}
 
+export interface MemoryContextDecision {
+  event: "prompt" | "sessionStart"
+  mode: "off" | "policy-only" | "selective"
+  maxItems: number
+  maxChars: number
+  selected: number
+  omitted: number
+  omittedReasons: string[]
+}
+
 export interface LifecycleResult {
   additionalContext?: string
   saved: SaveResult[]
   discarded: Array<{ text: string; reason: string }>
+  contextDecision?: MemoryContextDecision
 }
 
 export type CandidateDecision = "save-approved" | "save-pending" | "discard"

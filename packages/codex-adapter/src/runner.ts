@@ -24,13 +24,30 @@ function lifecycleCounts(result: LifecycleResult): {
   discarded: number
   additionalContext: boolean
   warningCount: number
+  contextPolicyMode?: string
+  contextEvent?: string
+  contextSelected?: number
+  contextOmitted?: number
+  contextMaxItems?: number
+  contextMaxChars?: number
+  contextOmittedReasons?: string[]
 } {
+  const decision = result.contextDecision
   return {
     saved: result.saved.filter((saveResult) => saveResult.status === "saved").length,
     skipped: result.saved.filter((saveResult) => saveResult.status === "skipped").length,
     discarded: result.discarded.length,
     additionalContext: Boolean(result.additionalContext),
     warningCount: result.saved.reduce((count, saveResult) => count + (saveResult.warnings?.length ?? 0), 0),
+    ...(decision ? {
+      contextPolicyMode: decision.mode,
+      contextEvent: decision.event,
+      contextSelected: decision.selected,
+      contextOmitted: decision.omitted,
+      contextMaxItems: decision.maxItems,
+      contextMaxChars: decision.maxChars,
+      contextOmittedReasons: decision.omittedReasons,
+    } : {}),
   }
 }
 

@@ -469,6 +469,32 @@ test("debug-enabled hook writes one JSONL record with safe counts", async () => 
   assert.equal(typeof records[0].durationMs, "number")
 })
 
+test("debug-enabled user-prompt logs safe context decision fields", async () => {
+  const logPath = debugLogPath()
+  const engine = engineInTemp()
+  engine.save({ text: "This repo runs tests with pnpm test", category: "project", scopeType: "global", status: "approved" })
+
+  await runCodexHookCommand("user-prompt-submit", {
+    engine,
+    env: { MEMORY_LANE_HOOK_DEBUG: "1" } as NodeJS.ProcessEnv,
+    hookDebugLogPath: logPath,
+    payloadText: userPromptPayload(),
+  })
+
+  const logText = fs.readFileSync(logPath, "utf8")
+  const records = readDebugRecords(logPath)
+
+  assert.equal(records.length, 1)
+  assert.equal(records[0].contextPolicyMode, "selective")
+  assert.equal(records[0].contextEvent, "prompt")
+  assert.equal(records[0].contextSelected, 1)
+  assert.equal(records[0].contextOmitted, 0)
+  assert.equal(records[0].contextMaxItems, 6)
+  assert.equal(records[0].contextMaxChars, 3000)
+  assert.deepEqual(records[0].contextOmittedReasons, [])
+  assert.doesNotMatch(logText, /This repo runs tests with pnpm test/u)
+})
+
 test("invalid JSON debug hook writes noop log record", async () => {
   const logPath = debugLogPath()
   await runCodexHookCommand("user-prompt-submit", {

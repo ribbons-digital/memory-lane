@@ -16,6 +16,13 @@ export interface HookDebugLogRecord {
   discarded?: number
   additionalContext?: boolean
   warningCount?: number
+  contextPolicyMode?: string
+  contextEvent?: string
+  contextSelected?: number
+  contextOmitted?: number
+  contextMaxItems?: number
+  contextMaxChars?: number
+  contextOmittedReasons?: string[]
   durationMs?: number
 }
 
@@ -35,6 +42,13 @@ const SAFE_FIELDS = [
   "discarded",
   "additionalContext",
   "warningCount",
+  "contextPolicyMode",
+  "contextEvent",
+  "contextSelected",
+  "contextOmitted",
+  "contextMaxItems",
+  "contextMaxChars",
+  "contextOmittedReasons",
   "durationMs",
 ] as const
 

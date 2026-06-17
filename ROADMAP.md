@@ -372,7 +372,7 @@ Remaining follow-up scope:
 
 ## Phase 14 — Token-Aware Context Policy
 
-**Status:** Slice 1 complete: shared context policy config, guarded context rendering, and policy-only/off/selective lifecycle routing are implemented. Debug/doctor evidence and richer kind prioritization remain follow-up work.
+**Status:** Slice 1 complete: shared context policy config, guarded context rendering, and policy-only/off/selective lifecycle routing are implemented. Slice 2 complete: lifecycle results and Claude/Codex hook debug logs include privacy-safe context decision metadata. Doctor summaries and richer kind prioritization remain follow-up work.
 
 **Goal:** Prevent Memory Lane from polluting or exploding context windows across all harnesses before adding broader automatic learning.
 
@@ -386,9 +386,16 @@ Completed Slice 1 scope:
 4. Added `off` mode, which disables automatic context injection while preserving explicit CLI/MCP tools and save hooks.
 5. Routed Codex, Claude Code, and pi lifecycle prompt/session-start injection through the shared policy layer and updated tests/docs.
 
+Completed Slice 2 scope:
+
+1. Added `contextDecision` metadata to lifecycle results for prompt and session-start injection decisions.
+2. Captured policy mode, event, max item/character budget, selected count, omitted count, and omitted reason categories without including memory text.
+3. Added safe context decision fields to hook debug JSONL records for Claude and Codex when `MEMORY_LANE_HOOK_DEBUG=1`.
+4. Kept hook debug logs privacy-safe: no raw prompts, transcripts, tool outputs, memory text, or injected context text.
+
 Remaining follow-up scope:
 
-1. Add debug/doctor evidence for memory context decisions: policy mode, budget, selected count, omitted count/reasons, and harness adapter surface, without logging raw memory text unless explicitly requested by a user command.
+1. Surface context decision summaries through `memory-lane doctor` or a dedicated debug/status command without reading raw log contents by default.
 2. Add kind preference/deprioritization once real usage shows which memory kinds should be favored or suppressed per lifecycle event.
 3. Consider token-estimation rather than character budgets only if character budgets prove insufficient across target harnesses.
 4. Update MCP/future-adapter guidance as new harnesses consume the shared context policy.

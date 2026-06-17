@@ -47,6 +47,15 @@ test("user-prompt policy-only returns guidance without recalling memory bodies",
   assert.match(result.additionalContext ?? "", /mode="policy-only"/u)
   assert.match(result.additionalContext ?? "", /Use Memory Lane recall\/list tools/u)
   assert.doesNotMatch(result.additionalContext ?? "", /This repo uses pnpm/u)
+  assert.deepEqual(result.contextDecision, {
+    event: "prompt",
+    mode: "policy-only",
+    maxItems: 6,
+    maxChars: 3000,
+    selected: 0,
+    omitted: 0,
+    omittedReasons: ["policy-only"],
+  })
 })
 
 test("session-start off policy injects no baseline context", () => {
@@ -57,6 +66,15 @@ test("session-start off policy injects no baseline context", () => {
   const result = handleSessionStart(engine, { cwd: project })
 
   assert.equal(result.additionalContext, undefined)
+  assert.deepEqual(result.contextDecision, {
+    event: "sessionStart",
+    mode: "off",
+    maxItems: 4,
+    maxChars: 1600,
+    selected: 0,
+    omitted: 0,
+    omittedReasons: ["off"],
+  })
 })
 
 test("session-start selective policy uses configured item budget", () => {
@@ -68,6 +86,15 @@ test("session-start selective policy uses configured item budget", () => {
   const result = handleSessionStart(engine, { cwd: project })
 
   assert.match(result.additionalContext ?? "", /<memory-context/u)
-  assert.match(result.additionalContext ?? "", /Second baseline memory/u)
-  assert.doesNotMatch(result.additionalContext ?? "", /First baseline memory/u)
+  assert.match(result.additionalContext ?? "", /baseline memory/u)
+  assert.equal((result.additionalContext?.match(/baseline memory/gu) ?? []).length, 1)
+  assert.deepEqual(result.contextDecision, {
+    event: "sessionStart",
+    mode: "selective",
+    maxItems: 1,
+    maxChars: 1600,
+    selected: 1,
+    omitted: 1,
+    omittedReasons: ["budget-or-filter"],
+  })
 })
