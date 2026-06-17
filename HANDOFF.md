@@ -7,14 +7,14 @@
 - Slice 2 commit `1e02a5b` added privacy-safe context decision metadata to lifecycle results and Claude/Codex hook debug logs without logging raw prompts, transcripts, tool output, memory text, or injected context.
 - Slice 3 commit `24baa90` exposes active context policy config through `MemoryEngine.doctor()`, CLI `memory-lane doctor`, CLI `memory-lane status --json`, and MCP `memory_status`, with readable CLI human output and memory-text-free tests.
 - Full verification for Slice 3 passed with `pnpm test && pnpm build`.
-- Phase 15 Review Hygiene Slice 1 is implemented and verified locally: `memory-lane review --suspect-meta` lists likely old delegated-subagent/task-wrapper and acceptance-finalization prompt pollution without auto-deleting anything. It reuses the existing meta-task classifier and keeps cleanup review-first.
+- Phase 15 Review Hygiene Slice 1 is implemented and verified locally: `memory-lane review --suspect-meta` lists likely old delegated-subagent/task-wrapper and acceptance-finalization prompt pollution without auto-deleting anything, `--include-approved` also surfaces approved suspect pollution that may affect recall/context injection, and human output is compact/actionable instead of dumping full memory bodies. It reuses the existing meta-task classifier and keeps cleanup review-first.
 - Production installer shipped: `install.sh` / `install.ps1` download a prebuilt Bun-compiled binary from GitHub Releases, place it on PATH, and prompt the user to run `memory-lane init`.
 - `memory-lane init` is an interactive wizard that detects and configures Claude Code CLI, Codex CLI, Claude Desktop, Codex Desktop, and pi.
 - `memory-lane init --yes` auto-configures all detected harnesses non-interactively.
 - `memory-lane uninstall` removes the binary and integration configs while preserving memory data by default.
 - Slash command / skill support: `memory-lane init` installs a personal skill at `~/.claude/skills/memory-lane/SKILL.md` (invoked as `/memory-lane` in Claude Code CLI) and `~/.agents/skills/memory-lane/SKILL.md` (invoked as `$memory-lane` in Codex CLI/Desktop/app).
 - `memory-lane upgrade` downloads the latest release binary and re-applies only the harness configs that were previously installed.
-- pi lifecycle autosave and tool capture: `input`, `turn_end`, and `tool_result` events now write memories through shared `@memory-lane/lifecycle` handlers, with per-turn duplicate suppression and privacy-safe debug logging.
+- pi lifecycle writes are intentionally lower-noise: `input` only saves explicit memory requests such as “Remember that ...”, while `turn_end` and `tool_result` capture higher-signal stop candidates and successful workflow commands through shared `@memory-lane/lifecycle` handlers, with per-turn duplicate suppression and privacy-safe debug logging.
 - Plugin system implemented and released in `v0.2.1`: Phase 9 (Obsidian LLM Wiki / Knowledge Base Integration) ships as the first opt-in plugin via a lightweight plugin API. First-party plugins are bundled into the standalone binary but remain inactive unless added to `~/.memory-lane/config.json`. Phase 12 is planned for binary-friendly plugin installation and management (`memory-lane plugin install/list/enable/disable/uninstall`).
 - v0.2.1 includes bundled plugin fixes so first-party plugins actually work in the standalone binary, plus config error handling and cross-platform vault paths for the Obsidian Wiki plugin.
 - Strategic review concluded: Memory Lane is practical for short explicit agent preferences and project facts, but not yet for long-running project continuity because it lacks automatic session synthesis, token-aware context policy, review controls, and staleness handling.
@@ -35,7 +35,7 @@
 
 Phase 14 Slice 3 is implemented, verified, and committed as `24baa90 Expose context policy in doctor status`.
 
-Current working slice: Phase 15 Review Hygiene Slice 1 adds `memory-lane review --suspect-meta` for safely finding old pending operational prompt pollution. It is verified locally with `pnpm test && pnpm build`; commit it before starting the next implementation slice.
+Current working slice: Phase 15 noise-reduction follow-up makes suspect-review output compact/actionable and changes pi `input` autosave to explicit-memory-request only. Focused tests pass; run full `pnpm test && pnpm build`, then commit before starting the next slice.
 
 Phase 13 Session-End Summarization manual flow is merged to `main`. The former feature worktree `~/.config/superpowers/worktrees/memory-lane/session-end-summarization` has been removed after merge.
 

@@ -239,8 +239,12 @@ function handleReject(ctx: CliContext): void {
 
 function handleReview(ctx: CliContext): void {
   const suspectMeta = hasFlag(ctx.argv, "suspect-meta")
-  const memories = ctx.engine.reviewPending().filter((memory) => !suspectMeta || isMetaTaskPromptText(memory.text))
-  console.log(formatReviewMemories(memories, ctx.json, { suspectMeta, projectScope: ctx.engine.getProjectScope()?.key ?? "none" }))
+  const includeApproved = suspectMeta && hasFlag(ctx.argv, "include-approved")
+  const reviewMemories = includeApproved
+    ? [...ctx.engine.reviewPending(), ...ctx.engine.list({ status: "approved", all: true })]
+    : ctx.engine.reviewPending()
+  const memories = reviewMemories.filter((memory) => !suspectMeta || isMetaTaskPromptText(memory.text))
+  console.log(formatReviewMemories(memories, ctx.json, { suspectMeta, includeApproved, projectScope: ctx.engine.getProjectScope()?.key ?? "none" }))
 }
 
 function handleCompact(ctx: CliContext): void {

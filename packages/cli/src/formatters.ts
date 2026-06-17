@@ -45,6 +45,17 @@ export function formatMemories(memories: MemoryRecord[], json: boolean, extraMet
   ).join("\n")
 }
 
+function compactPreview(text: string, max = 160): string {
+  const normalized = text.replace(/\s+/gu, " ").trim()
+  if (normalized.length <= max) return normalized
+  return normalized.slice(0, max - 1).trimEnd() + "…"
+}
+
+function suspectMetaAction(memory: MemoryRecord): string {
+  if (memory.status === "approved") return `memory-lane delete ${memory.id}`
+  return `memory-lane reject ${memory.id}  # or: memory-lane delete ${memory.id}`
+}
+
 export function formatReviewMemories(memories: MemoryRecord[], json: boolean, extraMeta?: Record<string, unknown>): string {
   const groups = groupReviewMemories(memories)
   if (json) {
@@ -52,9 +63,23 @@ export function formatReviewMemories(memories: MemoryRecord[], json: boolean, ex
   }
   if (!memories.length) return extraMeta?.suspectMeta ? "No likely operational prompt pollution found." : "No pending memories found."
 
-  const lines = extraMeta?.suspectMeta
-    ? ["Likely operational prompt pollution (review, then reject/delete if obsolete):"]
-    : ["Pending memories grouped by project, source, kind, and provenance:"]
+  if (extraMeta?.suspectMeta) {
+    const lines = [
+      "Likely operational prompt pollution:",
+      "Review each preview, then reject/delete only entries you confirm are obsolete.",
+    ]
+    for (const memory of memories) {
+      lines.push(
+        "",
+        `[${memory.id}] [${memory.status}] (${memory.scope.type}/${memory.category}/${memory.kind ?? "?"})`,
+        `  Preview: ${compactPreview(memory.text)}`,
+        `  Suggested: ${suspectMetaAction(memory)}`,
+      )
+    }
+    return lines.join("\n")
+  }
+
+  const lines = ["Pending memories grouped by project, source, kind, and provenance:"]
   for (const group of groups) {
     lines.push("", `${group.label} (${group.count})`)
     const groupIds = new Set(group.memoryIds)
@@ -219,7 +244,7 @@ Commands:
   delete <id>
   approve <id>
   reject <id>
-  review [--suspect-meta]
+  review [--suspect-meta] [--include-approved]
   compact
   doctor
   reindex [--force]

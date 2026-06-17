@@ -218,7 +218,7 @@ test("before_agent_start injects shared lifecycle memory block for relevant appr
   assert.equal(fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8"), before)
 })
 
-test("input auto-save delegates to shared lifecycle filtering", async () => {
+test("input ignores implicit durable statements", async () => {
   const env = makeTempEnv()
   cleanup = env.restore
   const pi = createFakePi()
@@ -227,10 +227,22 @@ test("input auto-save delegates to shared lifecycle filtering", async () => {
 
   await runEvent(pi, "input", { text: "This repo uses pnpm test" }, ctx)
 
+  assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
+})
+
+test("input saves explicit memory requests", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const ctx = baseCtx(env.dir)
+
+  await runEvent(pi, "input", { text: "Remember that this repo uses pnpm test" }, ctx)
+
   const lines = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8").trim().split("\n")
   assert.equal(lines.length, 1)
   const mem = JSON.parse(lines[0])
-  assert.equal(mem.text, "This repo uses pnpm test")
+  assert.equal(mem.text, "this repo uses pnpm test")
 })
 
 test("input filters questions through shared lifecycle", async () => {

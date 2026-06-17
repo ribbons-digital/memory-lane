@@ -2,7 +2,7 @@ import { Type } from "typebox"
 import { createOpenAICompatibleProvider, handlePostToolUse, handleSessionEnd, handleStop, handleUserPromptSubmit } from "@memory-lane/lifecycle"
 import type { PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
 import {
-  MemoryEngine, inferMemoryKind, initProjectLocalStorage, loadConfig, resolveWritableMemoryPaths, type SaveResult,
+  MemoryEngine, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableMemoryPaths, type SaveResult,
 } from "@memory-lane/core"
 import { isPiDebugEnabled, piDebugPath, writePiDebugLog } from "./debug.js"
 
@@ -485,6 +485,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
 
     const text = typeof event.text === "string" ? event.text.trim() : ""
     if (!text) return { action: "continue" }
+    if (!parseExplicitMemoryRequest(text)) return { action: "continue" }
 
     try {
       const e = getEngine(ctx.cwd)

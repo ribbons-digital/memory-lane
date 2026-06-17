@@ -154,7 +154,7 @@ EOF
 
 Replace `/absolute/path/to/memory-lane` with your checkout path, then run `/reload` in pi. The timestamp query avoids stale module caches while iterating locally. Re-run `pnpm build` after changing Memory Lane source, then `/reload` pi again.
 
-The pi adapter provides manual `memory_save`, `memory_suggest`, and `memory_recall` tools plus `/memory ...` commands. It also injects relevant approved memories through pi's `before_agent_start` event. Automatic lifecycle writes are enabled for `input`, `turn_end`, and `tool_result` events: explicit memory requests, durable project statements, and successful workflow commands (e.g., `pnpm test`, `pnpm build`, `pnpm install`) are saved using the same shared lifecycle policy as Codex and Claude Code hooks. For session summaries, pi uses the explicit `/memory session-summary` command: it reads the current branch through pi's session manager, asks for interactive confirmation, and saves any generated summary as a pending `session_summary` memory with pi `session_end` provenance. It does not automatically summarize on `agent_end`, `session_shutdown`, or compaction.
+The pi adapter provides manual `memory_save`, `memory_suggest`, and `memory_recall` tools plus `/memory ...` commands. It also injects relevant approved memories through pi's `before_agent_start` event. To reduce memory noise, pi `input` only saves explicit memory requests such as “Remember that ...”; ordinary prompt submissions are not auto-saved. `turn_end` and `tool_result` still capture higher-signal lifecycle evidence such as completed durable project statements and successful workflow commands (e.g., `pnpm test`, `pnpm build`, `pnpm install`) through the shared lifecycle policy. For session summaries, pi uses the explicit `/memory session-summary` command: it reads the current branch through pi's session manager, asks for interactive confirmation, and saves any generated summary as a pending `session_summary` memory with pi `session_end` provenance. It does not automatically summarize on `agent_end`, `session_shutdown`, or compaction.
 
 #### Claude Code CLI: paste hooks manually
 
@@ -403,7 +403,8 @@ memory-lane approve <id>          Approve a pending memory
 memory-lane reject <id>           Reject a memory
 memory-lane delete <id>           Soft-delete a memory
 memory-lane review                Show pending memories
-memory-lane review --suspect-meta Show likely old operational prompt pollution only
+memory-lane review --suspect-meta Show likely old pending operational prompt pollution only
+memory-lane review --suspect-meta --include-approved Show pending+approved suspect pollution
 memory-lane compact               Remove deleted/rejected tombstones
 memory-lane doctor                Diagnostic report
 memory-lane status                Quick stats
@@ -444,7 +445,8 @@ Run it manually with explicit confirmation:
 echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant","content":"Done."}]}' \
   | memory-lane session-end --confirm
 memory-lane review
-memory-lane review --suspect-meta  # optional: find old delegated-task/finalization prompt pollution
+memory-lane review --suspect-meta  # optional: find old pending delegated-task/finalization prompt pollution
+memory-lane review --suspect-meta --include-approved  # include approved suspects that may affect recall
 memory-lane approve <id>
 memory-lane reject <id>            # reject obsolete/suspect pending entries
 ```
@@ -687,9 +689,9 @@ Lifecycle autosave intentionally filters transient reviewer, subagent, and task 
 
 The pi adapter supports manual Memory Lane tools and commands (`memory_save`, `memory_suggest`, `memory_recall`, and `/memory ...`). It performs read-only lifecycle recall injection through pi's documented `before_agent_start` event: relevant approved memories may be injected as hidden `memory-lane` context before the agent starts.
 
-pi also writes memories automatically through lifecycle events:
+pi also writes memories through higher-signal lifecycle events:
 
-- `input` — explicit memory requests ("Remember that...") and durable project statements are filtered through the shared stop-candidate policy.
+- `input` — explicit memory requests only ("Remember that..."); ordinary prompt submissions are ignored to avoid noisy memory queues.
 - `turn_end` — the last user and assistant messages are evaluated for memory-worthy candidates after a turn completes.
 - `tool_result` — successful shell workflow commands such as `pnpm test`, `pnpm build`, and `pnpm install` are captured as project workflow rules.
 

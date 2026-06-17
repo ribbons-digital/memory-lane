@@ -61,7 +61,8 @@ memory-lane list --status approved
 ```bash
 memory-lane search "pnpm"         # lexical search within project scope
 memory-lane review                # list pending for review
-memory-lane review --suspect-meta # list likely old operational prompt pollution only
+memory-lane review --suspect-meta # list likely old pending operational prompt pollution only
+memory-lane review --suspect-meta --include-approved # include approved suspect pollution that may affect recall
 memory-lane approve <id>          # approve a pending memory
 memory-lane reject <id>           # reject a pending memory
 memory-lane delete <id>           # soft-delete a memory
@@ -87,7 +88,8 @@ Use `memory-lane session-end --confirm` only when the user explicitly wants to g
 echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant","content":"Done."}]}' \
   | memory-lane session-end --confirm
 memory-lane review
-memory-lane review --suspect-meta  # optional: find old delegated-task/finalization prompt pollution
+memory-lane review --suspect-meta  # optional: find old pending delegated-task/finalization prompt pollution
+memory-lane review --suspect-meta --include-approved  # include approved suspects that may affect recall
 ```
 
 Do not imply this is fully automatic handoff-free mode or that every Codex `Stop` turn creates a summary. Approve or reject generated summaries through the normal review queue before they affect future recall. Raw transcripts are not stored; tool messages are excluded unless `includeToolOutputs` is configured, and likely secret lines are redacted before the transcript is sent to the configured model.
@@ -284,7 +286,7 @@ To upgrade to the latest release while preserving existing harness configs and m
 memory-lane upgrade
 ```
 
-In pi, Memory Lane also writes automatically during the lifecycle: `/memory` commands and tools save explicitly, while `input`, `turn_end`, and `tool_result` events can auto-save durable project facts and workflow rules. Use `/memory review` to inspect auto-saved pending suggestions.
+In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save explicitly, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal stop candidates and successful workflow rules. Use `/memory review` to inspect pending suggestions.
 
 Optional Memory Lane plugins extend the CLI and MCP server. For example, `@memory-lane/plugin-obsidian-wiki` adds Obsidian/Garden knowledge-base search and reading. Enable plugins in `~/.memory-lane/config.json` under `plugins`.
 

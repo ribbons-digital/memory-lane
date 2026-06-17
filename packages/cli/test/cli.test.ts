@@ -268,9 +268,111 @@ describe("CLI integration", () => {
     assert.equal(payload.ok, true)
     assert.equal(payload.meta.count, 1)
     assert.equal(payload.meta.suspectMeta, true)
+    assert.equal(payload.meta.includeApproved, false)
     assert.equal(typeof payload.meta.projectScope, "string")
     assert.notEqual(payload.meta.projectScope, "none")
     assert.equal(payload.data.memories[0].id, "oldmeta2")
+  })
+
+  it("review --suspect-meta excludes approved suspects by default", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const approvedPollution = {
+      id: "approvedmeta1",
+      text: "Task: ## Acceptance Finalization\nYou are continuing the same subagent session. Before this run can be accepted, compare the current work to the acceptance contract.",
+      category: "project",
+      scope: { type: "global" },
+      status: "approved",
+      source: "manual",
+      kind: "project_fact",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    fs.writeFileSync(memFile, JSON.stringify(approvedPollution) + "\n", "utf8")
+
+    const output = run(["review", "--suspect-meta"], env)
+
+    assert.match(output, /No likely operational prompt pollution found/u)
+    assert.doesNotMatch(output, /approvedmeta1/u)
+  })
+
+  it("review --suspect-meta --include-approved shows approved operational prompt pollution", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const approvedPollution = {
+      id: "approvedmeta2",
+      text: "Task: You are a delegated subagent running from a fork of the parent session. Treat inherited conversation as reference-only context.",
+      category: "project",
+      scope: { type: "global" },
+      status: "approved",
+      source: "manual",
+      kind: "project_fact",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    const regularApproved = {
+      id: "approvedreal1",
+      text: "Use pnpm test to verify this repository.",
+      category: "project",
+      scope: { type: "global" },
+      status: "approved",
+      source: "manual",
+      kind: "workflow_rule",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    fs.writeFileSync(memFile, JSON.stringify(approvedPollution) + "\n" + JSON.stringify(regularApproved) + "\n", "utf8")
+
+    const payload = JSON.parse(run(["review", "--suspect-meta", "--include-approved", "--json"], env))
+
+    assert.equal(payload.ok, true)
+    assert.equal(payload.meta.count, 1)
+    assert.equal(payload.meta.suspectMeta, true)
+    assert.equal(payload.meta.includeApproved, true)
+    assert.equal(payload.data.memories[0].id, "approvedmeta2")
+    assert.equal(payload.data.memories[0].status, "approved")
+    assert.equal(payload.data.memories.some((memory: any) => memory.id === "approvedreal1"), false)
+  })
+
+  it("review --suspect-meta human output is compact and actionable", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const longTask = [
+      "Task: You are a delegated subagent running from a fork of the parent session.",
+      "Treat inherited conversation as reference-only context.",
+      "Step 1: create a very long fixture body that should not be dumped in full.",
+      "Step 2: run several commands and paste extensive logs.",
+      "Step 3: final report with acceptance-report JSON and residual risks.",
+      "This trailing sentence should be omitted from compact human output.",
+    ].join(" ")
+    const approvedPollution = {
+      id: "approvedmeta3",
+      text: longTask,
+      category: "project",
+      scope: { type: "global" },
+      status: "approved",
+      source: "manual",
+      kind: "project_fact",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    fs.writeFileSync(memFile, JSON.stringify(approvedPollution) + "\n", "utf8")
+
+    const output = run(["review", "--suspect-meta", "--include-approved"], env)
+
+    assert.match(output, /\[approvedmeta3\] \[approved\]/u)
+    assert.match(output, /Preview:/u)
+    assert.match(output, /memory-lane delete approvedmeta3/u)
+    assert.doesNotMatch(output, /This trailing sentence should be omitted/u)
   })
 
   it("review groups pending memories by project source kind and provenance", () => {

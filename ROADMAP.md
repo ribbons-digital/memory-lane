@@ -198,7 +198,7 @@ The next high-value implementation phase is **Phase 13 Session-End Summarization
 
 Completed scope:
 
-1. Reassessed pi event semantics: kept `input` for user-message auto-save, added `turn_end` for stop-candidate extraction over the last user/assistant messages, and added `tool_result` for shell workflow capture.
+1. Reassessed pi event semantics: `input` is now explicit-memory-request only to avoid noisy prompt-submit autosaves, while `turn_end` handles stop-candidate extraction over the last user/assistant messages and `tool_result` handles shell workflow capture.
 2. Refactored pi autosave to use shared `handleStop` / `extractStopCandidates`, including reviewer/subagent/task meta-prompt filtering and checkpoint-save handling.
 3. Added pi tool-outcome capture from `tool_result` using shared `handlePostToolUse`, with per-turn duplicate suppression.
 4. Added privacy-safe pi debug logging to `~/.memory-lane/pi-debug.jsonl` when `MEMORY_LANE_DEBUG=1`; never logs raw prompts or tool outputs.
@@ -413,9 +413,11 @@ Session-end summarization (Phase 13) and future learning features will produce c
 
 Completed Slice 1 scope:
 
-1. Added `memory-lane review --suspect-meta` to list only pending memories that match the existing delegated-subagent/task/acceptance-finalization meta-task classifier.
-2. Kept cleanup review-first and non-destructive: the command only lists likely operational prompt pollution and tells users to reject/delete after review.
-3. Added JSON metadata (`suspectMeta`, `projectScope`, count) for authoritative scoped inspection.
+1. Added `memory-lane review --suspect-meta` to list pending memories that match the existing delegated-subagent/task/acceptance-finalization meta-task classifier.
+2. Added opt-in `--include-approved` so users can also find approved suspect pollution that may affect recall/context injection.
+3. Made suspect-review human output compact and actionable: IDs, status, short previews, and suggested reject/delete commands instead of dumping full memory bodies.
+4. Kept cleanup review-first and non-destructive: the command only lists likely operational prompt pollution and tells users to reject/delete after review.
+5. Added JSON metadata (`suspectMeta`, `includeApproved`, `projectScope`, count) for authoritative scoped inspection.
 
 Todos:
 
