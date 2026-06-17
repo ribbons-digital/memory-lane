@@ -150,7 +150,9 @@ describe("CLI integration", () => {
     const before = JSON.parse(run(["list", "--json"], env))
     assert.ok(before.data.memories.length > 0)
     const id = before.data.memories[0].id
-    run(["delete", id], env)
+    const deleteOutput = run(["delete", id], env)
+    assert.match(deleteOutput, new RegExp(`Deleted: ${id}`, "u"))
+    assert.doesNotMatch(deleteOutput, /delete me/u)
     const after = JSON.parse(run(["list", "--json"], env))
     const deletedMem = after.data.memories.find((m: any) => m.id === id)
     assert.ok(deletedMem)

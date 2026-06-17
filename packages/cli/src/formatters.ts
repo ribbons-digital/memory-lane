@@ -134,7 +134,7 @@ export function formatMutationResult(label: string, result: MemoryMutationResult
     if (warnings?.length) data.warnings = warnings
     return JSON.stringify({ ok: true, data, meta: meta() }, null, 2)
   }
-  const formatted = formatResult(label, memory, false)
+  const formatted = label === "Deleted" && memory.id ? `Deleted: ${memory.id}` : formatResult(label, memory, false)
   if (!warnings?.length) return formatted
   return [formatted, ...warnings.map((warning) => `Warning: ${warning}`)].join("\n")
 }
