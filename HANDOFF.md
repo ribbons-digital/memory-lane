@@ -5,7 +5,7 @@
 - Phase 14 Token-Aware Context Policy is complete through Slice 3. See `ROADMAP.md#phase-14--token-aware-context-policy` for the detailed slice breakdown.
 - Slice 1 commit `537b441` added shared context policy injection modes (`selective`, `policy-only`, `off`) with guarded context rendering across Claude/Codex/pi lifecycle injection.
 - Slice 2 commit `1e02a5b` added privacy-safe context decision metadata to lifecycle results and Claude/Codex hook debug logs without logging raw prompts, transcripts, tool output, memory text, or injected context.
-- Current Slice 3 work exposes active context policy config through `MemoryEngine.doctor()`, CLI `memory-lane doctor`, CLI `memory-lane status --json`, and MCP `memory_status`, with readable CLI human output and memory-text-free tests.
+- Slice 3 commit `24baa90` exposes active context policy config through `MemoryEngine.doctor()`, CLI `memory-lane doctor`, CLI `memory-lane status --json`, and MCP `memory_status`, with readable CLI human output and memory-text-free tests.
 - Full verification for Slice 3 passed with `pnpm test && pnpm build`.
 - Production installer shipped: `install.sh` / `install.ps1` download a prebuilt Bun-compiled binary from GitHub Releases, place it on PATH, and prompt the user to run `memory-lane init`.
 - `memory-lane init` is an interactive wizard that detects and configures Claude Code CLI, Codex CLI, Claude Desktop, Codex Desktop, and pi.
@@ -20,6 +20,7 @@
 - Roadmap extended beyond Phase 13 with a revised order: Phase 14 token-aware context policy, Phase 15 review/dashboard, Phase 16 harness-neutral learning enhancements, Phase 17 time-aware memory/consolidation, and Phase 18 handoff-free sessions. New automation remains opt-in/review-first by default.
 - pi-hermes-memory research was folded into the roadmap as inspiration, not a feature copy. Relevant ideas: failure/correction learning, procedure memories, background learning, auto-consolidation, and policy-only/token-aware context. Memory Lane's adaptation should stay harness-neutral for future Hermes, Cursor, and other adapters, with JSONL as source of truth and native skill/rule exports as optional later integrations.
 - Cross-harness pending-memory review surfaced product issues now reflected in `ROADMAP.md`: MCP review/list is confusing when Claude Desktop has `projectScope: none`; review output needs grouping by project/source/kind/provenance; `memory_status` should explain MCP explicit tools vs hook lifecycle automation more clearly; pending session summaries need duplicate/debounce handling and should avoid self-referential review chatter such as "approve these memory IDs".
+- Latest cross-harness review observation: real pending installer/onboarding preferences should be kept/reviewed, but older delegated-subagent task-wrapper and acceptance-finalization pending memories are pollution from before the meta-task filter and should be rejected/deleted manually or addressed by a future cleanup helper. Different harnesses can also show different project queues when their cwd/projectPath differs; use `memory-lane review/list/status --json --project "$PWD"` or MCP `projectPath` for authoritative per-project inspection.
 - Installer hardening was added to the roadmap: avoid breaking published entrypoints/config paths, ensure `memory-lane upgrade` preserves/reapplies existing harness configs, fix Claude Desktop MCP config detection/writing to `claude_desktop_config.json`, and replace the limited sequential yes/no init wizard with clearer menu-driven or flag-based integration selection.
 - Current hardening slice implemented and committed: MCP server `dist/index.js` direct execution is backward-compatible again; `memory-lane init` detects/writes Claude Desktop MCP at `claude_desktop_config.json`; init now has a numbered selectable wizard plus `--list`, `--only`, `--all`, and `--recommended` flags, while `--yes` keeps recommended/detected behavior.
 - Upgrade compatibility hardening added: manifest-driven reapply logic is now covered by tests, deduplicates configured harnesses, migrates old Claude Desktop manifest paths by writing the supported `claude_desktop_config.json`, preserves unrelated MCP config fields, and skips unknown/stale harness IDs without aborting valid reconfiguration.
@@ -31,7 +32,7 @@
 
 ## Current state
 
-Phase 14 Slice 3 is implemented and verified locally. It should be committed before the next implementation slice if not already present in `git log`.
+Phase 14 Slice 3 is implemented, verified, and committed as `24baa90 Expose context policy in doctor status`.
 
 Phase 13 Session-End Summarization manual flow is merged to `main`. The former feature worktree `~/.config/superpowers/worktrees/memory-lane/session-end-summarization` has been removed after merge.
 
