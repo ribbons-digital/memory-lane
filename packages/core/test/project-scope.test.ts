@@ -23,7 +23,12 @@ describe("resolveProjectScope", () => {
   let dir: string
   beforeEach(() => { dir = tempDir() })
 
-  it("returns null when no scope file or git", () => assert.equal(resolveProjectScope(dir), null))
+  it("falls back to a canonical directory key when no scope file or git exists", () => {
+    const s = resolveProjectScope(dir)
+    assert.notEqual(s, null)
+    assert.equal(fs.realpathSync(s!.root), fs.realpathSync(dir))
+    assert.equal(fs.realpathSync(s!.key), fs.realpathSync(dir))
+  })
 
   it("finds scope file walking up", () => {
     fs.writeFileSync(path.join(dir, ".memory-lane-scope"), JSON.stringify({ id: "uuid-123" }))

@@ -35,9 +35,9 @@ function meta(extra?: Record<string, unknown>) {
   return { version: VERSION, ...extra }
 }
 
-export function formatMemories(memories: MemoryRecord[], json: boolean): string {
+export function formatMemories(memories: MemoryRecord[], json: boolean, extraMeta?: Record<string, unknown>): string {
   if (json) {
-    return JSON.stringify({ ok: true, data: { memories }, meta: meta({ count: memories.length }) }, null, 2)
+    return JSON.stringify({ ok: true, data: { memories }, meta: meta({ count: memories.length, ...extraMeta }) }, null, 2)
   }
   if (!memories.length) return "No memories found."
   return memories.map((m) =>

@@ -135,7 +135,7 @@ function createEngine(paths: MemoryPaths, projPath?: string): MemoryEngine {
     configPath: paths.configPath,
     embeddingProvider: createEmbeddingProvider(paths.configPath),
   })
-  if (projPath) engine.refreshScope(projPath)
+  engine.refreshScope(projPath ?? process.cwd())
   return engine
 }
 
@@ -199,7 +199,7 @@ function handleList(ctx: CliContext): void {
   const statusFlag = flag(ctx.argv, "status") as any
   const allScope = hasFlag(ctx.argv, "all")
   const mems = ctx.engine.list({ status: statusFlag, all: allScope })
-  console.log(formatMemories(mems, ctx.json))
+  console.log(formatMemories(mems, ctx.json, { projectScope: ctx.engine.getProjectScope()?.key ?? "none" }))
 }
 
 function handleSearch(ctx: CliContext): void {

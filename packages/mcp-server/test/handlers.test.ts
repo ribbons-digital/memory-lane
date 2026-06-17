@@ -215,9 +215,26 @@ test("memory_status returns doctor counts without memory text", async () => {
   assert.equal(result.meta.projectScope, expectedScope)
   assert.ok(Array.isArray(result.data.notes))
   assert.match(result.data.notes.join("\n"), /MCP provides explicit/u)
-  assert.match(result.data.notes.join("\n"), /No projectPath was provided/u)
+  assert.doesNotMatch(result.data.notes.join("\n"), /No projectPath was provided/u)
   assert.doesNotMatch(serialized, /Do not leak this exact memory text/u)
   assert.doesNotMatch(serialized, /Do not leak this pending text/u)
+})
+
+test("memory_status explains missing projectPath when no project scope is active", async () => {
+  const previousCwd = process.cwd()
+  const cwd = tempDir()
+  try {
+    process.chdir(cwd)
+    const engine = engineInTemp()
+
+    const result = parseToolResult(await handleMemoryStatus(engine, {}))
+
+    assert.equal(result.ok, true)
+    assert.equal(result.meta.projectScope, "none")
+    assert.match(result.data.notes.join("\n"), /No projectPath was provided/u)
+  } finally {
+    process.chdir(previousCwd)
+  }
 })
 
 test("memory_status applies projectPath before reading scope", async () => {

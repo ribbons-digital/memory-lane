@@ -114,7 +114,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
     "memory_list",
     {
       title: "List Memories",
-      description: "List Memory Lane memories visible to the current project scope by default.",
+      description: "List Memory Lane memories visible to the current project scope by default. Pass projectPath for current-project queries, especially in desktop clients. Use all=true only for cross-project/admin listings.",
       inputSchema: {
         status: statusSchema.optional(),
         all: z.boolean().optional(),
@@ -128,7 +128,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
     "memory_review",
     {
       title: "Review Pending Memories",
-      description: "List pending Memory Lane memories for review.",
+      description: "List pending Memory Lane memories for review. Pass projectPath for current-project review context; omit it only for global/cross-project review.",
       inputSchema: {
         projectPath,
       },

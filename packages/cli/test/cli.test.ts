@@ -53,6 +53,25 @@ describe("CLI integration", () => {
     assert.ok(list.includes("use pnpm"))
   })
 
+  it("lists project-scoped memories in non-git directories", () => {
+    const project = tempDir()
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const saved = runProcess(["save", "project plain folder rule", "--scope", "project", "--category", "project", "--status", "approved"], { env, cwd: project })
+    assert.equal(saved.status, 0, saved.stderr)
+
+    const listed = runProcess(["list", "--json"], { env, cwd: project })
+    assert.equal(listed.status, 0, listed.stderr)
+    const payload = JSON.parse(listed.stdout)
+    assert.equal(payload.meta.count, 1)
+    assert.equal(fs.realpathSync(payload.meta.projectScope), fs.realpathSync(project))
+    assert.equal(payload.data.memories[0].text, "project plain folder rule")
+  })
+
   it("init --project-local creates project storage and save uses it", () => {
     const project = tempDir()
     const home = tempDir()

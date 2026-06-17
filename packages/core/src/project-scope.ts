@@ -57,8 +57,13 @@ function resolveGitScope(cwd: string): ProjectScope | null {
 
 /** Resolve project scope: scope file → git root → null. Never auto-creates scope files. */
 export function resolveProjectScope(cwd?: string): ProjectScope | null {
+  const hasExplicitCwd = cwd !== undefined
   const resolvedCwd = path.resolve(cwd ?? process.cwd())
   const scope = findScopeFile(resolvedCwd)
   if (scope) return { cwd: resolvedCwd, root: scope.root, key: scope.id }
-  return resolveGitScope(resolvedCwd)
+  const gitScope = resolveGitScope(resolvedCwd)
+  if (gitScope) return gitScope
+  if (!hasExplicitCwd) return null
+  const canonical = realpathOrResolved(resolvedCwd)
+  return { cwd: resolvedCwd, root: canonical, key: canonical }
 }
