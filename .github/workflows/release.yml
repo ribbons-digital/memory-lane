@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -44,13 +46,47 @@ jobs:
       - name: Smoke test current-platform binary
         run: bun scripts/smoke-binary.ts
 
+      - name: Generate release notes
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          previous_tag="$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null || true)"
+
+          {
+            echo "## What's changed"
+            echo
+            if [ -n "$previous_tag" ]; then
+              git log --pretty=format:'- %s (%h)' "${previous_tag}..${tag}"
+            else
+              git log --pretty=format:'- %s (%h)' "${tag}"
+            fi
+            echo
+            echo
+            echo "## Verification"
+            echo
+            echo "- Built packages with \`pnpm build\`"
+            echo "- Ran test suite with \`pnpm test\`"
+            echo "- Built release binaries"
+            echo "- Smoke-tested the current-platform binary"
+            echo
+            echo "## Assets"
+            echo
+            echo "- macOS arm64/x64 binaries"
+            echo "- Linux arm64/x64 binaries"
+            echo "- Windows x64 binary"
+            echo "- \`install.sh\`, \`install.ps1\`, and \`SHA256SUMS\`"
+            if [ -n "$previous_tag" ]; then
+              echo
+              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous_tag}...${tag}"
+            fi
+          } > RELEASE_NOTES.md
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: RELEASE_NOTES.md
           files: |
             dist-binaries/*.tar.gz
             dist-binaries/*.zip
             dist-binaries/SHA256SUMS
             install.sh
             install.ps1
-          generate_release_notes: true
