@@ -411,9 +411,15 @@ Remaining follow-up scope:
 
 Session-end summarization (Phase 13) and future learning features will produce candidate memories. This phase builds the review surface so users can trust the system before broader automation is enabled.
 
+Completed Slice 1 scope:
+
+1. Added `memory-lane review --suspect-meta` to list only pending memories that match the existing delegated-subagent/task/acceptance-finalization meta-task classifier.
+2. Kept cleanup review-first and non-destructive: the command only lists likely operational prompt pollution and tells users to reject/delete after review.
+3. Added JSON metadata (`suspectMeta`, `projectScope`, count) for authoritative scoped inspection.
+
 Todos:
 
-1. Extend `memory-lane review` to group pending memories by source, project key, scope, kind, and harness/provenance where available (e.g., `session-summary`, `agent-suggested`, `user-suggested`, future `background-learning`).
+1. Extend `memory-lane review` to group pending memories by source, project key, scope, kind, and harness/provenance where available (e.g., `session-summary`, `agent-suggested`, `user-suggested`, future `background-learning`). Initial grouped review is implemented; continue refining as new memory kinds/sources arrive.
 2. Make MCP review/list output less confusing when `projectScope: none`: show project ownership inline, explain that Claude Desktop MCP has no cwd unless `projectPath` is passed, and offer/projectPath guidance instead of implying the current chat's project was used.
 3. Add a memory dashboard command: `memory-lane memory dashboard` (or `memory-lane dashboard`) that prints a human-readable summary of what Memory Lane knows per project and globally without dumping long memory bodies by default.
 4. Add MCP/CLI tools to list, inspect, and bulk-approve/reject pending session summaries and future learning candidates.

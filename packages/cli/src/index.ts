@@ -3,7 +3,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { readFile } from "node:fs/promises"
-import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, resolveWritableMemoryPaths, type MemoryPaths } from "@memory-lane/core"
+import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, isMetaTaskPromptText, resolveWritableMemoryPaths, type MemoryPaths } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import { handleSessionEnd, createOpenAICompatibleProvider } from "@memory-lane/lifecycle"
@@ -238,7 +238,9 @@ function handleReject(ctx: CliContext): void {
 }
 
 function handleReview(ctx: CliContext): void {
-  console.log(formatReviewMemories(ctx.engine.reviewPending(), ctx.json))
+  const suspectMeta = hasFlag(ctx.argv, "suspect-meta")
+  const memories = ctx.engine.reviewPending().filter((memory) => !suspectMeta || isMetaTaskPromptText(memory.text))
+  console.log(formatReviewMemories(memories, ctx.json, { suspectMeta, projectScope: ctx.engine.getProjectScope()?.key ?? "none" }))
 }
 
 function handleCompact(ctx: CliContext): void {

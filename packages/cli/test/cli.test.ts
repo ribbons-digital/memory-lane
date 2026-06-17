@@ -216,6 +216,63 @@ describe("CLI integration", () => {
     assert.match(parsed.data.warnings.join("\n"), /Vault path does not exist/u)
   })
 
+  it("review --suspect-meta shows likely operational prompt pollution only", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const legacyPollution = {
+      id: "oldmeta1",
+      text: "Task: ## Acceptance Finalization\nYou are continuing the same subagent session. Before this run can be accepted, compare the current work to the acceptance contract.",
+      category: "project",
+      scope: { type: "global" },
+      status: "pending",
+      source: "user-suggested",
+      kind: "project_fact",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    fs.writeFileSync(memFile, JSON.stringify(legacyPollution) + "\n", "utf8")
+    run(["suggest", "User prefers option B for installer onboarding", "--category", "preference"], env)
+
+    const output = run(["review", "--suspect-meta"], env)
+
+    assert.match(output, /Likely operational prompt pollution/u)
+    assert.match(output, /oldmeta1/u)
+    assert.match(output, /Acceptance Finalization/u)
+    assert.doesNotMatch(output, /option B for installer onboarding/u)
+  })
+
+  it("review --suspect-meta JSON marks suspect filter and preserves project scope metadata", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const legacyPollution = {
+      id: "oldmeta2",
+      text: "Task: You are a delegated subagent running from a fork of the parent session. Treat inherited conversation as reference-only context.",
+      category: "project",
+      scope: { type: "global" },
+      status: "pending",
+      source: "user-suggested",
+      kind: "project_fact",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    fs.writeFileSync(memFile, JSON.stringify(legacyPollution) + "\n", "utf8")
+
+    const payload = JSON.parse(run(["review", "--suspect-meta", "--json"], env))
+
+    assert.equal(payload.ok, true)
+    assert.equal(payload.meta.count, 1)
+    assert.equal(payload.meta.suspectMeta, true)
+    assert.equal(typeof payload.meta.projectScope, "string")
+    assert.notEqual(payload.meta.projectScope, "none")
+    assert.equal(payload.data.memories[0].id, "oldmeta2")
+  })
+
   it("review groups pending memories by project source kind and provenance", () => {
     const project = tempDir()
     fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-review-project" }))

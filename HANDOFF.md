@@ -7,6 +7,7 @@
 - Slice 2 commit `1e02a5b` added privacy-safe context decision metadata to lifecycle results and Claude/Codex hook debug logs without logging raw prompts, transcripts, tool output, memory text, or injected context.
 - Slice 3 commit `24baa90` exposes active context policy config through `MemoryEngine.doctor()`, CLI `memory-lane doctor`, CLI `memory-lane status --json`, and MCP `memory_status`, with readable CLI human output and memory-text-free tests.
 - Full verification for Slice 3 passed with `pnpm test && pnpm build`.
+- Phase 15 Review Hygiene Slice 1 is implemented and verified locally: `memory-lane review --suspect-meta` lists likely old delegated-subagent/task-wrapper and acceptance-finalization prompt pollution without auto-deleting anything. It reuses the existing meta-task classifier and keeps cleanup review-first.
 - Production installer shipped: `install.sh` / `install.ps1` download a prebuilt Bun-compiled binary from GitHub Releases, place it on PATH, and prompt the user to run `memory-lane init`.
 - `memory-lane init` is an interactive wizard that detects and configures Claude Code CLI, Codex CLI, Claude Desktop, Codex Desktop, and pi.
 - `memory-lane init --yes` auto-configures all detected harnesses non-interactively.
@@ -33,6 +34,8 @@
 ## Current state
 
 Phase 14 Slice 3 is implemented, verified, and committed as `24baa90 Expose context policy in doctor status`.
+
+Current working slice: Phase 15 Review Hygiene Slice 1 adds `memory-lane review --suspect-meta` for safely finding old pending operational prompt pollution. It is verified locally with `pnpm test && pnpm build`; commit it before starting the next implementation slice.
 
 Phase 13 Session-End Summarization manual flow is merged to `main`. The former feature worktree `~/.config/superpowers/worktrees/memory-lane/session-end-summarization` has been removed after merge.
 

@@ -61,6 +61,7 @@ memory-lane list --status approved
 ```bash
 memory-lane search "pnpm"         # lexical search within project scope
 memory-lane review                # list pending for review
+memory-lane review --suspect-meta # list likely old operational prompt pollution only
 memory-lane approve <id>          # approve a pending memory
 memory-lane reject <id>           # reject a pending memory
 memory-lane delete <id>           # soft-delete a memory
@@ -86,6 +87,7 @@ Use `memory-lane session-end --confirm` only when the user explicitly wants to g
 echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant","content":"Done."}]}' \
   | memory-lane session-end --confirm
 memory-lane review
+memory-lane review --suspect-meta  # optional: find old delegated-task/finalization prompt pollution
 ```
 
 Do not imply this is fully automatic handoff-free mode or that every Codex `Stop` turn creates a summary. Approve or reject generated summaries through the normal review queue before they affect future recall. Raw transcripts are not stored; tool messages are excluded unless `includeToolOutputs` is configured, and likely secret lines are redacted before the transcript is sent to the configured model.

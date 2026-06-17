@@ -45,14 +45,16 @@ export function formatMemories(memories: MemoryRecord[], json: boolean, extraMet
   ).join("\n")
 }
 
-export function formatReviewMemories(memories: MemoryRecord[], json: boolean): string {
+export function formatReviewMemories(memories: MemoryRecord[], json: boolean, extraMeta?: Record<string, unknown>): string {
   const groups = groupReviewMemories(memories)
   if (json) {
-    return JSON.stringify({ ok: true, data: { memories, groups }, meta: meta({ count: memories.length }) }, null, 2)
+    return JSON.stringify({ ok: true, data: { memories, groups }, meta: meta({ count: memories.length, ...extraMeta }) }, null, 2)
   }
-  if (!memories.length) return "No pending memories found."
+  if (!memories.length) return extraMeta?.suspectMeta ? "No likely operational prompt pollution found." : "No pending memories found."
 
-  const lines = ["Pending memories grouped by project, source, kind, and provenance:"]
+  const lines = extraMeta?.suspectMeta
+    ? ["Likely operational prompt pollution (review, then reject/delete if obsolete):"]
+    : ["Pending memories grouped by project, source, kind, and provenance:"]
   for (const group of groups) {
     lines.push("", `${group.label} (${group.count})`)
     const groupIds = new Set(group.memoryIds)
@@ -217,7 +219,7 @@ Commands:
   delete <id>
   approve <id>
   reject <id>
-  review
+  review [--suspect-meta]
   compact
   doctor
   reindex [--force]

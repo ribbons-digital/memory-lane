@@ -403,6 +403,7 @@ memory-lane approve <id>          Approve a pending memory
 memory-lane reject <id>           Reject a memory
 memory-lane delete <id>           Soft-delete a memory
 memory-lane review                Show pending memories
+memory-lane review --suspect-meta Show likely old operational prompt pollution only
 memory-lane compact               Remove deleted/rejected tombstones
 memory-lane doctor                Diagnostic report
 memory-lane status                Quick stats
@@ -443,7 +444,9 @@ Run it manually with explicit confirmation:
 echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant","content":"Done."}]}' \
   | memory-lane session-end --confirm
 memory-lane review
+memory-lane review --suspect-meta  # optional: find old delegated-task/finalization prompt pollution
 memory-lane approve <id>
+memory-lane reject <id>            # reject obsolete/suspect pending entries
 ```
 
 Codex CLI does not currently expose a supported `SessionEnd` hook event. Do not add `SessionEnd` to `.codex/hooks.json`; Codex will ignore it. For Codex today, use either the manual `memory-lane session-end --confirm` command or the supported `Stop` hook explicit-intent path: when the latest user message says something like "remember this session", "save a session summary", or "summarize this session to memory", `memory-lane codex stop` treats that request as confirmation, summarizes a bounded transcript through the configured provider, and saves the result as a pending session-summary memory. Ordinary `Stop` turns keep the existing silent autosave behavior and do not run the summarizer.
