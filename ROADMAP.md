@@ -3,11 +3,11 @@
 This roadmap now centers on a continuity-first sequence:
 
 1. Keep review/status controls strong enough that generated memory stays user-governed.
-2. Add read-only freshness detection so sessions can notice newer approved state from other sessions/harnesses.
+2. Add read-only freshness detection plus canonical continuity primitives so sessions can notice newer approved state, prefer current workflow/operating-agreement memories, and avoid duplicated stale guidance.
 3. Add review-first progress/checkpoint capture for releases, merges, fixes, and decisions.
 4. Make global personal preferences consistently available through a bounded preference layer.
 5. Add harness-neutral learning features only after review, freshness, checkpoint, and preference foundations are in place.
-6. Add time-aware staleness/consolidation so continuity does not become misleading.
+6. Add deeper time-aware staleness/consolidation so continuity does not become misleading.
 7. Graduate to handoff-free sessions only after those safeguards are proven.
 
 Earlier Obsidian, pi, MCP, installer, and plugin phases remain part of the roadmap history below, but new implementation should prioritize this continuity order unless the user explicitly chooses a different maintenance slice.
@@ -472,27 +472,36 @@ Remaining dashboard/review-controls scope:
 2. Add docs for maintaining a healthy review queue and for deciding when to approve, reject, delete, or leave pending candidate memories.
 3. Keep this phase focused on visibility/control; do not add new automatic learning behaviors here.
 
-## Phase 16 — Cross-Session Freshness and Continuity Status
+## Phase 16 — Freshness, Canonical Continuity, and Memory Revision
 
-**Goal:** Let any session/harness cheaply notice that newer approved project progress or relevant global preferences exist, without injecting large memory bodies or silently saving new state.
+**Goal:** Let any session/harness cheaply notice newer approved project progress, relevant global preferences, and current canonical workflow/operating-agreement memories without injecting large memory bodies or silently saving new state.
 
-This is the first direct implementation step toward seamless continuity. It should answer: “What changed in Memory Lane since this session started?” and “Is there approved state from another session/harness that I should surface?”
+This is the first direct implementation step toward seamless continuity. It should answer: “What changed in Memory Lane since this session started?”, “Is there approved state from another session/harness that I should surface?”, and “Which memory should be treated as the current version of a workflow, preference, or project operating agreement?”
+
+The loop-memory refinement failure is the concrete product driver for the extension: when a user asks to refine an existing durable workflow, Memory Lane should make update/supersede the obvious path instead of encouraging another near-duplicate memory.
 
 First-slice decisions:
 
 - Freshness is read-only. It never writes or rewrites memories.
-- The first signal is approved memory metadata: `updatedAt`, project scope, source, kind, and provenance.
+- Canonical/revision features are explicit and append-only: updates or replacements preserve audit history and do not silently delete old memories.
+- The first signal is approved memory metadata: `updatedAt`, project scope, source, kind, provenance, and lightweight revision/canonical markers where available.
 - The first UX is a bounded notice, not full context injection.
 - Global/personal preferences are eligible for a separate preference layer, but this phase should only report that relevant preferences exist unless the context policy selects them.
-- Adapters should call shared lifecycle/core helpers; harness-specific code should not implement its own freshness rules.
+- Adapters should call shared lifecycle/core helpers; harness-specific code should not implement its own freshness or canonical-selection rules.
 
-Todos:
+Extension slices:
 
-1. Add shared freshness/status helper(s) that compare a session start time or checkpoint timestamp against approved visible memories for the current project and global scope.
-2. Expose freshness metadata through `memory-lane status --json`, `memory-lane doctor`, and MCP `memory_status` without returning memory text by default.
-3. Add optional human output such as “Newer approved project checkpoint exists; run recall/list/review for details,” with IDs/previews only where appropriate.
-4. Route SessionStart/UserPromptSubmit lifecycle injection through the freshness helper so harnesses can surface a bounded notice when newer approved project progress exists.
-5. Add tests proving freshness notices respect project scope, global scope, status, context budget, and privacy boundaries.
+1. **Read-only freshness/status detection:** add shared helper(s) that compare a session start time or checkpoint timestamp against approved visible memories for the current project and global scope; expose metadata through `memory-lane status --json`, `memory-lane doctor`, and MCP `memory_status` without returning memory text by default.
+2. **Canonical workflow / operating-agreement memories:** add a supported convention for current workflow rules such as project loops, global working preferences, release processes, PR processes, and review gates so new sessions can reliably discover small operating contracts before starting work.
+3. **Update / replace / supersede primitives:** expose explicit CLI-first operations for revising active memories while preserving append-only history, e.g. update an existing memory, replace an old memory with refined text, and mark older memories as superseded by the current one; MCP parity can follow once CLI semantics are proven.
+4. **Continuity/status hints for duplicates and stale guidance:** make dashboard/status/review flag possible duplicate workflow memories, superseded memories, project/global preference overlap, and multiple candidate project loops without performing silent cleanup.
+5. **Lifecycle bounded notices:** route SessionStart/UserPromptSubmit lifecycle injection through the freshness/canonical helpers so harnesses can surface a compact notice when newer approved progress or current operating agreements exist, with tests for project scope, global scope, status, context budget, and privacy boundaries.
+
+Out of scope for Phase 16:
+
+- Automatic consolidation, background rewriting, or silent deletion.
+- Broad learning from chat history.
+- Handoff-free automatic injection of large session summaries. Phase 16 should surface signals and canonical operating contracts, not replace review gates.
 
 ## Phase 17 — Review-First Progress and Checkpoint Capture
 
