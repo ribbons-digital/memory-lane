@@ -19,7 +19,11 @@
     "@memory-lane/obsidian-import": "workspace:*",
     "@memory-lane/obsidian-mirror": "workspace:*",
     "@memory-lane/plugin-api": "workspace:*",
-    "@memory-lane/plugin-obsidian-wiki": "workspace:*"
+    "@memory-lane/plugin-obsidian-wiki": "workspace:*",
+    "ansis": "^4.2.0",
+    "boxen": "^8.0.1",
+    "cli-table3": "^0.6.5",
+    "figures": "^6.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

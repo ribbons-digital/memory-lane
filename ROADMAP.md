@@ -444,13 +444,21 @@ Completed review/status UX scope:
 2. MCP `memory_review` and `memory_status` include project-scope guidance for clients such as Claude Desktop that do not provide a cwd unless `projectPath` is passed.
 3. MCP status clarifies explicit MCP tools vs lifecycle hook automation.
 
-Next Slice — Dashboard and Review Controls:
+Dashboard and Review Controls:
 
-1. Add a memory dashboard command, e.g. `memory-lane dashboard`, that prints a compact human-readable summary of what Memory Lane knows globally and for the current project without dumping long memory bodies by default.
-2. Add MCP/CLI surfaces to inspect pending session summaries and future continuity candidates by source/kind/provenance.
-3. Add safe bulk actions for clearly grouped pending candidates, with dry-run/confirmation semantics and no silent deletes.
-4. Add docs for maintaining a healthy review queue and for deciding when to approve, reject, delete, or leave pending candidate memories.
-5. Keep this phase focused on visibility/control; do not add new automatic learning behaviors here.
+Completed first dashboard slice:
+
+1. Added `memory-lane dashboard` and `memory-lane dashboard --json` for a compact continuity/review overview scoped to the current project plus global memories by default.
+2. Added `memory-lane dashboard --all` for admin-style inspection across all stored scopes.
+3. Kept dashboard output privacy-conscious: counts, review queue signals, suggested review commands, and short session-summary previews only; no long memory-body dumps.
+4. Added friendly CLI presentation primitives for this dashboard only, without refactoring command parsing or adding interactive prompts.
+
+Remaining dashboard/review-controls scope:
+
+1. Add MCP/CLI surfaces to inspect pending session summaries and future continuity candidates by source/kind/provenance.
+2. Add safe bulk actions for clearly grouped pending candidates, with dry-run/confirmation semantics and no silent deletes.
+3. Add docs for maintaining a healthy review queue and for deciding when to approve, reject, delete, or leave pending candidate memories.
+4. Keep this phase focused on visibility/control; do not add new automatic learning behaviors here.
 
 ## Phase 16 — Cross-Session Freshness and Continuity Status
 

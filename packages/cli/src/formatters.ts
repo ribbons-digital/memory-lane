@@ -1,4 +1,8 @@
-import { groupReviewMemories, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport } from "@memory-lane/core"
+import ansis from "ansis"
+import boxen from "boxen"
+import Table from "cli-table3"
+import figures from "figures"
+import { groupReviewMemories, isMetaTaskPromptText, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
@@ -33,6 +37,134 @@ function formatDate(iso: string): string {
 
 function meta(extra?: Record<string, unknown>) {
   return { version: VERSION, ...extra }
+}
+
+function supportsColor(): boolean {
+  return Boolean(process.stdout.isTTY && !process.env.NO_COLOR)
+}
+
+function colorize(value: string, color: "cyan" | "green" | "yellow" | "red" | "gray" | "bold"): string {
+  if (!supportsColor()) return value
+  switch (color) {
+    case "cyan": return ansis.cyan(value)
+    case "green": return ansis.green(value)
+    case "yellow": return ansis.yellow(value)
+    case "red": return ansis.red(value)
+    case "gray": return ansis.gray(value)
+    case "bold": return ansis.bold(value)
+  }
+}
+
+export interface DashboardSummary {
+  projectScope: string
+  counts: {
+    total: number
+    approved: number
+    pending: number
+    rejected: number
+    deleted: number
+    global: number
+    project: number
+  }
+  review: {
+    pending: number
+    sessionSummaries: number
+    suspectMeta: number
+  }
+  recent: {
+    sessionSummaries: Array<{ id: string; createdAt: string; preview: string }>
+  }
+  suggestedActions: string[]
+}
+
+function statusCount(memories: MemoryRecord[], status: MemoryRecord["status"]): number {
+  return memories.filter((memory) => memory.status === status).length
+}
+
+function latestByCreatedAt(memories: MemoryRecord[], limit: number): MemoryRecord[] {
+  return [...memories]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, limit)
+}
+
+export function buildDashboardSummary(memories: MemoryRecord[], projectScope = "none"): DashboardSummary {
+  const pending = memories.filter((memory) => memory.status === "pending")
+  const sessionSummaries = pending.filter((memory) => memory.kind === "session_summary")
+  const suspectMeta = pending.filter((memory) => isMetaTaskPromptText(memory.text))
+  const suggestedActions: string[] = []
+  if (pending.length) suggestedActions.push("memory-lane review")
+  if (suspectMeta.length) suggestedActions.push("memory-lane review --suspect-meta")
+  if (!pending.length && !suspectMeta.length) suggestedActions.push("memory-lane recall <query>")
+
+  return {
+    projectScope,
+    counts: {
+      total: memories.length,
+      approved: statusCount(memories, "approved"),
+      pending: pending.length,
+      rejected: statusCount(memories, "rejected"),
+      deleted: statusCount(memories, "deleted"),
+      global: memories.filter((memory) => memory.scope.type === "global").length,
+      project: memories.filter((memory) => memory.scope.type === "project").length,
+    },
+    review: {
+      pending: pending.length,
+      sessionSummaries: sessionSummaries.length,
+      suspectMeta: suspectMeta.length,
+    },
+    recent: {
+      sessionSummaries: latestByCreatedAt(sessionSummaries, 3).map((memory) => ({
+        id: memory.id,
+        createdAt: memory.createdAt,
+        preview: compactPreview(memory.text, 56),
+      })),
+    },
+    suggestedActions,
+  }
+}
+
+export function formatDashboard(memories: MemoryRecord[], json: boolean, extraMeta?: Record<string, unknown>): string {
+  const summary = buildDashboardSummary(memories, typeof extraMeta?.projectScope === "string" ? extraMeta.projectScope : "none")
+  if (json) {
+    return JSON.stringify({ ok: true, data: summary, meta: meta({ count: memories.length, ...extraMeta }) }, null, 2)
+  }
+
+  const counts = summary.counts
+  const header = [
+    `${colorize("Project", "gray")}: ${summary.projectScope}`,
+    `${figures.pointerSmall} Approved ${counts.approved}   Pending ${counts.pending}   Total ${counts.total}`,
+    `${figures.pointerSmall} Global ${counts.global}   Project ${counts.project}`,
+  ].join("\n")
+  const box = boxen(header, {
+    title: "Memory Lane Dashboard",
+    titleAlignment: "center",
+    padding: 1,
+    borderStyle: "round",
+    borderColor: supportsColor() ? "cyan" : undefined,
+  })
+
+  const reviewTable = new Table({
+    head: ["Review Queue", "Count"],
+    style: { head: supportsColor() ? ["cyan"] : [], border: [] },
+  })
+  reviewTable.push(
+    ["Pending", String(summary.review.pending)],
+    ["Session summaries", String(summary.review.sessionSummaries)],
+    ["Suspect meta", String(summary.review.suspectMeta)],
+  )
+
+  const lines = [box, reviewTable.toString()]
+  if (summary.recent.sessionSummaries.length) {
+    lines.push(
+      "Recent session summaries:",
+      ...summary.recent.sessionSummaries.map((memory) => `  ${figures.bullet} [${memory.id}] ${memory.preview}`),
+    )
+  }
+  lines.push(
+    "Suggested actions:",
+    ...summary.suggestedActions.map((action) => `  ${colorize(figures.arrowRight, "cyan")} ${action}`),
+  )
+  return lines.join("\n")
 }
 
 export function formatMemories(memories: MemoryRecord[], json: boolean, extraMeta?: Record<string, unknown>): string {
@@ -245,6 +377,8 @@ Commands:
   approve <id>
   reject <id>
   review [--suspect-meta] [--include-approved]
+  dashboard [--all]
+                  Compact continuity and review overview
   compact
   doctor
   reindex [--force]

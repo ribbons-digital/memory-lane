@@ -432,6 +432,69 @@ describe("CLI integration", () => {
     assert.match(output, /Pending session summary/u)
   })
 
+  it("dashboard --json summarizes memory health without long memory bodies", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "dashboard-project" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const longSummary = "Session summary: released v1.2.3 and completed docs sync. This very long trailing detail should not be dumped in full by dashboard JSON output."
+    const engine = new MemoryEngine({ memoryPath: memFile, embeddingsPath: embFile, configPath: cfgFile })
+    engine.save({ text: "Global preference", category: "preference", scopeType: "global", status: "approved", kind: "preference" })
+    engine.refreshScope(project)
+    engine.save({ text: "Project checkpoint", category: "project", scopeType: "project", status: "approved", kind: "project_checkpoint" })
+    engine.save({ text: longSummary, category: "project", scopeType: "project", status: "pending", source: "session-summary", kind: "session_summary" })
+    engine.save({ text: "Task: ## Acceptance Finalization\nYou are continuing the same subagent session.", category: "project", scopeType: "project", status: "pending", source: "user-suggested", kind: "project_fact" })
+
+    const result = runProcess(["dashboard", "--json"], { env, cwd: project })
+    assert.equal(result.status, 0, result.stderr)
+    const payload = JSON.parse(result.stdout)
+
+    assert.equal(payload.ok, true)
+    assert.equal(payload.data.projectScope, "dashboard-project")
+    assert.equal(payload.data.counts.total, 4)
+    assert.equal(payload.data.counts.approved, 2)
+    assert.equal(payload.data.counts.pending, 2)
+    assert.equal(payload.data.counts.global, 1)
+    assert.equal(payload.data.counts.project, 3)
+    assert.equal(payload.data.review.pending, 2)
+    assert.equal(payload.data.review.sessionSummaries, 1)
+    assert.equal(payload.data.review.suspectMeta, 1)
+    assert.equal(payload.data.recent.sessionSummaries.length, 1)
+    assert.match(payload.data.recent.sessionSummaries[0].preview, /released v1\.2\.3/u)
+    assert.doesNotMatch(JSON.stringify(payload), /This very long trailing detail/u)
+    assert.ok(payload.data.suggestedActions.includes("memory-lane review"))
+  })
+
+  it("dashboard human output is compact and friendly", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "dashboard-human-project" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+    const engine = new MemoryEngine({ memoryPath: memFile, embeddingsPath: embFile, configPath: cfgFile })
+    engine.refreshScope(project)
+    engine.save({ text: "Project dashboard checkpoint with trailing private detail that should not be dumped", category: "project", scopeType: "project", status: "approved", kind: "project_checkpoint" })
+    engine.save({ text: "Task: You are a delegated subagent running from a fork of the parent session.", category: "project", scopeType: "project", status: "pending", source: "user-suggested", kind: "project_fact" })
+
+    const result = runProcess(["dashboard"], { env, cwd: project })
+    assert.equal(result.status, 0, result.stderr)
+    const output = result.stdout
+
+    assert.match(output, /Memory Lane Dashboard/u)
+    assert.match(output, /dashboard-human-project/u)
+    assert.match(output, /Review Queue/u)
+    assert.match(output, /Suspect meta/u)
+    assert.match(output, /Suggested actions/u)
+    assert.match(output, /memory-lane review --suspect-meta/u)
+    assert.doesNotMatch(output, /trailing private detail/u)
+  })
+
   it("doctor reports stats", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,
