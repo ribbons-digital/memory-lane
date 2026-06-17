@@ -1,6 +1,8 @@
 # Memory Lane
 
-Local-first memory for AI coding agents — CLI, hooks, pi extension, semantic recall, and optional Obsidian mirror/import, all backed by simple JSONL files.
+Local-first, review-governed continuity infrastructure for AI coding agents — a shared project memory/index across Claude Code, Codex, Cursor-style clients, pi, MCP clients, and future harnesses, all backed by simple JSONL files.
+
+Memory Lane is not meant to be another isolated chat-history search box. Its goal is to make project state, durable preferences, decisions, checkpoints, failures, corrections, and procedures available across sessions and tools without relying on any single vendor's built-in thread memory. It stays non-autonomous by default: bounded context, freshness checks, explicit review controls, privacy-conscious storage, good defaults, and optional configuration for advanced workflows.
 
 ## Table of Contents
 
