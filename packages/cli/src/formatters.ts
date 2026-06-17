@@ -178,8 +178,8 @@ Commands:
   doctor
   reindex [--force]
   status
-  init [--yes] [--project]
-                  Run the first-time setup wizard
+  init [--yes|--recommended|--all|--list|--only <integrations>] [--project]
+                  Run the first-time setup wizard; --only accepts comma-separated harnesses
   init --project-local [--project <path>]
                   Initialize project-local storage
   uninstall [--yes]

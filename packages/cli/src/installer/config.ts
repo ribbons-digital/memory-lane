@@ -153,8 +153,8 @@ export function installClaudeDesktop(options: InitOptions): IntegrationResult {
   const platform = process.platform
   const configPath =
     platform === "darwin"
-      ? path.join(options.homeDir, "Library/Application Support/Claude/settings.json")
-      : path.join(options.homeDir, ".config/claude/settings.json")
+      ? path.join(options.homeDir, "Library/Application Support/Claude/claude_desktop_config.json")
+      : path.join(options.homeDir, ".config/Claude/claude_desktop_config.json")
   const existing = readJson(configPath)
   const mcpServers = (existing.mcpServers as Record<string, unknown>) ?? {}
   mcpServers["memory-lane"] = {

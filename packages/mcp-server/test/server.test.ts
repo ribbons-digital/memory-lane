@@ -4,8 +4,10 @@ import { MemoryEngine } from "@memory-lane/core"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
+import { pathToFileURL } from "node:url"
 import { createMemoryLaneMcpServer, MEMORY_LANE_TOOL_NAMES } from "../src/server.ts"
 import { createMemoryLaneEngine } from "../src/engine.ts"
+import { isDirectExecution } from "../src/index.ts"
 
 const tempDirs = new Set<string>()
 let listenerRegistered = false
@@ -43,6 +45,16 @@ function registeredToolNames(server: unknown): string[] {
   assert.notEqual(registeredTools, null)
   return Object.keys(registeredTools).sort()
 }
+
+test("direct index entrypoint detection supports existing client configs", () => {
+  const dir = tempDir("memory-lane-mcp-entrypoint-")
+  const indexPath = path.join(dir, "index.js")
+  fs.writeFileSync(indexPath, "")
+
+  assert.equal(isDirectExecution(pathToFileURL(indexPath).href, indexPath), true)
+  assert.equal(isDirectExecution(pathToFileURL(indexPath).href, undefined), false)
+  assert.equal(isDirectExecution(pathToFileURL(indexPath).href, path.join(dir, "cli.js")), false)
+})
 
 test("exports status and review-complete MCP tool names", () => {
   assert.deepEqual(MEMORY_LANE_TOOL_NAMES, [

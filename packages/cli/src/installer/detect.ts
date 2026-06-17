@@ -31,8 +31,12 @@ export function detectHarnesses(options: { homeDir: string }): DetectedHarness[]
 
   const claudeDesktopConfig =
     platform === "darwin"
-      ? path.join(homeDir, "Library/Application Support/Claude/settings.json")
-      : path.join(homeDir, ".config/claude/settings.json")
+      ? path.join(homeDir, "Library/Application Support/Claude/claude_desktop_config.json")
+      : path.join(homeDir, ".config/Claude/claude_desktop_config.json")
+  const claudeDesktopApp =
+    platform === "darwin"
+      ? "/Applications/Claude.app"
+      : ""
 
   const codexDesktopConfig = path.join(homeDir, ".codex/config.toml")
 
@@ -52,7 +56,7 @@ export function detectHarnesses(options: { homeDir: string }): DetectedHarness[]
     {
       harness: "claude-desktop",
       name: "Claude Desktop",
-      detected: fs.existsSync(claudeDesktopConfig),
+      detected: fs.existsSync(claudeDesktopConfig) || Boolean(claudeDesktopApp && fs.existsSync(claudeDesktopApp)),
       configPath: claudeDesktopConfig,
     },
     {

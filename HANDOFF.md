@@ -11,8 +11,12 @@
 - pi lifecycle autosave and tool capture: `input`, `turn_end`, and `tool_result` events now write memories through shared `@memory-lane/lifecycle` handlers, with per-turn duplicate suppression and privacy-safe debug logging.
 - Plugin system implemented and released in `v0.2.1`: Phase 9 (Obsidian LLM Wiki / Knowledge Base Integration) ships as the first opt-in plugin via a lightweight plugin API. First-party plugins are bundled into the standalone binary but remain inactive unless added to `~/.memory-lane/config.json`. Phase 12 is planned for binary-friendly plugin installation and management (`memory-lane plugin install/list/enable/disable/uninstall`).
 - v0.2.1 includes bundled plugin fixes so first-party plugins actually work in the standalone binary, plus config error handling and cross-platform vault paths for the Obsidian Wiki plugin.
-- Strategic review concluded: Memory Lane is practical for short explicit agent preferences and project facts, but not yet for long-running project continuity because it lacks automatic session synthesis and staleness handling.
-- Roadmap extended with Phases 13–16 for session-end summarization, auto-memory review/dashboard, time-aware memory, and handoff-free sessions. All are opt-in and disabled by default.
+- Strategic review concluded: Memory Lane is practical for short explicit agent preferences and project facts, but not yet for long-running project continuity because it lacks automatic session synthesis, token-aware context policy, review controls, and staleness handling.
+- Roadmap extended beyond Phase 13 with a revised order: Phase 14 token-aware context policy, Phase 15 review/dashboard, Phase 16 harness-neutral learning enhancements, Phase 17 time-aware memory/consolidation, and Phase 18 handoff-free sessions. New automation remains opt-in/review-first by default.
+- pi-hermes-memory research was folded into the roadmap as inspiration, not a feature copy. Relevant ideas: failure/correction learning, procedure memories, background learning, auto-consolidation, and policy-only/token-aware context. Memory Lane's adaptation should stay harness-neutral for future Hermes, Cursor, and other adapters, with JSONL as source of truth and native skill/rule exports as optional later integrations.
+- Cross-harness pending-memory review surfaced product issues now reflected in `ROADMAP.md`: MCP review/list is confusing when Claude Desktop has `projectScope: none`; review output needs grouping by project/source/kind/provenance; `memory_status` should explain MCP explicit tools vs hook lifecycle automation more clearly; pending session summaries need duplicate/debounce handling and should avoid self-referential review chatter such as "approve these memory IDs".
+- Installer hardening was added to the roadmap: avoid breaking published entrypoints/config paths, ensure `memory-lane upgrade` preserves/reapplies existing harness configs, fix Claude Desktop MCP config detection/writing to `claude_desktop_config.json`, and replace the limited sequential yes/no init wizard with clearer menu-driven or flag-based integration selection.
+- Current hardening slice implemented in the working tree: MCP server `dist/index.js` direct execution is backward-compatible again; `memory-lane init` detects/writes Claude Desktop MCP at `claude_desktop_config.json`; init now has a numbered selectable wizard plus `--list`, `--only`, `--all`, and `--recommended` flags, while `--yes` keeps recommended/detected behavior.
 - Session-end summarization design spec is at `docs/superpowers/specs/2026-06-16-session-end-summarization-design.md`. It requires user confirmation before generating a summary and saves summaries as pending memories for review.
 - Phase 13 Session-End Summarization is implemented through the explicit pi session-summary command on branch `docs/pi-session-summary-command`. Implemented and verified: core data model/config, lifecycle LLM provider, `handleSessionEnd`, manual `memory-lane session-end --confirm` CLI command, docs, full build/test, manual mock-provider smoke, supported Codex `Stop` explicit-intent automation, Claude Code `memory-lane claude session-end`, and pi `/memory session-summary`. Correction: current Codex CLI docs do not expose a supported `SessionEnd` hook event; the Codex-shaped session-end adapter path is future-compatible/manual-test only. Follow-up supported-hook design is documented at `docs/superpowers/specs/2026-06-16-supported-session-summary-hooks.md`.
 - To upgrade manually, re-run the installer and then `memory-lane init --yes`.
@@ -327,16 +331,21 @@ External comparison references discussed:
 
 - Basic Memory: https://github.com/basicmachines-co/basic-memory
 - obsidian-mind: https://github.com/breferrari/obsidian-mind
+- pi-hermes-memory package/docs: https://pi.dev/packages/pi-hermes-memory
+- pi-hermes-memory source: https://github.com/chandra447/pi-hermes-memory
 - User's Obsidian setup summary: `/Users/shiang/Desktop/obsidian_codex_memory_types.md`
 
 ## Suggested next steps
 
-1. Continue evaluating Codex `Stop` explicit-intent summaries, pi `/memory session-summary`, and `memory-lane session-end --confirm` with the user's preferred local/remote OpenAI-compatible model, then approve only useful pending summaries.
-2. Keep Phase 13 follow-ups focused on user-confirmed session continuity; do not start Phase 14 review/dashboard or Phase 15 staleness work until the basic summary flow proves useful.
-3. Do not add automatic pi `agent_end`, `session_shutdown`, or compaction summarization without a separate supported-event design and explicit approval.
-4. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
-5. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
-6. Only schedule hardening backlog items or deferred improvements from `ROADMAP.md` after explicit user approval or clear real-world user value.
+1. Finish/review the current installer/MCP hardening slice: check the working-tree diff, verify `memory-lane upgrade` behavior against an install manifest, then commit/release so v0.2.2 users get the Claude Desktop/MCP/init fixes.
+2. Then improve review/status UX before broader automation: group pending memories by project/source/kind/provenance, make MCP `projectScope: none` behavior obvious, clarify MCP-vs-hooks boundaries in `memory_status`, and add guidance for passing `projectPath` from MCP clients.
+3. Continue evaluating Codex `Stop` explicit-intent summaries, pi `/memory session-summary`, and `memory-lane session-end --confirm` with the user's preferred local/remote OpenAI-compatible model, then approve only useful pending summaries.
+4. Treat Phase 14 token-aware context policy as the next prerequisite before broader automatic learning. The user's priority is avoiding context pollution/explosion across all harnesses, not copying pi-hermes-memory exactly.
+5. Keep future learning enhancements harness-neutral. Core/lifecycle should own selection, token budgeting, correction/failure/procedure candidate extraction, and consolidation proposals; adapters for pi, Codex, Claude Code, Cursor, Hermes, etc. should only supply bounded lifecycle evidence and render shared outputs.
+6. Do not add automatic pi `agent_end`, `session_shutdown`, or compaction summarization without a separate supported-event design and explicit approval.
+7. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
+8. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
+9. Only schedule hardening backlog items or deferred improvements from `ROADMAP.md` after explicit user approval or clear real-world user value.
 
 ## Suggested skills for future agents
 

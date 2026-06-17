@@ -40,6 +40,61 @@ function ensureDataDir(dataDir: string): void {
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true })
 }
 
+function hasFlag(argv: string[], name: string): boolean {
+  return argv.includes(`--${name}`)
+}
+
+function flagValue(argv: string[], name: string): string | undefined {
+  const prefix = `--${name}=`
+  const inline = argv.find((arg) => arg.startsWith(prefix))
+  if (inline) return inline.slice(prefix.length)
+  const idx = argv.indexOf(`--${name}`)
+  if (idx === -1) return undefined
+  const next = argv[idx + 1]
+  return next && !next.startsWith("--") ? next : undefined
+}
+
+const HARNESS_ALIASES: Record<string, Harness> = {
+  "claude-code": "claude-code-cli",
+  "claude-code-cli": "claude-code-cli",
+  claude: "claude-code-cli",
+  "codex-cli": "codex-cli",
+  codex: "codex-cli",
+  "claude-desktop": "claude-desktop",
+  "claude-desktop-mcp": "claude-desktop",
+  "codex-desktop": "codex-desktop",
+  "codex-desktop-mcp": "codex-desktop",
+  pi: "pi",
+}
+
+function dedupeHarnesses(harnesses: Harness[]): Harness[] {
+  const seen = new Set<Harness>()
+  const result: Harness[] = []
+  for (const harness of harnesses) {
+    if (seen.has(harness)) continue
+    seen.add(harness)
+    result.push(harness)
+  }
+  return result
+}
+
+function parseHarnessTokens(raw: string, harnesses: DetectedHarness[]): Harness[] {
+  const byNumber = new Map(harnesses.map((h, index) => [String(index + 1), h.harness]))
+  const selected = raw
+    .split(/[\s,]+/u)
+    .map((token) => token.trim().toLowerCase())
+    .filter(Boolean)
+    .map((token) => byNumber.get(token) ?? HARNESS_ALIASES[token])
+    .filter((harness): harness is Harness => Boolean(harness))
+  return dedupeHarnesses(selected)
+}
+
+function renderHarnessList(harnesses: DetectedHarness[]): string {
+  return harnesses
+    .map((h, index) => `  ${index + 1}. ${h.name.padEnd(20)} ${h.detected ? "detected" : "not detected"}`)
+    .join("\n")
+}
+
 function writeInstallManifest(options: InitOptions, result: InitResult): void {
   const manifestPath = path.join(options.dataDir, "install.json")
   const manifest = {
@@ -57,30 +112,28 @@ function writeInstallManifest(options: InitOptions, result: InitResult): void {
 
 async function runInteractive(options: InitOptions, harnesses: DetectedHarness[]): Promise<Harness[]> {
   console.log("Memory Lane helps your AI remember useful context. Let's wire it up.\n")
+  console.log("Integrations:")
+  console.log(renderHarnessList(harnesses))
+  console.log("\nSelect integrations to configure:")
+  console.log("  recommended = all detected integrations")
+  console.log("  all         = every supported integration")
+  console.log("  none        = skip integration setup")
+  console.log("  numbers     = e.g. 1,3,4")
 
-  const detected = findDetected(harnesses)
-  if (detected.length === 0) {
-    console.log("No supported harnesses detected. Install Claude Code, Codex, Claude Desktop, Codex Desktop, or pi first.")
-    return []
-  }
-
-  console.log("Detected integrations:")
-  for (const h of harnesses) {
-    console.log(`  [${h.detected ? "x" : " "}] ${h.name}${h.detected ? "" : " (not found)"}`)
-  }
-
-  const selected: Harness[] = []
-  for (const h of detected) {
-    if (await confirm(`Set up ${h.name}?`, true)) {
-      selected.push(h.harness)
-    }
-  }
-
-  return selected
+  const answer = await prompt("Select integrations", "recommended")
+  const normalized = answer.trim().toLowerCase()
+  if (normalized === "" || normalized === "r" || normalized === "recommended") return findDetected(harnesses).map((h) => h.harness)
+  if (normalized === "a" || normalized === "all") return harnesses.map((h) => h.harness)
+  if (normalized === "n" || normalized === "none") return []
+  return parseHarnessTokens(normalized, harnesses)
 }
 
 export async function handleInit(argv: string[]): Promise<InitResult> {
-  const yes = argv.includes("--yes")
+  const yes = hasFlag(argv, "yes")
+  const listOnly = hasFlag(argv, "list")
+  const only = flagValue(argv, "only")
+  const all = hasFlag(argv, "all")
+  const recommended = hasFlag(argv, "recommended")
   const projectMode = argv.includes("--project")
   const projectPathFlag = argv[argv.indexOf("--project") + 1]
   const projectPath = projectMode && projectPathFlag && !projectPathFlag.startsWith("-") ? projectPathFlag : process.cwd()
@@ -100,7 +153,19 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
   }
 
   const harnesses = detectHarnesses({ homeDir })
-  const selected = yes ? findDetected(harnesses).map((h) => h.harness) : await runInteractive(options, harnesses)
+  if (listOnly) {
+    console.log("Memory Lane integrations:")
+    console.log(renderHarnessList(harnesses))
+    return { binaryPath, dataDir, integrations: [] }
+  }
+
+  const selected = only
+    ? parseHarnessTokens(only, harnesses)
+    : all
+      ? harnesses.map((h) => h.harness)
+      : (yes || recommended)
+        ? findDetected(harnesses).map((h) => h.harness)
+        : await runInteractive(options, harnesses)
 
   const integrations: IntegrationResult[] = []
   for (const harness of selected) {

@@ -24,12 +24,13 @@ describe("init wizard", () => {
   let binaryPath: string
   let fakeBinDir: string
 
-  function run(args: string[], env?: NodeJS.ProcessEnv, cwd?: string) {
+  function run(args: string[], env?: NodeJS.ProcessEnv, cwd?: string, stdin?: string) {
     const cli = path.resolve(__dirname, "../dist/index.js")
     return execFileSync("node", [cli, ...args], {
       encoding: "utf8",
       env: { ...process.env, PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH}`, ...env },
       cwd,
+      input: stdin,
     }).trim()
   }
 
@@ -40,10 +41,10 @@ describe("init wizard", () => {
     fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true })
     fs.mkdirSync(path.join(home, ".claude"), { recursive: true })
     fs.mkdirSync(path.join(home, ".codex"), { recursive: true })
-    fs.mkdirSync(path.join(home, ".config", "claude"), { recursive: true })
-    fs.writeFileSync(path.join(home, ".config", "claude", "settings.json"), "{}", "utf8")
+    fs.mkdirSync(path.join(home, ".config", "Claude"), { recursive: true })
+    fs.writeFileSync(path.join(home, ".config", "Claude", "claude_desktop_config.json"), "{}", "utf8")
     fs.mkdirSync(path.join(home, "Library", "Application Support", "Claude"), { recursive: true })
-    fs.writeFileSync(path.join(home, "Library", "Application Support", "Claude", "settings.json"), "{}", "utf8")
+    fs.writeFileSync(path.join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json"), "{}", "utf8")
   })
 
   afterEach(() => {
@@ -83,19 +84,64 @@ describe("init wizard", () => {
 
     const configPath =
       process.platform === "darwin"
-        ? path.join(home, "Library/Application Support/Claude/settings.json")
-        : path.join(home, ".config/claude/settings.json")
+        ? path.join(home, "Library/Application Support/Claude/claude_desktop_config.json")
+        : path.join(home, ".config/Claude/claude_desktop_config.json")
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"))
     assert.ok(config.mcpServers["memory-lane"])
     assert.equal(config.mcpServers["memory-lane"].command, binaryPath)
     assert.deepEqual(config.mcpServers["memory-lane"].args, ["mcp"])
   })
 
+  it("lists selectable integrations without configuring them", () => {
+    const output = run(["init", "--list"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    assert.match(output, /Claude Code CLI/u)
+    assert.match(output, /Claude Desktop/u)
+    assert.match(output, /Codex Desktop/u)
+    assert.equal(fs.existsSync(path.join(home, ".memory-lane/install.json")), false)
+  })
+
+  it("--only configures an explicitly selected undetected Claude Desktop", () => {
+    const configPath =
+      process.platform === "darwin"
+        ? path.join(home, "Library/Application Support/Claude/claude_desktop_config.json")
+        : path.join(home, ".config/Claude/claude_desktop_config.json")
+    fs.rmSync(configPath, { force: true })
+
+    run(["init", "--only", "claude-desktop"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"))
+    assert.ok(config.mcpServers["memory-lane"])
+  })
+
+  it("interactive numbered selection can choose an undetected integration", () => {
+    const configPath =
+      process.platform === "darwin"
+        ? path.join(home, "Library/Application Support/Claude/claude_desktop_config.json")
+        : path.join(home, ".config/Claude/claude_desktop_config.json")
+    fs.rmSync(configPath, { force: true })
+
+    const output = run(["init"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    }, undefined, "3\n")
+
+    assert.match(output, /Select integrations/u)
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"))
+    assert.ok(config.mcpServers["memory-lane"])
+  })
+
   it("preserves existing unrelated settings when adding MCP server", () => {
     const configPath =
       process.platform === "darwin"
-        ? path.join(home, "Library/Application Support/Claude/settings.json")
-        : path.join(home, ".config/claude/settings.json")
+        ? path.join(home, "Library/Application Support/Claude/claude_desktop_config.json")
+        : path.join(home, ".config/Claude/claude_desktop_config.json")
     fs.writeFileSync(configPath, JSON.stringify({ theme: "dark" }), "utf8")
 
     run(["init", "--yes"], {

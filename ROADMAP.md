@@ -91,13 +91,19 @@ Completed scope:
 
 ## Hardening Backlog — Completed Phase Follow-ups
 
-These items do **not** reopen Phases 1–3 and should not start the next roadmap phase by themselves. Treat them as small hardening tasks to schedule only after explicit user approval.
+These items do **not** reopen completed phases and should not start the next roadmap phase by themselves. Treat them as small hardening tasks to schedule only after explicit user approval.
 
-1. **Obsidian import dry-run secret warnings**
+1. **Installer and upgrade compatibility hardening**
+   - Preserve backward compatibility for any published integration entrypoints/config paths; do not move MCP/hook entrypoints without keeping old paths working or migrating configs.
+   - Ensure `memory-lane upgrade` reapplies previously configured harnesses successfully and does not break existing Claude Desktop MCP, Codex Desktop MCP, Claude Code hooks, Codex hooks, or pi extension setups.
+   - Fix/replace the current sequential yes/no init wizard with a clearer menu-driven flow: show all supported integrations, distinguish detected vs not detected, allow explicit selection, and provide non-interactive flags for specific integrations such as Claude Desktop MCP.
+   - Detect/write Claude Desktop MCP config at the correct `claude_desktop_config.json` path and keep tests covering that path.
+
+2. **Obsidian import dry-run secret warnings**
    - Current apply path uses normal `MemoryEngine.save`/`MemoryEngine.update` validation, so likely secrets are skipped at apply time.
    - Improve dry-run so secret-containing import notes are warned/skipped before apply, either by passing a secret-detection callback into the import planner or extracting secret detection into a small shared utility.
 
-2. **Import snapshot type cleanup**
+3. **Import snapshot type cleanup**
    - `ExistingImportMemory` includes optional fields that the planner currently does not read and the CLI snapshot mapper does not populate.
    - Either trim the type to fields actually used by the planner or populate the fields consistently for future maintainability.
 
@@ -364,25 +370,62 @@ Remaining follow-up scope:
 1. Manually smoke Codex `Stop` explicit-intent summaries, pi `/memory session-summary`, and `memory-lane session-end --confirm` with the user's preferred provider, then evaluate summary quality before adding broader automation.
 2. Consider a stricter structured `SessionSummary` schema if real summaries need machine-readable subsections beyond the Markdown pending-memory format.
 
-## Phase 14 — Auto-Memory Review and Memory Dashboard
+## Phase 14 — Token-Aware Context Policy
 
-**Goal:** Give users visibility and control over automatically generated memories before they affect future sessions.
+**Goal:** Prevent Memory Lane from polluting or exploding context windows across all harnesses before adding broader automatic learning.
 
-Session-end summarization (Phase 13) will produce a stream of candidate memories. This phase builds the review surface so users can trust the system.
+This phase is inspired by pi-hermes-memory's policy-only mode, but Memory Lane's implementation must remain harness-neutral. Core should decide what to inject, how much to inject, and when to fall back to "search memory if needed" guidance; adapters should only translate that shared policy into Codex, Claude Code, pi, Cursor, Hermes, or future harness surfaces.
 
 Todos:
 
-1. Extend `memory-lane review` to group pending memories by source (e.g., `session-summary`, `agent-suggested`, `user-suggested`).
-2. Add a memory dashboard command: `memory-lane memory dashboard` (or `memory-lane dashboard`) that prints a human-readable summary of what Memory Lane knows per project and globally.
-3. Add MCP/CLI tools to list, inspect, and bulk-approve/reject pending session summaries.
-4. Add a "dismiss stale" helper that flags or removes session summaries that no longer match current project state.
-5. Document how to use the review queue and dashboard to keep memory accurate.
+1. Add shared `memory.contextPolicy` config with non-breaking defaults, including mode (`off`, `policy-only`, `selective`), per-event budgets, pending-memory inclusion, preferred/deprioritized kinds, and fallback-to-search guidance.
+2. Move SessionStart and prompt-recall selection through one shared token/character-budgeted renderer that emits guarded `<memory-context>` blocks and avoids raw transcript/tool output.
+3. Add a policy-only renderer that injects compact instructions explaining when to use explicit recall/search tools instead of dumping memories into context.
+4. Add debug/doctor evidence for memory context decisions: policy mode, budget, selected count, omitted count/reasons, and harness adapter surface, without logging raw memory text unless explicitly requested by a user command.
+5. Update Codex, Claude Code, pi, MCP docs, and future-adapter guidance so all harnesses use the same policy semantics rather than harness-specific prompt stuffing.
 
-## Phase 15 — Time-Aware Memory
+## Phase 15 — Auto-Memory Review and Memory Dashboard
 
-**Goal:** Prevent memories from going stale and misleading future sessions.
+**Goal:** Give users visibility and control over automatically generated memories before they affect future sessions.
 
-Time-sensitive statements like "I'm traveling next week" or "The build is broken" become wrong as time passes. This phase adds expiration and revision semantics.
+Session-end summarization (Phase 13) and future learning features will produce candidate memories. This phase builds the review surface so users can trust the system before broader automation is enabled.
+
+Todos:
+
+1. Extend `memory-lane review` to group pending memories by source, project key, scope, kind, and harness/provenance where available (e.g., `session-summary`, `agent-suggested`, `user-suggested`, future `background-learning`).
+2. Make MCP review/list output less confusing when `projectScope: none`: show project ownership inline, explain that Claude Desktop MCP has no cwd unless `projectPath` is passed, and offer/projectPath guidance instead of implying the current chat's project was used.
+3. Add a memory dashboard command: `memory-lane memory dashboard` (or `memory-lane dashboard`) that prints a human-readable summary of what Memory Lane knows per project and globally without dumping long memory bodies by default.
+4. Add MCP/CLI tools to list, inspect, and bulk-approve/reject pending session summaries and future learning candidates.
+5. Add a "dismiss stale" helper that flags or removes session summaries that no longer match current project state.
+6. Document how to use the review queue and dashboard to keep memory accurate, including the boundary that MCP provides explicit tools while hooks provide lifecycle automation.
+
+## Phase 16 — Harness-Neutral Learning Enhancements
+
+**Goal:** Adapt useful learning-system ideas from pi-hermes-memory without making Memory Lane pi-specific or breaking existing memory categories, APIs, review semantics, or storage behavior.
+
+Memory Lane should keep JSONL as the source of truth and keep harness-native artifacts optional exports. Pi, Hermes, Cursor, Codex, Claude Code, and future adapters should feed bounded lifecycle evidence into shared lifecycle handlers rather than owning learning behavior themselves.
+
+First-slice decisions:
+
+- Do not expand `MemoryCategory` for learning taxonomy in the first slice; keep existing `preference`, `personal`, and `project` categories stable.
+- Add learning semantics primarily through additional `MemoryKind` values such as `failure`, `correction`, `insight`, `tool_quirk`, `convention`, and `procedure`.
+- Default new automatic learning outputs to `pending` unless the user explicitly asks Memory Lane to remember something.
+- Store procedural memory as Memory Lane records first; exporting approved procedures into Pi/Claude/Codex/Cursor/Hermes-native skill/rule formats is a later optional integration layer.
+- Keep raw transcripts, raw tool outputs, secrets, and harness-internal markers out of saved memory text.
+
+Todos:
+
+1. Add non-breaking `MemoryKind` values for learning taxonomy and update validation, formatting, docs, Obsidian mirror/import handling, MCP schemas, and tests.
+2. Add shared correction detection in `@memory-lane/lifecycle` using high-confidence heuristics plus negative patterns; adapters provide recent bounded turn context, and detected corrections save as pending candidates by default.
+3. Expand post-tool-use learning beyond current package-manager/test-command heuristics to capture conservative failure/tool-quirk candidates when a failed action and safe recovery evidence are both available.
+4. Add structured procedure-memory support (`kind: "procedure"`) with fields or conventions for when-to-use, steps, pitfalls, and verification, while keeping native skill export out of the first slice.
+5. Add opt-in background learning config and lifecycle review plumbing only after token-aware policy and dashboard/review controls are in place; reviews must be bounded, best-effort, privacy-safe, and harness-neutral.
+
+## Phase 17 — Time-Aware Memory and Consolidation
+
+**Goal:** Prevent memories from going stale, noisy, duplicated, or misleading future sessions.
+
+Time-sensitive statements like "I'm traveling next week" or "the build is broken" become wrong as time passes. Separately, automatic summaries and learning candidates can create overlap. This phase handles both through reviewable revisions and consolidation proposals rather than silent destructive rewrites.
 
 Todos:
 
@@ -390,23 +433,25 @@ Todos:
 2. Add a `memory-lane refresh` command that scans approved memories, uses an LLM or heuristics to identify stale entries, and presents them as pending revisions or deletions.
 3. Update recall/injection to deprioritize or skip memories that are past their expiration.
 4. Add time metadata to session summaries so later refreshes can reason about temporal context.
-5. Add tests and docs for expiration, refresh, and recall behavior.
+5. Add `memory-lane consolidate --dry-run` and `memory-lane consolidate --apply` to propose duplicate/overlap merges and replacement memories, preserving append-only auditability.
+6. Add duplicate/debounce handling for pending session summaries, especially back-to-back summaries generated from the same session/review flow.
+7. Improve session-summary prompt/filtering so summaries avoid self-referential review chatter like "approve memory IDs" unless the user explicitly asks to preserve review decisions.
 
-## Phase 16 — Handoff-Free Sessions
+## Phase 18 — Handoff-Free Sessions
 
 **Goal:** Enable fully automatic cross-session continuity for users who have validated their memory pipeline.
 
-This phase turns Phase 13–15 into a cohesive experience: the agent starts a new session already aware of where things left off, without a manual `HANDOFF.md`.
+This phase turns Phase 13–17 into a cohesive experience: the agent starts a new session already aware of where things left off, without a manual `HANDOFF.md`, while still respecting token-aware context budgets.
 
 Todos:
 
 1. Add a `memory.handoffMode` config flag with values `manual`, `review`, and `automatic`. Default to `manual` so users opt in explicitly.
 2. In `manual` mode, do nothing new; users keep writing handoffs.
 3. In `review` mode, session summaries are generated and saved as pending; users must approve them before the next session uses them.
-4. In `automatic` mode, approved session summaries are automatically injected at the next `SessionStart` alongside baseline memories.
+4. In `automatic` mode, approved session summaries are eligible for budgeted injection at the next `SessionStart` alongside baseline memories.
 5. Add a confidence threshold: low-confidence summaries stay pending even in automatic mode.
 6. Add safeguards so users can disable handoff-free mode per project or globally.
-7. Update docs to explain the three modes, risks of automatic mode, and how to switch back to manual.
+7. Update docs to explain the three modes, risks of automatic mode, token-budget behavior, and how to switch back to manual.
 
 ## Deferred improvements
 
