@@ -1,6 +1,6 @@
 import { groupReviewMemories, type MemoryEngine, type MemoryMutationResult, type MemoryRecord, type RecallResult, type SaveResult } from "@memory-lane/core"
 import type {
-  ListToolInput, MemoryIdToolInput, RecallToolInput, ReviewToolInput, SaveToolInput, StatusToolInput, SuggestToolInput, ToolEnvelope,
+  ListToolInput, MemoryIdToolInput, RecallToolInput, ReviewFilters, ReviewToolInput, SaveToolInput, StatusToolInput, SuggestToolInput, ToolEnvelope,
 } from "./types.js"
 
 type ToolResult<T> = {
@@ -8,9 +8,10 @@ type ToolResult<T> = {
   structuredContent: ToolEnvelope<T>
 }
 
-function envelope<T>(engine: MemoryEngine, data: T, count?: number): ToolEnvelope<T> {
-  const meta: { count?: number; projectScope?: string | "none" } = { projectScope: currentProjectScope(engine) }
+function envelope<T>(engine: MemoryEngine, data: T, count?: number, filters?: ReviewFilters): ToolEnvelope<T> {
+  const meta: { count?: number; projectScope?: string | "none"; filters?: ReviewFilters } = { projectScope: currentProjectScope(engine) }
   if (count !== undefined) meta.count = count
+  if (filters && Object.keys(filters).length) meta.filters = filters
   return { ok: true, data, meta }
 }
 
@@ -116,11 +117,32 @@ export async function handleMemoryList(engine: MemoryEngine, input: ListToolInpu
   }
 }
 
+function activeReviewFilters(input: ReviewToolInput): ReviewFilters {
+  return Object.fromEntries(
+    Object.entries({ kind: input.kind, source: input.source, provenance: input.provenance })
+      .filter(([, value]) => Boolean(value)),
+  ) as ReviewFilters
+}
+
+function reviewProvenanceLabel(memory: MemoryRecord): string {
+  return memory.provenance ? `${memory.provenance.adapter}/${memory.provenance.lifecycleEvent}` : "none"
+}
+
+function filterReviewMemories(memories: MemoryRecord[], filters: ReviewFilters): MemoryRecord[] {
+  return memories.filter((memory) => {
+    if (filters.kind && (memory.kind ?? "misc") !== filters.kind) return false
+    if (filters.source && memory.source !== filters.source) return false
+    if (filters.provenance && reviewProvenanceLabel(memory) !== filters.provenance) return false
+    return true
+  })
+}
+
 export async function handleMemoryReview(engine: MemoryEngine, input: ReviewToolInput) {
   try {
     applyProjectPath(engine, input.projectPath)
-    const memories = engine.reviewPending()
-    return jsonContent(envelope(engine, { memories, groups: groupReviewMemories(memories), notes: scopeNotes(engine) }, memories.length))
+    const filters = activeReviewFilters(input)
+    const memories = filterReviewMemories(engine.reviewPending(), filters)
+    return jsonContent(envelope(engine, { memories, groups: groupReviewMemories(memories), notes: scopeNotes(engine) }, memories.length, filters))
   } catch (error) {
     return jsonContent(errorEnvelope(error))
   }

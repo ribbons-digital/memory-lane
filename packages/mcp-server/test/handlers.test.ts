@@ -149,6 +149,44 @@ test("memory_review includes grouped project source kind and provenance metadata
   ])
 })
 
+test("memory_review filters pending memories by kind source and provenance", async () => {
+  const projectA = tempDir()
+  fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "review-filter-project" }))
+  const engine = engineInTemp(projectA)
+  engine.suggest("Pending preference", "preference", "global", "preference")
+  engine.save({
+    text: "Pending pi session summary",
+    status: "pending",
+    category: "project",
+    scopeType: "project",
+    source: "session-summary",
+    kind: "session_summary",
+    provenance: { adapter: "pi", lifecycleEvent: "session_end" },
+  })
+  engine.save({
+    text: "Pending claude session summary",
+    status: "pending",
+    category: "project",
+    scopeType: "project",
+    source: "session-summary",
+    kind: "session_summary",
+    provenance: { adapter: "claude", lifecycleEvent: "session_end" },
+  })
+
+  const result = parseToolResult(await handleMemoryReview(engine, {
+    kind: "session_summary",
+    source: "session-summary",
+    provenance: "pi/session_end",
+  }))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.meta.count, 1)
+  assert.deepEqual(result.meta.filters, { kind: "session_summary", source: "session-summary", provenance: "pi/session_end" })
+  assert.deepEqual(result.data.memories.map((memory: any) => memory.text), ["Pending pi session summary"])
+  assert.equal(result.data.groups.length, 1)
+  assert.equal(result.data.groups[0].adapter, "pi")
+})
+
 test("memory_approve approves a pending memory", async () => {
   const engine = engineInTemp()
   const saved = engine.suggest("Approve this item")

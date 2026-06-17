@@ -1,7 +1,13 @@
 import type { MemoryCategory, MemoryKind, MemoryScopeType, MemoryStatus } from "@memory-lane/core"
 
+export interface ReviewFilters {
+  kind?: MemoryKind
+  source?: string
+  provenance?: string
+}
+
 export type ToolEnvelope<T> =
-  | { ok: true; data: T; meta?: { count?: number; projectScope?: string | "none" } }
+  | { ok: true; data: T; meta?: { count?: number; projectScope?: string | "none"; filters?: ReviewFilters } }
   | { ok: false; error: string }
 
 export interface ProjectPathInput {
@@ -28,7 +34,7 @@ export interface ListToolInput extends ProjectPathInput {
   all?: boolean
 }
 
-export type ReviewToolInput = ProjectPathInput
+export interface ReviewToolInput extends ProjectPathInput, ReviewFilters {}
 
 export type StatusToolInput = ProjectPathInput
 

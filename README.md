@@ -649,12 +649,12 @@ The MCP server exposes explicit tools only:
 - `memory_recall` — recall relevant memories for a query
 - `memory_status` — read Memory Lane counts, config paths, project scope, and integration diagnostics
 - `memory_list` — list memories visible to the current project scope by default
-- `memory_review` — list pending memories for review
+- `memory_review` — list pending memories for review; supports `kind`, `source`, and `provenance` filters such as `kind: "session_summary"`, `source: "session-summary"`, and `provenance: "pi/session_end"`
 - `memory_approve` — approve a memory by id
 - `memory_reject` — reject a memory by id
 - `memory_delete` — soft-delete a memory by id
 
-Use `memory_status` from MCP clients when you want the same kind of read-only setup/status overview that `memory-lane doctor` provides in a terminal. It reports counts and diagnostics only; it does not return raw memory text or run lifecycle hooks.
+Use `memory_status` from MCP clients when you want the same kind of read-only setup/status overview that `memory-lane doctor` provides in a terminal. It reports counts and diagnostics only; it does not return raw memory text or run lifecycle hooks. Use filtered `memory_review` calls when you want an MCP client to inspect only pending session summaries or continuity candidates from a specific adapter/event before approving or rejecting them.
 
 **Tip for Claude Desktop and Codex Desktop:** if you ask the model to save or recall a memory without mentioning the MCP, it may first try the `memory-lane` CLI, fail because the sandbox cannot write to `~/.memory-lane`, and then fall back to MCP. To skip that error turn, explicitly say "use the Memory Lane MCP" in your request.
 

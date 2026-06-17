@@ -463,14 +463,14 @@ Completed review-filter slice:
 
 1. Added CLI filters for pending review queues by kind, source, and provenance, e.g. `memory-lane review --kind session_summary --source session-summary --provenance pi/session_end`.
 2. Prettified human `memory-lane review` output with the same CLI presentation primitives used by dashboard, while keeping `--json` authoritative and structured.
-3. Kept review non-destructive: filtered review only narrows inspection and suggests existing approve/reject/delete commands.
+3. Added matching MCP `memory_review` filters (`kind`, `source`, `provenance`) so desktop MCP clients can inspect pending session summaries and future continuity candidates precisely.
+4. Kept review non-destructive: filtered review only narrows inspection and suggests existing approve/reject/delete commands.
 
 Remaining dashboard/review-controls scope:
 
-1. Add MCP surfaces to inspect pending session summaries and future continuity candidates by source/kind/provenance.
-2. Add safe bulk actions for clearly grouped pending candidates, with dry-run/confirmation semantics and no silent deletes.
-3. Add docs for maintaining a healthy review queue and for deciding when to approve, reject, delete, or leave pending candidate memories.
-4. Keep this phase focused on visibility/control; do not add new automatic learning behaviors here.
+1. Add safe bulk actions for clearly grouped pending candidates, with dry-run/confirmation semantics and no silent deletes.
+2. Add docs for maintaining a healthy review queue and for deciding when to approve, reject, delete, or leave pending candidate memories.
+3. Keep this phase focused on visibility/control; do not add new automatic learning behaviors here.
 
 ## Phase 16 — Cross-Session Freshness and Continuity Status
 
