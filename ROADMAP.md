@@ -107,6 +107,13 @@ These items do **not** reopen completed phases and should not start the next roa
    - `ExistingImportMemory` includes optional fields that the planner currently does not read and the CLI snapshot mapper does not populate.
    - Either trim the type to fields actually used by the planner or populate the fields consistently for future maintainability.
 
+Completed hardening follow-ups:
+
+1. **Historical JSONL compatibility and diagnostics**
+   - Historical memory rows that predate newer `source` and `scope` fields now load with safe defaults instead of disappearing from list/review/recall output.
+   - `memory-lane doctor` now reports memory JSONL row counts and warns when malformed or schema-invalid rows were skipped, without exposing memory text.
+   - Release target: `v0.2.9`.
+
 ## Phase 4 — Obsidian Mirror UX Polish
 
 **Status:** Complete and merged.

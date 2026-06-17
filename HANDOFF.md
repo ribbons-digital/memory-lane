@@ -2,6 +2,8 @@
 
 ## Recent changes (since this handoff was last updated)
 
+- Historical JSONL hardening is implemented and verified: commit `d0c7620` normalizes older memory rows that predate newer `source`/`scope` fields so they no longer disappear from list/review/recall, and commit `06c3cb3` adds `memory-lane doctor` row diagnostics for malformed/schema-invalid memory JSONL without exposing memory text.
+- `v0.2.8` was released in a parallel session; the next release from this handoff/doc-sync slice is `v0.2.9`.
 - Phase 14 Token-Aware Context Policy is complete through Slice 3. See `ROADMAP.md#phase-14--token-aware-context-policy` for the detailed slice breakdown.
 - Slice 1 commit `537b441` added shared context policy injection modes (`selective`, `policy-only`, `off`) with guarded context rendering across Claude/Codex/pi lifecycle injection.
 - Slice 2 commit `1e02a5b` added privacy-safe context decision metadata to lifecycle results and Claude/Codex hook debug logs without logging raw prompts, transcripts, tool output, memory text, or injected context.
@@ -33,9 +35,17 @@
 
 ## Current state
 
+Current `main` is tagged at `v0.2.8` before this docs/release-sync slice. The working target is `v0.2.9`, which should include historical JSONL compatibility/doctor diagnostics plus the compact delete-confirmation output already present at `038de04`.
+
+Historical JSONL hardening is complete and committed:
+- `d0c7620 fix(core): normalize historical memory records`
+- `06c3cb3 feat(core): report skipped memory JSONL rows in doctor`
+
+Verification for the hardening work passed with `pnpm test && pnpm build` before this docs slice.
+
 Phase 14 Slice 3 is implemented, verified, and committed as `24baa90 Expose context policy in doctor status`.
 
-Current working slice: Phase 15 noise-reduction follow-up makes suspect-review output compact/actionable and changes pi `input` autosave to explicit-memory-request only. Focused tests pass; run full `pnpm test && pnpm build`, then commit before starting the next slice.
+Phase 15 noise-reduction follow-up is complete: suspect-review output is compact/actionable, pi `input` autosave is explicit-memory-request only, historical JSONL rows are more robust, and `doctor` now surfaces skipped-row diagnostics.
 
 Phase 13 Session-End Summarization manual flow is merged to `main`. The former feature worktree `~/.config/superpowers/worktrees/memory-lane/session-end-summarization` has been removed after merge.
 
@@ -340,6 +350,7 @@ status: pending
 - Obsidian Wiki plugin package: `packages/plugin-obsidian-wiki/`
 - Core engine/config: `packages/core/src/engine.ts`, `packages/core/src/config.ts`
 - CLI entrypoint/formatters: `packages/cli/src/index.ts`, `packages/cli/src/formatters.ts`
+- Historical JSONL compatibility/diagnostics: `packages/core/src/storage.ts`, `packages/core/src/storage-validation.ts`, `packages/core/src/engine.ts`, `packages/core/test/storage.test.ts`, `packages/core/test/engine.test.ts`, `packages/cli/test/cli.test.ts`
 
 External comparison references discussed:
 
@@ -351,10 +362,10 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Finish/review the current installer/MCP hardening slice: check the working-tree diff, verify `memory-lane upgrade` behavior against an install manifest, then commit/release so v0.2.2 users get the Claude Desktop/MCP/init fixes.
-2. Then improve review/status UX before broader automation: group pending memories by project/source/kind/provenance, make MCP `projectScope: none` behavior obvious, clarify MCP-vs-hooks boundaries in `memory_status`, and add guidance for passing `projectPath` from MCP clients.
+1. Cut and publish `v0.2.9` from the docs/release-sync commit after fresh verification. The release should call out historical JSONL compatibility, doctor skipped-row diagnostics, and compact delete-confirmation output.
+2. Then continue Phase 15 review/status UX only where it has clear user value: memory dashboard/summary ergonomics and safer review controls before broader automation. Grouped review, MCP `projectScope: none` guidance, and MCP-vs-hooks status clarification are already implemented; refine them only if real usage remains confusing.
 3. Continue evaluating Codex `Stop` explicit-intent summaries, pi `/memory session-summary`, and `memory-lane session-end --confirm` with the user's preferred local/remote OpenAI-compatible model, then approve only useful pending summaries.
-4. Treat Phase 14 token-aware context policy as the next prerequisite before broader automatic learning. The user's priority is avoiding context pollution/explosion across all harnesses, not copying pi-hermes-memory exactly.
+4. Treat Phase 16+ learning enhancements as gated on review controls and token-aware context policy. The user's priority is avoiding context pollution/explosion across all harnesses, not copying pi-hermes-memory exactly.
 5. Keep future learning enhancements harness-neutral. Core/lifecycle should own selection, token budgeting, correction/failure/procedure candidate extraction, and consolidation proposals; adapters for pi, Codex, Claude Code, Cursor, Hermes, etc. should only supply bounded lifecycle evidence and render shared outputs.
 6. Do not add automatic pi `agent_end`, `session_shutdown`, or compaction summarization without a separate supported-event design and explicit approval.
 7. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
