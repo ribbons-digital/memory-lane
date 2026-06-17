@@ -4,6 +4,7 @@
 
 - Historical JSONL hardening is implemented and verified: commit `d0c7620` normalizes older memory rows that predate newer `source`/`scope` fields so they no longer disappear from list/review/recall, and commit `06c3cb3` adds `memory-lane doctor` row diagnostics for malformed/schema-invalid memory JSONL without exposing memory text.
 - `v0.2.8` was released in a parallel session; the next release from this handoff/doc-sync slice is `v0.2.9`.
+- Product north star clarified and saved as approved memory `344a3af2`: Memory Lane should become a seamless cross-session/cross-harness continuity layer where important progress from one session can be surfaced in another and durable personal preferences remain consistently available, while staying non-autonomous through bounded injection, implicit reminders, and review-first memory suggestions rather than silent broad autosave.
 - Phase 14 Token-Aware Context Policy is complete through Slice 3. See `ROADMAP.md#phase-14--token-aware-context-policy` for the detailed slice breakdown.
 - Slice 1 commit `537b441` added shared context policy injection modes (`selective`, `policy-only`, `off`) with guarded context rendering across Claude/Codex/pi lifecycle injection.
 - Slice 2 commit `1e02a5b` added privacy-safe context decision metadata to lifecycle results and Claude/Codex hook debug logs without logging raw prompts, transcripts, tool output, memory text, or injected context.
@@ -35,7 +36,7 @@
 
 ## Current state
 
-Current `main` is tagged at `v0.2.8` before this docs/release-sync slice. The working target is `v0.2.9`, which should include historical JSONL compatibility/doctor diagnostics plus the compact delete-confirmation output already present at `038de04`.
+Current `main` is tagged at `v0.2.9`. A follow-up docs-only change is in progress to center future roadmap/design work around the newly approved continuity north star (`344a3af2`).
 
 Historical JSONL hardening is complete and committed:
 - `d0c7620 fix(core): normalize historical memory records`
@@ -46,6 +47,8 @@ Verification for the hardening work passed with `pnpm test && pnpm build` before
 Phase 14 Slice 3 is implemented, verified, and committed as `24baa90 Expose context policy in doctor status`.
 
 Phase 15 noise-reduction follow-up is complete: suspect-review output is compact/actionable, pi `input` autosave is explicit-memory-request only, historical JSONL rows are more robust, and `doctor` now surfaces skipped-row diagnostics.
+
+Future roadmap/design center: seamless continuity without silent autonomy. Favor features that let a session discover newer approved project progress from other sessions/harnesses, consistently apply global personal preferences, and prompt/suggest reviewable memory updates when important continuity events happen. Avoid broad silent background writes until review/dashboard, token policy, and staleness controls are strong enough.
 
 Phase 13 Session-End Summarization manual flow is merged to `main`. The former feature worktree `~/.config/superpowers/worktrees/memory-lane/session-end-summarization` has been removed after merge.
 
@@ -362,10 +365,10 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Cut and publish `v0.2.9` from the docs/release-sync commit after fresh verification. The release should call out historical JSONL compatibility, doctor skipped-row diagnostics, and compact delete-confirmation output.
+1. Commit the follow-up docs-only continuity north-star update after verification.
 2. Then continue Phase 15 review/status UX only where it has clear user value: memory dashboard/summary ergonomics and safer review controls before broader automation. Grouped review, MCP `projectScope: none` guidance, and MCP-vs-hooks status clarification are already implemented; refine them only if real usage remains confusing.
 3. Continue evaluating Codex `Stop` explicit-intent summaries, pi `/memory session-summary`, and `memory-lane session-end --confirm` with the user's preferred local/remote OpenAI-compatible model, then approve only useful pending summaries.
-4. Treat Phase 16+ learning enhancements as gated on review controls and token-aware context policy. The user's priority is avoiding context pollution/explosion across all harnesses, not copying pi-hermes-memory exactly.
+4. Treat Phase 16+ learning enhancements as gated on review controls and token-aware context policy. Center their design on cross-session/cross-harness continuity: notice likely durable progress/preferences, suggest updates, and surface newer approved state from other sessions without silent broad autosave.
 5. Keep future learning enhancements harness-neutral. Core/lifecycle should own selection, token budgeting, correction/failure/procedure candidate extraction, and consolidation proposals; adapters for pi, Codex, Claude Code, Cursor, Hermes, etc. should only supply bounded lifecycle evidence and render shared outputs.
 6. Do not add automatic pi `agent_end`, `session_shutdown`, or compaction summarization without a separate supported-event design and explicit approval.
 7. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.

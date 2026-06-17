@@ -10,6 +10,16 @@ This roadmap focuses on five upcoming directions:
 
 The ordering is intentional: mirror/import gives users Obsidian value with low risk; pi lifecycle recall improves the current harness without adding automatic writes; MCP is broadly useful and should not depend on Obsidian; Obsidian LLM Wiki features should build on MCP/resource access while staying distinct from Memory Lane memories; true Obsidian-backed storage comes last because it changes Memory Lane's core reliability model.
 
+## Product North Star — Seamless Continuity Without Silent Autonomy
+
+Memory Lane's future roadmap and implementation design should center on cross-session and cross-harness continuity:
+
+- If the same project is open in multiple sessions or harnesses, important progress from one session should be available to the others without the user manually restating it.
+- Durable personal preferences should be consistently available across projects and harnesses so workflows stay streamlined and predictable.
+- The system should remain non-autonomous and low-noise: prefer bounded context injection, freshness checks, and implicit reminders to add/update memories over silent broad autosave.
+- New learning features should be review-first by default. They may suggest memories, flag stale continuity, or ask whether to save release/progress events, but should not silently rewrite the user's memory base.
+- Token-aware context policy and review hygiene are prerequisites for broader continuity features because seamlessness must not become context pollution.
+
 Each phase lists a focused implementation slice of no more than five todos. If a phase needs more work, add the next slice only after the current slice is complete, keeping the todo order aligned with implementation dependencies.
 
 ## Production Installer
@@ -437,9 +447,9 @@ Todos:
 
 ## Phase 16 — Harness-Neutral Learning Enhancements
 
-**Goal:** Adapt useful learning-system ideas from pi-hermes-memory without making Memory Lane pi-specific or breaking existing memory categories, APIs, review semantics, or storage behavior.
+**Goal:** Adapt useful learning-system ideas from pi-hermes-memory into the continuity north star without making Memory Lane pi-specific or breaking existing memory categories, APIs, review semantics, or storage behavior.
 
-Memory Lane should keep JSONL as the source of truth and keep harness-native artifacts optional exports. Pi, Hermes, Cursor, Codex, Claude Code, and future adapters should feed bounded lifecycle evidence into shared lifecycle handlers rather than owning learning behavior themselves.
+Memory Lane should keep JSONL as the source of truth and keep harness-native artifacts optional exports. Pi, Hermes, Cursor, Codex, Claude Code, and future adapters should feed bounded lifecycle evidence into shared lifecycle handlers rather than owning learning behavior themselves. The first learning slices should help the system notice likely durable events or preferences and prompt/suggest reviewable memories, not silently auto-approve broad background learning.
 
 First-slice decisions:
 
@@ -475,19 +485,20 @@ Todos:
 
 ## Phase 18 — Handoff-Free Sessions
 
-**Goal:** Enable fully automatic cross-session continuity for users who have validated their memory pipeline.
+**Goal:** Enable seamless cross-session and cross-harness continuity for users who have validated their memory pipeline.
 
-This phase turns Phase 13–17 into a cohesive experience: the agent starts a new session already aware of where things left off, without a manual `HANDOFF.md`, while still respecting token-aware context budgets.
+This phase turns Phase 13–17 into a cohesive experience: the agent starts a new session already aware of where things left off, can surface newer progress recorded by another session/harness, and can consistently apply global personal preferences without a manual `HANDOFF.md`, while still respecting token-aware context budgets and review controls.
 
 Todos:
 
 1. Add a `memory.handoffMode` config flag with values `manual`, `review`, and `automatic`. Default to `manual` so users opt in explicitly.
-2. In `manual` mode, do nothing new; users keep writing handoffs.
-3. In `review` mode, session summaries are generated and saved as pending; users must approve them before the next session uses them.
-4. In `automatic` mode, approved session summaries are eligible for budgeted injection at the next `SessionStart` alongside baseline memories.
-5. Add a confidence threshold: low-confidence summaries stay pending even in automatic mode.
-6. Add safeguards so users can disable handoff-free mode per project or globally.
-7. Update docs to explain the three modes, risks of automatic mode, token-budget behavior, and how to switch back to manual.
+2. In `manual` mode, keep current behavior but allow explicit status/review/list tools to reveal newer approved progress from other sessions.
+3. In `review` mode, session/release/progress summaries are generated as pending suggestions; users approve them before future sessions use them.
+4. In `automatic` mode, approved session summaries and relevant global preferences are eligible for budgeted injection at the next `SessionStart` alongside baseline memories.
+5. Add cross-session freshness checks: if another harness/session has newer approved project progress, surface a bounded notice or ask whether to recall/review it.
+6. Add confidence and noise thresholds: low-confidence summaries or ambiguous progress events stay pending even in automatic mode.
+7. Add safeguards so users can disable handoff-free mode per project or globally.
+8. Update docs to explain the three modes, risks of automatic mode, token-budget behavior, cross-harness continuity behavior, and how to switch back to manual.
 
 ## Deferred improvements
 
