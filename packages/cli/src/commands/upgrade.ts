@@ -8,12 +8,18 @@ import type { Harness, InitOptions, IntegrationResult } from "../installer/types
 const INSTALLER_URL = "https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh"
 const WINDOWS_INSTALLER_URL = "https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.ps1"
 
-interface InstallManifest {
+export interface InstallManifest {
   version: string
   installedAt: string
   binaryPath: string
   dataDir: string
-  integrations: Array<{ harness: Harness; configPath: string }>
+  integrations: Array<{ harness: Harness | string; configPath: string }>
+}
+
+export interface ReapplyInstallManifestResult {
+  results: IntegrationResult[]
+  configuredCount: number
+  manifest: InstallManifest
 }
 
 function commandExists(cmd: string): boolean {
@@ -64,12 +70,24 @@ function writeManifest(manifest: InstallManifest): void {
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n", "utf8")
 }
 
+const KNOWN_HARNESSES: readonly Harness[] = ["claude-code-cli", "codex-cli", "claude-desktop", "codex-desktop", "pi"]
+
+function isKnownHarness(harness: string): harness is Harness {
+  return (KNOWN_HARNESSES as readonly string[]).includes(harness)
+}
+
 function installPreviouslyConfigured(options: InitOptions, manifest: InstallManifest): IntegrationResult[] {
   const results: IntegrationResult[] = []
-  const seen = new Set<Harness>()
+  const seen = new Set<string>()
   for (const integration of manifest.integrations) {
     if (seen.has(integration.harness)) continue
     seen.add(integration.harness)
+    if (!isKnownHarness(integration.harness)) {
+      const message = `Unknown harness: ${integration.harness}`
+      results.push({ harness: integration.harness as Harness, configured: false, message })
+      console.log(`  - ${integration.harness} skipped: ${message}`)
+      continue
+    }
     try {
       results.push(installHarness(integration.harness, options))
       console.log(`  ✓ ${integration.harness} reconfigured`)
@@ -80,6 +98,28 @@ function installPreviouslyConfigured(options: InitOptions, manifest: InstallMani
     }
   }
   return results
+}
+
+export function reapplyInstallManifest(options: InitOptions, manifest: InstallManifest): ReapplyInstallManifestResult {
+  const results = installPreviouslyConfigured(options, manifest)
+  const configured = results.filter((r) => r.configured)
+  const nextManifest: InstallManifest = {
+    ...manifest,
+    installedAt: new Date().toISOString(),
+    binaryPath: options.binaryPath,
+    dataDir: options.dataDir,
+    integrations: configured.map((r) => ({
+      harness: r.harness,
+      configPath: r.configPath || "",
+    })),
+  }
+  writeManifest(nextManifest)
+
+  return {
+    results,
+    configuredCount: configured.length,
+    manifest: nextManifest,
+  }
 }
 
 export async function handleUpgrade(argv: string[]): Promise<void> {
@@ -119,17 +159,7 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
         yes: true,
         homeDir,
       }
-      const results = installPreviouslyConfigured(options, manifest)
-      const configuredCount = results.filter((r) => r.configured).length
-      writeManifest({
-        ...manifest,
-        installedAt: new Date().toISOString(),
-        binaryPath: options.binaryPath,
-        integrations: results.filter((r) => r.configured).map((r) => ({
-          harness: r.harness,
-          configPath: r.configPath || "",
-        })),
-      })
+      const { configuredCount } = reapplyInstallManifest(options, manifest)
 
       if (configuredCount === 0) {
         console.log("\nNo previous harness configs were reapplied. Run `memory-lane init` to set up integrations.")
