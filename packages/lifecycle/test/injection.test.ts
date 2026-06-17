@@ -6,6 +6,7 @@ import {
   selectMemoriesForInjection,
   selectBaselineMemories,
   renderMemoryBlock,
+  renderMemoryContext,
   CODEX_MEMORY_INJECTION_LIMITS,
 } from "../src/injection.ts"
 
@@ -88,6 +89,38 @@ test("deduplicates normalized text and skips likely secrets", () => {
 test("renders plain memory block without ids or labels", () => {
   const rendered = renderMemoryBlock([memory("abc123", "This repo uses pnpm")])
   assert.equal(rendered, "## Relevant Memory\n\n- This repo uses pnpm")
+})
+
+ test("renderMemoryContext wraps selected memories in guarded context", () => {
+  const rendered = renderMemoryContext({
+    event: "prompt",
+    memories: [memory("abc123", "This repo uses pnpm")],
+    policy: { mode: "selective", maxItems: { sessionStart: 4, prompt: 6 }, maxChars: { sessionStart: 1600, prompt: 3000 }, includePending: false, fallbackToSearch: true },
+  })
+  assert.match(rendered, /^<memory-context/u)
+  assert.match(rendered, /mode="selective"/u)
+  assert.match(rendered, /- This repo uses pnpm/u)
+  assert.match(rendered, /<\/memory-context>$/u)
+})
+
+test("renderMemoryContext policy-only injects guidance without memory bodies", () => {
+  const rendered = renderMemoryContext({
+    event: "sessionStart",
+    memories: [memory("abc123", "This repo uses pnpm")],
+    policy: { mode: "policy-only", maxItems: { sessionStart: 4, prompt: 6 }, maxChars: { sessionStart: 1600, prompt: 3000 }, includePending: false, fallbackToSearch: true },
+  })
+  assert.match(rendered, /mode="policy-only"/u)
+  assert.match(rendered, /Use Memory Lane recall\/list tools/u)
+  assert.doesNotMatch(rendered, /This repo uses pnpm/u)
+})
+
+test("renderMemoryContext off returns empty context", () => {
+  const rendered = renderMemoryContext({
+    event: "prompt",
+    memories: [memory("abc123", "This repo uses pnpm")],
+    policy: { mode: "off", maxItems: { sessionStart: 4, prompt: 6 }, maxChars: { sessionStart: 1600, prompt: 3000 }, includePending: false, fallbackToSearch: true },
+  })
+  assert.equal(rendered, "")
 })
 
 function memoryWithUpdatedAt(id: string, text: string, updatedAt: string): MemoryRecord {

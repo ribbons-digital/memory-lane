@@ -224,6 +224,49 @@ describe("validateConfig", () => {
     assert.equal(config.memory?.sessionEndSummary?.requireConfirmation, true)
     assert.equal(config.memory?.sessionEndSummary?.includeToolOutputs, false)
     assert.equal(config.memory?.sessionEndSummary?.maxTokens, 800)
+    assert.equal(config.memory?.contextPolicy?.mode, "selective")
+    assert.equal(config.memory?.contextPolicy?.maxItems?.sessionStart, 4)
+    assert.equal(config.memory?.contextPolicy?.maxItems?.prompt, 6)
+    assert.equal(config.memory?.contextPolicy?.maxChars?.sessionStart, 1600)
+    assert.equal(config.memory?.contextPolicy?.maxChars?.prompt, 3000)
+    assert.equal(config.memory?.contextPolicy?.includePending, false)
+    assert.equal(config.memory?.contextPolicy?.fallbackToSearch, true)
+  })
+
+  it("accepts contextPolicy modes and budgets", () => {
+    const config = validateConfig({
+      semantic: {
+        enabled: false,
+        activeEmbeddingProfile: "local-example",
+        embeddings: { profiles: {} },
+        retrieval: { topK: 8, minSimilarity: 0.25, semanticWeight: 0.65, lexicalWeight: 0.25, recencyWeight: 0.1, fallbackToAllVisibleOnMiss: true },
+        privacy: { allowRemoteEmbeddings: false },
+      },
+      memory: {
+        contextPolicy: {
+          mode: "policy-only",
+          maxItems: { sessionStart: 2, prompt: 3 },
+          maxChars: { sessionStart: 400, prompt: 900 },
+          includePending: false,
+          fallbackToSearch: true,
+        },
+      },
+    })
+    assert.equal(config.memory?.contextPolicy?.mode, "policy-only")
+    assert.equal(config.memory?.contextPolicy?.maxItems?.prompt, 3)
+  })
+
+  it("rejects invalid contextPolicy mode", () => {
+    assert.throws(() => validateConfig({
+      semantic: {
+        enabled: false,
+        activeEmbeddingProfile: "local-example",
+        embeddings: { profiles: {} },
+        retrieval: { topK: 8, minSimilarity: 0.25, semanticWeight: 0.65, lexicalWeight: 0.25, recencyWeight: 0.1, fallbackToAllVisibleOnMiss: true },
+        privacy: { allowRemoteEmbeddings: false },
+      },
+      memory: { contextPolicy: { mode: "loud" } },
+    }), /contextPolicy\.mode/)
   })
 
   it("accepts enabled sessionEndSummary config", () => {

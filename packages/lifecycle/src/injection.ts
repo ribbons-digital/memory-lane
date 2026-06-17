@@ -2,6 +2,7 @@ import {
   containsLikelySecret,
   lexicalScore,
   normalizeMemoryText,
+  type MemoryContextPolicyConfig,
   type MemoryRecord,
   type RecallResult,
 } from "@memory-lane/core"
@@ -25,6 +26,21 @@ export const CODEX_BASELINE_INJECTION_LIMITS: MemoryInjectionLimits = {
   targetChars: 1000,
   hardMaxChars: 1600,
   absoluteMaxChars: 2000,
+}
+
+export type MemoryContextEvent = "prompt" | "sessionStart"
+
+export type ResolvedMemoryContextPolicy = Required<MemoryContextPolicyConfig> & {
+  maxItems: { sessionStart: number; prompt: number }
+  maxChars: { sessionStart: number; prompt: number }
+}
+
+export const DEFAULT_CONTEXT_POLICY: ResolvedMemoryContextPolicy = {
+  mode: "selective",
+  maxItems: { sessionStart: 4, prompt: 6 },
+  maxChars: { sessionStart: 1600, prompt: 3000 },
+  includePending: false,
+  fallbackToSearch: true,
 }
 
 const GENERIC_PROMPTS = new Set([
@@ -99,6 +115,34 @@ export function shouldSkipAutomaticInjection(prompt: string): boolean {
 
 function normalizedMemoryKey(text: string): string {
   return normalizeMemoryText(text).toLowerCase().replace(/\s+/gu, " ").trim()
+}
+
+export function resolveContextPolicy(policy?: MemoryContextPolicyConfig): ResolvedMemoryContextPolicy {
+  return {
+    mode: policy?.mode ?? DEFAULT_CONTEXT_POLICY.mode,
+    maxItems: {
+      sessionStart: policy?.maxItems?.sessionStart ?? DEFAULT_CONTEXT_POLICY.maxItems.sessionStart,
+      prompt: policy?.maxItems?.prompt ?? DEFAULT_CONTEXT_POLICY.maxItems.prompt,
+    },
+    maxChars: {
+      sessionStart: policy?.maxChars?.sessionStart ?? DEFAULT_CONTEXT_POLICY.maxChars.sessionStart,
+      prompt: policy?.maxChars?.prompt ?? DEFAULT_CONTEXT_POLICY.maxChars.prompt,
+    },
+    includePending: policy?.includePending ?? DEFAULT_CONTEXT_POLICY.includePending,
+    fallbackToSearch: policy?.fallbackToSearch ?? DEFAULT_CONTEXT_POLICY.fallbackToSearch,
+  }
+}
+
+export function limitsFromContextPolicy(event: MemoryContextEvent, policy?: MemoryContextPolicyConfig, overrides?: Partial<MemoryInjectionLimits>): Partial<MemoryInjectionLimits> {
+  const resolved = resolveContextPolicy(policy)
+  const key = event === "sessionStart" ? "sessionStart" : "prompt"
+  return {
+    maxItems: resolved.maxItems[key],
+    targetChars: resolved.maxChars[key],
+    hardMaxChars: resolved.maxChars[key],
+    absoluteMaxChars: resolved.maxChars[key],
+    ...overrides,
+  }
 }
 
 function capLimits(options?: Partial<MemoryInjectionLimits>): MemoryInjectionLimits {
@@ -202,6 +246,33 @@ export function renderMemoryManagementListGuidance(): string {
 export function renderMemoryBlock(memories: MemoryRecord[]): string {
   if (!memories.length) return ""
   return ["## Relevant Memory", "", ...memories.map((memory) => `- ${memory.text}`)].join("\n")
+}
+
+export function renderMemoryContext(input: { event: MemoryContextEvent; memories: MemoryRecord[]; policy?: MemoryContextPolicyConfig }): string {
+  const policy = resolveContextPolicy(input.policy)
+  if (policy.mode === "off") return ""
+
+  const header = `<memory-context mode="${policy.mode}" event="${input.event}">`
+  const footer = "</memory-context>"
+
+  if (policy.mode === "policy-only") {
+    return [
+      header,
+      "Memory Lane is available, but automatic memory-body injection is disabled by policy.",
+      "Use Memory Lane recall/list tools when durable preferences, project facts, or prior-session context would help.",
+      policy.fallbackToSearch ? "Prefer targeted recall/search before assuming missing context." : undefined,
+      footer,
+    ].filter((line): line is string => Boolean(line)).join("\n")
+  }
+
+  if (!input.memories.length) return ""
+  return [
+    header,
+    "These are selected Memory Lane memories for this turn. They are not an authoritative full memory list.",
+    "",
+    ...input.memories.map((memory) => `- ${memory.text}`),
+    footer,
+  ].join("\n")
 }
 
 function compareBaselineRelevance(a: MemoryRecord, b: MemoryRecord): number {

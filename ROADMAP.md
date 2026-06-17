@@ -372,17 +372,26 @@ Remaining follow-up scope:
 
 ## Phase 14 — Token-Aware Context Policy
 
+**Status:** Slice 1 complete: shared context policy config, guarded context rendering, and policy-only/off/selective lifecycle routing are implemented. Debug/doctor evidence and richer kind prioritization remain follow-up work.
+
 **Goal:** Prevent Memory Lane from polluting or exploding context windows across all harnesses before adding broader automatic learning.
 
 This phase is inspired by pi-hermes-memory's policy-only mode, but Memory Lane's implementation must remain harness-neutral. Core should decide what to inject, how much to inject, and when to fall back to "search memory if needed" guidance; adapters should only translate that shared policy into Codex, Claude Code, pi, Cursor, Hermes, or future harness surfaces.
 
-Todos:
+Completed Slice 1 scope:
 
-1. Add shared `memory.contextPolicy` config with non-breaking defaults, including mode (`off`, `policy-only`, `selective`), per-event budgets, pending-memory inclusion, preferred/deprioritized kinds, and fallback-to-search guidance.
-2. Move SessionStart and prompt-recall selection through one shared token/character-budgeted renderer that emits guarded `<memory-context>` blocks and avoids raw transcript/tool output.
-3. Add a policy-only renderer that injects compact instructions explaining when to use explicit recall/search tools instead of dumping memories into context.
-4. Add debug/doctor evidence for memory context decisions: policy mode, budget, selected count, omitted count/reasons, and harness adapter surface, without logging raw memory text unless explicitly requested by a user command.
-5. Update Codex, Claude Code, pi, MCP docs, and future-adapter guidance so all harnesses use the same policy semantics rather than harness-specific prompt stuffing.
+1. Added shared `memory.contextPolicy` config with non-breaking defaults: `mode: "selective"`, per-event `maxItems`, per-event `maxChars`, `includePending: false`, and `fallbackToSearch: true`.
+2. Added shared lifecycle context rendering that emits guarded `<memory-context>` blocks for selected memory bodies instead of loose `## Relevant Memory` injection.
+3. Added `policy-only` mode, which injects compact guidance to use Memory Lane recall/list tools without including memory bodies.
+4. Added `off` mode, which disables automatic context injection while preserving explicit CLI/MCP tools and save hooks.
+5. Routed Codex, Claude Code, and pi lifecycle prompt/session-start injection through the shared policy layer and updated tests/docs.
+
+Remaining follow-up scope:
+
+1. Add debug/doctor evidence for memory context decisions: policy mode, budget, selected count, omitted count/reasons, and harness adapter surface, without logging raw memory text unless explicitly requested by a user command.
+2. Add kind preference/deprioritization once real usage shows which memory kinds should be favored or suppressed per lifecycle event.
+3. Consider token-estimation rather than character budgets only if character budgets prove insufficient across target harnesses.
+4. Update MCP/future-adapter guidance as new harnesses consume the shared context policy.
 
 ## Phase 15 — Auto-Memory Review and Memory Dashboard
 

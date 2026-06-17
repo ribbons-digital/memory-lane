@@ -50,6 +50,8 @@ For explicit user requests, save as approved. For proactive observations, sugges
 
 For requests to list, show, review, or count current Memory Lane memories, use the authoritative list/status/review surface instead of answering from injected relevant-memory context. Prefer \`memory-lane list --json --project "$PWD"\` for the authoritative current-project list, \`memory-lane review --json --project "$PWD"\` for pending memories, and \`memory-lane status --json --project "$PWD"\` for counts/scope. Check JSON \`meta.projectScope\`; if it is \`none\`, ask for or pass the project path instead of presenting the result as project-scoped.
 
+Automatic context injection is controlled by \`memory.contextPolicy\`: \`selective\` injects bounded selected approved memories inside a guarded \`<memory-context>\` block, \`policy-only\` injects guidance to use Memory Lane tools without memory bodies, and \`off\` disables automatic context injection while preserving explicit CLI/MCP tools and save hooks.
+
 When running inside an MCP client with Memory Lane MCP configured, prefer the MCP tools.
 If MCP is not available, fall back to the CLI commands above.
 The binary is available at: ${binaryPath}

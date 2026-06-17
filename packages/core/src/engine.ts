@@ -25,7 +25,7 @@ import {
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
   MemoryKind, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, ProjectScope,
-  RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig,
+  RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig,
 } from "./types.js"
 
 function displayValue(value: unknown): string {
@@ -117,6 +117,11 @@ export class MemoryEngine {
   /** Current project scope or null if none available. */
   getProjectScope(): ProjectScope | null {
     return this.scope
+  }
+
+  /** Shared context-injection policy loaded from config. */
+  getContextPolicy(): MemoryContextPolicyConfig | undefined {
+    return this.config.memory?.contextPolicy
   }
 
   private syncMirrorAndCollectWarnings(): string[] {

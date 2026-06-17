@@ -134,6 +134,22 @@ export interface ObsidianMirrorConfig {
   mode?: "mirror"
 }
 
+export type MemoryContextPolicyMode = "off" | "policy-only" | "selective"
+
+export interface MemoryContextPolicyConfig {
+  mode?: MemoryContextPolicyMode
+  maxItems?: {
+    sessionStart?: number
+    prompt?: number
+  }
+  maxChars?: {
+    sessionStart?: number
+    prompt?: number
+  }
+  includePending?: boolean
+  fallbackToSearch?: boolean
+}
+
 export interface SessionEndSummaryConfig {
   enabled?: boolean
   provider?: "openai-compatible"
@@ -166,6 +182,7 @@ export interface SemanticMemoryConfig {
   pluginConfig?: Record<string, unknown>
   memory?: {
     sessionEndSummary?: SessionEndSummaryConfig
+    contextPolicy?: MemoryContextPolicyConfig
   }
 }
 

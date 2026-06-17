@@ -207,16 +207,13 @@ test("before_agent_start injects shared lifecycle memory block for relevant appr
 
   const result = await runBeforeAgentStart(pi, { prompt: "How do I verify this repo?" }, ctx)
 
-  assert.deepEqual(result, {
-    message: {
-      customType: "memory-lane",
-      content: "## Relevant Memory\n\n- This repo uses pnpm test for verification",
-      display: false,
-      details: {
-        source: "memory-lane",
-        lifecycleEvent: "user_prompt_submit",
-      },
-    },
+  assert.equal(result?.message.customType, "memory-lane")
+  assert.match(result?.message.content ?? "", /<memory-context mode="selective" event="prompt">/)
+  assert.match(result?.message.content ?? "", /This repo uses pnpm test for verification/u)
+  assert.equal(result?.message.display, false)
+  assert.deepEqual(result?.message.details, {
+    source: "memory-lane",
+    lifecycleEvent: "user_prompt_submit",
   })
   assert.equal(fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8"), before)
 })

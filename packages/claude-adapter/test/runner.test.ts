@@ -130,7 +130,7 @@ test("session-start emits Claude additionalContext output", async () => {
 
   const parsed = JSON.parse(output)
   assert.equal(parsed.hookSpecificOutput.hookEventName, "SessionStart")
-  assert.match(parsed.hookSpecificOutput.additionalContext, /Relevant Memory/)
+  assert.match(parsed.hookSpecificOutput.additionalContext, /<memory-context mode="selective" event="sessionStart">/)
 })
 
 test("user-prompt-submit emits Claude additionalContext output", async () => {
@@ -144,7 +144,7 @@ test("user-prompt-submit emits Claude additionalContext output", async () => {
 
   const parsed = JSON.parse(output)
   assert.equal(parsed.hookSpecificOutput.hookEventName, "UserPromptSubmit")
-  assert.match(parsed.hookSpecificOutput.additionalContext, /Relevant Memory/)
+  assert.match(parsed.hookSpecificOutput.additionalContext, /<memory-context mode="selective" event="prompt">/)
 })
 
 test("stop saves with claude provenance", async () => {

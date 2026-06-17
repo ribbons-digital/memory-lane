@@ -26,6 +26,13 @@ export const DEFAULT_CONFIG: SemanticMemoryConfig = {
       includeToolOutputs: false,
       maxTokens: 800,
     },
+    contextPolicy: {
+      mode: "selective",
+      maxItems: { sessionStart: 4, prompt: 6 },
+      maxChars: { sessionStart: 1600, prompt: 3000 },
+      includePending: false,
+      fallbackToSearch: true,
+    },
   },
 }
 
@@ -57,6 +64,11 @@ function bool(v: unknown, p: string): boolean {
 function num(v: unknown, p: string): number {
   if (typeof v !== "number" || !Number.isFinite(v)) throw new ConfigError(`${p} must be finite number`)
   return v
+}
+function positiveInt(v: unknown, p: string): number {
+  const n = num(v, p)
+  if (!Number.isInteger(n) || n < 0) throw new ConfigError(`${p} must be a non-negative integer`)
+  return n
 }
 function optionalStr(v: unknown, p: string): string | undefined {
   if (v === undefined) return undefined
@@ -119,9 +131,30 @@ export function validateConfig(config: unknown): SemanticMemoryConfig {
   bool(r.fallbackToAllVisibleOnMiss, "semantic.retrieval.fallbackToAllVisibleOnMiss")
   bool(obj(s.privacy, "semantic.privacy").allowRemoteEmbeddings, "semantic.privacy.allowRemoteEmbeddings")
   validateObsidianConfig(root.obsidian)
+  validateContextPolicyConfig((root.memory as Record<string, unknown> | undefined)?.contextPolicy)
   validateSessionEndSummaryConfig((root.memory as Record<string, unknown> | undefined)?.sessionEndSummary)
   validatePluginsConfig(root.plugins, root.pluginConfig)
   return config as SemanticMemoryConfig
+}
+
+function validateContextPolicyConfig(v: unknown): void {
+  if (v === undefined) return
+  const o = obj(v, "memory.contextPolicy")
+  if (o.mode !== undefined && o.mode !== "off" && o.mode !== "policy-only" && o.mode !== "selective") {
+    throw new ConfigError("memory.contextPolicy.mode must be off, policy-only, or selective")
+  }
+  if (o.maxItems !== undefined) {
+    const maxItems = obj(o.maxItems, "memory.contextPolicy.maxItems")
+    if (maxItems.sessionStart !== undefined) positiveInt(maxItems.sessionStart, "memory.contextPolicy.maxItems.sessionStart")
+    if (maxItems.prompt !== undefined) positiveInt(maxItems.prompt, "memory.contextPolicy.maxItems.prompt")
+  }
+  if (o.maxChars !== undefined) {
+    const maxChars = obj(o.maxChars, "memory.contextPolicy.maxChars")
+    if (maxChars.sessionStart !== undefined) positiveInt(maxChars.sessionStart, "memory.contextPolicy.maxChars.sessionStart")
+    if (maxChars.prompt !== undefined) positiveInt(maxChars.prompt, "memory.contextPolicy.maxChars.prompt")
+  }
+  if (o.includePending !== undefined) bool(o.includePending, "memory.contextPolicy.includePending")
+  if (o.fallbackToSearch !== undefined) bool(o.fallbackToSearch, "memory.contextPolicy.fallbackToSearch")
 }
 
 function validateSessionEndSummaryConfig(v: unknown): void {

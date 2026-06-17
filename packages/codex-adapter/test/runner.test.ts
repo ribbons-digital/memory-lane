@@ -144,7 +144,7 @@ test("user-prompt-submit emits additionalContext", async () => {
   })
   const parsed = JSON.parse(output)
   assert.equal(parsed.hookSpecificOutput.hookEventName, "UserPromptSubmit")
-  assert.match(parsed.hookSpecificOutput.additionalContext, /Relevant Memory/)
+  assert.match(parsed.hookSpecificOutput.additionalContext, /<memory-context mode="selective" event="prompt">/)
 })
 
 test("invalid JSON returns no-op", async () => {
@@ -600,5 +600,5 @@ test("session-start emits baseline additionalContext", async () => {
   })
   const parsed = JSON.parse(output)
   assert.equal(parsed.hookSpecificOutput.hookEventName, "SessionStart")
-  assert.match(parsed.hookSpecificOutput.additionalContext, /Relevant Memory/)
+  assert.match(parsed.hookSpecificOutput.additionalContext, /<memory-context mode="selective" event="sessionStart">/)
 })

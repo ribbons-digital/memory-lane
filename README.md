@@ -690,6 +690,30 @@ Automatic writes skip secrets, transient imperatives, reviewer/subagent meta-pro
 
 For session summaries, use `/memory session-summary` in pi. The command reads the current conversation branch through pi's session manager, asks for interactive confirmation, sends the compact transcript to the configured `memory.sessionEndSummary` provider, and saves any result as a pending `session_summary` memory with pi `session_end` provenance. Memory Lane does not automatically summarize pi sessions on `agent_end`, `session_shutdown`, or compaction.
 
+### Context policy
+
+Lifecycle hooks use `memory.contextPolicy` to decide how much context to inject. Defaults preserve existing behavior with bounded selected memory blocks:
+
+```json
+{
+  "memory": {
+    "contextPolicy": {
+      "mode": "selective",
+      "maxItems": { "sessionStart": 4, "prompt": 6 },
+      "maxChars": { "sessionStart": 1600, "prompt": 3000 },
+      "includePending": false,
+      "fallbackToSearch": true
+    }
+  }
+}
+```
+
+Modes:
+
+- `selective` injects selected approved memories inside a guarded `<memory-context>` block.
+- `policy-only` injects compact guidance telling the agent to use Memory Lane recall/list tools when needed, without including memory bodies.
+- `off` disables automatic context injection while leaving explicit CLI/MCP tools and automatic save hooks unchanged.
+
 ### Claude Code hooks
 
 Claude Code CLI users can wire Memory Lane into lifecycle hooks:

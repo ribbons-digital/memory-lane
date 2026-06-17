@@ -1,5 +1,5 @@
 import type { MemoryEngine, MemoryProvenance, MemorySource, SaveResult } from "@memory-lane/core"
-import { isMemoryManagementListIntent, renderMemoryBlock, renderMemoryManagementListGuidance, selectBaselineMemories, selectMemoriesForInjection, type MemoryInjectionLimits } from "./injection.js"
+import { isMemoryManagementListIntent, limitsFromContextPolicy, renderMemoryContext, renderMemoryManagementListGuidance, resolveContextPolicy, selectBaselineMemories, selectMemoriesForInjection, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
 import { summarizeToolOutcome } from "./tool-outcomes.js"
 import type { LifecycleResult, MemoryCandidate, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
@@ -68,9 +68,12 @@ export async function handleUserPromptSubmit(
 ): Promise<LifecycleResult> {
   engine.refreshScope(input.cwd)
   if (isMemoryManagementListIntent(input.prompt)) return createResult(renderMemoryManagementListGuidance())
+  const policy = resolveContextPolicy(engine.getContextPolicy())
+  if (policy.mode === "off") return createResult()
+  if (policy.mode === "policy-only") return createResult(renderMemoryContext({ event: "prompt", memories: [], policy }))
   const recalled = await engine.recall(input.prompt)
-  const selected = selectMemoriesForInjection(input.prompt, recalled, options)
-  const rendered = renderMemoryBlock(selected)
+  const selected = selectMemoriesForInjection(input.prompt, recalled, limitsFromContextPolicy("prompt", policy, options))
+  const rendered = renderMemoryContext({ event: "prompt", memories: selected, policy })
   return createResult(rendered || undefined)
 }
 
@@ -80,9 +83,12 @@ export function handleSessionStart(
   options?: Partial<MemoryInjectionLimits>,
 ): LifecycleResult {
   engine.refreshScope(input.cwd)
+  const policy = resolveContextPolicy(engine.getContextPolicy())
+  if (policy.mode === "off") return createResult()
+  if (policy.mode === "policy-only") return createResult(renderMemoryContext({ event: "sessionStart", memories: [], policy }))
   const approved = engine.list({ status: "approved" })
-  const selected = selectBaselineMemories(approved, options)
-  const rendered = renderMemoryBlock(selected)
+  const selected = selectBaselineMemories(approved, limitsFromContextPolicy("sessionStart", policy, options))
+  const rendered = renderMemoryContext({ event: "sessionStart", memories: selected, policy })
   return createResult(rendered || undefined)
 }
 
