@@ -12,14 +12,20 @@ This roadmap now centers on a continuity-first sequence:
 
 Earlier Obsidian, pi, MCP, installer, and plugin phases remain part of the roadmap history below, but new implementation should prioritize this continuity order unless the user explicitly chooses a different maintenance slice.
 
-## Product North Star — Seamless Continuity Without Silent Autonomy
+## Product North Star — Cross-Agent Continuity Without Silent Autonomy
 
-Memory Lane's future roadmap and implementation design should center on cross-session and cross-harness continuity:
+Memory Lane's future roadmap and implementation design should center on becoming local-first, review-governed continuity infrastructure for AI coding agents: a shared project memory/index across Claude Code, Codex, Cursor-style clients, pi, MCP clients, and future harnesses.
+
+The product goal is not another isolated chat-history search box. Memory Lane should make project state, durable preferences, decisions, checkpoints, failures, corrections, and procedures available across sessions and tools without relying on any single vendor's built-in thread memory.
+
+Design implications:
 
 - If the same project is open in multiple sessions or harnesses, important progress from one session should be available to the others without the user manually restating it.
 - Durable personal preferences should be consistently available across projects and harnesses so workflows stay streamlined and predictable.
+- Project continuity should be an intentional index, not a transcript dump: store and surface compact, useful state rather than raw conversations by default.
 - The system should remain non-autonomous and low-noise: prefer bounded context injection, freshness checks, and implicit reminders to add/update memories over silent broad autosave.
-- New learning features should be review-first by default. They may suggest memories, flag stale continuity, or ask whether to save release/progress events, but should not silently rewrite the user's memory base.
+- New learning features should be review-first by default. They may suggest memories, flag stale continuity, or ask whether to save release/progress/failure/correction/procedure events, but should not silently rewrite the user's memory base.
+- Good defaults and minimal setup matter for first-time users; optional configuration should exist for teams and advanced workflows without making the default path heavy.
 - Token-aware context policy and review hygiene are prerequisites for broader continuity features because seamlessness must not become context pollution.
 
 Each phase lists a focused implementation slice of no more than five todos. If a phase needs more work, add the next slice only after the current slice is complete, keeping the todo order aligned with implementation dependencies.
