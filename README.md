@@ -405,6 +405,9 @@ memory-lane approve <id>          Approve a pending memory
 memory-lane reject <id>           Reject a memory
 memory-lane delete <id>           Soft-delete a memory
 memory-lane review                Show pending memories
+memory-lane review --kind session_summary Filter pending review by memory kind
+memory-lane review --source session-summary Filter pending review by source
+memory-lane review --provenance pi/session_end Filter pending review by adapter/event provenance
 memory-lane review --suspect-meta Show likely old pending operational prompt pollution only
 memory-lane review --suspect-meta --include-approved Show pending+approved suspect pollution
 memory-lane dashboard [--all]     Compact continuity/review overview without long memory bodies
@@ -448,6 +451,8 @@ Run it manually with explicit confirmation:
 echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant","content":"Done."}]}' \
   | memory-lane session-end --confirm
 memory-lane review
+memory-lane review --kind session_summary --source session-summary  # inspect pending session summaries only
+memory-lane review --provenance pi/session_end  # inspect candidates from a specific adapter/event
 memory-lane review --suspect-meta  # optional: find old pending delegated-task/finalization prompt pollution
 memory-lane review --suspect-meta --include-approved  # include approved suspects that may affect recall
 memory-lane approve <id>
