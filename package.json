@@ -6,7 +6,8 @@
     "test": "pnpm -r test",
     "test:core": "pnpm --filter @memory-lane/core test",
     "test:cli": "pnpm --filter @memory-lane/cli test",
-    "build:binary": "bun scripts/build-binaries.ts --current"
+    "build:binary": "bun scripts/build-binaries.ts --current",
+    "smoke:binary": "bun scripts/smoke-binary.ts"
   },
   "engines": {
     "node": ">=18"

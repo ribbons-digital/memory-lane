@@ -725,6 +725,11 @@ async function main(): Promise<void> {
   const command = argv[0]?.toLowerCase()
   const json = hasFlag(argv, "json")
 
+  if (command === "--smoke-test") {
+    console.log("memory-lane ok")
+    process.exit(0)
+  }
+
   if (!command || command === "help" || hasFlag(argv, "help") || hasFlag(argv, "h")) {
     console.log(usage())
     printInitPrompt(json)

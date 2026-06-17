@@ -41,6 +41,9 @@ jobs:
       - name: Build binaries
         run: bun scripts/build-binaries.ts
 
+      - name: Smoke test current-platform binary
+        run: bun scripts/smoke-binary.ts
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:

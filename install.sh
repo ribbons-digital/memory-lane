@@ -16,6 +16,35 @@ VERSION="${VERSION:-latest}"
   exit 1
 }
 
+ restore_backup() {
+  if [ -n "$backup_path" ] && [ -f "$backup_path" ]; then
+    mv "$backup_path" "$install_path"
+    say "restored previous binary"
+  elif [ -n "$install_path" ]; then
+    rm -f "$install_path"
+  fi
+}
+
+ verify_installed_binary() {
+  if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
+    if command -v xattr >/dev/null 2>&1; then
+      xattr -d com.apple.quarantine "$install_path" 2>/dev/null || true
+    fi
+    if command -v codesign >/dev/null 2>&1; then
+      codesign --force --sign - "$install_path" >/dev/null 2>&1 || true
+    fi
+  fi
+
+  if ! "$install_path" --smoke-test >/dev/null 2>&1; then
+    restore_backup
+    err "installed binary failed smoke test; previous installation was restored"
+  fi
+
+  if [ -n "$backup_path" ] && [ -f "$backup_path" ]; then
+    rm -f "$backup_path"
+  fi
+}
+
  get_arch() {
   arch=$(uname -m)
   case "$arch" in
@@ -49,14 +78,20 @@ VERSION="${VERSION:-latest}"
 }
 
  main() {
+  backup_path=""
   if [ -n "$MEMORY_LANE_INSTALL_BINARY" ]; then
     say "using local binary from MEMORY_LANE_INSTALL_BINARY"
     binary_path="$MEMORY_LANE_INSTALL_BINARY"
     install_dir="${INSTALL_DIR:-$HOME/.local/bin}"
     install_path="$install_dir/memory-lane"
     mkdir -p "$install_dir"
+    if [ -f "$install_path" ]; then
+      backup_path="$install_path.backup.$$"
+      cp "$install_path" "$backup_path"
+    fi
     cp "$binary_path" "$install_path"
     chmod +x "$install_path"
+    verify_installed_binary
   else
     os=$(get_os)
     arch=$(get_arch)
@@ -91,8 +126,13 @@ VERSION="${VERSION:-latest}"
     install_path="$install_dir/memory-lane"
 
     mkdir -p "$install_dir"
+    if [ -f "$install_path" ]; then
+      backup_path="$install_path.backup.$$"
+      cp "$install_path" "$backup_path"
+    fi
     cp "$tmpdir/memory-lane-${suffix}" "$install_path"
     chmod +x "$install_path"
+    verify_installed_binary
   fi
 
   case ":${PATH}:" in
