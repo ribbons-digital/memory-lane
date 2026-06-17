@@ -72,7 +72,7 @@ export interface DashboardSummary {
     suspectMeta: number
   }
   recent: {
-    sessionSummaries: Array<{ id: string; createdAt: string; preview: string }>
+    sessionSummaries: Array<{ id: string; createdAt: string; status: MemoryRecord["status"]; provenance: string; preview: string }>
   }
   suggestedActions: string[]
 }
@@ -85,6 +85,24 @@ function latestByCreatedAt(memories: MemoryRecord[], limit: number): MemoryRecor
   return [...memories]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, limit)
+}
+
+function provenanceLabel(memory: MemoryRecord): string {
+  if (!memory.provenance) return "none"
+  return `${memory.provenance.adapter}/${memory.provenance.lifecycleEvent}`
+}
+
+function sessionSummaryPreview(text: string, max = 180): string {
+  const cleaned = text
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line && !/^#+\s*Session Summary(?:\s*\([^)]*\))?\s*$/iu.test(line))
+    .map((line) => line
+      .replace(/^[-*]\s+/u, "")
+      .replace(/^\*\*(?:Decisions made|Next step|Verification|Summary)\*\*\s*:?[\s-]*/iu, "")
+      .replace(/\*\*/gu, ""))
+    .join(" ")
+  return compactPreview(cleaned || text, max)
 }
 
 export function buildDashboardSummary(memories: MemoryRecord[], projectScope = "none"): DashboardSummary {
@@ -116,7 +134,9 @@ export function buildDashboardSummary(memories: MemoryRecord[], projectScope = "
       sessionSummaries: latestByCreatedAt(sessionSummaries, 3).map((memory) => ({
         id: memory.id,
         createdAt: memory.createdAt,
-        preview: compactPreview(memory.text, 56),
+        status: memory.status,
+        provenance: provenanceLabel(memory),
+        preview: sessionSummaryPreview(memory.text),
       })),
     },
     suggestedActions,
@@ -157,7 +177,10 @@ export function formatDashboard(memories: MemoryRecord[], json: boolean, extraMe
   if (summary.recent.sessionSummaries.length) {
     lines.push(
       "Recent session summaries:",
-      ...summary.recent.sessionSummaries.map((memory) => `  ${figures.bullet} [${memory.id}] ${memory.preview}`),
+      ...summary.recent.sessionSummaries.flatMap((memory) => [
+        `  ${figures.bullet} [${memory.id}] ${memory.status} · ${memory.provenance}`,
+        `    ${memory.preview}`,
+      ]),
     )
   }
   lines.push(

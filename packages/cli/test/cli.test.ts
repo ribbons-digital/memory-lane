@@ -440,12 +440,25 @@ describe("CLI integration", () => {
       MEMORY_LANE_EMBEDDINGS_FILE: embFile,
       MEMORY_LANE_CONFIG: cfgFile,
     }
-    const longSummary = "Session summary: released v1.2.3 and completed docs sync. This very long trailing detail should not be dumped in full by dashboard JSON output."
+    const longSummary = [
+      "## Session Summary (2026-06-16)",
+      "- **Decisions made** Phase 13 session-summary work landed in slices; Codex has no real SessionEnd hook, so automation moved to Stop plus explicit intent.",
+      "- **Verification** pnpm test and pnpm build passed.",
+      "Hidden private tail that should not be dumped in full by dashboard JSON output.",
+    ].join("\n")
     const engine = new MemoryEngine({ memoryPath: memFile, embeddingsPath: embFile, configPath: cfgFile })
     engine.save({ text: "Global preference", category: "preference", scopeType: "global", status: "approved", kind: "preference" })
     engine.refreshScope(project)
     engine.save({ text: "Project checkpoint", category: "project", scopeType: "project", status: "approved", kind: "project_checkpoint" })
-    engine.save({ text: longSummary, category: "project", scopeType: "project", status: "pending", source: "session-summary", kind: "session_summary" })
+    engine.save({
+      text: longSummary,
+      category: "project",
+      scopeType: "project",
+      status: "pending",
+      source: "session-summary",
+      kind: "session_summary",
+      provenance: { adapter: "pi", lifecycleEvent: "session_end" },
+    })
     engine.save({ text: "Task: ## Acceptance Finalization\nYou are continuing the same subagent session.", category: "project", scopeType: "project", status: "pending", source: "user-suggested", kind: "project_fact" })
 
     const result = runProcess(["dashboard", "--json"], { env, cwd: project })
@@ -463,9 +476,52 @@ describe("CLI integration", () => {
     assert.equal(payload.data.review.sessionSummaries, 1)
     assert.equal(payload.data.review.suspectMeta, 1)
     assert.equal(payload.data.recent.sessionSummaries.length, 1)
-    assert.match(payload.data.recent.sessionSummaries[0].preview, /released v1\.2\.3/u)
-    assert.doesNotMatch(JSON.stringify(payload), /This very long trailing detail/u)
+    assert.equal(payload.data.recent.sessionSummaries[0].status, "pending")
+    assert.equal(payload.data.recent.sessionSummaries[0].provenance, "pi/session_end")
+    assert.match(payload.data.recent.sessionSummaries[0].preview, /Phase 13 session-summary work landed in slices/u)
+    assert.match(payload.data.recent.sessionSummaries[0].preview, /Codex has no real SessionEnd hook/u)
+    assert.doesNotMatch(payload.data.recent.sessionSummaries[0].preview, /## Session Summary/u)
+    assert.doesNotMatch(JSON.stringify(payload), /Hidden private tail/u)
     assert.ok(payload.data.suggestedActions.includes("memory-lane review"))
+  })
+
+  it("dashboard human output gives session-summary previews enough context without full dumps", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "dashboard-summary-project" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+    const summary = [
+      "## Session Summary (2026-06-16)",
+      "- **Decisions made** Phase 13 session-summary work landed in slices; Codex has no real SessionEnd hook, so automation moved to Stop plus explicit intent.",
+      "- **Next step** Review pending session summaries before freshness automation.",
+      "Hidden private tail that should not be dumped in dashboard human output.",
+    ].join("\n")
+    const engine = new MemoryEngine({ memoryPath: memFile, embeddingsPath: embFile, configPath: cfgFile })
+    engine.refreshScope(project)
+    engine.save({
+      text: summary,
+      category: "project",
+      scopeType: "project",
+      status: "pending",
+      source: "session-summary",
+      kind: "session_summary",
+      provenance: { adapter: "pi", lifecycleEvent: "session_end" },
+    })
+
+    const result = runProcess(["dashboard"], { env, cwd: project })
+    assert.equal(result.status, 0, result.stderr)
+    const output = result.stdout
+
+    assert.match(output, /Recent session summaries:/u)
+    assert.match(output, /\[.+\] pending · pi\/session_end/u)
+    assert.match(output, /Phase 13 session-summary work landed in slices/u)
+    assert.match(output, /Codex has no real SessionEnd hook/u)
+    assert.doesNotMatch(output, /## Session Summary/u)
+    assert.doesNotMatch(output, /Hidden private tail/u)
   })
 
   it("dashboard human output is compact and friendly", () => {
