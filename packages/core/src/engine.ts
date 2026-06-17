@@ -17,6 +17,7 @@ import { retrieveSemanticMemories } from "./retrieval.js"
 import { compact as compactStores, shouldCompact } from "./compact.js"
 import { diagnoseIntegrations, type IntegrationDiagnosticPaths } from "./integration-diagnostics.js"
 import { validateSaveInput } from "./storage-validation.js"
+import { isMetaTaskPromptText } from "./meta-task-filter.js"
 import {
   contentHash, createNewMemory, saveContext, shouldAutoEmbed, timestamp, visibleInScope,
   type SaveContext,
@@ -186,7 +187,9 @@ export class MemoryEngine {
 
   /** Queue a memory suggestion. Defaults to pending, but can auto-approve for explicit user requests. */
   suggest(text: string, category?: MemoryCategory, scopeType?: MemoryScopeType, kind?: MemoryKind, status?: MemoryStatus): SaveResult {
-    return this.save({ text, category, scopeType, source: "user-suggested", status: status ?? "pending", kind })
+    const nextStatus = status ?? "pending"
+    if (nextStatus === "pending" && isMetaTaskPromptText(text)) return { status: "skipped", reason: "meta task prompt" }
+    return this.save({ text, category, scopeType, source: "user-suggested", status: nextStatus, kind })
   }
 
   /** Approve a pending memory by id. Returns the updated memory plus mirror warnings, or undefined. */

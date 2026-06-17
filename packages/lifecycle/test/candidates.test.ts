@@ -89,6 +89,31 @@ test("standalone subagent status instructions produce no candidates", () => {
   assert.deepEqual(candidates, [])
 })
 
+test("delegated subagent task wrapper prompts produce no candidates", () => {
+  const candidates = extractStopCandidates({
+    cwd: process.cwd(),
+    lastUserMessage: `Task: You are a delegated subagent running from a fork of the parent session. Treat the inherited conversation as reference-only context, not a live thread to continue.
+
+Task:
+Implement Task 2 of the Codex SessionStart baseline injection plan in worktree /tmp/example.`,
+    lastAssistantMessage: "I'll implement the task.",
+  })
+
+  assert.deepEqual(candidates, [])
+})
+
+test("acceptance finalization prompts produce no candidates", () => {
+  const candidates = extractStopCandidates({
+    cwd: process.cwd(),
+    lastUserMessage: `Task: ## Acceptance Finalization
+You are continuing the same subagent session. Before this run can be accepted, compare the current work to the acceptance contract and the evidence below.
+This is finalization turn 1 of 2.`,
+    lastAssistantMessage: "Acceptance criteria satisfied.",
+  })
+
+  assert.deepEqual(candidates, [])
+})
+
 test("explicit memory requests about reviewer behavior are preserved", () => {
   const candidates = extractStopCandidates({
     cwd: process.cwd(),

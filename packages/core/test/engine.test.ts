@@ -443,6 +443,28 @@ describe("MemoryEngine", () => {
     }
   })
 
+  it("suggest skips delegated subagent task wrapper prompts", () => {
+    const e = engine()
+    const r = e.suggest(`Task: You are a delegated subagent running from a fork of the parent session. Treat the inherited conversation as reference-only context, not a live thread to continue.
+
+Task:
+Implement Task 2 of the Codex SessionStart baseline injection plan.`, "project", "project")
+
+    assert.equal(r.status, "skipped")
+    if (r.status === "skipped") assert.match(r.reason, /meta task prompt/u)
+    assert.equal(e.reviewPending().length, 0)
+  })
+
+  it("suggest skips acceptance finalization prompts", () => {
+    const e = engine()
+    const r = e.suggest(`Task: ## Acceptance Finalization
+You are continuing the same subagent session. Before this run can be accepted, compare the current work to the acceptance contract and the evidence below.`, "project", "project")
+
+    assert.equal(r.status, "skipped")
+    if (r.status === "skipped") assert.match(r.reason, /meta task prompt/u)
+    assert.equal(e.reviewPending().length, 0)
+  })
+
   it("doctor returns stats", () => {
     const e = engine()
     e.save({ text: "approved text", status: "approved" })
