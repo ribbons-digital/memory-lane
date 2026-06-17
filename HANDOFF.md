@@ -11,6 +11,7 @@
 - Slice 3 commit `24baa90` exposes active context policy config through `MemoryEngine.doctor()`, CLI `memory-lane doctor`, CLI `memory-lane status --json`, and MCP `memory_status`, with readable CLI human output and memory-text-free tests.
 - Full verification for Slice 3 passed with `pnpm test && pnpm build`.
 - Phase 15 Review Hygiene Slice 1 is implemented and verified locally: `memory-lane review --suspect-meta` lists likely old delegated-subagent/task-wrapper and acceptance-finalization prompt pollution without auto-deleting anything, `--include-approved` also surfaces approved suspect pollution that may affect recall/context injection, and human output is compact/actionable instead of dumping full memory bodies. It reuses the existing meta-task classifier and keeps cleanup review-first.
+- Phase 15 dashboard slice is in progress on branch `phase15-dashboard-cli-ui`: adds `memory-lane dashboard`, `memory-lane dashboard --json`, and `--all`; uses `ansis`, `boxen`, `cli-table3`, and `figures` only for friendly read-only CLI output; keeps long memory bodies out of dashboard output.
 - Production installer shipped: `install.sh` / `install.ps1` download a prebuilt Bun-compiled binary from GitHub Releases, place it on PATH, and prompt the user to run `memory-lane init`.
 - `memory-lane init` is an interactive wizard that detects and configures Claude Code CLI, Codex CLI, Claude Desktop, Codex Desktop, and pi.
 - `memory-lane init --yes` auto-configures all detected harnesses non-interactively.
@@ -46,7 +47,7 @@ Verification for the hardening work passed with `pnpm test && pnpm build` before
 
 Phase 14 Slice 3 is implemented, verified, and committed as `24baa90 Expose context policy in doctor status`.
 
-Phase 15 noise-reduction follow-up is complete: suspect-review output is compact/actionable, pi `input` autosave is explicit-memory-request only, historical JSONL rows are more robust, and `doctor` now surfaces skipped-row diagnostics.
+Phase 15 noise-reduction follow-up is complete: suspect-review output is compact/actionable, pi `input` autosave is explicit-memory-request only, historical JSONL rows are more robust, and `doctor` now surfaces skipped-row diagnostics. Phase 15 dashboard slice is now the active branch: `phase15-dashboard-cli-ui`.
 
 Future roadmap/design center: seamless continuity without silent autonomy. The logical implementation order is now documented in `ROADMAP.md`: review/dashboard controls first, then read-only freshness/status detection, then review-first progress/checkpoint capture, then global preference layering, then harness-neutral learning, then staleness/consolidation, and finally handoff-free sessions. Favor features that let a session discover newer approved project progress from other sessions/harnesses, consistently apply global personal preferences, and prompt/suggest reviewable memory updates when important continuity events happen. Avoid broad silent background writes until review/dashboard, token policy, freshness, checkpoint, preference, and staleness controls are strong enough.
 
@@ -366,7 +367,7 @@ External comparison references discussed:
 ## Suggested next steps
 
 1. Commit this docs-only roadmap reorder after verification.
-2. Next implementation slice should be Phase 15 dashboard/review controls if the user wants to keep building toward continuity. Keep it user-visible: compact dashboard, inspect pending continuity candidates, safe bulk review actions, and docs for healthy review queues.
+2. Next Phase 15 follow-up after this dashboard PR should be review controls for pending session summaries/continuity candidates by source/kind/provenance, plus safe bulk actions with dry-run/confirmation semantics.
 3. After Phase 15 controls are good enough, implement Phase 16 read-only freshness/status detection so a session can notice newer approved project progress from another session/harness without injecting large memory bodies or saving anything.
 4. Then Phase 17 should add review-first progress/checkpoint capture for releases, merges, verification, and roadmap decisions. Only after those foundations should Phase 18 preference layering and Phase 19 learning enhancements begin.
 5. Keep future learning enhancements harness-neutral. Core/lifecycle should own selection, token budgeting, correction/failure/procedure candidate extraction, and consolidation proposals; adapters for pi, Codex, Claude Code, Cursor, Hermes, etc. should only supply bounded lifecycle evidence and render shared outputs.

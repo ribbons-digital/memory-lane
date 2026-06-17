@@ -19,7 +19,7 @@ import type { SemanticMemoryConfig } from "@memory-lane/core"
 import { resolveBundledPlugin } from "./plugins.js"
 import {
   formatMemories, formatReviewMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
-  formatCompact, formatDoctor, formatImportPlan, formatError, usage,
+  formatCompact, formatDashboard, formatDoctor, formatImportPlan, formatError, usage,
   type ObsidianImportApplyResult,
 } from "./formatters.js"
 
@@ -245,6 +245,12 @@ function handleReview(ctx: CliContext): void {
     : ctx.engine.reviewPending()
   const memories = reviewMemories.filter((memory) => !suspectMeta || isMetaTaskPromptText(memory.text))
   console.log(formatReviewMemories(memories, ctx.json, { suspectMeta, includeApproved, projectScope: ctx.engine.getProjectScope()?.key ?? "none" }))
+}
+
+function handleDashboard(ctx: CliContext): void {
+  const allScope = hasFlag(ctx.argv, "all")
+  const memories = ctx.engine.list({ all: allScope })
+  console.log(formatDashboard(memories, ctx.json, { all: allScope, projectScope: ctx.engine.getProjectScope()?.key ?? "none" }))
 }
 
 function handleCompact(ctx: CliContext): void {
@@ -703,6 +709,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   approve: handleApprove,
   reject: handleReject,
   review: handleReview,
+  dashboard: handleDashboard,
   compact: handleCompact,
   doctor: handleDoctor,
   status: handleStatus,

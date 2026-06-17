@@ -405,6 +405,7 @@ memory-lane delete <id>           Soft-delete a memory
 memory-lane review                Show pending memories
 memory-lane review --suspect-meta Show likely old pending operational prompt pollution only
 memory-lane review --suspect-meta --include-approved Show pending+approved suspect pollution
+memory-lane dashboard [--all]     Compact continuity/review overview without long memory bodies
 memory-lane compact               Remove deleted/rejected tombstones
 memory-lane doctor                Diagnostic report
 memory-lane status                Quick stats
