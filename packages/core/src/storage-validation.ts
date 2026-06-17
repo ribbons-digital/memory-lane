@@ -107,11 +107,30 @@ export function validateSaveInput(input: SaveInput): void {
   }
 }
 
+function normalizeScope(value: Record<string, unknown>): MemoryRecord["scope"] | undefined {
+  if (value.scope !== undefined) return hasValidScope(value) ? value.scope as MemoryRecord["scope"] : undefined
+  const project = value.project
+  if (isPlainObject(project) && typeof project.key === "string" && project.key.length > 0) {
+    return { type: "project", key: project.key }
+  }
+  return { type: "global" }
+}
+
+function normalizeSource(value: Record<string, unknown>): MemorySource | undefined {
+  if (value.source === undefined) return "manual"
+  return isEnumValue(value.source, VALID_SOURCES) ? value.source : undefined
+}
+
+export function normalizeMemoryRecord(value: unknown): MemoryRecord | undefined {
+  if (!isPlainObject(value)) return undefined
+  if (!hasValidRequiredFields({ ...value, source: normalizeSource(value) })) return undefined
+  const source = normalizeSource(value)
+  const scope = normalizeScope(value)
+  if (source === undefined || scope === undefined) return undefined
+  if (!hasValidProject(value) || !hasValidKind(value) || !hasValidProvenance(value)) return undefined
+  return { ...value, source, scope } as MemoryRecord
+}
+
 export function isMemoryRecord(value: unknown): value is MemoryRecord {
-  return isPlainObject(value)
-    && hasValidRequiredFields(value)
-    && hasValidScope(value)
-    && hasValidProject(value)
-    && hasValidKind(value)
-    && hasValidProvenance(value)
+  return normalizeMemoryRecord(value) !== undefined
 }

@@ -63,6 +63,26 @@ describe("MemoryStore", () => {
     assert.equal(memories[0].provenance, undefined)
   })
 
+  it("normalizes historical records that predate source and scope fields", () => {
+    const legacyRecord = {
+      id: "legacy1",
+      status: "pending",
+      text: "Historical pending memory",
+      category: "project",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    }
+    fs.writeFileSync(file, JSON.stringify(legacyRecord) + "\n", "utf8")
+
+    const memories = createMemoryStore(file).list()
+
+    assert.equal(memories.length, 1)
+    assert.equal(memories[0].id, "legacy1")
+    assert.equal(memories[0].source, "manual")
+    assert.deepEqual(memories[0].scope, { type: "global" })
+    assert.equal(memories[0].kind, undefined)
+  })
+
   it("storage rejects malformed provenance when present", () => {
     const record = {
       ...rec({ text: "Bad provenance" }),

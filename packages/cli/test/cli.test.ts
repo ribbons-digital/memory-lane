@@ -274,6 +274,31 @@ describe("CLI integration", () => {
     assert.equal(payload.data.memories[0].id, "oldmeta2")
   })
 
+  it("review --suspect-meta JSON includes historical records missing newer source and scope fields", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const historicalPollution = {
+      id: "oldmeta-json",
+      text: "Task: ## Acceptance Finalization\nYou are continuing the same subagent session.",
+      category: "project",
+      status: "pending",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    }
+    fs.writeFileSync(memFile, JSON.stringify(historicalPollution) + "\n", "utf8")
+
+    const payload = JSON.parse(run(["review", "--suspect-meta", "--json"], env))
+
+    assert.equal(payload.ok, true)
+    assert.equal(payload.meta.count, 1)
+    assert.equal(payload.data.memories[0].id, "oldmeta-json")
+    assert.equal(payload.data.memories[0].source, "manual")
+    assert.deepEqual(payload.data.memories[0].scope, { type: "global" })
+  })
+
   it("review --suspect-meta excludes approved suspects by default", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,

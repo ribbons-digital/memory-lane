@@ -2,7 +2,7 @@ import * as crypto from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { MemoryRecord } from "./types.js"
-import { isMemoryRecord } from "./storage-validation.js"
+import { normalizeMemoryRecord } from "./storage-validation.js"
 
 export function createMemoryId(): string {
   return crypto.randomBytes(4).toString("hex")
@@ -29,7 +29,7 @@ export function createMemoryStore(filePath: string): MemoryStore {
     if (!line.trim()) return undefined
     try {
       const parsed = JSON.parse(line)
-      return isMemoryRecord(parsed) ? parsed : undefined
+      return normalizeMemoryRecord(parsed)
     } catch {
       return undefined
     }
