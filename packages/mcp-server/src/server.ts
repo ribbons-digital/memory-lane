@@ -37,9 +37,12 @@ const kindSchema = z.enum([
   "project_checkpoint",
   "workflow_rule",
   "decision",
+  "session_summary",
   "misc",
 ])
 
+const sourceSchema = z.enum(["manual", "user-suggested", "agent-suggested", "session-summary"])
+const provenanceSchema = z.string().min(1).describe("Optional adapter/event filter such as pi/session_end, claude/session_end, codex/session_end, or none")
 const projectPath = z.string().optional().describe("Optional directory to use for project-scoped Memory Lane operations")
 const memoryId = z.string().min(1).describe("Memory Lane memory id")
 
@@ -128,8 +131,11 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
     "memory_review",
     {
       title: "Review Pending Memories",
-      description: "List pending Memory Lane memories for review. Pass projectPath for current-project review context; omit it only for global/cross-project review.",
+      description: "List pending Memory Lane memories for review. Pass projectPath for current-project review context; omit it only for global/cross-project review. Use kind/source/provenance filters to inspect session summaries or other continuity candidates.",
       inputSchema: {
+        kind: kindSchema.optional(),
+        source: sourceSchema.optional(),
+        provenance: provenanceSchema.optional(),
         projectPath,
       },
     },
