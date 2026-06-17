@@ -123,6 +123,32 @@ test("memory_review returns pending memories", async () => {
   assert.equal(result.data.memories[0].status, "pending")
 })
 
+test("memory_review includes grouped project source kind and provenance metadata", async () => {
+  const projectA = tempDir()
+  fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "review-project-a" }))
+  const engine = engineInTemp(projectA)
+  engine.suggest("Pending preference", "preference", "global", "preference")
+  engine.save({
+    text: "Pending session summary",
+    status: "pending",
+    category: "project",
+    scopeType: "project",
+    source: "session-summary",
+    kind: "session_summary",
+    provenance: { adapter: "pi", lifecycleEvent: "session_end" },
+  })
+
+  const result = parseToolResult(await handleMemoryReview(engine, {}))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.memories.length, 2)
+  assert.equal(result.data.groups.length, 2)
+  assert.deepEqual(result.data.groups.map((g: any) => ({ projectScope: g.projectScope, source: g.source, kind: g.kind, adapter: g.adapter, lifecycleEvent: g.lifecycleEvent, count: g.count })), [
+    { projectScope: "global", source: "user-suggested", kind: "preference", adapter: "none", lifecycleEvent: "none", count: 1 },
+    { projectScope: "review-project-a", source: "session-summary", kind: "session_summary", adapter: "pi", lifecycleEvent: "session_end", count: 1 },
+  ])
+})
+
 test("memory_approve approves a pending memory", async () => {
   const engine = engineInTemp()
   const saved = engine.suggest("Approve this item")
@@ -172,7 +198,7 @@ test("review mutation tools report missing ids without throwing", async () => {
 })
 
 test("memory_status returns doctor counts without memory text", async () => {
-  const engine = engineInTemp()
+  const engine = engineInTemp(tempDir())
   engine.save({ text: "Do not leak this exact memory text", status: "approved", category: "project", scopeType: "global" })
   engine.suggest("Do not leak this pending text")
 
@@ -189,6 +215,7 @@ test("memory_status returns doctor counts without memory text", async () => {
   assert.equal(result.meta.projectScope, expectedScope)
   assert.ok(Array.isArray(result.data.notes))
   assert.match(result.data.notes.join("\n"), /MCP provides explicit/u)
+  assert.match(result.data.notes.join("\n"), /No projectPath was provided/u)
   assert.doesNotMatch(serialized, /Do not leak this exact memory text/u)
   assert.doesNotMatch(serialized, /Do not leak this pending text/u)
 })

@@ -3,6 +3,7 @@ export { MemoryEngine } from "./engine.js"
 export { createMemoryStore, createMemoryId, foldMemoryRecords } from "./storage.js"
 export { containsLikelySecret } from "./secret-detection.js"
 export { isMetaTaskPromptText } from "./meta-task-filter.js"
+export { groupReviewMemories, reviewProjectScope, reviewProvenance, type ReviewGroup } from "./review.js"
 export {
   inferCategory, inferMemoryKind, effectiveMemoryKind,
   memoryMatchesContext, filterMemoriesForContext, searchMemories, findDuplicateMemory,

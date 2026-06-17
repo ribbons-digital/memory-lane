@@ -18,7 +18,7 @@ import type { BundledPluginModule, LoadedPlugin } from "@memory-lane/plugin-api"
 import type { SemanticMemoryConfig } from "@memory-lane/core"
 import { resolveBundledPlugin } from "./plugins.js"
 import {
-  formatMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
+  formatMemories, formatReviewMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
   formatCompact, formatDoctor, formatImportPlan, formatError, usage,
   type ObsidianImportApplyResult,
 } from "./formatters.js"
@@ -238,7 +238,7 @@ function handleReject(ctx: CliContext): void {
 }
 
 function handleReview(ctx: CliContext): void {
-  console.log(formatMemories(ctx.engine.reviewPending(), ctx.json))
+  console.log(formatReviewMemories(ctx.engine.reviewPending(), ctx.json))
 }
 
 function handleCompact(ctx: CliContext): void {

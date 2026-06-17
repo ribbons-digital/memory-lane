@@ -1,4 +1,4 @@
-import type { MemoryEngine, MemoryMutationResult, MemoryRecord, RecallResult, SaveResult } from "@memory-lane/core"
+import { groupReviewMemories, type MemoryEngine, type MemoryMutationResult, type MemoryRecord, type RecallResult, type SaveResult } from "@memory-lane/core"
 import type {
   ListToolInput, MemoryIdToolInput, RecallToolInput, ReviewToolInput, SaveToolInput, StatusToolInput, SuggestToolInput, ToolEnvelope,
 } from "./types.js"
@@ -51,8 +51,13 @@ const STATUS_NOTES = [
   "Use memory-lane doctor in a terminal for the same read-only diagnostics outside MCP.",
 ]
 
+function scopeNotes(engine: MemoryEngine): string[] {
+  if (currentProjectScope(engine) !== "none") return []
+  return ["No projectPath was provided and no project scope is active; pass projectPath to scope project-specific recall/list/review/status in MCP clients such as Claude Desktop."]
+}
+
 function statusData(engine: MemoryEngine): { status: Record<string, unknown>; notes: string[] } {
-  return { status: engine.doctor(), notes: STATUS_NOTES }
+  return { status: engine.doctor(), notes: [...STATUS_NOTES, ...scopeNotes(engine)] }
 }
 
 export async function handleMemorySave(engine: MemoryEngine, input: SaveToolInput) {
@@ -115,7 +120,7 @@ export async function handleMemoryReview(engine: MemoryEngine, input: ReviewTool
   try {
     applyProjectPath(engine, input.projectPath)
     const memories = engine.reviewPending()
-    return jsonContent(envelope(engine, { memories }, memories.length))
+    return jsonContent(envelope(engine, { memories, groups: groupReviewMemories(memories), notes: scopeNotes(engine) }, memories.length))
   } catch (error) {
     return jsonContent(errorEnvelope(error))
   }

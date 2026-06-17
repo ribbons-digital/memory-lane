@@ -1,4 +1,4 @@
-import type { MemoryRecord, RecallResult, SaveResult, MemoryMutationResult, CompactReport } from "@memory-lane/core"
+import { groupReviewMemories, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
@@ -43,6 +43,24 @@ export function formatMemories(memories: MemoryRecord[], json: boolean): string 
   return memories.map((m) =>
     `[${m.id}] (${m.scope.type}/${m.category}/${m.kind ?? "?"}) ${m.status !== "approved" ? `[${m.status}] ` : ""}${m.text}  (saved ${formatDate(m.createdAt)})`,
   ).join("\n")
+}
+
+export function formatReviewMemories(memories: MemoryRecord[], json: boolean): string {
+  const groups = groupReviewMemories(memories)
+  if (json) {
+    return JSON.stringify({ ok: true, data: { memories, groups }, meta: meta({ count: memories.length }) }, null, 2)
+  }
+  if (!memories.length) return "No pending memories found."
+
+  const lines = ["Pending memories grouped by project, source, kind, and provenance:"]
+  for (const group of groups) {
+    lines.push("", `${group.label} (${group.count})`)
+    const groupIds = new Set(group.memoryIds)
+    for (const memory of memories.filter((m) => groupIds.has(m.id))) {
+      lines.push(`  [${memory.id}] (${memory.scope.type}/${memory.category}/${memory.kind ?? "?"}) ${memory.text}  (saved ${formatDate(memory.createdAt)})`)
+    }
+  }
+  return lines.join("\n")
 }
 
 export function formatRecall(result: RecallResult, json: boolean): string {

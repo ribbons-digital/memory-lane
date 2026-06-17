@@ -6,6 +6,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
+import { MemoryEngine } from "@memory-lane/core"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -194,6 +195,36 @@ describe("CLI integration", () => {
     assert.equal(parsed.data.deleted.status, "deleted")
     assert.ok(Array.isArray(parsed.data.warnings))
     assert.match(parsed.data.warnings.join("\n"), /Vault path does not exist/u)
+  })
+
+  it("review groups pending memories by project source kind and provenance", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-review-project" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const engine = new MemoryEngine({ memoryPath: memFile, embeddingsPath: embFile, configPath: cfgFile })
+    engine.suggest("Pending preference", "preference", "global", "preference")
+    engine.refreshScope(project)
+    engine.save({
+      text: "Pending session summary",
+      status: "pending",
+      category: "project",
+      scopeType: "project",
+      source: "session-summary",
+      kind: "session_summary",
+      provenance: { adapter: "pi", lifecycleEvent: "session_end" },
+    })
+
+    const output = run(["review"], env)
+
+    assert.match(output, /Pending memories grouped by project, source, kind, and provenance/u)
+    assert.match(output, /Project: global \| Source: user-suggested \| Kind: preference \| Provenance: none/u)
+    assert.match(output, /Project: cli-review-project \| Source: session-summary \| Kind: session_summary \| Provenance: pi\/session_end/u)
+    assert.match(output, /Pending preference/u)
+    assert.match(output, /Pending session summary/u)
   })
 
   it("doctor reports stats", () => {
