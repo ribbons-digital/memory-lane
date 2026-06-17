@@ -1,14 +1,16 @@
 # Memory Lane Roadmap
 
-This roadmap focuses on five upcoming directions:
+This roadmap now centers on a continuity-first sequence:
 
-1. Obsidian mirror/import support
-2. pi adapter lifecycle support
-3. MCP server support
-4. Obsidian LLM Wiki / knowledge-base access
-5. Experimental Obsidian-backed storage
+1. Keep review/status controls strong enough that generated memory stays user-governed.
+2. Add read-only freshness detection so sessions can notice newer approved state from other sessions/harnesses.
+3. Add review-first progress/checkpoint capture for releases, merges, fixes, and decisions.
+4. Make global personal preferences consistently available through a bounded preference layer.
+5. Add harness-neutral learning features only after review, freshness, checkpoint, and preference foundations are in place.
+6. Add time-aware staleness/consolidation so continuity does not become misleading.
+7. Graduate to handoff-free sessions only after those safeguards are proven.
 
-The ordering is intentional: mirror/import gives users Obsidian value with low risk; pi lifecycle recall improves the current harness without adding automatic writes; MCP is broadly useful and should not depend on Obsidian; Obsidian LLM Wiki features should build on MCP/resource access while staying distinct from Memory Lane memories; true Obsidian-backed storage comes last because it changes Memory Lane's core reliability model.
+Earlier Obsidian, pi, MCP, installer, and plugin phases remain part of the roadmap history below, but new implementation should prioritize this continuity order unless the user explicitly chooses a different maintenance slice.
 
 ## Product North Star — Seamless Continuity Without Silent Autonomy
 
@@ -424,9 +426,9 @@ Remaining follow-up scope:
 
 ## Phase 15 — Auto-Memory Review and Memory Dashboard
 
-**Goal:** Give users visibility and control over automatically generated memories before they affect future sessions.
+**Goal:** Give users visibility and control over generated memories before broader continuity automation depends on them.
 
-Session-end summarization (Phase 13) and future learning features will produce candidate memories. This phase builds the review surface so users can trust the system before broader automation is enabled.
+Session-end summarization (Phase 13), cross-session continuity checks, and future learning features will produce candidate memories. This phase builds the review surface so users can trust the system before Memory Lane becomes more proactive.
 
 Completed Slice 1 scope:
 
@@ -436,25 +438,95 @@ Completed Slice 1 scope:
 4. Kept cleanup review-first and non-destructive: the command only lists likely operational prompt pollution and tells users to reject/delete after review.
 5. Added JSON metadata (`suspectMeta`, `includeApproved`, `projectScope`, count) for authoritative scoped inspection.
 
+Completed review/status UX scope:
+
+1. `memory-lane review` groups pending memories by source, project key, scope, kind, and harness/provenance where available.
+2. MCP `memory_review` and `memory_status` include project-scope guidance for clients such as Claude Desktop that do not provide a cwd unless `projectPath` is passed.
+3. MCP status clarifies explicit MCP tools vs lifecycle hook automation.
+
+Next Slice — Dashboard and Review Controls:
+
+1. Add a memory dashboard command, e.g. `memory-lane dashboard`, that prints a compact human-readable summary of what Memory Lane knows globally and for the current project without dumping long memory bodies by default.
+2. Add MCP/CLI surfaces to inspect pending session summaries and future continuity candidates by source/kind/provenance.
+3. Add safe bulk actions for clearly grouped pending candidates, with dry-run/confirmation semantics and no silent deletes.
+4. Add docs for maintaining a healthy review queue and for deciding when to approve, reject, delete, or leave pending candidate memories.
+5. Keep this phase focused on visibility/control; do not add new automatic learning behaviors here.
+
+## Phase 16 — Cross-Session Freshness and Continuity Status
+
+**Goal:** Let any session/harness cheaply notice that newer approved project progress or relevant global preferences exist, without injecting large memory bodies or silently saving new state.
+
+This is the first direct implementation step toward seamless continuity. It should answer: “What changed in Memory Lane since this session started?” and “Is there approved state from another session/harness that I should surface?”
+
+First-slice decisions:
+
+- Freshness is read-only. It never writes or rewrites memories.
+- The first signal is approved memory metadata: `updatedAt`, project scope, source, kind, and provenance.
+- The first UX is a bounded notice, not full context injection.
+- Global/personal preferences are eligible for a separate preference layer, but this phase should only report that relevant preferences exist unless the context policy selects them.
+- Adapters should call shared lifecycle/core helpers; harness-specific code should not implement its own freshness rules.
+
 Todos:
 
-1. Extend `memory-lane review` to group pending memories by source, project key, scope, kind, and harness/provenance where available (e.g., `session-summary`, `agent-suggested`, `user-suggested`, future `background-learning`). Initial grouped review is implemented; continue refining as new memory kinds/sources arrive.
-2. Make MCP review/list output less confusing when `projectScope: none`: show project ownership inline, explain that Claude Desktop MCP has no cwd unless `projectPath` is passed, and offer/projectPath guidance instead of implying the current chat's project was used.
-3. Add a memory dashboard command: `memory-lane memory dashboard` (or `memory-lane dashboard`) that prints a human-readable summary of what Memory Lane knows per project and globally without dumping long memory bodies by default.
-4. Add MCP/CLI tools to list, inspect, and bulk-approve/reject pending session summaries and future learning candidates.
-5. Add a "dismiss stale" helper that flags or removes session summaries that no longer match current project state.
-6. Document how to use the review queue and dashboard to keep memory accurate, including the boundary that MCP provides explicit tools while hooks provide lifecycle automation.
+1. Add shared freshness/status helper(s) that compare a session start time or checkpoint timestamp against approved visible memories for the current project and global scope.
+2. Expose freshness metadata through `memory-lane status --json`, `memory-lane doctor`, and MCP `memory_status` without returning memory text by default.
+3. Add optional human output such as “Newer approved project checkpoint exists; run recall/list/review for details,” with IDs/previews only where appropriate.
+4. Route SessionStart/UserPromptSubmit lifecycle injection through the freshness helper so harnesses can surface a bounded notice when newer approved project progress exists.
+5. Add tests proving freshness notices respect project scope, global scope, status, context budget, and privacy boundaries.
 
-## Phase 16 — Harness-Neutral Learning Enhancements
+## Phase 17 — Review-First Progress and Checkpoint Capture
+
+**Goal:** Capture high-value continuity events such as releases, merges, major fixes, and roadmap decisions as reviewable checkpoint candidates, so another session can pick up the project state without the user restating it.
+
+This phase makes Memory Lane proactive, but still not autonomous. It should suggest durable project progress when evidence is strong and let the user approve before it affects future sessions.
+
+First-slice decisions:
+
+- Default all inferred progress/checkpoint captures to `pending` unless the user explicitly asks to remember/save.
+- Prefer concrete evidence from commands/tool outcomes (`git tag`, release workflow success, tests/build pass, merge commits) over model inference.
+- Store compact checkpoint memories, not transcripts or logs.
+- Deduplicate by project, event type, and nearby timestamp to avoid multiple sessions saving the same release/checkpoint.
+- Keep release/checkpoint capture harness-neutral; adapters provide bounded evidence, lifecycle/core decides what to suggest.
+
+Todos:
+
+1. Add conservative checkpoint candidate kinds/conventions for release, merge, verification, docs-sync, and roadmap-decision events using existing `MemoryKind` where possible or a non-breaking new kind if needed.
+2. Extend lifecycle/tool-outcome capture to suggest checkpoint candidates from safe, high-confidence evidence such as successful release workflow/tag creation or explicit “released vX.Y.Z” user statements.
+3. Add duplicate/debounce logic for pending checkpoint candidates from the same project/event/version.
+4. Add review output that clearly labels checkpoint candidates and why they were suggested.
+5. Document examples of good checkpoint memories and explain why they remain review-first.
+
+## Phase 18 — Global Preference Layering and Context Policy
+
+**Goal:** Make durable personal preferences consistently available across projects and harnesses while preventing preferences from overpowering project-specific state.
+
+This phase addresses the “workflow feels different in each session” problem. Global preferences should be stable and portable, but still bounded by context policy and easy to inspect.
+
+First-slice decisions:
+
+- Global preferences are not the same as project facts. They should be grouped, budgeted, and explained separately.
+- Project-specific preferences can override or narrow global preferences when clearly scoped.
+- Preference injection must remain token-aware and should prefer concise summaries or policy hints when the budget is tight.
+- Users need an authoritative way to inspect which preferences may be influencing a session.
+
+Todos:
+
+1. Add a shared preference-selection layer that separates global personal/preferences from project memories before context rendering.
+2. Extend `memory.contextPolicy` with preference-specific budgets or priority rules without breaking existing defaults.
+3. Add status/doctor/MCP metadata showing selected/omitted preference counts without exposing full preference text in diagnostics.
+4. Add tests for global preference inclusion, project override behavior, and bounded prompt/session-start rendering across Codex, Claude Code, pi, and MCP guidance.
+5. Document how to save, inspect, and override global preferences safely.
+
+## Phase 19 — Harness-Neutral Learning Enhancements
 
 **Goal:** Adapt useful learning-system ideas from pi-hermes-memory into the continuity north star without making Memory Lane pi-specific or breaking existing memory categories, APIs, review semantics, or storage behavior.
 
-Memory Lane should keep JSONL as the source of truth and keep harness-native artifacts optional exports. Pi, Hermes, Cursor, Codex, Claude Code, and future adapters should feed bounded lifecycle evidence into shared lifecycle handlers rather than owning learning behavior themselves. The first learning slices should help the system notice likely durable events or preferences and prompt/suggest reviewable memories, not silently auto-approve broad background learning.
+Memory Lane should keep JSONL as the source of truth and keep harness-native artifacts optional exports. Pi, Hermes, Cursor, Codex, Claude Code, and future adapters should feed bounded lifecycle evidence into shared lifecycle handlers rather than owning learning behavior themselves. The first learning slices should help the system notice likely durable failures, corrections, procedures, or preferences and prompt/suggest reviewable memories, not silently auto-approve broad background learning.
 
 First-slice decisions:
 
 - Do not expand `MemoryCategory` for learning taxonomy in the first slice; keep existing `preference`, `personal`, and `project` categories stable.
-- Add learning semantics primarily through additional `MemoryKind` values such as `failure`, `correction`, `insight`, `tool_quirk`, `convention`, and `procedure`.
+- Add learning semantics primarily through additional `MemoryKind` values such as `failure`, `correction`, `insight`, `tool_quirk`, `convention`, and `procedure` only after review/dashboard and freshness foundations are in place.
 - Default new automatic learning outputs to `pending` unless the user explicitly asks Memory Lane to remember something.
 - Store procedural memory as Memory Lane records first; exporting approved procedures into Pi/Claude/Codex/Cursor/Hermes-native skill/rule formats is a later optional integration layer.
 - Keep raw transcripts, raw tool outputs, secrets, and harness-internal markers out of saved memory text.
@@ -467,34 +539,34 @@ Todos:
 4. Add structured procedure-memory support (`kind: "procedure"`) with fields or conventions for when-to-use, steps, pitfalls, and verification, while keeping native skill export out of the first slice.
 5. Add opt-in background learning config and lifecycle review plumbing only after token-aware policy and dashboard/review controls are in place; reviews must be bounded, best-effort, privacy-safe, and harness-neutral.
 
-## Phase 17 — Time-Aware Memory and Consolidation
+## Phase 20 — Time-Aware Memory and Consolidation
 
 **Goal:** Prevent memories from going stale, noisy, duplicated, or misleading future sessions.
 
-Time-sensitive statements like "I'm traveling next week" or "the build is broken" become wrong as time passes. Separately, automatic summaries and learning candidates can create overlap. This phase handles both through reviewable revisions and consolidation proposals rather than silent destructive rewrites.
+Time-sensitive statements like “I'm traveling next week” or “the build is broken” become wrong as time passes. Separately, automatic summaries, checkpoint candidates, and learning candidates can create overlap. This phase handles both through reviewable revisions and consolidation proposals rather than silent destructive rewrites.
 
 Todos:
 
 1. Add optional `expiresAt` and `staleAfterDays` fields to memory records and the save/suggest APIs.
 2. Add a `memory-lane refresh` command that scans approved memories, uses an LLM or heuristics to identify stale entries, and presents them as pending revisions or deletions.
 3. Update recall/injection to deprioritize or skip memories that are past their expiration.
-4. Add time metadata to session summaries so later refreshes can reason about temporal context.
+4. Add time metadata to session summaries and checkpoint memories so later refreshes can reason about temporal context.
 5. Add `memory-lane consolidate --dry-run` and `memory-lane consolidate --apply` to propose duplicate/overlap merges and replacement memories, preserving append-only auditability.
-6. Add duplicate/debounce handling for pending session summaries, especially back-to-back summaries generated from the same session/review flow.
-7. Improve session-summary prompt/filtering so summaries avoid self-referential review chatter like "approve memory IDs" unless the user explicitly asks to preserve review decisions.
+6. Add duplicate/debounce handling for pending session summaries and checkpoint candidates, especially back-to-back summaries generated from the same session/review flow.
+7. Improve session-summary prompt/filtering so summaries avoid self-referential review chatter like “approve memory IDs” unless the user explicitly asks to preserve review decisions.
 
-## Phase 18 — Handoff-Free Sessions
+## Phase 21 — Handoff-Free Sessions
 
 **Goal:** Enable seamless cross-session and cross-harness continuity for users who have validated their memory pipeline.
 
-This phase turns Phase 13–17 into a cohesive experience: the agent starts a new session already aware of where things left off, can surface newer progress recorded by another session/harness, and can consistently apply global personal preferences without a manual `HANDOFF.md`, while still respecting token-aware context budgets and review controls.
+This phase turns Phase 13–20 into a cohesive experience: the agent starts a new session already aware of where things left off, can surface newer progress recorded by another session/harness, and can consistently apply global personal preferences without a manual `HANDOFF.md`, while still respecting token-aware context budgets and review controls.
 
 Todos:
 
 1. Add a `memory.handoffMode` config flag with values `manual`, `review`, and `automatic`. Default to `manual` so users opt in explicitly.
 2. In `manual` mode, keep current behavior but allow explicit status/review/list tools to reveal newer approved progress from other sessions.
 3. In `review` mode, session/release/progress summaries are generated as pending suggestions; users approve them before future sessions use them.
-4. In `automatic` mode, approved session summaries and relevant global preferences are eligible for budgeted injection at the next `SessionStart` alongside baseline memories.
+4. In `automatic` mode, approved session summaries, checkpoint memories, and relevant global preferences are eligible for budgeted injection at the next `SessionStart` alongside baseline memories.
 5. Add cross-session freshness checks: if another harness/session has newer approved project progress, surface a bounded notice or ask whether to recall/review it.
 6. Add confidence and noise thresholds: low-confidence summaries or ambiguous progress events stay pending even in automatic mode.
 7. Add safeguards so users can disable handoff-free mode per project or globally.
