@@ -475,6 +475,36 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(d.totalMemories, 2)
   })
 
+  it("doctor reports skipped invalid memory JSONL rows without memory text", () => {
+    const memoryPath = path.join(dir, "mem.jsonl")
+    fs.writeFileSync(memoryPath, [
+      JSON.stringify({
+        id: "ok1",
+        status: "approved",
+        text: "Do not expose this memory text",
+        category: "project",
+        scope: { type: "global" },
+        source: "manual",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      }),
+      "not json",
+      JSON.stringify({ id: "bad1", status: "approved", text: "Also do not expose" }),
+    ].join("\n") + "\n", "utf8")
+    const e = engine()
+
+    const d = e.doctor()
+    const serialized = JSON.stringify(d)
+
+    assert.equal(d.memoryFileRows, 3)
+    assert.equal(d.memoryFileValidRows, 1)
+    assert.equal(d.memoryFileSkippedRows, 2)
+    assert.equal(d.memoryFileMalformedRows, 1)
+    assert.equal(d.memoryFileInvalidRows, 1)
+    assert.deepEqual(d.memoryFileWarnings, ["Memory file has 2 skipped JSONL row(s): 1 malformed JSON, 1 schema-invalid."])
+    assert.doesNotMatch(serialized, /Do not expose this memory text|Also do not expose/u)
+  })
+
   it("doctor reports context policy config without memory text", () => {
     fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({
       memory: {

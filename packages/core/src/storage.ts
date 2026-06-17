@@ -14,33 +14,59 @@ export function foldMemoryRecords(records: MemoryRecord[]): MemoryRecord[] {
   return Array.from(latest.values()).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 }
 
+export interface MemoryStoreDiagnostics {
+  totalRows: number
+  validRows: number
+  skippedRows: number
+  malformedRows: number
+  invalidRows: number
+}
+
 export interface MemoryStore {
   readonly file: string
   append(record: MemoryRecord): void
   readLog(): MemoryRecord[]
   list(): MemoryRecord[]
+  diagnostics(): MemoryStoreDiagnostics
 }
 
 export function createMemoryStore(filePath: string): MemoryStore {
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
   let cache: { mtime: number; records: MemoryRecord[] } | null = null
 
-  function parseLine(line: string): MemoryRecord | undefined {
-    if (!line.trim()) return undefined
-    try {
-      const parsed = JSON.parse(line)
-      return normalizeMemoryRecord(parsed)
-    } catch {
-      return undefined
+  function analyzeLines(): { records: MemoryRecord[]; diagnostics: MemoryStoreDiagnostics } {
+    const diagnostics: MemoryStoreDiagnostics = {
+      totalRows: 0,
+      validRows: 0,
+      skippedRows: 0,
+      malformedRows: 0,
+      invalidRows: 0,
     }
+    const records: MemoryRecord[] = []
+    if (!fs.existsSync(filePath)) return { records, diagnostics }
+
+    for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/u)) {
+      if (!line.trim()) continue
+      diagnostics.totalRows += 1
+      try {
+        const parsed = JSON.parse(line)
+        const record = normalizeMemoryRecord(parsed)
+        if (record) {
+          diagnostics.validRows += 1
+          records.push(record)
+        } else {
+          diagnostics.invalidRows += 1
+        }
+      } catch {
+        diagnostics.malformedRows += 1
+      }
+    }
+    diagnostics.skippedRows = diagnostics.malformedRows + diagnostics.invalidRows
+    return { records, diagnostics }
   }
 
   function parseLines(): MemoryRecord[] {
-    if (!fs.existsSync(filePath)) return []
-    return fs.readFileSync(filePath, "utf8")
-      .split(/\r?\n/u)
-      .map(parseLine)
-      .filter((record): record is MemoryRecord => record !== undefined)
+    return analyzeLines().records
   }
 
   function readAll(): MemoryRecord[] {
@@ -66,5 +92,8 @@ export function createMemoryStore(filePath: string): MemoryStore {
     },
     readLog: parseLines,
     list: readAll,
+    diagnostics() {
+      return analyzeLines().diagnostics
+    },
   }
 }

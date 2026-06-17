@@ -424,6 +424,21 @@ export class MemoryEngine {
     }
   }
 
+  private memoryFileDoctor(): Record<string, unknown> {
+    const diagnostics = this.store.diagnostics()
+    const warnings = diagnostics.skippedRows > 0
+      ? [`Memory file has ${diagnostics.skippedRows} skipped JSONL row(s): ${diagnostics.malformedRows} malformed JSON, ${diagnostics.invalidRows} schema-invalid.`]
+      : []
+    return {
+      memoryFileRows: diagnostics.totalRows,
+      memoryFileValidRows: diagnostics.validRows,
+      memoryFileSkippedRows: diagnostics.skippedRows,
+      memoryFileMalformedRows: diagnostics.malformedRows,
+      memoryFileInvalidRows: diagnostics.invalidRows,
+      memoryFileWarnings: warnings,
+    }
+  }
+
   private hookDebugDoctor(): Record<string, unknown> {
     const warnings: string[] = []
     const base = {
@@ -524,6 +539,7 @@ export class MemoryEngine {
       integrations: diagnoseIntegrations({ cwd: this.scope?.cwd ?? null, paths: this.integrationPaths }),
       ...this.semanticDoctor(mems),
       ...this.contextPolicyDoctor(),
+      ...this.memoryFileDoctor(),
       ...this.hookDebugDoctor(),
       ...this.obsidianDoctor(),
     }

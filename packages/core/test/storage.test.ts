@@ -51,6 +51,22 @@ describe("MemoryStore", () => {
     assert.equal(createMemoryStore(file).list().length, 1)
   })
 
+  it("reports skipped malformed and schema-invalid rows", () => {
+    fs.writeFileSync(file, [
+      JSON.stringify(rec({ id: "ok" })),
+      "garbage",
+      JSON.stringify({ id: "bad", status: "approved", text: "missing required fields" }),
+      "",
+    ].join("\n"), "utf8")
+
+    const diagnostics = createMemoryStore(file).diagnostics()
+
+    assert.equal(diagnostics.totalRows, 3)
+    assert.equal(diagnostics.validRows, 1)
+    assert.equal(diagnostics.skippedRows, 2)
+    assert.equal(diagnostics.malformedRows, 1)
+    assert.equal(diagnostics.invalidRows, 1)
+  })
 
   it("storage accepts old records without provenance", () => {
     const record = rec({ text: "Old memory without provenance" })
