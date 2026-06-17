@@ -240,11 +240,31 @@ function handleReject(ctx: CliContext): void {
 function handleReview(ctx: CliContext): void {
   const suspectMeta = hasFlag(ctx.argv, "suspect-meta")
   const includeApproved = suspectMeta && hasFlag(ctx.argv, "include-approved")
+  const filters = {
+    kind: flag(ctx.argv, "kind"),
+    source: flag(ctx.argv, "source"),
+    provenance: flag(ctx.argv, "provenance"),
+  }
   const reviewMemories = includeApproved
     ? [...ctx.engine.reviewPending(), ...ctx.engine.list({ status: "approved", all: true })]
     : ctx.engine.reviewPending()
-  const memories = reviewMemories.filter((memory) => !suspectMeta || isMetaTaskPromptText(memory.text))
-  console.log(formatReviewMemories(memories, ctx.json, { suspectMeta, includeApproved, projectScope: ctx.engine.getProjectScope()?.key ?? "none" }))
+  const memories = reviewMemories.filter((memory) => {
+    if (suspectMeta && !isMetaTaskPromptText(memory.text)) return false
+    if (filters.kind && (memory.kind ?? "misc") !== filters.kind) return false
+    if (filters.source && memory.source !== filters.source) return false
+    if (filters.provenance) {
+      const provenance = memory.provenance ? `${memory.provenance.adapter}/${memory.provenance.lifecycleEvent}` : "none"
+      if (provenance !== filters.provenance) return false
+    }
+    return true
+  })
+  const activeFilters = Object.fromEntries(Object.entries(filters).filter(([, value]) => Boolean(value)))
+  console.log(formatReviewMemories(memories, ctx.json, {
+    suspectMeta,
+    includeApproved,
+    filters: activeFilters,
+    projectScope: ctx.engine.getProjectScope()?.key ?? "none",
+  }))
 }
 
 function handleDashboard(ctx: CliContext): void {

@@ -211,6 +211,29 @@ function suspectMetaAction(memory: MemoryRecord): string {
   return `memory-lane reject ${memory.id}  # or: memory-lane delete ${memory.id}`
 }
 
+function reviewAction(memory: MemoryRecord): string {
+  return memory.status === "pending"
+    ? `memory-lane approve ${memory.id}  # or: memory-lane reject ${memory.id}`
+    : suspectMetaAction(memory)
+}
+
+function reviewPreview(memory: MemoryRecord): string {
+  return memory.kind === "session_summary" ? sessionSummaryPreview(memory.text) : compactPreview(memory.text)
+}
+
+function reviewStatusLine(memory: MemoryRecord): string {
+  return `[${memory.id}] ${memory.status} · ${provenanceLabel(memory)} · ${memory.scope.type}/${memory.category}/${memory.kind ?? "misc"}`
+}
+
+function filterSummary(extraMeta?: Record<string, unknown>): string | undefined {
+  const filters = extraMeta?.filters
+  if (!filters || typeof filters !== "object") return undefined
+  const entries = Object.entries(filters as Record<string, unknown>)
+    .filter(([, value]) => typeof value === "string" && value.length > 0)
+    .map(([key, value]) => `${key}=${value}`)
+  return entries.length ? `Filters: ${entries.join(", ")}` : undefined
+}
+
 export function formatReviewMemories(memories: MemoryRecord[], json: boolean, extraMeta?: Record<string, unknown>): string {
   const groups = groupReviewMemories(memories)
   if (json) {
@@ -219,14 +242,21 @@ export function formatReviewMemories(memories: MemoryRecord[], json: boolean, ex
   if (!memories.length) return extraMeta?.suspectMeta ? "No likely operational prompt pollution found." : "No pending memories found."
 
   if (extraMeta?.suspectMeta) {
-    const lines = [
-      "Likely operational prompt pollution:",
+    const summary = [
       "Review each preview, then reject/delete only entries you confirm are obsolete.",
-    ]
+      filterSummary(extraMeta),
+    ].filter(Boolean).join("\n")
+    const lines = [boxen(summary, {
+      title: "Likely operational prompt pollution",
+      titleAlignment: "center",
+      padding: 1,
+      borderStyle: "round",
+      borderColor: supportsColor() ? "yellow" : undefined,
+    })]
     for (const memory of memories) {
       lines.push(
         "",
-        `[${memory.id}] [${memory.status}] (${memory.scope.type}/${memory.category}/${memory.kind ?? "?"})`,
+        `${figures.bullet} [${memory.id}] [${memory.status}] (${memory.scope.type}/${memory.category}/${memory.kind ?? "?"})`,
         `  Preview: ${compactPreview(memory.text)}`,
         `  Suggested: ${suspectMetaAction(memory)}`,
       )
@@ -234,12 +264,39 @@ export function formatReviewMemories(memories: MemoryRecord[], json: boolean, ex
     return lines.join("\n")
   }
 
-  const lines = ["Pending memories grouped by project, source, kind, and provenance:"]
+  const headerLines = [
+    "Pending memories grouped by project, source, kind, and provenance.",
+    filterSummary(extraMeta),
+  ].filter(Boolean)
+  const table = new Table({
+    head: ["Project", "Source", "Kind", "Provenance", "Count"],
+    style: { head: supportsColor() ? ["cyan"] : [], border: [] },
+  })
+  for (const group of groups) {
+    const provenance = group.adapter === "none" ? "none" : `${group.adapter}/${group.lifecycleEvent}`
+    table.push([compactPreview(group.projectScope, 42), group.source, group.kind, provenance, String(group.count)])
+  }
+
+  const lines = [
+    boxen(headerLines.join("\n"), {
+      title: "Memory Lane Review",
+      titleAlignment: "center",
+      padding: 1,
+      borderStyle: "round",
+      borderColor: supportsColor() ? "cyan" : undefined,
+    }),
+    "Review Queue:",
+    table.toString(),
+  ]
   for (const group of groups) {
     lines.push("", `${group.label} (${group.count})`)
     const groupIds = new Set(group.memoryIds)
     for (const memory of memories.filter((m) => groupIds.has(m.id))) {
-      lines.push(`  [${memory.id}] (${memory.scope.type}/${memory.category}/${memory.kind ?? "?"}) ${memory.text}  (saved ${formatDate(memory.createdAt)})`)
+      lines.push(
+        `  ${figures.bullet} ${reviewStatusLine(memory)}`,
+        `    ${reviewPreview(memory)}  (saved ${formatDate(memory.createdAt)})`,
+        `    Suggested: ${reviewAction(memory)}`,
+      )
     }
   }
   return lines.join("\n")
@@ -399,7 +456,7 @@ Commands:
   delete <id>
   approve <id>
   reject <id>
-  review [--suspect-meta] [--include-approved]
+  review [--kind <kind>] [--source <source>] [--provenance <adapter/event>] [--suspect-meta] [--include-approved]
   dashboard [--all]
                   Compact continuity and review overview
   compact

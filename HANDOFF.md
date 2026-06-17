@@ -12,6 +12,7 @@
 - Full verification for Slice 3 passed with `pnpm test && pnpm build`.
 - Phase 15 Review Hygiene Slice 1 is implemented and verified locally: `memory-lane review --suspect-meta` lists likely old delegated-subagent/task-wrapper and acceptance-finalization prompt pollution without auto-deleting anything, `--include-approved` also surfaces approved suspect pollution that may affect recall/context injection, and human output is compact/actionable instead of dumping full memory bodies. It reuses the existing meta-task classifier and keeps cleanup review-first.
 - Phase 15 dashboard slice was merged via PR #2: adds `memory-lane dashboard`, `memory-lane dashboard --json`, and `--all`; uses `ansis`, `boxen`, `cli-table3`, and `figures` only for friendly read-only CLI output; keeps long memory bodies out of dashboard output.
+- Phase 15 review-filter/UI slice is in progress on branch `phase15-review-filters-ui`: adds `memory-lane review --kind`, `--source`, and `--provenance`, plus prettier human review output for filtered and unfiltered review queues; keeps review non-destructive and JSON structured.
 - Production installer shipped: `install.sh` / `install.ps1` download a prebuilt Bun-compiled binary from GitHub Releases, place it on PATH, and prompt the user to run `memory-lane init`.
 - `memory-lane init` is an interactive wizard that detects and configures Claude Code CLI, Codex CLI, Claude Desktop, Codex Desktop, and pi.
 - `memory-lane init --yes` auto-configures all detected harnesses non-interactively.
@@ -47,7 +48,7 @@ Verification for the hardening work passed with `pnpm test && pnpm build` before
 
 Phase 14 Slice 3 is implemented, verified, and committed as `24baa90 Expose context policy in doctor status`.
 
-Phase 15 noise-reduction follow-up is complete: suspect-review output is compact/actionable, pi `input` autosave is explicit-memory-request only, historical JSONL rows are more robust, and `doctor` now surfaces skipped-row diagnostics. Phase 15 dashboard slice is merged via PR #2.
+Phase 15 noise-reduction follow-up is complete: suspect-review output is compact/actionable, pi `input` autosave is explicit-memory-request only, historical JSONL rows are more robust, and `doctor` now surfaces skipped-row diagnostics. Phase 15 dashboard slice is merged via PR #2. Active Phase 15 branch: `phase15-review-filters-ui` for review filters and prettier review output.
 
 Future roadmap/design center: cross-agent continuity without silent autonomy. The logical implementation order is now documented in `ROADMAP.md`: review/dashboard controls first, then read-only freshness/status detection, then review-first progress/checkpoint capture, then global preference layering, then harness-neutral learning, then staleness/consolidation, and finally handoff-free sessions. Favor features that let a session discover newer approved project progress from other sessions/harnesses, consistently apply global personal preferences, and prompt/suggest reviewable memory updates when important continuity events happen. Avoid broad silent background writes until review/dashboard, token policy, freshness, checkpoint, preference, and staleness controls are strong enough.
 

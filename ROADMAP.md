@@ -459,9 +459,15 @@ Completed first dashboard slice:
 3. Kept dashboard output privacy-conscious: counts, review queue signals, suggested review commands, and short session-summary previews only; no long memory-body dumps.
 4. Added friendly CLI presentation primitives for this dashboard only, without refactoring command parsing or adding interactive prompts.
 
+Completed review-filter slice:
+
+1. Added CLI filters for pending review queues by kind, source, and provenance, e.g. `memory-lane review --kind session_summary --source session-summary --provenance pi/session_end`.
+2. Prettified human `memory-lane review` output with the same CLI presentation primitives used by dashboard, while keeping `--json` authoritative and structured.
+3. Kept review non-destructive: filtered review only narrows inspection and suggests existing approve/reject/delete commands.
+
 Remaining dashboard/review-controls scope:
 
-1. Add MCP/CLI surfaces to inspect pending session summaries and future continuity candidates by source/kind/provenance.
+1. Add MCP surfaces to inspect pending session summaries and future continuity candidates by source/kind/provenance.
 2. Add safe bulk actions for clearly grouped pending candidates, with dry-run/confirmation semantics and no silent deletes.
 3. Add docs for maintaining a healthy review queue and for deciding when to approve, reject, delete, or leave pending candidate memories.
 4. Keep this phase focused on visibility/control; do not add new automatic learning behaviors here.

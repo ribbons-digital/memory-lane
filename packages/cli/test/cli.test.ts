@@ -409,6 +409,7 @@ describe("CLI integration", () => {
       MEMORY_LANE_FILE: memFile,
       MEMORY_LANE_EMBEDDINGS_FILE: embFile,
       MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
     }
     const engine = new MemoryEngine({ memoryPath: memFile, embeddingsPath: embFile, configPath: cfgFile })
     engine.suggest("Pending preference", "preference", "global", "preference")
@@ -425,11 +426,87 @@ describe("CLI integration", () => {
 
     const output = run(["review"], env)
 
+    assert.match(output, /Memory Lane Review/u)
     assert.match(output, /Pending memories grouped by project, source, kind, and provenance/u)
     assert.match(output, /Project: global \| Source: user-suggested \| Kind: preference \| Provenance: none/u)
     assert.match(output, /Project: cli-review-project \| Source: session-summary \| Kind: session_summary \| Provenance: pi\/session_end/u)
+    assert.match(output, /Review Queue/u)
     assert.match(output, /Pending preference/u)
     assert.match(output, /Pending session summary/u)
+    assert.match(output, /memory-lane approve/u)
+  })
+
+  it("review filters pending memories by kind source and provenance", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-review-filter-project" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+    const engine = new MemoryEngine({ memoryPath: memFile, embeddingsPath: embFile, configPath: cfgFile })
+    engine.suggest("Pending preference", "preference", "global", "preference")
+    engine.refreshScope(project)
+    engine.save({
+      text: "## Session Summary (2026-06-16)\n- **Decisions made** Phase 13 summary candidate needs review before freshness work.",
+      status: "pending",
+      category: "project",
+      scopeType: "project",
+      source: "session-summary",
+      kind: "session_summary",
+      provenance: { adapter: "pi", lifecycleEvent: "session_end" },
+    })
+    engine.save({
+      text: "Claude summary candidate",
+      status: "pending",
+      category: "project",
+      scopeType: "project",
+      source: "session-summary",
+      kind: "session_summary",
+      provenance: { adapter: "claude", lifecycleEvent: "session_end" },
+    })
+
+    const output = run(["review", "--kind", "session_summary", "--source", "session-summary", "--provenance", "pi/session_end"], env)
+
+    assert.match(output, /Filters: kind=session_summary, source=session-summary/u)
+    assert.match(output, /provenance=pi\/session_end/u)
+    assert.match(output, /Phase 13 summary candidate needs review/u)
+    assert.match(output, /pending · pi\/session_end/u)
+    assert.doesNotMatch(output, /Pending preference/u)
+    assert.doesNotMatch(output, /Claude summary candidate/u)
+    assert.doesNotMatch(output, /## Session Summary/u)
+  })
+
+  it("review --json reports active filters and filtered groups", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-review-filter-json-project" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const engine = new MemoryEngine({ memoryPath: memFile, embeddingsPath: embFile, configPath: cfgFile })
+    engine.suggest("Pending preference", "preference", "global", "preference")
+    engine.refreshScope(project)
+    engine.save({
+      text: "Pending pi session summary",
+      status: "pending",
+      category: "project",
+      scopeType: "project",
+      source: "session-summary",
+      kind: "session_summary",
+      provenance: { adapter: "pi", lifecycleEvent: "session_end" },
+    })
+
+    const payload = JSON.parse(run(["review", "--kind", "session_summary", "--source", "session-summary", "--provenance", "pi/session_end", "--json"], env))
+
+    assert.equal(payload.ok, true)
+    assert.equal(payload.meta.count, 1)
+    assert.deepEqual(payload.meta.filters, { kind: "session_summary", source: "session-summary", provenance: "pi/session_end" })
+    assert.equal(payload.data.memories[0].text, "Pending pi session summary")
+    assert.equal(payload.data.groups.length, 1)
+    assert.match(payload.data.groups[0].label, /Kind: session_summary/u)
   })
 
   it("dashboard --json summarizes memory health without long memory bodies", () => {
