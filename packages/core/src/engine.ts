@@ -22,6 +22,7 @@ import {
 } from "./revisions.js"
 import { isMetaTaskPromptText } from "./meta-task-filter.js"
 import { buildFreshnessStatus } from "./freshness.js"
+import { buildContinuityHints } from "./continuity-hints.js"
 import { selectOperatingAgreements, summarizeOperatingAgreements } from "./operating-agreements.js"
 import {
   contentHash, createNewMemory, saveContext, shouldAutoEmbed, timestamp, visibleInScope,
@@ -31,7 +32,7 @@ import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
   MemoryKind, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, UpdatePreview, ProjectScope,
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig,
-  FreshnessStatus, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
+  FreshnessStatus, ContinuityHintSummary, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
   SupersedeResult, ReplaceResult, MemoryRevisionActor,
 } from "./types.js"
 
@@ -706,6 +707,13 @@ export class MemoryEngine {
     })
   }
 
+  continuityHints(opts?: { since?: string }): ContinuityHintSummary {
+    return buildContinuityHints(this.store.list(), {
+      projectScopeKey: this.scope?.key,
+      since: opts?.since,
+    })
+  }
+
   /** Generate a diagnostic report. */
   doctor(opts?: { freshnessSince?: string }): Record<string, unknown> {
     const mems = this.store.list()
@@ -730,6 +738,7 @@ export class MemoryEngine {
       projectScope: this.scope?.key ?? "none",
       integrations: diagnoseIntegrations({ cwd: this.scope?.cwd ?? null, paths: this.integrationPaths }),
       freshness: this.freshnessStatus({ since: opts?.freshnessSince }),
+      continuityHints: this.continuityHints({ since: opts?.freshnessSince }),
       operatingAgreements: this.operatingAgreementSummary(),
       ...this.semanticDoctor(mems),
       ...this.contextPolicyDoctor(),

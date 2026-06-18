@@ -21,6 +21,7 @@ The product goal is not another isolated chat-history search box. Memory Lane sh
 Design implications:
 
 - If the same project is open in multiple sessions or harnesses, important progress from one session should be available to the others without the user manually restating it.
+- Users should be able to ask natural-language continuity questions such as “resume building X” or “find the thread where we implemented X,” and Memory Lane should surface the relevant project memories, session summaries, checkpoints, PRs, and successor/superseded guidance without requiring the user to remember thread ids, branch names, or dates.
 - Durable personal preferences should be consistently available across projects and harnesses so workflows stay streamlined and predictable.
 - Project continuity should be an intentional index, not a transcript dump: store and surface compact, useful state rather than raw conversations by default.
 - The system should remain non-autonomous and low-noise: prefer bounded context injection, freshness checks, and implicit reminders to add/update memories over silent broad autosave.
@@ -474,7 +475,7 @@ Remaining dashboard/review-controls scope:
 
 ## Phase 16 — Freshness, Canonical Continuity, and Memory Revision
 
-**Status:** Slice 1 complete: read-only freshness/status detection is implemented. Slice 2 complete: read-only canonical workflow/operating-agreement discovery is implemented. Slice 3 complete: CLI-first update/replace/supersede revision primitives are implemented. Slice 4 continuity/status hints for duplicates and stale guidance are the next incomplete item; lifecycle bounded notices remain later follow-up slices.
+**Status:** Slice 1 complete: read-only freshness/status detection is implemented. Slice 2 complete: read-only canonical workflow/operating-agreement discovery is implemented. Slice 3 complete: CLI-first update/replace/supersede revision primitives are implemented. Slice 4 complete: read-only continuity/status hints for superseded-visible memories, operating-agreement overlaps, project/global overlaps, and newer approved state are implemented. Slice 5 lifecycle bounded notices are the next incomplete item.
 
 **Goal:** Let any session/harness cheaply notice newer approved project progress, relevant global preferences, and current canonical workflow/operating-agreement memories without injecting large memory bodies or silently saving new state.
 
@@ -502,8 +503,8 @@ Extension slices:
 
 1. **Complete — read-only freshness/status detection:** shared helper(s) compare a session start time or checkpoint timestamp against approved visible memories for the current project and global scope; metadata is exposed through `memory-lane status --json --since`, `memory-lane doctor --json --since`, and MCP `memory_status({ since })` without returning memory text by default.
 2. **Complete — canonical workflow / operating-agreement memories:** added a read-only operating agreement convention, selector, CLI `memory-lane agreements`, and text-free status/doctor/MCP status metadata for current project/global workflow contracts. Revision/supersede operations are covered by Slice 3.
-3. **Complete — update / replace / supersede primitives:** added explicit CLI-first append-only revision operations for same-id updates, new successor replacements, and approved successor supersede relationships, with dry-run/confirmation safety and revision metadata. MCP mutation parity, duplicate/stale hints, and retrieval filtering remain later work.
-4. **Continuity/status hints for duplicates and stale guidance:** make dashboard/status/review flag possible duplicate workflow memories, superseded memories, project/global preference overlap, and multiple candidate project loops without performing silent cleanup.
+3. **Complete — update / replace / supersede primitives:** added explicit CLI-first append-only revision operations for same-id updates, new successor replacements, and approved successor supersede relationships, with dry-run/confirmation safety and revision metadata. MCP mutation parity and retrieval filtering remain later work; continuity hints are covered by Slice 4.
+4. **Complete — continuity/status hints for stale and overlapping guidance:** dashboard/status/doctor/MCP status flag superseded-visible memories, multiple operating-agreement candidates, project/global preference overlap, and newer approved state without performing silent cleanup.
 5. **Lifecycle bounded notices:** route SessionStart/UserPromptSubmit lifecycle injection through the freshness/canonical helpers so harnesses can surface a compact notice when newer approved progress or current operating agreements exist, with tests for project scope, global scope, status, context budget, and privacy boundaries.
 
 Out of scope for Phase 16:
@@ -597,7 +598,9 @@ Todos:
 
 **Goal:** Enable seamless cross-session and cross-harness continuity for users who have validated their memory pipeline.
 
-This phase turns Phase 13–20 into a cohesive experience: the agent starts a new session already aware of where things left off, can surface newer progress recorded by another session/harness, and can consistently apply global personal preferences without a manual `HANDOFF.md`, while still respecting token-aware context budgets and review controls.
+This phase turns Phase 13–20 into a cohesive experience: the agent starts a new session already aware of where things left off, can surface newer progress recorded by another session/harness, can help the user find or resume the relevant prior workstream by natural language, and can consistently apply global personal preferences without a manual `HANDOFF.md`, while still respecting token-aware context budgets and review controls.
+
+For this roadmap, a workstream is the user-meaningful unit of ongoing work across one or more manual threads, harness sessions, orchestrator threads, subagent runs, branches, PRs, and session summaries. Memory Lane should index durable outcomes and pointers for the workstream, not preserve every operational message inside it.
 
 Todos:
 
@@ -606,9 +609,11 @@ Todos:
 3. In `review` mode, session/release/progress summaries are generated as pending suggestions; users approve them before future sessions use them.
 4. In `automatic` mode, approved session summaries, checkpoint memories, and relevant global preferences are eligible for budgeted injection at the next `SessionStart` alongside baseline memories.
 5. Add cross-session freshness checks: if another harness/session has newer approved project progress, surface a bounded notice or ask whether to recall/review it.
-6. Add confidence and noise thresholds: low-confidence summaries or ambiguous progress events stay pending even in automatic mode.
-7. Add safeguards so users can disable handoff-free mode per project or globally.
-8. Update docs to explain the three modes, risks of automatic mode, token-budget behavior, cross-harness continuity behavior, and how to switch back to manual.
+6. Add natural-language workstream discovery for queries like “resume building X” or “find where we implemented X,” using approved session summaries, checkpoint memories, provenance, PR/branch references when available, and revision relationships as pointers rather than raw transcript search.
+7. Distinguish orchestrator/session-level summaries from subagent task chatter so parallel-agent workflows produce one durable workstream trail instead of many noisy operational memories.
+8. Add confidence and noise thresholds: low-confidence summaries or ambiguous progress events stay pending even in automatic mode.
+9. Add safeguards so users can disable handoff-free mode per project or globally.
+10. Update docs to explain the three modes, risks of automatic mode, token-budget behavior, cross-harness continuity behavior, workstream discovery behavior, and how to switch back to manual.
 
 ## Deferred improvements
 
