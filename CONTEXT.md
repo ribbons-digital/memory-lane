@@ -59,6 +59,10 @@ _Avoid_: Automatic cleanup, rejected memory, deleted memory, new status
 The user-meaningful unit of ongoing work across one or more manual threads, harness sessions, orchestrator threads, subagent runs, branches, PRs, and session summaries. In Phase 16 Slice 4 this is a domain/spec concept only; Memory Lane should infer continuity hints from existing memory metadata rather than adding a first-class workstream id or thread metadata.
 _Avoid_: Thread id, branch id, transcript, subagent task log
 
+**Continuity notice**:
+A compact, plain-language lifecycle signal that Memory Lane has newer approved state, current operating agreements, or continuity hints worth inspecting. It is guidance inside lifecycle context, not a memory body, transcript summary, or cleanup recommendation.
+_Avoid_: Relevant memory, session summary, automatic handoff, cleanup recommendation
+
 **Obsidian mirror**:
 An optional one-way Markdown projection of Memory Lane's JSONL memory records into an Obsidian vault. The JSONL memory store remains the source of truth; edits to mirrored Markdown are not imported by the mirror.
 _Avoid_: Obsidian-backed storage, import, sync
