@@ -67,7 +67,9 @@ memory-lane approve <id>          # approve a pending memory
 memory-lane reject <id>           # reject a pending memory
 memory-lane delete <id>           # soft-delete a memory
 memory-lane status                # quick stats
+memory-lane status --json --since 2026-06-18T00:00:00.000Z
 memory-lane doctor                # full diagnostic report
+memory-lane doctor --json --since 2026-06-18T00:00:00.000Z
 memory-lane compact               # remove deleted/rejected entries
 memory-lane reindex               # (re)build embeddings for all approved memories
 memory-lane init                  # first-time setup wizard for harnesses
@@ -79,6 +81,8 @@ memory-lane uninstall             # remove binary and integration configs
 memory-lane uninstall --yes       # non-interactive uninstall
 memory-lane mcp                   # run the bundled MCP server over stdio
 ```
+
+Freshness status is read-only and memory-text-free. It reports approved visible-memory changes since a checkpoint timestamp so agents can notice possible newer continuity without injecting large memory bodies.
 
 ### Session-end summarization
 

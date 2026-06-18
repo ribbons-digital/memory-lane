@@ -422,6 +422,10 @@ memory-lane obsidian ...          Manage optional Obsidian mirror/import workflo
 
 All commands support `--json` for machine-readable output and `--project <path>` to set the project scope.
 
+### Freshness status
+
+`memory-lane status --json --since <ISO timestamp>` and `memory-lane doctor --json --since <ISO timestamp>` include a read-only `freshness` object. It reports counts and metadata for approved memories visible to the current project scope plus global memories that were updated after the timestamp. Freshness output intentionally excludes memory text; use `memory-lane list --json` or targeted recall when you need the actual memory bodies.
+
 ### Session-end summarization
 
 Session-end summarization is opt-in and disabled by default. It sends a compact session transcript to an explicitly configured OpenAI-compatible chat model, then saves the generated summary as a **pending** memory with `source: "session-summary"`, `kind: "session_summary"`, and `provenance.lifecycleEvent: "session_end"`. The transcript itself is not stored in Memory Lane.

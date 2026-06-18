@@ -474,6 +474,8 @@ Remaining dashboard/review-controls scope:
 
 ## Phase 16 — Freshness, Canonical Continuity, and Memory Revision
 
+**Status:** Slice 1 complete: read-only freshness/status detection is implemented. Canonical workflow/operating-agreement memories, revision/supersede operations, duplicate/stale guidance, and lifecycle bounded notices remain follow-up slices.
+
 **Goal:** Let any session/harness cheaply notice newer approved project progress, relevant global preferences, and current canonical workflow/operating-agreement memories without injecting large memory bodies or silently saving new state.
 
 This is the first direct implementation step toward seamless continuity. It should answer: “What changed in Memory Lane since this session started?”, “Is there approved state from another session/harness that I should surface?”, and “Which memory should be treated as the current version of a workflow, preference, or project operating agreement?”
@@ -489,9 +491,16 @@ First-slice decisions:
 - Global/personal preferences are eligible for a separate preference layer, but this phase should only report that relevant preferences exist unless the context policy selects them.
 - Adapters should call shared lifecycle/core helpers; harness-specific code should not implement its own freshness or canonical-selection rules.
 
+Completed Slice 1 scope:
+
+1. Added read-only freshness helper for approved memories visible to the current project plus global scope.
+2. Exposed freshness metadata through `memory-lane status --json --since`, `memory-lane doctor --json --since`, and MCP `memory_status({ since })`.
+3. Kept freshness output memory-text-free: only counts and metadata such as ids, timestamps, scope, source, kind, and provenance are returned.
+4. Kept lifecycle notices, canonical selection, revision/supersede operations, duplicate hints, and memory writes out of this slice.
+
 Extension slices:
 
-1. **Read-only freshness/status detection:** add shared helper(s) that compare a session start time or checkpoint timestamp against approved visible memories for the current project and global scope; expose metadata through `memory-lane status --json`, `memory-lane doctor`, and MCP `memory_status` without returning memory text by default.
+1. **Complete — read-only freshness/status detection:** shared helper(s) compare a session start time or checkpoint timestamp against approved visible memories for the current project and global scope; metadata is exposed through `memory-lane status --json --since`, `memory-lane doctor --json --since`, and MCP `memory_status({ since })` without returning memory text by default.
 2. **Canonical workflow / operating-agreement memories:** add a supported convention for current workflow rules such as project loops, global working preferences, release processes, PR processes, and review gates so new sessions can reliably discover small operating contracts before starting work.
 3. **Update / replace / supersede primitives:** expose explicit CLI-first operations for revising active memories while preserving append-only history, e.g. update an existing memory, replace an old memory with refined text, and mark older memories as superseded by the current one; MCP parity can follow once CLI semantics are proven.
 4. **Continuity/status hints for duplicates and stale guidance:** make dashboard/status/review flag possible duplicate workflow memories, superseded memories, project/global preference overlap, and multiple candidate project loops without performing silent cleanup.
