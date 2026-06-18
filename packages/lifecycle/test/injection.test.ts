@@ -213,6 +213,45 @@ test("renderContinuityNotice omits unsafe suggested action text", () => {
   ])
 })
 
+test("renderContinuityNotice renders project/global preference overlap from hint code", () => {
+  const result = renderContinuityNotice({
+    hints: continuityHints({
+      hintCount: 1,
+      hints: [{
+        code: "project-global-overlap",
+        severity: "info",
+        message: "PRIVATE PROJECT/GLOBAL OVERLAP MESSAGE SHOULD NOT RENDER",
+        count: 2,
+        memoryIds: ["project-pref-secret-id", "global-pref-secret-id"],
+        workflowArea: "pr-process",
+        suggestedActions: ["memory-lane dashboard"],
+      }],
+      supersededVisible: [],
+      operatingAgreementOverlaps: [],
+      projectGlobalPreferenceOverlaps: [{
+        workflowArea: "pr-process",
+        projectIds: ["project-pref-secret-id"],
+        globalIds: ["global-pref-secret-id"],
+      }],
+      newerApproved: undefined,
+      suggestedActions: [],
+      notes: ["PRIVATE NOTE SHOULD NOT RENDER"],
+    }),
+    operatingAgreements: operatingAgreements({ primaryCount: 0, workflowAreas: [], primary: [] }),
+    maxChars: 900,
+  })
+
+  assert.equal(result.generated, true)
+  assert.equal(result.injected, true)
+  assert.equal(result.operatingAgreementPrimaryCount, 0)
+  assert.deepEqual(result.hintCodes, ["project-global-overlap"])
+  assert.match(result.text, /Project and global preferences may overlap/u)
+  assert.match(result.text, /Inspect Memory Lane before choosing which preference applies/u)
+  assert.match(result.text, /memory-lane dashboard/u)
+  assert.doesNotMatch(result.text, /Current workflow agreements are available/u)
+  assert.doesNotMatch(result.text, /project-pref-secret-id|global-pref-secret-id|PRIVATE/u)
+})
+
 test("renderContinuityNotice returns not generated when there are no signals", () => {
   const result = renderContinuityNotice({
     hints: continuityHints({ hintCount: 0, hints: [], supersededVisible: [], newerApproved: undefined, suggestedActions: [] }),
