@@ -973,7 +973,10 @@ describe("CLI integration", () => {
 
     assert.match(output, /Continuity hints/u)
     assert.match(output, /superseded-visible/u)
+    assert.match(output, /Suggested actions/u)
     assert.match(output, /memory-lane list --json/u)
+    assert.doesNotMatch(output, /Continuity inspection/u)
+    assert.equal(output.match(/memory-lane list --json/gu)?.length, 1)
     assert.doesNotMatch(output, /PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT/u)
   })
 

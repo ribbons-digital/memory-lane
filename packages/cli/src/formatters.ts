@@ -192,12 +192,6 @@ export function formatDashboard(memories: MemoryRecord[], json: boolean, extraMe
       "Continuity hints:",
       ...summary.continuityHints.hints.map((hint) => `  ${figures.bullet} ${hint.code}: ${hint.count}${hint.workflowArea ? ` (${hint.workflowArea})` : ""}`),
     )
-    if (summary.continuityHints.suggestedActions.length) {
-      lines.push(
-        "Continuity inspection:",
-        ...summary.continuityHints.suggestedActions.map((action) => `  ${colorize(figures.arrowRight, "cyan")} ${action}`),
-      )
-    }
   }
   lines.push(
     "Suggested actions:",
