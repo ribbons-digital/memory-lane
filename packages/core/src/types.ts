@@ -92,6 +92,67 @@ export interface FreshnessStatusOptions {
   maxNewerMetadata?: number
 }
 
+export type WorkflowArea =
+  | "project-loop"
+  | "review-gate"
+  | "pr-process"
+  | "release-process"
+  | "tooling-preference"
+  | "other"
+
+export type OperatingAgreementMatchReason = "explicit-kind" | "heuristic"
+
+export interface OperatingAgreementSelection {
+  memory: MemoryRecord
+  workflowArea: WorkflowArea
+  matchReason: OperatingAgreementMatchReason
+  recommendedKind?: "workflow_rule"
+}
+
+export interface OperatingAgreementMetadata {
+  id: string
+  category: MemoryCategory
+  scope: MemoryScope
+  source: MemorySource
+  createdAt: string
+  updatedAt: string
+  kind?: MemoryKind
+  provenance?: MemoryProvenance
+  workflowArea: WorkflowArea
+  matchReason: OperatingAgreementMatchReason
+  recommendedKind?: "workflow_rule"
+}
+
+export interface OperatingAgreementList {
+  projectScope: string | "none"
+  workflowAreas: WorkflowArea[]
+  primary: OperatingAgreementSelection[]
+  relatedCandidates: OperatingAgreementSelection[]
+  omittedPrimaryCount: number
+  omittedRelatedCandidateCount: number
+  notes: string[]
+}
+
+export interface OperatingAgreementSummary {
+  projectScope: string | "none"
+  primaryCount: number
+  relatedCandidateCount: number
+  omittedPrimaryCount: number
+  omittedRelatedCandidateCount: number
+  workflowAreas: WorkflowArea[]
+  primary: OperatingAgreementMetadata[]
+  relatedCandidates: OperatingAgreementMetadata[]
+  notes: string[]
+}
+
+export interface OperatingAgreementOptions {
+  projectScopeKey?: string
+  all?: boolean
+  area?: WorkflowArea
+  limit?: number
+  relatedLimit?: number
+}
+
 export interface ProjectScope {
   cwd: string
   root: string
