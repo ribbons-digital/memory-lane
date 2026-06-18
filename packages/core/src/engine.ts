@@ -18,6 +18,7 @@ import { compact as compactStores, shouldCompact } from "./compact.js"
 import { diagnoseIntegrations, type IntegrationDiagnosticPaths } from "./integration-diagnostics.js"
 import { validateSaveInput } from "./storage-validation.js"
 import { isMetaTaskPromptText } from "./meta-task-filter.js"
+import { buildFreshnessStatus } from "./freshness.js"
 import {
   contentHash, createNewMemory, saveContext, shouldAutoEmbed, timestamp, visibleInScope,
   type SaveContext,
@@ -26,6 +27,7 @@ import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
   MemoryKind, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, ProjectScope,
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig,
+  FreshnessStatus,
 } from "./types.js"
 
 function displayValue(value: unknown): string {
@@ -514,8 +516,15 @@ export class MemoryEngine {
     }
   }
 
+  freshnessStatus(opts?: { since?: string }): FreshnessStatus {
+    return buildFreshnessStatus(this.store.list(), {
+      projectScopeKey: this.scope?.key,
+      since: opts?.since,
+    })
+  }
+
   /** Generate a diagnostic report. */
-  doctor(): Record<string, unknown> {
+  doctor(opts?: { freshnessSince?: string }): Record<string, unknown> {
     const mems = this.store.list()
     const embStore = createEmbeddingStore(this.embPath)
     const embs = embStore.listEmbeddings()
@@ -537,6 +546,7 @@ export class MemoryEngine {
       activeProfileName: config.activeEmbeddingProfile,
       projectScope: this.scope?.key ?? "none",
       integrations: diagnoseIntegrations({ cwd: this.scope?.cwd ?? null, paths: this.integrationPaths }),
+      freshness: this.freshnessStatus({ since: opts?.freshnessSince }),
       ...this.semanticDoctor(mems),
       ...this.contextPolicyDoctor(),
       ...this.memoryFileDoctor(),
