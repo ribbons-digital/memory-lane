@@ -2,7 +2,7 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { groupReviewMemories, isMetaTaskPromptText, revisionLabel, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type OperatingAgreementList, type OperatingAgreementSummary, type UpdatePreview } from "@memory-lane/core"
+import { groupReviewMemories, isMetaTaskPromptText, revisionLabel, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type OperatingAgreementList, type OperatingAgreementSummary, type UpdatePreview, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
@@ -337,6 +337,32 @@ export function formatUpdatePreview(result: UpdatePreview, json: boolean): strin
   ].join("\n")
 }
 
+function formatRevisionWarnings(warnings: Array<{ message: string }>): string[] {
+  return warnings.map((warning) => `Warning: ${warning.message}`)
+}
+
+export function formatSupersedeResult(result: SupersedeResult, json: boolean): string {
+  if (json) return JSON.stringify({ ok: true, data: result, meta: meta({ count: result.superseded.length }) }, null, 2)
+  return [
+    result.dryRun ? "Supersede dry run:" : "Superseded memories:",
+    `Successor: ${result.successor.id}`,
+    `Old memories: ${result.superseded.map((m) => m.id).join(", ") || "none"}`,
+    ...formatRevisionWarnings(result.warnings),
+    ...(result.mirrorWarnings ?? []).map((warning) => `Warning: ${warning}`),
+  ].join("\n")
+}
+
+export function formatReplaceResult(result: ReplaceResult, json: boolean): string {
+  if (json) return JSON.stringify({ ok: true, data: result, meta: meta({ count: result.superseded.length }) }, null, 2)
+  return [
+    result.dryRun ? "Replace dry run:" : "Replaced memory:",
+    `Successor: [${result.successor.id}] ${compactPreview(result.successor.text)}`,
+    `Superseded old memories: ${result.superseded.map((m) => m.id).join(", ") || "none"}`,
+    ...formatRevisionWarnings(result.warnings),
+    ...(result.mirrorWarnings ?? []).map((warning) => `Warning: ${warning}`),
+  ].join("\n")
+}
+
 export function formatSaveResult(result: SaveResult, json: boolean): string {
   if (result.status === "saved") {
     if (json) {
@@ -546,6 +572,10 @@ Commands:
   reject <id>
   update <id> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run]
                   Revise an active memory with the same id
+  supersede <new-id> <old-id...> [--reason <reason>] [--dry-run] [--yes]
+                  Mark approved old memories as superseded by an approved successor
+  replace <old-id...> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run] [--yes]
+                  Create a successor memory and optionally supersede old memories
   review [--kind <kind>] [--source <source>] [--provenance <adapter/event>] [--suspect-meta] [--include-approved]
   dashboard [--all]
                   Compact continuity and review overview

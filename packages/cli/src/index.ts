@@ -19,7 +19,7 @@ import type { SemanticMemoryConfig } from "@memory-lane/core"
 import { resolveBundledPlugin } from "./plugins.js"
 import {
   formatMemories, formatReviewMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
-  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatImportPlan, formatOperatingAgreements, formatError, formatUpdatePreview, usage,
+  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatImportPlan, formatOperatingAgreements, formatError, formatUpdatePreview, formatSupersedeResult, formatReplaceResult, usage,
   type ObsidianImportApplyResult,
 } from "./formatters.js"
 
@@ -182,6 +182,12 @@ function optionalTextArg(ctx: CliContext): string | undefined {
   return undefined
 }
 
+function requireYesForMultiple(ctx: CliContext, ids: string[], action: string): void {
+  if (ids.length <= 1 || hasFlag(ctx.argv, "yes") || hasFlag(ctx.argv, "dry-run")) return
+  console.log(formatError(`${action} with multiple old memories requires --yes or --dry-run`, ctx.json))
+  process.exit(1)
+}
+
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = []
   for await (const chunk of process.stdin) {
@@ -299,6 +305,47 @@ async function handleUpdate(ctx: CliContext): Promise<void> {
     process.exit(1)
   }
   console.log(formatMutationResult("Updated", mem, ctx.json))
+}
+
+function handleSupersede(ctx: CliContext): void {
+  const [newId, ...oldIds] = ctx.rest
+  if (!newId || !oldIds.length) {
+    console.log(formatError("Usage: memory-lane supersede <new-id> <old-id...>", ctx.json))
+    process.exit(1)
+  }
+  requireYesForMultiple(ctx, oldIds, "supersede")
+  const result = ctx.engine.supersede(newId, oldIds, {
+    reason: flag(ctx.argv, "reason"),
+    revisedBy: "cli",
+    dryRun: hasFlag(ctx.argv, "dry-run"),
+  })
+  console.log(formatSupersedeResult(result, ctx.json))
+}
+
+async function handleReplace(ctx: CliContext): Promise<void> {
+  const oldIds = ctx.rest
+  if (!oldIds.length) {
+    console.log(formatError("Usage: memory-lane replace <old-id...> --text <text>|--stdin", ctx.json))
+    process.exit(1)
+  }
+  requireYesForMultiple(ctx, oldIds, "replace")
+  const fromStdin = hasFlag(ctx.argv, "stdin")
+  const textFromFlag = optionalTextArg(ctx)
+  const text = fromStdin ? await readStdin() : textFromFlag
+  if (text === undefined) {
+    console.log(formatError("Replacement text required: use --text <text> or --stdin", ctx.json))
+    process.exit(1)
+  }
+  const result = ctx.engine.replace(oldIds, {
+    text,
+    category: flag(ctx.argv, "category") as any,
+    kind: flag(ctx.argv, "kind") as any,
+    status: flag(ctx.argv, "status") as any,
+    reason: flag(ctx.argv, "reason"),
+    revisedBy: "cli",
+    dryRun: hasFlag(ctx.argv, "dry-run"),
+  })
+  console.log(formatReplaceResult(result, ctx.json))
 }
 
 function handleReview(ctx: CliContext): void {
@@ -810,6 +857,8 @@ const commandHandlers: Record<string, CommandHandler> = {
   approve: handleApprove,
   reject: handleReject,
   update: handleUpdate,
+  supersede: handleSupersede,
+  replace: handleReplace,
   review: handleReview,
   dashboard: handleDashboard,
   agreements: handleAgreements,
