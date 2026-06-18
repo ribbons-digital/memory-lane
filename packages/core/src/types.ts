@@ -21,6 +21,16 @@ export interface MemoryProvenance {
   toolName?: string
 }
 
+export type MemoryRevisionActor = "manual" | "cli" | "mcp"
+
+export interface MemoryRevision {
+  supersedes?: string[]
+  supersededBy?: string
+  reason?: string
+  revisedAt: string
+  revisedBy: MemoryRevisionActor
+}
+
 export type MemoryKind =
   | "preference"
   | "personal_context"
@@ -54,6 +64,7 @@ export interface MemoryRecord {
   project?: ProjectInfo
   kind?: MemoryKind
   provenance?: MemoryProvenance
+  revision?: MemoryRevision
 }
 
 export interface FreshnessMemoryMetadata {
@@ -167,6 +178,7 @@ export interface SaveInput {
   status?: MemoryStatus
   kind?: MemoryKind
   provenance?: MemoryProvenance
+  revision?: MemoryRevision
 }
 
 export interface UpdateInput {
@@ -174,6 +186,8 @@ export interface UpdateInput {
   category?: MemoryCategory
   status?: Extract<MemoryStatus, "pending" | "approved">
   kind?: MemoryKind
+  reason?: string
+  revisedBy?: MemoryRevisionActor
 }
 
 export type SaveResult =
@@ -181,6 +195,31 @@ export type SaveResult =
   | { status: "skipped"; reason: "empty" | "secret" | "duplicate" | "meta task prompt"; warnings?: string[] }
 
 export type MemoryMutationResult = MemoryRecord & { warnings?: string[] }
+
+export interface RevisionWarning {
+  code: "cross-scope" | "cross-category"
+  message: string
+  memoryId?: string
+}
+
+export interface UpdatePreview {
+  dryRun: true
+  current: MemoryRecord
+  proposed: MemoryRecord
+  warnings: string[]
+}
+
+export interface SupersedeResult {
+  dryRun: boolean
+  successor: MemoryRecord
+  superseded: MemoryRecord[]
+  warnings: RevisionWarning[]
+  mirrorWarnings?: string[]
+}
+
+export interface ReplaceResult extends SupersedeResult {
+  successorCreated: boolean
+}
 
 export interface RecallOptions {
   topK?: number

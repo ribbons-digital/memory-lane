@@ -110,6 +110,52 @@ describe("MemoryStore", () => {
     assert.deepEqual(store.list(), [])
   })
 
+  it("storage preserves valid revision metadata", () => {
+    const file = path.join(dir, "memories.jsonl")
+    const store = createMemoryStore(file)
+    const record: MemoryRecord = {
+      id: "revision-valid",
+      text: "Refined workflow rule",
+      category: "project",
+      scope: { type: "project", key: "project-a" },
+      status: "approved",
+      source: "manual",
+      kind: "workflow_rule",
+      createdAt: "2026-06-18T00:00:00.000Z",
+      updatedAt: "2026-06-18T01:00:00.000Z",
+      revision: {
+        supersedes: ["old-a", "old-b"],
+        reason: "merged duplicate workflow memories",
+        revisedAt: "2026-06-18T01:00:00.000Z",
+        revisedBy: "cli",
+      },
+    }
+
+    store.append(record)
+
+    assert.deepEqual(store.list()[0].revision, record.revision)
+  })
+
+  it("storage skips records with invalid revision metadata", () => {
+    const file = path.join(dir, "memories.jsonl")
+    fs.writeFileSync(file, JSON.stringify({
+      id: "revision-invalid",
+      text: "Bad revision",
+      category: "project",
+      scope: { type: "global" },
+      status: "approved",
+      source: "manual",
+      createdAt: "2026-06-18T00:00:00.000Z",
+      updatedAt: "2026-06-18T00:00:00.000Z",
+      revision: { supersededBy: "new-id", revisedAt: "not-an-iso-date", revisedBy: "robot" },
+    }) + "\n", "utf8")
+
+    const store = createMemoryStore(file)
+
+    assert.equal(store.list().length, 0)
+    assert.equal(store.diagnostics().invalidRows, 1)
+  })
+
   it("caches reads", () => {
     const store = createMemoryStore(file)
     store.append(rec({ id: "a" }))
