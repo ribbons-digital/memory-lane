@@ -45,7 +45,7 @@ memory-lane recall "package manager"
 memory-lane recall "what were we working on"
 ```
 
-## Operating agreements
+### Operating agreements
 
 When you need the current project workflow, review gates, PR process, release process, or tooling workflow rules, prefer the explicit command:
 
@@ -54,7 +54,7 @@ memory-lane agreements
 memory-lane agreements --area project-loop
 ```
 
-The command returns approved operating agreement text for the current project plus global scope. `memory-lane status --json` and MCP `memory_status` only expose text-free agreement metadata.
+The command returns approved operating agreement text for the current project plus global scope. `memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` only expose text-free agreement metadata.
 
 ### List (respects project scope by default)
 
