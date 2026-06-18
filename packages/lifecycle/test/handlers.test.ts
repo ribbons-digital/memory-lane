@@ -18,6 +18,16 @@ function engineInTemp(cwd?: string, memoryConfig?: Record<string, unknown>): Mem
   return engine
 }
 
+function saveWorkflowAgreement(engine: MemoryEngine): void {
+  engine.save({
+    text: "PRIVATE WORKFLOW AGREEMENT TEXT Project workflow loop: inspect roadmap before implementation.",
+    status: "approved",
+    category: "project",
+    scopeType: "project",
+    kind: "workflow_rule",
+  })
+}
+
 test("user-prompt list-memory intent returns authoritative list guidance instead of filtered relevant memory", async () => {
   const project = tempDir()
   const engine = engineInTemp(project)
@@ -58,14 +68,16 @@ test("user-prompt policy-only returns guidance without recalling memory bodies",
   })
 })
 
-test("session-start off policy injects no baseline context", () => {
+test("session-start off policy injects no baseline context or continuity notice", () => {
   const project = tempDir()
   const engine = engineInTemp(project, { contextPolicy: { mode: "off" } })
   engine.save({ text: "This repo uses pnpm", status: "approved", category: "project", scopeType: "project" })
+  saveWorkflowAgreement(engine)
 
   const result = handleSessionStart(engine, { cwd: project })
 
   assert.equal(result.additionalContext, undefined)
+  assert.equal(result.contextDecision?.continuity, undefined)
   assert.deepEqual(result.contextDecision, {
     event: "sessionStart",
     mode: "off",
@@ -75,6 +87,69 @@ test("session-start off policy injects no baseline context", () => {
     omitted: 0,
     omittedReasons: ["off"],
   })
+})
+
+test("session-start policy-only injects continuity notice without memory bodies", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "policy-only" } })
+  saveWorkflowAgreement(engine)
+
+  const result = handleSessionStart(engine, { cwd: project })
+
+  assert.match(result.additionalContext ?? "", /mode="policy-only"/u)
+  assert.match(result.additionalContext ?? "", /Continuity notice:/u)
+  assert.match(result.additionalContext ?? "", /Current workflow agreements are available/u)
+  assert.match(result.additionalContext ?? "", /memory-lane agreements/u)
+  assert.doesNotMatch(result.additionalContext ?? "", /PRIVATE WORKFLOW AGREEMENT TEXT/u)
+  assert.equal(result.contextDecision?.continuity?.generated, true)
+  assert.equal(result.contextDecision?.continuity?.injected, true)
+  assert.equal(result.contextDecision?.continuity?.operatingAgreementPrimaryCount, 1)
+  assert.equal("text" in (result.contextDecision?.continuity ?? {}), false)
+})
+
+test("session-start selective injects continuity notice before relevant memory", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "selective", maxItems: { sessionStart: 1 } } })
+  saveWorkflowAgreement(engine)
+  engine.save({ text: "Baseline memory body", status: "approved", category: "project", scopeType: "project" })
+
+  const result = handleSessionStart(engine, { cwd: project })
+  const context = result.additionalContext ?? ""
+
+  assert.match(context, /Continuity notice:/u)
+  assert.match(context, /## Relevant Memory/u)
+  assert.ok(context.indexOf("Continuity notice:") < context.indexOf("## Relevant Memory"))
+  assert.match(context, /Baseline memory body/u)
+  assert.doesNotMatch(context, /PRIVATE WORKFLOW AGREEMENT TEXT/u)
+  assert.equal(result.contextDecision?.continuity?.injected, true)
+})
+
+test("session-start continuity notice reports newer approved state from since", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "policy-only" } })
+  engine.save({ text: "PRIVATE NEW CHECKPOINT TEXT", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint" })
+
+  const result = handleSessionStart(engine, { cwd: project, since: "2000-01-01T00:00:00.000Z" })
+
+  assert.match(result.additionalContext ?? "", /There is newer approved Memory Lane state/u)
+  assert.match(result.additionalContext ?? "", /memory-lane status --json --since 2000-01-01T00:00:00.000Z/u)
+  assert.doesNotMatch(result.additionalContext ?? "", /PRIVATE NEW CHECKPOINT TEXT/u)
+  assert.equal(result.contextDecision?.continuity?.newerApprovedCount, 1)
+  assert.deepEqual(result.contextDecision?.continuity?.hintCodes.includes("newer-approved"), true)
+  assert.equal("text" in (result.contextDecision?.continuity ?? {}), false)
+})
+
+test("session-start tight budget records continuity budget omission", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "policy-only", maxChars: { sessionStart: 20 } } })
+  saveWorkflowAgreement(engine)
+
+  const result = handleSessionStart(engine, { cwd: project })
+
+  assert.doesNotMatch(result.additionalContext ?? "", /Continuity notice:/u)
+  assert.equal(result.contextDecision?.continuity?.generated, true)
+  assert.equal(result.contextDecision?.continuity?.injected, false)
+  assert.deepEqual(result.contextDecision?.continuity?.omittedReasons, ["continuity-budget"])
 })
 
 test("session-start selective policy uses configured item budget", () => {
@@ -95,6 +170,16 @@ test("session-start selective policy uses configured item budget", () => {
     maxChars: 1600,
     selected: 1,
     omitted: 1,
+    continuity: {
+      generated: false,
+      injected: false,
+      omittedReasons: [],
+      hintCount: 0,
+      hintCodes: [],
+      newerApprovedCount: undefined,
+      operatingAgreementPrimaryCount: 0,
+      suggestedActions: [],
+    },
     omittedReasons: ["budget-or-filter"],
   })
 })
