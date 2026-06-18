@@ -21,6 +21,7 @@ The product goal is not another isolated chat-history search box. Memory Lane sh
 Design implications:
 
 - If the same project is open in multiple sessions or harnesses, important progress from one session should be available to the others without the user manually restating it.
+- Users should be able to ask natural-language continuity questions such as “resume building X” or “find the thread where we implemented X,” and Memory Lane should surface the relevant project memories, session summaries, checkpoints, PRs, and successor/superseded guidance without requiring the user to remember thread ids, branch names, or dates.
 - Durable personal preferences should be consistently available across projects and harnesses so workflows stay streamlined and predictable.
 - Project continuity should be an intentional index, not a transcript dump: store and surface compact, useful state rather than raw conversations by default.
 - The system should remain non-autonomous and low-noise: prefer bounded context injection, freshness checks, and implicit reminders to add/update memories over silent broad autosave.
@@ -597,7 +598,9 @@ Todos:
 
 **Goal:** Enable seamless cross-session and cross-harness continuity for users who have validated their memory pipeline.
 
-This phase turns Phase 13–20 into a cohesive experience: the agent starts a new session already aware of where things left off, can surface newer progress recorded by another session/harness, and can consistently apply global personal preferences without a manual `HANDOFF.md`, while still respecting token-aware context budgets and review controls.
+This phase turns Phase 13–20 into a cohesive experience: the agent starts a new session already aware of where things left off, can surface newer progress recorded by another session/harness, can help the user find or resume the relevant prior workstream by natural language, and can consistently apply global personal preferences without a manual `HANDOFF.md`, while still respecting token-aware context budgets and review controls.
+
+For this roadmap, a workstream is the user-meaningful unit of ongoing work across one or more manual threads, harness sessions, orchestrator threads, subagent runs, branches, PRs, and session summaries. Memory Lane should index durable outcomes and pointers for the workstream, not preserve every operational message inside it.
 
 Todos:
 
@@ -606,9 +609,11 @@ Todos:
 3. In `review` mode, session/release/progress summaries are generated as pending suggestions; users approve them before future sessions use them.
 4. In `automatic` mode, approved session summaries, checkpoint memories, and relevant global preferences are eligible for budgeted injection at the next `SessionStart` alongside baseline memories.
 5. Add cross-session freshness checks: if another harness/session has newer approved project progress, surface a bounded notice or ask whether to recall/review it.
-6. Add confidence and noise thresholds: low-confidence summaries or ambiguous progress events stay pending even in automatic mode.
-7. Add safeguards so users can disable handoff-free mode per project or globally.
-8. Update docs to explain the three modes, risks of automatic mode, token-budget behavior, cross-harness continuity behavior, and how to switch back to manual.
+6. Add natural-language workstream discovery for queries like “resume building X” or “find where we implemented X,” using approved session summaries, checkpoint memories, provenance, PR/branch references when available, and revision relationships as pointers rather than raw transcript search.
+7. Distinguish orchestrator/session-level summaries from subagent task chatter so parallel-agent workflows produce one durable workstream trail instead of many noisy operational memories.
+8. Add confidence and noise thresholds: low-confidence summaries or ambiguous progress events stay pending even in automatic mode.
+9. Add safeguards so users can disable handoff-free mode per project or globally.
+10. Update docs to explain the three modes, risks of automatic mode, token-budget behavior, cross-harness continuity behavior, workstream discovery behavior, and how to switch back to manual.
 
 ## Deferred improvements
 
