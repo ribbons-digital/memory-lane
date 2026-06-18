@@ -136,6 +136,46 @@ function agreementFixtureRecords(projectScope: string): MemoryRecord[] {
   ]
 }
 
+function continuityFixtureRecords(projectScope: string): MemoryRecord[] {
+  return [
+    {
+      id: "current-loop",
+      text: "PRIVATE CURRENT LOOP TEXT Project workflow loop: spec approval then implementation.",
+      category: "project",
+      scope: { type: "project", key: projectScope },
+      status: "approved",
+      source: "manual",
+      kind: "workflow_rule",
+      createdAt: "2026-06-18T10:00:00.000Z",
+      updatedAt: "2026-06-18T10:00:00.000Z",
+      revision: { supersedes: ["old-loop"], revisedAt: "2026-06-18T10:00:00.000Z", revisedBy: "cli" },
+    },
+    {
+      id: "old-loop",
+      text: "PRIVATE OLD LOOP TEXT Project workflow loop: older duplicate.",
+      category: "project",
+      scope: { type: "project", key: projectScope },
+      status: "approved",
+      source: "manual",
+      kind: "project_fact",
+      createdAt: "2026-06-18T09:00:00.000Z",
+      updatedAt: "2026-06-18T09:00:00.000Z",
+      revision: { supersededBy: "current-loop", revisedAt: "2026-06-18T10:00:00.000Z", revisedBy: "cli" },
+    },
+    {
+      id: "global-loop",
+      text: "PRIVATE GLOBAL LOOP TEXT Project workflow loop global preference.",
+      category: "preference",
+      scope: { type: "global" },
+      status: "approved",
+      source: "manual",
+      kind: "workflow_rule",
+      createdAt: "2026-06-18T08:00:00.000Z",
+      updatedAt: "2026-06-18T08:00:00.000Z",
+    },
+  ]
+}
+
 describe("CLI integration", () => {
   let dir: string, memFile: string, embFile: string, cfgFile: string
   beforeEach(() => {
@@ -904,6 +944,57 @@ describe("CLI integration", () => {
     assert.doesNotMatch(payload.data.recent.sessionSummaries[0].preview, /## Session Summary/u)
     assert.doesNotMatch(JSON.stringify(payload), /Hidden private tail/u)
     assert.ok(payload.data.suggestedActions.includes("memory-lane review"))
+  })
+
+  it("dashboard --json includes text-free continuity hints", () => {
+    const dir = tempDir()
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-continuity" }))
+    const memoryFile = path.join(dir, "mem.jsonl")
+    writeMemoryRecords(memoryFile, continuityFixtureRecords("cli-continuity"))
+
+    const output = run(["dashboard", "--json", "--project", project], { MEMORY_LANE_FILE: memoryFile, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "emb.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json") })
+    const parsed = JSON.parse(output)
+
+    assert.equal(parsed.ok, true)
+    assert.equal(parsed.data.continuityHints.supersededVisible[0].id, "old-loop")
+    assert.ok(parsed.data.continuityHints.hints.some((hint: any) => hint.code === "superseded-visible"))
+    assert.doesNotMatch(JSON.stringify(parsed.data.continuityHints), /PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT/u)
+  })
+
+  it("dashboard human output shows compact continuity hints without memory text", () => {
+    const dir = tempDir()
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-continuity-human" }))
+    const memoryFile = path.join(dir, "mem.jsonl")
+    writeMemoryRecords(memoryFile, continuityFixtureRecords("cli-continuity-human"))
+
+    const output = run(["dashboard", "--project", project], { MEMORY_LANE_FILE: memoryFile, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "emb.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json") })
+
+    assert.match(output, /Continuity hints/u)
+    assert.match(output, /superseded-visible/u)
+    assert.match(output, /memory-lane list --json/u)
+    assert.doesNotMatch(output, /PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT/u)
+  })
+
+  it("status and doctor json include text-free continuity hints", () => {
+    const dir = tempDir()
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-continuity-status" }))
+    const memoryFile = path.join(dir, "mem.jsonl")
+    writeMemoryRecords(memoryFile, continuityFixtureRecords("cli-continuity-status"))
+    const env = { MEMORY_LANE_FILE: memoryFile, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "emb.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json") }
+
+    const status = JSON.parse(run(["status", "--json", "--since", "2026-06-18T07:00:00.000Z", "--project", project], env))
+    const doctor = JSON.parse(run(["doctor", "--json", "--since", "2026-06-18T07:00:00.000Z", "--project", project], env))
+    const humanDoctor = run(["doctor", "--since", "2026-06-18T07:00:00.000Z", "--project", project], env)
+
+    assert.equal(status.data.continuityHints.newerApproved.count, 3)
+    assert.equal(doctor.data.continuityHints.newerApproved.count, 3)
+    assert.doesNotMatch(JSON.stringify(status.data.continuityHints), /PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT/u)
+    assert.doesNotMatch(JSON.stringify(doctor.data.continuityHints), /PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT/u)
+    assert.match(humanDoctor, /Continuity hints: \d+ \(/u)
+    assert.doesNotMatch(humanDoctor, /supersededVisible|PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT/u)
   })
 
   it("dashboard human output gives session-summary previews enough context without full dumps", () => {

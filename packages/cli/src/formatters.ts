@@ -2,7 +2,7 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { groupReviewMemories, isMetaTaskPromptText, revisionLabel, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type OperatingAgreementList, type OperatingAgreementSummary, type UpdatePreview, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
+import { buildContinuityHints, groupReviewMemories, isMetaTaskPromptText, revisionLabel, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type OperatingAgreementList, type OperatingAgreementSummary, type UpdatePreview, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
@@ -74,6 +74,7 @@ export interface DashboardSummary {
   recent: {
     sessionSummaries: Array<{ id: string; createdAt: string; status: MemoryRecord["status"]; provenance: string; preview: string }>
   }
+  continuityHints: ContinuityHintSummary
   suggestedActions: string[]
 }
 
@@ -109,10 +110,12 @@ export function buildDashboardSummary(memories: MemoryRecord[], projectScope = "
   const pending = memories.filter((memory) => memory.status === "pending")
   const sessionSummaries = pending.filter((memory) => memory.kind === "session_summary")
   const suspectMeta = pending.filter((memory) => isMetaTaskPromptText(memory.text))
+  const continuityHints = buildContinuityHints(memories, { projectScopeKey: projectScope === "none" ? undefined : projectScope })
   const suggestedActions: string[] = []
   if (pending.length) suggestedActions.push("memory-lane review")
   if (suspectMeta.length) suggestedActions.push("memory-lane review --suspect-meta")
-  if (!pending.length && !suspectMeta.length) suggestedActions.push("memory-lane recall <query>")
+  for (const action of continuityHints.suggestedActions) suggestedActions.push(action)
+  if (!suggestedActions.length) suggestedActions.push("memory-lane recall <query>")
 
   return {
     projectScope,
@@ -139,7 +142,8 @@ export function buildDashboardSummary(memories: MemoryRecord[], projectScope = "
         preview: sessionSummaryPreview(memory.text),
       })),
     },
-    suggestedActions,
+    continuityHints,
+    suggestedActions: [...new Set(suggestedActions)],
   }
 }
 
@@ -182,6 +186,18 @@ export function formatDashboard(memories: MemoryRecord[], json: boolean, extraMe
         `    ${memory.preview}`,
       ]),
     )
+  }
+  if (summary.continuityHints.hintCount) {
+    lines.push(
+      "Continuity hints:",
+      ...summary.continuityHints.hints.map((hint) => `  ${figures.bullet} ${hint.code}: ${hint.count}${hint.workflowArea ? ` (${hint.workflowArea})` : ""}`),
+    )
+    if (summary.continuityHints.suggestedActions.length) {
+      lines.push(
+        "Continuity inspection:",
+        ...summary.continuityHints.suggestedActions.map((action) => `  ${colorize(figures.arrowRight, "cyan")} ${action}`),
+      )
+    }
   }
   lines.push(
     "Suggested actions:",
@@ -463,6 +479,19 @@ function formatOperatingAgreementSummary(value: unknown): string | undefined {
   return `Operating agreements: ${value.primaryCount} primary, ${value.relatedCandidateCount} related candidates (areas: ${areas}). Use memory-lane agreements to inspect agreement text.`
 }
 
+function isContinuityHintSummary(value: unknown): value is ContinuityHintSummary {
+  return typeof value === "object" && value !== null
+    && typeof (value as ContinuityHintSummary).hintCount === "number"
+    && Array.isArray((value as ContinuityHintSummary).hints)
+}
+
+function formatContinuityHintSummary(value: unknown): string | undefined {
+  if (!isContinuityHintSummary(value)) return undefined
+  if (!value.hintCount) return "Continuity hints: none"
+  const codes = value.hints.map((hint) => hint.workflowArea ? `${hint.code}/${hint.workflowArea}` : hint.code).join(", ")
+  return `Continuity hints: ${value.hintCount} (${codes}). Use memory-lane dashboard for inspection actions.`
+}
+
 export function formatOperatingAgreements(result: OperatingAgreementList, json: boolean): string {
   if (json) {
     return JSON.stringify({ ok: true, data: result, meta: meta({ count: result.primary.length, relatedCount: result.relatedCandidates.length }) }, null, 2)
@@ -514,6 +543,7 @@ export function formatDoctor(report: Record<string, unknown>, json: boolean): st
     .filter(([k]) => !contextPolicyDoctorKeys.has(k))
     .map(([k, v]) => {
       if (k === "freshness") return formatFreshnessSummary(v) ?? "freshness: unavailable"
+      if (k === "continuityHints") return formatContinuityHintSummary(v) ?? "continuityHints: unavailable"
       if (k === "operatingAgreements") return formatOperatingAgreementSummary(v) ?? "operatingAgreements: unavailable"
       if (v && typeof v === "object") return `${k}: ${JSON.stringify(v, null, 2)}`
       return `${k}: ${v}`
