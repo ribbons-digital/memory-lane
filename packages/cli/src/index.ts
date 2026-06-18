@@ -19,7 +19,7 @@ import type { SemanticMemoryConfig } from "@memory-lane/core"
 import { resolveBundledPlugin } from "./plugins.js"
 import {
   formatMemories, formatReviewMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
-  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatImportPlan, formatOperatingAgreements, formatError, usage,
+  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatImportPlan, formatOperatingAgreements, formatError, formatUpdatePreview, usage,
   type ObsidianImportApplyResult,
 } from "./formatters.js"
 
@@ -176,6 +176,12 @@ function requireId(ctx: CliContext, action: string): string {
   return id
 }
 
+function optionalTextArg(ctx: CliContext): string | undefined {
+  const value = flag(ctx.argv, "text")
+  if (value && value !== "true") return value
+  return undefined
+}
+
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = []
   for await (const chunk of process.stdin) {
@@ -254,6 +260,45 @@ function handleReject(ctx: CliContext): void {
     process.exit(1)
   }
   console.log(formatMutationResult("Rejected", mem, ctx.json))
+}
+
+async function handleUpdate(ctx: CliContext): Promise<void> {
+  const id = requireId(ctx, "update")
+  const fromStdin = hasFlag(ctx.argv, "stdin")
+  const textFromFlag = optionalTextArg(ctx)
+  const text = fromStdin ? await readStdin() : textFromFlag
+  const category = flag(ctx.argv, "category")
+  const kind = flag(ctx.argv, "kind")
+  const status = flag(ctx.argv, "status")
+  const reason = flag(ctx.argv, "reason")
+  const patch = {
+    ...(text !== undefined ? { text } : {}),
+    ...(category ? { category: category as any } : {}),
+    ...(kind ? { kind: kind as any } : {}),
+    ...(status ? { status: status as any } : {}),
+    ...(reason ? { reason } : {}),
+    revisedBy: "cli" as const,
+  }
+  const hasPatch = text !== undefined || Boolean(category) || Boolean(kind) || Boolean(status)
+  if (!hasPatch) {
+    console.log(formatError("At least one update field is required: --text/--stdin, --category, --kind, or --status", ctx.json))
+    process.exit(1)
+  }
+  if (hasFlag(ctx.argv, "dry-run")) {
+    const preview = ctx.engine.previewUpdate(id, patch)
+    if (!preview) {
+      console.log(formatError(`Memory not found: ${id}`, ctx.json))
+      process.exit(1)
+    }
+    console.log(formatUpdatePreview(preview, ctx.json))
+    return
+  }
+  const mem = ctx.engine.update(id, patch)
+  if (!mem) {
+    console.log(formatError(`Memory not found: ${id}`, ctx.json))
+    process.exit(1)
+  }
+  console.log(formatMutationResult("Updated", mem, ctx.json))
 }
 
 function handleReview(ctx: CliContext): void {
@@ -764,6 +809,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   delete: handleDelete,
   approve: handleApprove,
   reject: handleReject,
+  update: handleUpdate,
   review: handleReview,
   dashboard: handleDashboard,
   agreements: handleAgreements,

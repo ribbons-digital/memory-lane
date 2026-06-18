@@ -262,6 +262,104 @@ describe("CLI integration", () => {
     assert.equal(deletedMem.status, "deleted")
   })
 
+  it("update changes a memory and records revision metadata", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "old update text", "--status", "pending", "--category", "project"], env)
+    const before = JSON.parse(run(["list", "--json"], env))
+    const id = before.data.memories[0].id
+
+    const output = JSON.parse(run(["update", id, "--text", "new update text", "--category", "preference", "--kind", "workflow_rule", "--status", "approved", "--reason", "clarified", "--json"], env))
+    const after = JSON.parse(run(["list", "--json"], env))
+
+    assert.equal(output.ok, true)
+    assert.equal(output.data.updated.text, "new update text")
+    assert.equal(output.data.updated.category, "preference")
+    assert.equal(output.data.updated.kind, "workflow_rule")
+    assert.equal(output.data.updated.status, "approved")
+    assert.equal(output.data.updated.revision.reason, "clarified")
+    assert.equal(output.data.updated.revision.revisedBy, "cli")
+    assert.equal(after.data.memories[0].revision.reason, "clarified")
+  })
+
+  it("update supports stdin dry-run without writing", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "old stdin text", "--status", "approved"], env)
+    const id = JSON.parse(run(["list", "--json"], env)).data.memories[0].id
+
+    const result = runProcess(["update", id, "--stdin", "--dry-run", "--json"], { env, stdin: "new stdin text" })
+    const list = JSON.parse(run(["list", "--json"], env))
+    const payload = JSON.parse(result.stdout)
+
+    assert.equal(result.status, 0)
+    assert.equal(payload.data.dryRun, true)
+    assert.equal(payload.data.proposed.text, "new stdin text")
+    assert.equal(list.data.memories[0].text, "old stdin text")
+  })
+
+  it("update rejects missing changes and no-op patches", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "same text", "--status", "approved"], env)
+    const id = JSON.parse(run(["list", "--json"], env)).data.memories[0].id
+
+    const metadataOnly = runProcess(["update", id, "--reason", "reviewed"], { env })
+    const noOp = runProcess(["update", id, "--text", "same text"], { env })
+
+    assert.notEqual(metadataOnly.status, 0)
+    assert.match(metadataOnly.stdout + metadataOnly.stderr, /No changes to apply|At least one update field/u)
+    assert.notEqual(noOp.status, 0)
+    assert.match(noOp.stdout + noOp.stderr, /No changes to apply/u)
+  })
+
+  it("human list review and agreements show revision labels while recall stays unchanged", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    writeMemoryRecords(memFile, [
+      {
+        id: "agreement-current",
+        text: "PR process: open a pull request and wait for user merge approval.",
+        category: "preference",
+        scope: { type: "global" },
+        status: "approved",
+        source: "manual",
+        kind: "workflow_rule",
+        createdAt: "2026-06-18T08:00:00.000Z",
+        updatedAt: "2026-06-18T08:00:00.000Z",
+        revision: {
+          supersedes: ["agreement-old"],
+          reason: "consolidated",
+          revisedAt: "2026-06-18T09:00:00.000Z",
+          revisedBy: "cli",
+        },
+      },
+      {
+        id: "pending-old",
+        text: "Pending revision label memory",
+        category: "project",
+        scope: { type: "global" },
+        status: "pending",
+        source: "manual",
+        kind: "project_fact",
+        createdAt: "2026-06-18T07:00:00.000Z",
+        updatedAt: "2026-06-18T07:00:00.000Z",
+        revision: {
+          supersededBy: "pending-new",
+          revisedAt: "2026-06-18T09:30:00.000Z",
+          revisedBy: "cli",
+        },
+      },
+    ])
+
+    const list = run(["list"], env)
+    const review = run(["review"], env)
+    const agreements = run(["agreements"], env)
+    const recall = run(["recall", "PR process"], env)
+
+    assert.match(list, /\[supersedes: agreement-old\]/u)
+    assert.match(list, /\[superseded by: pending-new\]/u)
+    assert.match(review, /\[superseded by: pending-new\]/u)
+    assert.match(agreements, /\[supersedes: agreement-old\]/u)
+    assert.doesNotMatch(recall, /supersedes: agreement-old/u)
+  })
+
   it("JSON output", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,
