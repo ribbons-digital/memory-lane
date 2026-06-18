@@ -204,6 +204,12 @@ memory-lane codex post-tool-use
 
 Automatic context injection is controlled by `memory.contextPolicy`: `selective` injects bounded selected approved memories inside a guarded `<memory-context>` block, `policy-only` injects guidance to use Memory Lane tools without memory bodies, and `off` disables automatic context injection while preserving explicit CLI/MCP tools and save hooks.
 
+### Lifecycle continuity notices
+
+At SessionStart, Memory Lane may inject a compact `Continuity notice` when context policy is `policy-only` or `selective`. Treat it as a prompt to inspect authoritative surfaces such as `memory-lane dashboard`, `memory-lane agreements`, or `memory-lane status --json --since <timestamp>`; it is not a memory body and does not mean cleanup or recall filtering happened.
+
+Continuity notices share the existing SessionStart context budget and omit memory ids, memory text, transcripts, and tool outputs. Context policy `off` disables all automatic lifecycle context, including continuity notices.
+
 Lifecycle autosave filters transient reviewer, subagent, and task prompts such as commit review requests, “do not modify files” review tasks, and delegated status-report instructions. Do not rely on those operational prompts becoming memories. When a durable workflow rule, preference, or project fact should be saved, make it explicit with `memory_save`, `memory-lane save`, or wording like “Remember that ...”. Explicit memory requests remain supported even when they mention reviewer/subagent behavior.
 
 For hook support checks, prefer `memory-lane doctor` first: use `hookDebugLogPath`, `hookDebugLogExists`, `hookDebugLogSizeBytes`, `hookDebugLogLastModified`, and `hookDebugWarnings` to confirm log availability without reading raw log contents. Only inspect `~/.memory-lane/hooks-log.jsonl` itself when the user asks or when troubleshooting requires it.

@@ -1,5 +1,5 @@
 import type { MemoryEngine, MemoryProvenance, MemorySource, SaveResult } from "@memory-lane/core"
-import { isMemoryManagementListIntent, limitsFromContextPolicy, renderMemoryContext, renderMemoryManagementListGuidance, resolveContextPolicy, selectBaselineMemories, selectMemoriesForInjection, type MemoryInjectionLimits } from "./injection.js"
+import { isMemoryManagementListIntent, limitsFromContextPolicy, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, resolveContextPolicy, selectBaselineMemories, selectMemoriesForInjection, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
 import { summarizeToolOutcome } from "./tool-outcomes.js"
 import type { LifecycleResult, MemoryCandidate, MemoryContextDecision, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
@@ -15,6 +15,34 @@ function contextDecision(input: Omit<MemoryContextDecision, "omittedReasons"> & 
 function contextBudget(event: "prompt" | "sessionStart", policy: ReturnType<typeof resolveContextPolicy>): { maxItems: number; maxChars: number } {
   const key = event === "sessionStart" ? "sessionStart" : "prompt"
   return { maxItems: policy.maxItems[key], maxChars: policy.maxChars[key] }
+}
+
+function composeSessionStartContext(input: {
+  noticeText: string
+  memoryContext: string
+  policy: ReturnType<typeof resolveContextPolicy>
+}): string {
+  const noticeText = input.noticeText.trim()
+  const memoryContext = input.memoryContext.trim()
+  if (!noticeText && !memoryContext) return ""
+
+  const header = `<memory-context mode="${input.policy.mode}" event="sessionStart">`
+  const footer = "</memory-context>"
+  const rawInner = memoryContext.startsWith("<memory-context")
+    ? memoryContext
+      .replace(/^<memory-context[^>]*>\n?/u, "")
+      .replace(/\n?<\/memory-context>$/u, "")
+    : memoryContext
+  const inner = input.policy.mode === "selective" && rawInner && !rawInner.includes("## Relevant Memory")
+    ? `## Relevant Memory\n\n${rawInner}`
+    : rawInner
+  const body = [noticeText, inner].filter((part) => part.trim().length > 0).join("\n\n")
+  return [header, body, footer].join("\n")
+}
+
+function continuityDecision(notice: ReturnType<typeof renderContinuityNotice>): MemoryContextDecision["continuity"] {
+  const { text: _text, ...decision } = notice
+  return decision
 }
 
 function candidateSource(candidate: MemoryCandidate, fallback: MemorySource): MemorySource {
@@ -96,11 +124,48 @@ export function handleSessionStart(
   const policy = resolveContextPolicy(engine.getContextPolicy())
   const budget = contextBudget("sessionStart", policy)
   if (policy.mode === "off") return createResult(undefined, contextDecision({ event: "sessionStart", mode: policy.mode, ...budget, selected: 0, omitted: 0, omittedReasons: ["off"] }))
-  if (policy.mode === "policy-only") return createResult(renderMemoryContext({ event: "sessionStart", memories: [], policy }), contextDecision({ event: "sessionStart", mode: policy.mode, ...budget, selected: 0, omitted: 0, omittedReasons: ["policy-only"] }))
+
+  const hints = engine.continuityHints({ since: input.since })
+  const operatingAgreements = engine.operatingAgreementSummary()
+  const notice = renderContinuityNotice({ hints, operatingAgreements, since: input.since, maxChars: budget.maxChars })
+
+  if (policy.mode === "policy-only") {
+    const guidance = renderMemoryContext({ event: "sessionStart", memories: [], policy })
+    const rendered = composeSessionStartContext({ noticeText: notice.text, memoryContext: guidance, policy })
+    return createResult(rendered || undefined, contextDecision({
+      event: "sessionStart",
+      mode: policy.mode,
+      ...budget,
+      selected: 0,
+      omitted: 0,
+      omittedReasons: ["policy-only", ...notice.omittedReasons],
+      continuity: continuityDecision(notice),
+    }))
+  }
+
+  const remainingChars = Math.max(0, budget.maxChars - (notice.injected ? notice.text.length + 2 : 0))
   const approved = engine.list({ status: "approved" })
-  const selected = selectBaselineMemories(approved, limitsFromContextPolicy("sessionStart", policy, options))
-  const rendered = renderMemoryContext({ event: "sessionStart", memories: selected, policy })
-  return createResult(rendered || undefined, contextDecision({ event: "sessionStart", mode: policy.mode, ...budget, selected: selected.length, omitted: Math.max(0, approved.length - selected.length) }))
+  const operatingAgreementIds = new Set([
+    ...operatingAgreements.primary.map((agreement) => agreement.id),
+    ...operatingAgreements.relatedCandidates.map((agreement) => agreement.id),
+  ])
+  const baselineCandidates = approved.filter((memory) => !operatingAgreementIds.has(memory.id))
+  const selected = selectBaselineMemories(baselineCandidates, limitsFromContextPolicy("sessionStart", policy, {
+    ...options,
+    hardMaxChars: remainingChars,
+    targetChars: remainingChars,
+    absoluteMaxChars: remainingChars,
+  }))
+  const memoryContext = renderMemoryContext({ event: "sessionStart", memories: selected, policy })
+  const rendered = composeSessionStartContext({ noticeText: notice.text, memoryContext, policy })
+  return createResult(rendered || undefined, contextDecision({
+    event: "sessionStart",
+    mode: policy.mode,
+    ...budget,
+    selected: selected.length,
+    omitted: Math.max(0, baselineCandidates.length - selected.length),
+    continuity: continuityDecision(notice),
+  }))
 }
 
 export function handleStop(engine: MemoryEngine, input: StopInput, options?: LifecycleHandlerOptions): LifecycleResult {

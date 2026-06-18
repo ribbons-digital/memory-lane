@@ -787,6 +787,12 @@ Modes:
 - `policy-only` injects compact guidance telling the agent to use Memory Lane recall/list tools when needed, without including memory bodies.
 - `off` disables automatic context injection while leaving explicit CLI/MCP tools and automatic save hooks unchanged.
 
+### Lifecycle continuity notices
+
+SessionStart lifecycle context may include a compact `Continuity notice` section when `memory.contextPolicy.mode` is `policy-only` or `selective`. The notice is plain-language and inspection-first: it may say that newer approved state exists, current workflow agreements are available, or continuity hints should be inspected.
+
+Continuity notices share the existing SessionStart context budget. They do not include memory ids, memory text, transcripts, or tool outputs. They do not mutate memory, clean up superseded records, change recall ranking, or run on every UserPromptSubmit turn. Set `memory.contextPolicy.mode` to `off` to disable all lifecycle context, including continuity notices.
+
 ### Claude Code hooks
 
 Claude Code CLI users can wire Memory Lane into lifecycle hooks:

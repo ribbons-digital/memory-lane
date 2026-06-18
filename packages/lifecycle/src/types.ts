@@ -1,4 +1,4 @@
-import type { MemoryRecord, MemorySource, SaveResult } from "@memory-lane/core"
+import type { ContinuityHintCode, MemoryRecord, MemorySource, SaveResult } from "@memory-lane/core"
 
 export interface LifecycleContext {
   cwd: string
@@ -23,7 +23,20 @@ export interface PostToolUseInput extends LifecycleContext {
   toolResponse: unknown
 }
 
-export interface SessionStartInput extends LifecycleContext {}
+export interface SessionStartInput extends LifecycleContext {
+  since?: string
+}
+
+export interface ContinuityContextDecision {
+  generated: boolean
+  injected: boolean
+  omittedReasons: string[]
+  hintCount: number
+  hintCodes: ContinuityHintCode[]
+  newerApprovedCount?: number
+  operatingAgreementPrimaryCount?: number
+  suggestedActions: string[]
+}
 
 export interface MemoryContextDecision {
   event: "prompt" | "sessionStart"
@@ -33,6 +46,7 @@ export interface MemoryContextDecision {
   selected: number
   omitted: number
   omittedReasons: string[]
+  continuity?: ContinuityContextDecision
 }
 
 export interface LifecycleResult {

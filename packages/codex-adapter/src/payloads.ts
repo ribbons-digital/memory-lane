@@ -55,6 +55,10 @@ function baseContext(obj: Record<string, unknown>) {
   }
 }
 
+function sessionStartSince(obj: Record<string, unknown>): string | undefined {
+  return stringField(obj, "timestamp") ?? stringField(obj, "started_at") ?? stringField(obj, "session_started_at")
+}
+
 export function parseCodexPayload(value: unknown): ParsedCodexPayload {
   const obj = asRecord(value)
   if (!obj) return { kind: "invalid", reason: "payload is not an object" }
@@ -103,7 +107,10 @@ export function parseCodexPayload(value: unknown): ParsedCodexPayload {
     return {
       kind: "session-start",
       hookEventName: event,
-      input: context,
+      input: {
+        ...context,
+        since: sessionStartSince(obj),
+      },
     }
   }
 
