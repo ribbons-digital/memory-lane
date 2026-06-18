@@ -1,5 +1,6 @@
 export * from "./types.js"
 export { buildFreshnessStatus } from "./freshness.js"
+export { buildContinuityHints } from "./continuity-hints.js"
 export { revisionNow, sameIdRevision, revisionLabel, hasRealUpdateChange } from "./revisions.js"
 export {
   WORKFLOW_AREAS,

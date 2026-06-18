@@ -103,6 +103,65 @@ export interface FreshnessStatusOptions {
   maxNewerMetadata?: number
 }
 
+export type ContinuityHintCode =
+  | "superseded-visible"
+  | "operating-agreement-overlap"
+  | "project-global-overlap"
+  | "newer-approved"
+
+export interface ContinuityHintMemoryMetadata {
+  id: string
+  status: Extract<MemoryStatus, "approved">
+  category: MemoryCategory
+  scope: MemoryScope
+  source: MemorySource
+  createdAt: string
+  updatedAt: string
+  kind?: MemoryKind
+  provenance?: MemoryProvenance
+  supersededBy?: string
+}
+
+export interface ContinuityHint {
+  code: ContinuityHintCode
+  severity: "info" | "review"
+  message: string
+  count: number
+  memoryIds: string[]
+  workflowArea?: WorkflowArea
+  suggestedActions: string[]
+}
+
+export interface ContinuityHintSummary {
+  projectScope: string | "none"
+  hintCount: number
+  hints: ContinuityHint[]
+  supersededVisible: ContinuityHintMemoryMetadata[]
+  operatingAgreementOverlaps: Array<{
+    workflowArea: WorkflowArea
+    primaryIds: string[]
+    relatedIds: string[]
+  }>
+  projectGlobalPreferenceOverlaps: Array<{
+    workflowArea: WorkflowArea
+    projectIds: string[]
+    globalIds: string[]
+  }>
+  newerApproved?: {
+    referenceTime: string
+    count: number
+    newestIds: string[]
+  }
+  suggestedActions: string[]
+  notes: string[]
+}
+
+export interface ContinuityHintOptions {
+  projectScopeKey?: string
+  since?: string
+  maxIds?: number
+}
+
 export type WorkflowArea =
   | "project-loop"
   | "review-gate"
