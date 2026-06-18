@@ -289,6 +289,56 @@ test("memory_status applies projectPath before reading scope", async () => {
   assert.equal(result.meta.projectScope, "status-project-a")
 })
 
+test("memory_status includes text-free operating agreement summary", async () => {
+  const engine = engineInTemp(tempDir())
+  engine.save({
+    text: "PRIVATE MCP AGREEMENT TEXT Project workflow loop: spec before implementation.",
+    status: "approved",
+    category: "project",
+    scopeType: "project",
+    kind: "project_fact",
+  })
+  engine.save({
+    text: "User prefers concise answers.",
+    status: "approved",
+    category: "preference",
+    scopeType: "global",
+    kind: "preference",
+  })
+
+  const result = parseToolResult(await handleMemoryStatus(engine, {}))
+  const serialized = JSON.stringify(result)
+  const summary = result.data.status.operatingAgreements
+
+  assert.equal(result.ok, true)
+  assert.equal(summary.primaryCount, 1)
+  assert.equal(summary.primary[0].workflowArea, "project-loop")
+  assert.equal(summary.primary[0].recommendedKind, "workflow_rule")
+  assert.doesNotMatch(serialized, /PRIVATE MCP AGREEMENT TEXT/u)
+  assert.doesNotMatch(serialized, /User prefers concise answers/u)
+})
+
+test("memory_status applies projectPath before computing operating agreements", async () => {
+  const projectA = tempDir()
+  const projectB = tempDir()
+  fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "agreement-status-a" }))
+  fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "agreement-status-b" }))
+
+  const engine = engineInTemp(projectA)
+  engine.save({ text: "Project workflow loop for A.", status: "approved", category: "project", scopeType: "project", kind: "project_fact" })
+  engine.refreshScope(projectB)
+  engine.save({ text: "Project workflow loop for B.", status: "approved", category: "project", scopeType: "project", kind: "project_fact" })
+
+  const result = parseToolResult(await handleMemoryStatus(engine, { projectPath: projectA }))
+  const summary = result.data.status.operatingAgreements
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.status.projectScope, "agreement-status-a")
+  assert.equal(summary.projectScope, "agreement-status-a")
+  assert.equal(summary.primaryCount, 1)
+  assert.equal(summary.primary[0].scope.key, "agreement-status-a")
+})
+
 test("memory_status passes since and returns freshness metadata without memory text", async () => {
   const engine = engineInTemp(tempDir())
   engine.save({ text: "Approved private MCP freshness text", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint", source: "session-summary" })
