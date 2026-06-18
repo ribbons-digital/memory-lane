@@ -1,4 +1,6 @@
-import type { MemoryRecord, MemoryRevision, MemoryRevisionActor, UpdateInput } from "./types.js"
+import type {
+  MemoryRecord, MemoryRevision, MemoryRevisionActor, RevisionWarning, UpdateInput,
+} from "./types.js"
 
 export function revisionNow(reason?: string, revisedBy: MemoryRevisionActor = "manual"): MemoryRevision {
   return {
@@ -31,4 +33,41 @@ export function hasRealUpdateChange(
     || current.category !== proposed.category
     || current.status !== proposed.status
     || (current.kind ?? "misc") !== (proposed.kind ?? "misc")
+}
+
+export function revisionForSuccessor(
+  oldIds: string[],
+  reason?: string,
+  revisedBy: MemoryRevisionActor = "manual",
+): MemoryRevision {
+  return { ...revisionNow(reason, revisedBy), supersedes: oldIds }
+}
+
+export function revisionForSuperseded(
+  newId: string,
+  reason?: string,
+  revisedBy: MemoryRevisionActor = "manual",
+): MemoryRevision {
+  return { ...revisionNow(reason, revisedBy), supersededBy: newId }
+}
+
+export function revisionWarnings(successor: MemoryRecord, oldRecords: MemoryRecord[]): RevisionWarning[] {
+  const warnings: RevisionWarning[] = []
+  for (const old of oldRecords) {
+    if (successor.scope.type !== old.scope.type || successor.scope.key !== old.scope.key) {
+      warnings.push({
+        code: "cross-scope",
+        memoryId: old.id,
+        message: `Successor ${successor.id} and old memory ${old.id} have different scopes.`,
+      })
+    }
+    if (successor.category !== old.category) {
+      warnings.push({
+        code: "cross-category",
+        memoryId: old.id,
+        message: `Successor ${successor.id} and old memory ${old.id} have different categories.`,
+      })
+    }
+  }
+  return warnings
 }
