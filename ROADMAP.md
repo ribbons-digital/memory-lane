@@ -475,7 +475,7 @@ Remaining dashboard/review-controls scope:
 
 ## Phase 16 — Freshness, Canonical Continuity, and Memory Revision
 
-**Status:** Slice 1 complete: read-only freshness/status detection is implemented. Slice 2 complete: read-only canonical workflow/operating-agreement discovery is implemented. Slice 3 complete: CLI-first update/replace/supersede revision primitives are implemented. Slice 4 complete: read-only continuity/status hints for superseded-visible memories, operating-agreement overlaps, project/global overlaps, and newer approved state are implemented. Slice 5 lifecycle bounded notices are the next incomplete item.
+**Status:** Slice 1 complete: read-only freshness/status detection is implemented. Slice 2 complete: read-only canonical workflow/operating-agreement discovery is implemented. Slice 3 complete: CLI-first update/replace/supersede revision primitives are implemented. Slice 4 complete: read-only continuity/status hints for superseded-visible memories, operating-agreement overlaps, project/global overlaps, and newer approved state are implemented. Slice 5 complete: SessionStart lifecycle bounded continuity notices are implemented. Phase 17 review-first progress/checkpoint capture is the next recommended continuity item.
 
 **Goal:** Let any session/harness cheaply notice newer approved project progress, relevant global preferences, and current canonical workflow/operating-agreement memories without injecting large memory bodies or silently saving new state.
 
@@ -505,7 +505,7 @@ Extension slices:
 2. **Complete — canonical workflow / operating-agreement memories:** added a read-only operating agreement convention, selector, CLI `memory-lane agreements`, and text-free status/doctor/MCP status metadata for current project/global workflow contracts. Revision/supersede operations are covered by Slice 3.
 3. **Complete — update / replace / supersede primitives:** added explicit CLI-first append-only revision operations for same-id updates, new successor replacements, and approved successor supersede relationships, with dry-run/confirmation safety and revision metadata. MCP mutation parity and retrieval filtering remain later work; continuity hints are covered by Slice 4.
 4. **Complete — continuity/status hints for stale and overlapping guidance:** dashboard/status/doctor/MCP status flag superseded-visible memories, multiple operating-agreement candidates, project/global preference overlap, and newer approved state without performing silent cleanup.
-5. **Lifecycle bounded notices:** route SessionStart/UserPromptSubmit lifecycle injection through the freshness/canonical helpers so harnesses can surface a compact notice when newer approved progress or current operating agreements exist, with tests for project scope, global scope, status, context budget, and privacy boundaries.
+5. **Complete — lifecycle bounded notices:** SessionStart lifecycle context routes through freshness/operating-agreement/continuity hint helpers to surface compact plain-language notices when newer approved progress, current operating agreements, or continuity hints exist, with project/global scope, context budget, and privacy boundaries tested.
 
 Out of scope for Phase 16:
 
