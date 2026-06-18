@@ -414,6 +414,9 @@ memory-lane review --suspect-meta Show likely old pending operational prompt pol
 memory-lane review --suspect-meta --include-approved Show pending+approved suspect pollution
 memory-lane dashboard [--all]     Compact continuity/review overview without long memory bodies
 memory-lane agreements            Show approved operating agreements for the current project/global scope
+memory-lane update <id>           Revise an active memory with the same id
+memory-lane supersede <new-id> <old-id...> Link approved old memories to an approved successor
+memory-lane replace <old-id...>   Create a successor memory for approved old memories
 memory-lane compact               Remove deleted/rejected tombstones
 memory-lane doctor                Diagnostic report
 memory-lane status                Quick stats
@@ -424,6 +427,25 @@ memory-lane obsidian ...          Manage optional Obsidian mirror/import workflo
 ```
 
 All commands support `--json` for machine-readable output and `--project <path>` to set the project scope.
+
+### Memory revision commands
+
+Use explicit revision commands when an approved memory needs correction or replacement. These commands are append-only: they write newer rows instead of silently deleting history.
+
+```bash
+memory-lane update <id> --text "refined memory" --reason "clarified wording"
+cat refined.md | memory-lane update <id> --stdin --kind workflow_rule --dry-run
+
+memory-lane supersede <new-id> <old-id> --reason "newer workflow agreement"
+memory-lane supersede <new-id> <old1> <old2> --reason "merged duplicates" --yes
+
+memory-lane replace <old-id> --text "new successor memory" --kind workflow_rule
+cat replacement.md | memory-lane replace <old1> <old2> --stdin --yes
+```
+
+`update` keeps the same memory id and can change text, category, kind, or approved/pending status. `replace` creates a new successor memory. `supersede` links an existing approved successor to approved older memories. Superseded memories remain approved historical records; Memory Lane does not delete or hide them automatically in this slice.
+
+Use `--dry-run` to preview any revision command. Multi-old `replace` and `supersede` require `--yes` unless `--dry-run` is used. MCP mutation tools are not added for these operations yet.
 
 ### Freshness status
 
