@@ -19,6 +19,7 @@ import { diagnoseIntegrations, type IntegrationDiagnosticPaths } from "./integra
 import { validateSaveInput } from "./storage-validation.js"
 import { isMetaTaskPromptText } from "./meta-task-filter.js"
 import { buildFreshnessStatus } from "./freshness.js"
+import { selectOperatingAgreements, summarizeOperatingAgreements } from "./operating-agreements.js"
 import {
   contentHash, createNewMemory, saveContext, shouldAutoEmbed, timestamp, visibleInScope,
   type SaveContext,
@@ -27,7 +28,7 @@ import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
   MemoryKind, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, ProjectScope,
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig,
-  FreshnessStatus,
+  FreshnessStatus, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
 } from "./types.js"
 
 function displayValue(value: unknown): string {
@@ -516,6 +517,17 @@ export class MemoryEngine {
     }
   }
 
+  operatingAgreements(opts?: Omit<OperatingAgreementOptions, "projectScopeKey">): OperatingAgreementList {
+    return selectOperatingAgreements(this.store.list(), {
+      ...opts,
+      projectScopeKey: this.scope?.key,
+    })
+  }
+
+  operatingAgreementSummary(opts?: Omit<OperatingAgreementOptions, "projectScopeKey">): OperatingAgreementSummary {
+    return summarizeOperatingAgreements(this.operatingAgreements(opts))
+  }
+
   freshnessStatus(opts?: { since?: string }): FreshnessStatus {
     return buildFreshnessStatus(this.store.list(), {
       projectScopeKey: this.scope?.key,
@@ -547,6 +559,7 @@ export class MemoryEngine {
       projectScope: this.scope?.key ?? "none",
       integrations: diagnoseIntegrations({ cwd: this.scope?.cwd ?? null, paths: this.integrationPaths }),
       freshness: this.freshnessStatus({ since: opts?.freshnessSince }),
+      operatingAgreements: this.operatingAgreementSummary(),
       ...this.semanticDoctor(mems),
       ...this.contextPolicyDoctor(),
       ...this.memoryFileDoctor(),

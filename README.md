@@ -16,6 +16,8 @@ Memory Lane is not meant to be another isolated chat-history search box. Its goa
 - [Storage](#storage)
 - [Project Scoping](#project-scoping)
 - [CLI Commands](#cli-commands)
+  - [Freshness status](#freshness-status)
+  - [Operating agreements](#operating-agreements)
   - [Session-end summarization](#session-end-summarization)
   - [Obsidian mirror](#obsidian-mirror)
   - [Import from Obsidian](#import-from-obsidian)
@@ -411,6 +413,7 @@ memory-lane review --provenance pi/session_end Filter pending review by adapter/
 memory-lane review --suspect-meta Show likely old pending operational prompt pollution only
 memory-lane review --suspect-meta --include-approved Show pending+approved suspect pollution
 memory-lane dashboard [--all]     Compact continuity/review overview without long memory bodies
+memory-lane agreements            Show approved operating agreements for the current project/global scope
 memory-lane compact               Remove deleted/rejected tombstones
 memory-lane doctor                Diagnostic report
 memory-lane status                Quick stats
@@ -425,6 +428,19 @@ All commands support `--json` for machine-readable output and `--project <path>`
 ### Freshness status
 
 `memory-lane status --json --since <ISO timestamp>` and `memory-lane doctor --json --since <ISO timestamp>` include a read-only `freshness` object. It reports counts and metadata for approved memories visible to the current project scope plus global memories that were updated after the timestamp. Freshness output intentionally excludes memory text; use `memory-lane list --json` or targeted recall when you need the actual memory bodies.
+
+### Operating agreements
+
+Use `memory-lane agreements` to explicitly inspect approved workflow/process memories that should guide the current project. By default it considers the current project plus global scope, returns selected agreement text, and reports related overlap without changing memories.
+
+```bash
+memory-lane agreements
+memory-lane agreements --json
+memory-lane agreements --area project-loop
+memory-lane agreements --all
+```
+
+`memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` include text-free operating agreement metadata so clients can notice that agreements exist without injecting the agreement bodies.
 
 ### Session-end summarization
 

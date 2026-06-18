@@ -3,7 +3,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { readFile } from "node:fs/promises"
-import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, isMetaTaskPromptText, resolveWritableMemoryPaths, type MemoryPaths } from "@memory-lane/core"
+import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, isMetaTaskPromptText, resolveWritableMemoryPaths, isWorkflowArea, type MemoryPaths, type WorkflowArea } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import { handleSessionEnd, createOpenAICompatibleProvider } from "@memory-lane/lifecycle"
@@ -19,7 +19,7 @@ import type { SemanticMemoryConfig } from "@memory-lane/core"
 import { resolveBundledPlugin } from "./plugins.js"
 import {
   formatMemories, formatReviewMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
-  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatImportPlan, formatError, usage,
+  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatImportPlan, formatOperatingAgreements, formatError, usage,
   type ObsidianImportApplyResult,
 } from "./formatters.js"
 
@@ -67,6 +67,25 @@ function flag(argv: string[], name: string): string | undefined {
 
 function hasFlag(argv: string[], name: string): boolean {
   return argv.includes(`--${name}`)
+}
+
+function optionalWorkflowArea(argv: string[]): WorkflowArea | undefined {
+  const value = flag(argv, "area")
+  if (!value) return undefined
+  if (value === "true" || !isWorkflowArea(value)) {
+    throw new Error(`Invalid workflow area: ${value}. Expected one of: project-loop, review-gate, pr-process, release-process, tooling-preference, other`)
+  }
+  return value
+}
+
+function optionalNonNegativeInteger(argv: string[], name: string): number | undefined {
+  const value = flag(argv, name)
+  if (!value) return undefined
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`Invalid --${name}: ${value}. Expected a non-negative integer.`)
+  }
+  return parsed
 }
 
 // Strip flags (--foo and --foo value) from argv, return positional args
@@ -271,6 +290,16 @@ function handleDashboard(ctx: CliContext): void {
   const allScope = hasFlag(ctx.argv, "all")
   const memories = ctx.engine.list({ all: allScope })
   console.log(formatDashboard(memories, ctx.json, { all: allScope, projectScope: ctx.engine.getProjectScope()?.key ?? "none" }))
+}
+
+function handleAgreements(ctx: CliContext): void {
+  const result = ctx.engine.operatingAgreements({
+    all: hasFlag(ctx.argv, "all"),
+    area: optionalWorkflowArea(ctx.argv),
+    limit: optionalNonNegativeInteger(ctx.argv, "limit"),
+    relatedLimit: optionalNonNegativeInteger(ctx.argv, "related-limit"),
+  })
+  console.log(formatOperatingAgreements(result, ctx.json))
 }
 
 function handleCompact(ctx: CliContext): void {
@@ -737,6 +766,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   reject: handleReject,
   review: handleReview,
   dashboard: handleDashboard,
+  agreements: handleAgreements,
   compact: handleCompact,
   doctor: handleDoctor,
   status: handleStatus,

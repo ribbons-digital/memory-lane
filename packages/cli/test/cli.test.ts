@@ -87,6 +87,55 @@ function freshnessFixtureRecords(projectScope: string): MemoryRecord[] {
   ]
 }
 
+function agreementFixtureRecords(projectScope: string): MemoryRecord[] {
+  return [
+    {
+      id: "project-loop-current",
+      text: "Project workflow loop: spec, approval, slice implementation.",
+      category: "project",
+      scope: { type: "project", key: projectScope },
+      status: "approved",
+      source: "manual",
+      kind: "project_fact",
+      createdAt: "2026-06-18T10:00:00.000Z",
+      updatedAt: "2026-06-18T10:00:00.000Z",
+    },
+    {
+      id: "project-loop-older",
+      text: "Project workflow loop: older overlap.",
+      category: "project",
+      scope: { type: "project", key: projectScope },
+      status: "approved",
+      source: "manual",
+      kind: "project_fact",
+      createdAt: "2026-06-18T09:00:00.000Z",
+      updatedAt: "2026-06-18T09:00:00.000Z",
+    },
+    {
+      id: "global-pr-process",
+      text: "PR process: open a pull request and wait for user merge approval.",
+      category: "preference",
+      scope: { type: "global" },
+      status: "approved",
+      source: "manual",
+      kind: "workflow_rule",
+      createdAt: "2026-06-18T08:00:00.000Z",
+      updatedAt: "2026-06-18T08:00:00.000Z",
+    },
+    {
+      id: "generic-global-pref",
+      text: "User prefers concise answers.",
+      category: "preference",
+      scope: { type: "global" },
+      status: "approved",
+      source: "manual",
+      kind: "preference",
+      createdAt: "2026-06-18T07:00:00.000Z",
+      updatedAt: "2026-06-18T07:00:00.000Z",
+    },
+  ]
+}
+
 describe("CLI integration", () => {
   let dir: string, memFile: string, embFile: string, cfgFile: string
   beforeEach(() => {
@@ -786,6 +835,147 @@ describe("CLI integration", () => {
       assert.notEqual(result.status, 0)
       assert.match(result.stdout + result.stderr, /Invalid since timestamp: not-a-date/u)
     }
+  })
+
+  it("agreements --json returns primary and related agreement text", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-agreements-project" }), "utf8")
+    writeMemoryRecords(memFile, agreementFixtureRecords("cli-agreements-project"))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const payload = JSON.parse(run(["agreements", "--json", "--project", project], env))
+
+    assert.equal(payload.ok, true)
+    assert.equal(payload.data.projectScope, "cli-agreements-project")
+    assert.deepEqual(payload.data.primary.map((item: any) => item.memory.id), ["global-pr-process", "project-loop-current"])
+    assert.deepEqual(payload.data.relatedCandidates.map((item: any) => item.memory.id), ["project-loop-older"])
+    assert.match(JSON.stringify(payload.data), /Project workflow loop: spec/u)
+    assert.match(JSON.stringify(payload.data), /PR process: open a pull request/u)
+    assert.doesNotMatch(JSON.stringify(payload.data), /User prefers concise answers/u)
+    assert.equal(payload.data.primary.find((item: any) => item.memory.id === "project-loop-current").recommendedKind, "workflow_rule")
+  })
+
+  it("agreements supports area filters and related limits", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-area-project" }), "utf8")
+    writeMemoryRecords(memFile, agreementFixtureRecords("cli-area-project"))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const payload = JSON.parse(run(["agreements", "--json", "--project", project, "--area", "project-loop", "--related-limit", "0"], env))
+
+    assert.equal(payload.ok, true)
+    assert.deepEqual(payload.data.primary.map((item: any) => item.memory.id), ["project-loop-current"])
+    assert.deepEqual(payload.data.relatedCandidates, [])
+    assert.equal(payload.data.omittedRelatedCandidateCount, 1)
+  })
+
+  it("agreements supports all scope and primary limits", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-all-project" }), "utf8")
+    writeMemoryRecords(memFile, [
+      ...agreementFixtureRecords("cli-all-project"),
+      {
+        id: "other-project-release",
+        text: "Release process: tag releases after approval.",
+        category: "project",
+        scope: { type: "project", key: "other-project" },
+        status: "approved",
+        source: "manual",
+        kind: "workflow_rule",
+        createdAt: "2026-06-18T11:00:00.000Z",
+        updatedAt: "2026-06-18T11:00:00.000Z",
+      },
+    ])
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const scoped = JSON.parse(run(["agreements", "--json", "--project", project, "--area", "release-process"], env))
+    const all = JSON.parse(run(["agreements", "--json", "--project", project, "--area", "release-process", "--all"], env))
+    const limited = JSON.parse(run(["agreements", "--json", "--project", project, "--limit", "1"], env))
+
+    assert.deepEqual(scoped.data.primary, [])
+    assert.deepEqual(all.data.primary.map((item: any) => item.memory.id), ["other-project-release"])
+    assert.equal(limited.data.primary.length, 1)
+  })
+
+  it("agreements human output includes primary text and overlap note", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-human-project" }), "utf8")
+    writeMemoryRecords(memFile, agreementFixtureRecords("cli-human-project"))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const output = run(["agreements", "--project", project], env)
+
+    assert.match(output, /Operating agreements/u)
+    assert.match(output, /project-loop/u)
+    assert.match(output, /Project workflow loop: spec/u)
+    assert.match(output, /Related candidates/u)
+    assert.match(output, /not superseded/u)
+  })
+
+  it("agreements rejects invalid area and invalid limits", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const badArea = runProcess(["agreements", "--area", "invalid-area"], { env })
+    const badLimit = runProcess(["agreements", "--limit", "-1"], { env })
+
+    assert.notEqual(badArea.status, 0)
+    assert.match(badArea.stdout + badArea.stderr, /Invalid workflow area/u)
+    assert.notEqual(badLimit.status, 0)
+    assert.match(badLimit.stdout + badLimit.stderr, /Invalid --limit/u)
+  })
+
+  it("status and doctor expose operating agreement metadata without text", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-status-agreements" }), "utf8")
+    writeMemoryRecords(memFile, [
+      {
+        id: "private-agreement",
+        text: "PRIVATE CLI STATUS AGREEMENT TEXT Project workflow loop: review first.",
+        category: "project",
+        scope: { type: "project", key: "cli-status-agreements" },
+        status: "approved",
+        source: "manual",
+        kind: "workflow_rule",
+        createdAt: "2026-06-18T10:00:00.000Z",
+        updatedAt: "2026-06-18T10:00:00.000Z",
+      },
+    ])
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const statusPayload = JSON.parse(run(["status", "--json", "--project", project], env))
+    const doctorPayload = JSON.parse(run(["doctor", "--json", "--project", project], env))
+    const humanDoctor = run(["doctor", "--project", project], env)
+
+    assert.equal(statusPayload.data.operatingAgreements.primaryCount, 1)
+    assert.equal(doctorPayload.data.operatingAgreements.primary[0].id, "private-agreement")
+    assert.doesNotMatch(JSON.stringify(statusPayload), /PRIVATE CLI STATUS AGREEMENT TEXT/u)
+    assert.doesNotMatch(JSON.stringify(doctorPayload), /PRIVATE CLI STATUS AGREEMENT TEXT/u)
+    assert.match(humanDoctor, /Operating agreements/u)
+    assert.doesNotMatch(humanDoctor, /PRIVATE CLI STATUS AGREEMENT TEXT/u)
   })
 
   it("doctor human output renders integration diagnostics readably", () => {

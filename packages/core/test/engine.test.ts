@@ -4,6 +4,11 @@ import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { MemoryEngine } from "../src/engine.js"
 import { contentHash } from "../src/engine-helpers.js"
+import {
+  selectOperatingAgreements,
+  summarizeOperatingAgreements,
+} from "../src/operating-agreements.js"
+import type { MemoryRecord } from "../src/types.js"
 import { tempDir } from "./helpers.js"
 
 describe("MemoryEngine", () => {
@@ -552,6 +557,57 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.doesNotMatch(serialized, /Doctor approved private project freshness text|Doctor pending private freshness text|Doctor global approved private freshness text|Doctor other project private freshness text/u)
   })
 
+  it("returns operating agreements through engine APIs", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "agreement-engine-project" }), "utf8")
+    const e = engine()
+    e.refreshScope(project)
+
+    e.save({
+      text: "Project workflow loop: write a spec, get approval, implement a slice.",
+      status: "approved",
+      category: "project",
+      scopeType: "project",
+      kind: "project_fact",
+    })
+    e.save({
+      text: "User prefers concise answers.",
+      status: "approved",
+      category: "preference",
+      scopeType: "global",
+      kind: "preference",
+    })
+
+    const agreements = e.operatingAgreements()
+    const summary = e.operatingAgreementSummary()
+
+    assert.equal(agreements.projectScope, "agreement-engine-project")
+    assert.equal(agreements.primary.length, 1)
+    assert.equal(agreements.primary[0].memory.text, "Project workflow loop: write a spec, get approval, implement a slice.")
+    assert.equal(summary.primaryCount, 1)
+    assert.equal(summary.primary[0].id, agreements.primary[0].memory.id)
+    assert.ok(!JSON.stringify(summary).includes("Project workflow loop: write a spec"))
+  })
+
+  it("includes text-free operating agreement summary in doctor", () => {
+    const e = engine()
+    e.save({
+      text: "PRIVATE DOCTOR AGREEMENT TEXT Project workflow loop: review before implementation.",
+      status: "approved",
+      category: "project",
+      scopeType: "global",
+      kind: "workflow_rule",
+    })
+
+    const report = e.doctor()
+    const serialized = JSON.stringify(report)
+    const operatingAgreements = report.operatingAgreements as any
+
+    assert.equal(operatingAgreements.primaryCount, 1)
+    assert.equal(operatingAgreements.primary[0].matchReason, "explicit-kind")
+    assert.doesNotMatch(serialized, /PRIVATE DOCTOR AGREEMENT TEXT/u)
+  })
+
   it("freshnessStatus and doctor reject invalid since timestamps", () => {
     const e = engine()
 
@@ -1048,5 +1104,170 @@ You are continuing the same subagent session. Before this run can be accepted, c
       assert.match(result.warnings?.join("\n") ?? "", /Vault path does not exist/u)
       assert.equal(e.list({ all: true }).some((memory) => memory.id === result.memory.id), true)
     }
+  })
+})
+
+describe("operating agreement selection", () => {
+  function record(overrides: Partial<MemoryRecord> & { id: string; text: string }): MemoryRecord {
+    return {
+      id: overrides.id,
+      text: overrides.text,
+      status: overrides.status ?? "approved",
+      category: overrides.category ?? "project",
+      scope: overrides.scope ?? { type: "project", key: "project-a" },
+      source: overrides.source ?? "manual",
+      kind: overrides.kind,
+      createdAt: overrides.createdAt ?? "2026-06-18T00:00:00.000Z",
+      updatedAt: overrides.updatedAt ?? "2026-06-18T00:00:00.000Z",
+      provenance: overrides.provenance,
+      project: overrides.project,
+    }
+  }
+
+  it("selects explicit workflow_rule memories as primary operating agreements", () => {
+    const result = selectOperatingAgreements([
+      record({
+        id: "rule-1",
+        kind: "workflow_rule",
+        text: "Project loop: spec review before implementation.",
+        updatedAt: "2026-06-18T10:00:00.000Z",
+      }),
+    ], { projectScopeKey: "project-a" })
+
+    assert.equal(result.primary.length, 1)
+    assert.equal(result.primary[0].memory.id, "rule-1")
+    assert.equal(result.primary[0].workflowArea, "project-loop")
+    assert.equal(result.primary[0].matchReason, "explicit-kind")
+    assert.equal(result.primary[0].recommendedKind, undefined)
+    assert.equal(result.relatedCandidates.length, 0)
+  })
+
+  it("selects heuristic preference and project_fact candidates and recommends workflow_rule", () => {
+    const result = selectOperatingAgreements([
+      record({
+        id: "loop-pref",
+        category: "preference",
+        kind: "preference",
+        scope: { type: "global" },
+        text: "Global working preference: use the project loop with review gates before implementation.",
+      }),
+      record({
+        id: "plain-pref",
+        category: "preference",
+        kind: "preference",
+        scope: { type: "global" },
+        text: "User prefers concise answers.",
+      }),
+      record({
+        id: "project-pr",
+        kind: "project_fact",
+        text: "For PR process, use feature branches and wait for merge approval.",
+      }),
+    ], { projectScopeKey: "project-a" })
+
+    assert.deepEqual(result.primary.map((item) => item.memory.id).sort(), ["loop-pref", "project-pr"])
+    assert.ok(result.primary.every((item) => item.matchReason === "heuristic"))
+    assert.ok(result.primary.every((item) => item.recommendedKind === "workflow_rule"))
+    assert.ok(!result.primary.some((item) => item.memory.id === "plain-pref"))
+    assert.ok(!result.relatedCandidates.some((item) => item.memory.id === "plain-pref"))
+  })
+
+  it("prefers explicit kind, then project scope, then recency for each area", () => {
+    const result = selectOperatingAgreements([
+      record({
+        id: "new-global-loop",
+        category: "preference",
+        kind: "preference",
+        scope: { type: "global" },
+        text: "Global workflow loop: plan, review, implement.",
+        updatedAt: "2026-06-18T12:00:00.000Z",
+      }),
+      record({
+        id: "old-project-loop",
+        kind: "project_fact",
+        text: "Project collaboration workflow loop: roadmap, plan, review, implement.",
+        updatedAt: "2026-06-18T11:00:00.000Z",
+      }),
+      record({
+        id: "explicit-global-loop",
+        kind: "workflow_rule",
+        scope: { type: "global" },
+        category: "preference",
+        text: "Workflow rule: use review-gated loop.",
+        updatedAt: "2026-06-18T09:00:00.000Z",
+      }),
+    ], { projectScopeKey: "project-a" })
+
+    assert.equal(result.primary.length, 1)
+    assert.equal(result.primary[0].memory.id, "explicit-global-loop")
+    assert.deepEqual(result.relatedCandidates.map((item) => item.memory.id), ["old-project-loop", "new-global-loop"])
+  })
+
+  it("respects project plus global scope by default and all scope when requested", () => {
+    const memories = [
+      record({ id: "project-a-loop", text: "Project workflow loop for A.", scope: { type: "project", key: "project-a" }, kind: "project_fact" }),
+      record({ id: "project-b-loop", text: "Project workflow loop for B.", scope: { type: "project", key: "project-b" }, kind: "project_fact" }),
+      record({ id: "global-loop", text: "Global workflow loop.", scope: { type: "global" }, category: "preference", kind: "preference" }),
+    ]
+
+    const scoped = selectOperatingAgreements(memories, { projectScopeKey: "project-a" })
+    const all = selectOperatingAgreements(memories, { projectScopeKey: "project-a", all: true })
+
+    assert.ok(scoped.primary.concat(scoped.relatedCandidates).some((item) => item.memory.id === "project-a-loop"))
+    assert.ok(scoped.primary.concat(scoped.relatedCandidates).some((item) => item.memory.id === "global-loop"))
+    assert.ok(!scoped.primary.concat(scoped.relatedCandidates).some((item) => item.memory.id === "project-b-loop"))
+    assert.ok(all.primary.concat(all.relatedCandidates).some((item) => item.memory.id === "project-b-loop"))
+  })
+
+  it("filters by area, applies limits, and reports omitted counts", () => {
+    const result = selectOperatingAgreements([
+      record({ id: "loop-1", text: "Project workflow loop: plan first.", kind: "project_fact", updatedAt: "2026-06-18T12:00:00.000Z" }),
+      record({ id: "loop-2", text: "Project workflow loop: older rule.", kind: "project_fact", updatedAt: "2026-06-18T11:00:00.000Z" }),
+      record({ id: "review-1", text: "Review gate: get approval before merge.", kind: "project_fact" }),
+    ], { projectScopeKey: "project-a", area: "project-loop", limit: 1, relatedLimit: 0 })
+
+    assert.deepEqual(result.primary.map((item) => item.memory.id), ["loop-1"])
+    assert.deepEqual(result.relatedCandidates, [])
+    assert.equal(result.omittedPrimaryCount, 0)
+    assert.equal(result.omittedRelatedCandidateCount, 1)
+    assert.deepEqual(result.workflowAreas, ["project-loop"])
+  })
+
+  it("keeps distinct workflow-area candidates beyond the primary limit visible as related", () => {
+    const result = selectOperatingAgreements([
+      record({ id: "area-1-project-loop", text: "Project loop: plan first.", kind: "workflow_rule", updatedAt: "2026-06-18T06:00:00.000Z" }),
+      record({ id: "area-2-review-gate", text: "Code review gate: get approval before merge.", kind: "workflow_rule", updatedAt: "2026-06-18T05:00:00.000Z" }),
+      record({ id: "area-3-pr-process", text: "Pull request process: use feature branches.", kind: "workflow_rule", updatedAt: "2026-06-18T04:00:00.000Z" }),
+      record({ id: "area-4-release-process", text: "Release process: tag versions before publishing.", kind: "workflow_rule", updatedAt: "2026-06-18T03:00:00.000Z" }),
+      record({ id: "area-5-tooling-preference", text: "Package manager preference: use pnpm.", kind: "workflow_rule", updatedAt: "2026-06-18T02:00:00.000Z" }),
+      record({ id: "area-6-other", text: "Keep incident handoff checklist updated.", kind: "workflow_rule", updatedAt: "2026-06-18T01:00:00.000Z" }),
+    ], { projectScopeKey: "project-a", limit: 3 })
+
+    assert.deepEqual(result.primary.map((item) => item.memory.id), [
+      "area-1-project-loop",
+      "area-2-review-gate",
+      "area-3-pr-process",
+    ])
+    assert.deepEqual(result.relatedCandidates.map((item) => item.memory.id), [
+      "area-4-release-process",
+      "area-5-tooling-preference",
+      "area-6-other",
+    ])
+    assert.deepEqual(result.primary.map((item) => item.workflowArea), ["project-loop", "review-gate", "pr-process"])
+    assert.deepEqual(result.relatedCandidates.map((item) => item.workflowArea), ["release-process", "tooling-preference", "other"])
+    assert.equal(result.omittedPrimaryCount, 0)
+    assert.equal(result.omittedRelatedCandidateCount, 0)
+  })
+
+  it("builds a text-free operating agreement summary", () => {
+    const result = summarizeOperatingAgreements(selectOperatingAgreements([
+      record({ id: "private-loop", text: "PRIVATE AGREEMENT TEXT workflow loop", kind: "project_fact" }),
+    ], { projectScopeKey: "project-a" }))
+    const serialized = JSON.stringify(result)
+
+    assert.equal(result.primaryCount, 1)
+    assert.equal(result.primary[0].id, "private-loop")
+    assert.equal(result.primary[0].workflowArea, "project-loop")
+    assert.ok(!serialized.includes("PRIVATE AGREEMENT TEXT"))
   })
 })

@@ -45,6 +45,17 @@ memory-lane recall "package manager"
 memory-lane recall "what were we working on"
 ```
 
+### Operating agreements
+
+When you need the current project workflow, review gates, PR process, release process, or tooling workflow rules, prefer the explicit command:
+
+```bash
+memory-lane agreements
+memory-lane agreements --area project-loop
+```
+
+The command returns approved operating agreement text for the current project plus global scope. `memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` only expose text-free agreement metadata.
+
 ### List (respects project scope by default)
 
 ```bash
@@ -66,6 +77,7 @@ memory-lane review --suspect-meta --include-approved # include approved suspect 
 memory-lane approve <id>          # approve a pending memory
 memory-lane reject <id>           # reject a pending memory
 memory-lane delete <id>           # soft-delete a memory
+memory-lane agreements            # inspect approved operating agreement text
 memory-lane status                # quick stats
 memory-lane status --json --since 2026-06-18T00:00:00.000Z
 memory-lane doctor                # full diagnostic report

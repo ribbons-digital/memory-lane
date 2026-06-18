@@ -2,7 +2,7 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { groupReviewMemories, isMetaTaskPromptText, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus } from "@memory-lane/core"
+import { groupReviewMemories, isMetaTaskPromptText, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type OperatingAgreementList, type OperatingAgreementSummary } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
@@ -409,6 +409,61 @@ export function formatFreshnessSummary(value: unknown): string | undefined {
   return `Freshness: ${value.newerApprovedCount} newer approved ${newerLabel}${since} (visible approved: ${value.visibleApprovedCount}; project: ${value.newerProjectApprovedCount}; global: ${value.newerGlobalApprovedCount}; global preferences: ${value.newerGlobalPreferenceCount})`
 }
 
+function isOperatingAgreementSummary(value: unknown): value is OperatingAgreementSummary {
+  return typeof value === "object" && value !== null
+    && typeof (value as OperatingAgreementSummary).primaryCount === "number"
+    && typeof (value as OperatingAgreementSummary).relatedCandidateCount === "number"
+    && Array.isArray((value as OperatingAgreementSummary).workflowAreas)
+}
+
+function formatOperatingAgreementSummary(value: unknown): string | undefined {
+  if (!isOperatingAgreementSummary(value)) return undefined
+  const areas = value.workflowAreas.length ? value.workflowAreas.join(", ") : "none"
+  return `Operating agreements: ${value.primaryCount} primary, ${value.relatedCandidateCount} related candidates (areas: ${areas}). Use memory-lane agreements to inspect agreement text.`
+}
+
+export function formatOperatingAgreements(result: OperatingAgreementList, json: boolean): string {
+  if (json) {
+    return JSON.stringify({ ok: true, data: result, meta: meta({ count: result.primary.length, relatedCount: result.relatedCandidates.length }) }, null, 2)
+  }
+
+  const lines = [
+    "Operating agreements",
+    `Project scope: ${result.projectScope}`,
+  ]
+
+  if (!result.primary.length) {
+    lines.push("No operating agreements found.")
+  } else {
+    lines.push("", "Primary:")
+    for (const item of result.primary) {
+      const kind = item.memory.kind ?? "misc"
+      const recommended = item.recommendedKind ? `; recommended kind: ${item.recommendedKind}` : ""
+      lines.push(
+        `- [${item.memory.id}] ${item.workflowArea} · ${item.memory.scope.type}/${item.memory.category}/${kind} · ${item.matchReason}${recommended}`,
+        `  ${item.memory.text}`,
+      )
+    }
+  }
+
+  lines.push(
+    "",
+    "Related candidates are not superseded; no cleanup is performed.",
+    `Related candidates: ${result.relatedCandidates.length}${result.omittedRelatedCandidateCount ? ` (${result.omittedRelatedCandidateCount} omitted)` : ""}`,
+  )
+  for (const item of result.relatedCandidates) {
+    const kind = item.memory.kind ?? "misc"
+    const recommended = item.recommendedKind ? `; recommended kind: ${item.recommendedKind}` : ""
+    lines.push(`- [${item.memory.id}] ${item.workflowArea} · ${item.memory.scope.type}/${item.memory.category}/${kind} · ${item.matchReason}${recommended}`)
+  }
+
+  if (result.notes.length) {
+    lines.push("", "Notes:", ...result.notes.map((note) => `- ${note}`))
+  }
+
+  return lines.join("\n")
+}
+
 export function formatDoctor(report: Record<string, unknown>, json: boolean): string {
   if (json) {
     return JSON.stringify({ ok: true, data: report, meta: meta() }, null, 2)
@@ -418,6 +473,7 @@ export function formatDoctor(report: Record<string, unknown>, json: boolean): st
     .filter(([k]) => !contextPolicyDoctorKeys.has(k))
     .map(([k, v]) => {
       if (k === "freshness") return formatFreshnessSummary(v) ?? "freshness: unavailable"
+      if (k === "operatingAgreements") return formatOperatingAgreementSummary(v) ?? "operatingAgreements: unavailable"
       if (v && typeof v === "object") return `${k}: ${JSON.stringify(v, null, 2)}`
       return `${k}: ${v}`
     })
@@ -476,6 +532,8 @@ Commands:
   review [--kind <kind>] [--source <source>] [--provenance <adapter/event>] [--suspect-meta] [--include-approved]
   dashboard [--all]
                   Compact continuity and review overview
+  agreements [--area <area>] [--limit <n>] [--related-limit <n>] [--all]
+                  Show approved operating agreements for the current project and global scope
   compact
   doctor [--since <ISO timestamp>]
   reindex [--force]
@@ -508,5 +566,5 @@ Commands:
 Flags:
   --json           Output JSON instead of human-readable text
   --project <path> Set the project scope directory
-  --all            (list) Show all memories, bypassing project scope`
+  --all            (list, agreements) Show all memories, bypassing project scope`
 }

@@ -31,6 +31,22 @@ Regex-based pattern matching for memory-related user intents (save, suggest, rec
 **Memory provenance**:
 Optional harness-neutral origin metadata on a memory record that identifies which adapter and lifecycle event produced the memory. Provenance explains where a memory came from without storing raw hook payloads, transcripts, or harness-specific implementation details.
 
+**Operating agreement memory**:
+An approved memory that describes how agents should work for a user, project, or workflow, such as a project loop, global working preference, release process, PR process, or review gate. The first supported convention uses existing memory fields such as `kind`, `scope`, `category`, `source`, and `updatedAt`; explicit revision fields such as `canonical`, `supersedes`, `supersededBy`, or `revisionOf` are separate future concepts.
+_Avoid_: Revision record, superseded memory, lifecycle injection
+
+**Workflow area**:
+A coarse label for the kind of operating agreement a memory describes, used to keep separate agreements from hiding each other. Initial areas are `project-loop`, `review-gate`, `pr-process`, `release-process`, `tooling-preference`, and `other`.
+_Avoid_: Memory kind, category, project scope
+
+**Primary operating agreement**:
+The best currently applicable operating agreement selected for a workflow area. Selection prefers explicit `workflow_rule` memories, then project scope over global scope for the same area, then newer updates. Primary selection is a read-only view and does not mark other memories as superseded.
+_Avoid_: Canonical revision, automatic cleanup, superseded memory
+
+**Related operating agreement candidate**:
+An approved visible memory that looks like an operating agreement but overlaps with a primary agreement or was matched heuristically. Related candidates are surfaced for human review and future revision/supersede workflows, not hidden or cleaned up automatically.
+_Avoid_: Rejected duplicate, cleanup recommendation, superseded memory
+
 **Obsidian mirror**:
 An optional one-way Markdown projection of Memory Lane's JSONL memory records into an Obsidian vault. The JSONL memory store remains the source of truth; edits to mirrored Markdown are not imported by the mirror.
 _Avoid_: Obsidian-backed storage, import, sync
