@@ -56,6 +56,42 @@ export interface MemoryRecord {
   provenance?: MemoryProvenance
 }
 
+export interface FreshnessMemoryMetadata {
+  id: string
+  status: Extract<MemoryStatus, "approved">
+  category: MemoryCategory
+  scope: MemoryScope
+  source: MemorySource
+  createdAt: string
+  updatedAt: string
+  kind?: MemoryKind
+  provenance?: MemoryProvenance
+}
+
+export interface FreshnessStatus {
+  projectScope: string | "none"
+  referenceTime?: string
+  visibleApprovedCount: number
+  latestApproved?: FreshnessMemoryMetadata
+  latestProjectApproved?: FreshnessMemoryMetadata
+  latestGlobalApproved?: FreshnessMemoryMetadata
+  newerApprovedCount: number
+  newerProjectApprovedCount: number
+  newerGlobalApprovedCount: number
+  newerGlobalPreferenceCount: number
+  newerByKind: Record<string, number>
+  newerBySource: Record<string, number>
+  newerByProvenance: Record<string, number>
+  newestNewerApproved: FreshnessMemoryMetadata[]
+  notice?: string
+}
+
+export interface FreshnessStatusOptions {
+  projectScopeKey?: string
+  since?: string
+  maxNewerMetadata?: number
+}
+
 export interface ProjectScope {
   cwd: string
   root: string
