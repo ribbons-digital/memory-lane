@@ -57,8 +57,8 @@ function scopeNotes(engine: MemoryEngine): string[] {
   return ["No projectPath was provided and no project scope is active; pass projectPath to scope project-specific recall/list/review/status in MCP clients such as Claude Desktop."]
 }
 
-function statusData(engine: MemoryEngine): { status: Record<string, unknown>; notes: string[] } {
-  return { status: engine.doctor(), notes: [...STATUS_NOTES, ...scopeNotes(engine)] }
+function statusData(engine: MemoryEngine, since?: string): { status: Record<string, unknown>; notes: string[] } {
+  return { status: engine.doctor({ freshnessSince: since }), notes: [...STATUS_NOTES, ...scopeNotes(engine)] }
 }
 
 export async function handleMemorySave(engine: MemoryEngine, input: SaveToolInput) {
@@ -101,7 +101,7 @@ export async function handleMemoryRecall(engine: MemoryEngine, input: RecallTool
 export async function handleMemoryStatus(engine: MemoryEngine, input: StatusToolInput) {
   try {
     applyProjectPath(engine, input.projectPath)
-    return jsonContent(envelope(engine, statusData(engine)))
+    return jsonContent(envelope(engine, statusData(engine, input.since)))
   } catch (error) {
     return jsonContent(errorEnvelope(error))
   }

@@ -44,6 +44,7 @@ const kindSchema = z.enum([
 const sourceSchema = z.enum(["manual", "user-suggested", "agent-suggested", "session-summary"])
 const provenanceSchema = z.string().min(1).describe("Optional adapter/event filter such as pi/session_end, claude/session_end, codex/session_end, or none")
 const projectPath = z.string().optional().describe("Optional directory to use for project-scoped Memory Lane operations")
+const since = z.string().optional().describe("Optional ISO timestamp used to report approved visible-memory freshness since that time")
 const memoryId = z.string().min(1).describe("Memory Lane memory id")
 
 export interface CreateMemoryLaneMcpServerOptions {
@@ -108,6 +109,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
       description: "Read Memory Lane status, counts, project scope, and integration diagnostics without modifying memory.",
       inputSchema: {
         projectPath,
+        since,
       },
     },
     async (input) => handleMemoryStatus(engine, input),
