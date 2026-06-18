@@ -467,7 +467,7 @@ memory-lane agreements --all
 
 ### Continuity hints
 
-`memory-lane dashboard`, `memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` include read-only continuity hints. Hints are metadata-only: they may include memory ids, scope, category, kind, source, provenance, timestamps, and revision relationships, but they do not include memory text in status/MCP surfaces. The human dashboard shows compact hint counts and inspection actions without adding memory text from the hints.
+`memory-lane dashboard`, `memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` include read-only continuity hints. Hints are metadata-only: they may include memory ids, scope, category, kind, source, provenance, timestamps, and revision relationships, but they do not include memory text in status/MCP surfaces. Slice 4 only exposes deterministic metadata hints; natural-language workstream discovery such as "resume this thread" or "find the right thread" remains a future direction. The human dashboard shows compact hint counts and inspection actions without adding memory text from the hints.
 
 Current hints report:
 

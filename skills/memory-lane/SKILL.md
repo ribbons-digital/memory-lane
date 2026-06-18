@@ -70,7 +70,7 @@ The command returns approved operating agreement text for the current project pl
 
 ### Continuity hints
 
-Use `memory-lane dashboard` for a compact human overview of continuity hints. Use `memory-lane status --json`, `memory-lane doctor --json`, or MCP `memory_status` when an agent needs text-free metadata about possible stale or overlapping continuity state. Hints are read-only and inspection-first; do not assume they cleaned up, hid, or deprioritized any memory.
+Use `memory-lane dashboard` for a compact human overview of continuity hints. Use `memory-lane status --json`, `memory-lane doctor --json`, or MCP `memory_status` when an agent needs text-free metadata about possible stale or overlapping continuity state. Slice 4 only exposes deterministic metadata hints; natural-language workstream discovery such as "resume this thread" or "find the right thread" remains a future direction. Hints are read-only and inspection-first; do not assume they cleaned up, hid, or deprioritized any memory.
 
 ### List (respects project scope by default)
 
