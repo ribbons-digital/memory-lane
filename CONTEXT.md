@@ -55,6 +55,10 @@ _Avoid_: Replacement memory, supersede relationship, deletion
 Explicit revision metadata showing that one approved memory is now replaced by another approved memory. Superseded memories remain approved historical records; they are not rejected, deleted, or assigned a new status. A single successor may supersede multiple older memories when the user invokes the relationship explicitly.
 _Avoid_: Automatic cleanup, rejected memory, deleted memory, new status
 
+**Workstream**:
+The user-meaningful unit of ongoing work across one or more manual threads, harness sessions, orchestrator threads, subagent runs, branches, PRs, and session summaries. In Phase 16 Slice 4 this is a domain/spec concept only; Memory Lane should infer continuity hints from existing memory metadata rather than adding a first-class workstream id or thread metadata.
+_Avoid_: Thread id, branch id, transcript, subagent task log
+
 **Obsidian mirror**:
 An optional one-way Markdown projection of Memory Lane's JSONL memory records into an Obsidian vault. The JSONL memory store remains the source of truth; edits to mirrored Markdown are not imported by the mirror.
 _Avoid_: Obsidian-backed storage, import, sync
