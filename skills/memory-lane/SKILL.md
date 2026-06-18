@@ -38,6 +38,18 @@ memory-lane suggest "Consider adding CI pipeline for linting" --category project
 memory-lane suggest "User prefers pnpm" --category preference --status approved
 ```
 
+### Revising memories
+
+When a durable memory is wrong, stale, duplicated, or superseded, prefer explicit revision commands instead of saving another near-duplicate memory:
+
+```bash
+memory-lane update <id> --text "refined memory" --reason "clarified"
+memory-lane replace <old-id> --text "new successor memory" --kind workflow_rule
+memory-lane supersede <new-id> <old-id> --reason "newer version"
+```
+
+`update` keeps the same memory id. `replace` creates a new successor memory. `supersede` links an existing approved successor to approved old memories. Use `--dry-run` to preview revision commands before writing relationship changes. Use `--yes` for multi-old `replace` or `supersede`. Do not assume superseded memories are hidden from recall/context yet; Slice 3 records relationships only. MCP mutation tools are not available for these revision operations yet.
+
 ### Recall (semantic + lexical search of approved memories)
 
 ```bash
@@ -78,6 +90,9 @@ memory-lane approve <id>          # approve a pending memory
 memory-lane reject <id>           # reject a pending memory
 memory-lane delete <id>           # soft-delete a memory
 memory-lane agreements            # inspect approved operating agreement text
+memory-lane update <id> --text "..." --reason "..." # revise an active memory in place
+memory-lane supersede <new-id> <old-id...> [--yes] # link approved old memories to an approved successor
+memory-lane replace <old-id...> --text "..." [--yes] # create a successor memory
 memory-lane status                # quick stats
 memory-lane status --json --since 2026-06-18T00:00:00.000Z
 memory-lane doctor                # full diagnostic report

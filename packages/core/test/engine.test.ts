@@ -254,6 +254,54 @@ describe("MemoryEngine", () => {
     assert.equal(log[1].id, saved.memory.id)
   })
 
+  it("update records revision metadata when reason is provided", () => {
+    const e = engine()
+    const saved = e.save({ text: "Old workflow wording", status: "approved", category: "project", kind: "workflow_rule" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    const updated = e.update(saved.memory.id, {
+      text: "New workflow wording",
+      reason: "clarified operating agreement",
+      revisedBy: "cli",
+    })
+
+    assert.equal(updated?.id, saved.memory.id)
+    assert.equal(updated?.text, "New workflow wording")
+    assert.equal(updated?.revision?.reason, "clarified operating agreement")
+    assert.equal(updated?.revision?.revisedBy, "cli")
+    assert.match(updated?.revision?.revisedAt ?? "", /^\d{4}-\d{2}-\d{2}T/u)
+    assert.equal(updated?.revision?.supersedes, undefined)
+    assert.equal(updated?.revision?.supersededBy, undefined)
+  })
+
+  it("update rejects metadata-only and no-op patches", () => {
+    const e = engine()
+    const saved = e.save({ text: "Stable memory", status: "approved", category: "project", kind: "project_fact" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    assert.throws(() => e.update(saved.memory.id, { reason: "reviewed", revisedBy: "cli" }), /No changes to apply/u)
+    assert.throws(() => e.update(saved.memory.id, { text: "Stable memory" }), /No changes to apply/u)
+  })
+
+  it("previewUpdate returns proposed memory without writing or invalidating embeddings", () => {
+    const e = engine()
+    const saved = e.save({ text: "Preview source", status: "approved", category: "project", kind: "project_fact" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+    const logBefore = readJsonl(path.join(dir, "mem.jsonl")).length
+
+    const preview = e.previewUpdate(saved.memory.id, { text: "Preview target", reason: "dry run", revisedBy: "cli" })
+
+    assert.equal(preview?.dryRun, true)
+    assert.equal(preview?.current.text, "Preview source")
+    assert.equal(preview?.proposed.text, "Preview target")
+    assert.equal(preview?.proposed.revision?.reason, "dry run")
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, logBefore)
+    assert.equal(readJsonl(path.join(dir, "emb.jsonl")).length, 0)
+  })
+
   it("does not update rejected deleted or missing memories", () => {
     const e = engine()
     const rejectedSource = e.save({ text: "Reject before update", status: "pending" })
@@ -296,6 +344,14 @@ describe("MemoryEngine", () => {
     assert.throws(
       () => e.update(saved.memory.id, { kind: "research" } as any),
       /Invalid kind.*research/,
+    )
+    assert.throws(
+      () => e.update(saved.memory.id, { text: "Changed by invalid actor", revisedBy: "robot" } as any),
+      /Invalid revisedBy.*robot.*manual, cli, mcp/,
+    )
+    assert.throws(
+      () => e.previewUpdate(saved.memory.id, { text: "Preview by invalid actor", revisedBy: "robot" } as any),
+      /Invalid revisedBy.*robot.*manual, cli, mcp/,
     )
     assert.equal(e.list({ all: true }).find((memory) => memory.id === saved.memory.id)?.text, "Original valid memory")
     assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, 1)
@@ -358,6 +414,213 @@ describe("MemoryEngine", () => {
     assert.equal(updated?.text, "Updated despite mirror warning")
     assert.match(updated?.warnings?.join("\n") ?? "", /Vault path does not exist/u)
     assert.equal(e.list({ all: true }).find((memory) => memory.id === saved.memory.id)?.text, "Updated despite mirror warning")
+  })
+
+  it("supersede links one approved successor to many approved old memories", () => {
+    const e = engine()
+    const oldA = e.save({ text: "Old A", status: "approved", category: "project", kind: "workflow_rule" })
+    const oldB = e.save({ text: "Old B", status: "approved", category: "project", kind: "workflow_rule" })
+    const newer = e.save({ text: "New canonical", status: "approved", category: "project", kind: "workflow_rule" })
+    assert.equal(oldA.status, "saved"); assert.equal(oldB.status, "saved"); assert.equal(newer.status, "saved")
+    if (oldA.status !== "saved" || oldB.status !== "saved" || newer.status !== "saved") return
+
+    const result = e.supersede(newer.memory.id, [oldA.memory.id, oldB.memory.id], { reason: "merged duplicates", revisedBy: "cli" })
+
+    assert.equal(result.dryRun, false)
+    assert.deepEqual(result.successor.revision?.supersedes, [oldA.memory.id, oldB.memory.id])
+    assert.equal(result.successor.revision?.reason, "merged duplicates")
+    assert.deepEqual(result.superseded.map((m) => m.revision?.supersededBy), [newer.memory.id, newer.memory.id])
+    assert.equal(e.list({ all: true }).find((m) => m.id === oldA.memory.id)?.status, "approved")
+  })
+
+  it("supersede validates all inputs before writing", () => {
+    const e = engine()
+    const old = e.save({ text: "Old", status: "approved" })
+    const pendingSuccessor = e.save({ text: "Pending successor", status: "pending" })
+    const pendingOld = e.save({ text: "Pending old", status: "pending" })
+    assert.equal(old.status, "saved"); assert.equal(pendingSuccessor.status, "saved"); assert.equal(pendingOld.status, "saved")
+    if (old.status !== "saved" || pendingSuccessor.status !== "saved" || pendingOld.status !== "saved") return
+    const logBefore = readJsonl(path.join(dir, "mem.jsonl")).length
+
+    assert.throws(() => e.supersede("missing", [old.memory.id]), /Successor memory not found/u)
+    assert.throws(() => e.supersede(pendingSuccessor.memory.id, [old.memory.id]), /Successor must be approved/u)
+    assert.throws(() => e.supersede(old.memory.id, [old.memory.id]), /cannot supersede itself/u)
+    assert.throws(() => e.supersede(old.memory.id, ["missing-old"]), /Old memory not found/u)
+    assert.throws(() => e.supersede(old.memory.id, [pendingOld.memory.id]), /Old must be approved/u)
+    assert.throws(() => e.supersede(old.memory.id, [pendingOld.memory.id, pendingOld.memory.id]), /Old memory ids must be unique/u)
+    assert.throws(() => e.supersede(old.memory.id, [pendingOld.memory.id], { revisedBy: "robot" as any }), /Invalid revisedBy.*robot/u)
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, logBefore)
+  })
+
+  it("supersede rejects already superseded old memories before writing", () => {
+    const e = engine()
+    const old = e.save({ text: "Old already", status: "approved" })
+    const newer = e.save({ text: "New already", status: "approved" })
+    const newest = e.save({ text: "Newest already", status: "approved" })
+    assert.equal(old.status, "saved"); assert.equal(newer.status, "saved"); assert.equal(newest.status, "saved")
+    if (old.status !== "saved" || newer.status !== "saved" || newest.status !== "saved") return
+
+    e.supersede(newer.memory.id, [old.memory.id])
+    const logBefore = readJsonl(path.join(dir, "mem.jsonl")).length
+
+    assert.throws(() => e.supersede(newest.memory.id, [old.memory.id]), /Old memory is already superseded/u)
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, logBefore)
+  })
+
+  it("supersede dry-run returns proposed records without writing", () => {
+    const e = engine()
+    const old = e.save({ text: "Old dry", status: "approved" })
+    const newer = e.save({ text: "New dry", status: "approved" })
+    assert.equal(old.status, "saved"); assert.equal(newer.status, "saved")
+    if (old.status !== "saved" || newer.status !== "saved") return
+    const logBefore = readJsonl(path.join(dir, "mem.jsonl")).length
+
+    const result = e.supersede(newer.memory.id, [old.memory.id], { reason: "preview", revisedBy: "cli", dryRun: true })
+
+    assert.equal(result.dryRun, true)
+    assert.equal(result.successor.revision?.reason, "preview")
+    assert.equal(result.superseded[0].revision?.supersededBy, newer.memory.id)
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, logBefore)
+    assert.equal(readJsonl(path.join(dir, "emb.jsonl")).length, 0)
+  })
+
+  it("supersede warns on cross-scope and cross-category relationships", () => {
+    const e = engine()
+    const old = e.save({ text: "Global pref", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+    const newer = e.save({ text: "Project successor", status: "approved", category: "project", scopeType: "project", kind: "workflow_rule" })
+    assert.equal(old.status, "saved"); assert.equal(newer.status, "saved")
+    if (old.status !== "saved" || newer.status !== "saved") return
+
+    const result = e.supersede(newer.memory.id, [old.memory.id], { dryRun: true })
+
+    assert.ok(result.warnings.some((warning) => warning.code === "cross-scope"))
+    assert.ok(result.warnings.some((warning) => warning.code === "cross-category"))
+  })
+
+  it("replace approved creates successor and marks old memories superseded", () => {
+    const e = engine()
+    const old = e.save({ text: "Old replacement source", status: "approved", category: "project", kind: "project_fact" })
+    assert.equal(old.status, "saved")
+    if (old.status !== "saved") return
+
+    const result = e.replace([old.memory.id], { text: "New replacement", status: "approved", kind: "workflow_rule", reason: "refined", revisedBy: "cli" })
+
+    assert.equal(result.successorCreated, true)
+    assert.equal(result.successor.text, "New replacement")
+    assert.equal(result.successor.status, "approved")
+    assert.equal(result.successor.kind, "workflow_rule")
+    assert.deepEqual(result.successor.revision?.supersedes, [old.memory.id])
+    assert.equal(result.superseded[0].revision?.supersededBy, result.successor.id)
+  })
+
+  it("replace approved supersedes multiple old memories in order", () => {
+    const e = engine()
+    const oldA = e.save({ text: "First old replacement source", status: "approved", category: "project", kind: "project_fact" })
+    const oldB = e.save({ text: "Second old replacement source", status: "approved", category: "project", kind: "project_fact" })
+    assert.equal(oldA.status, "saved")
+    assert.equal(oldB.status, "saved")
+    if (oldA.status !== "saved" || oldB.status !== "saved") return
+
+    const result = e.replace([oldA.memory.id, oldB.memory.id], {
+      text: "Merged approved replacement",
+      status: "approved",
+      kind: "workflow_rule",
+      reason: "merged duplicate memories",
+      revisedBy: "cli",
+    })
+
+    assert.equal(result.successorCreated, true)
+    assert.equal(result.successor.text, "Merged approved replacement")
+    assert.equal(result.successor.status, "approved")
+    assert.deepEqual(result.successor.revision?.supersedes, [oldA.memory.id, oldB.memory.id])
+    assert.deepEqual(result.superseded.map((memory) => memory.id), [oldA.memory.id, oldB.memory.id])
+    assert.ok(result.superseded.every((memory) => memory.revision?.supersededBy === result.successor.id))
+
+    const folded = e.list({ all: true })
+    for (const oldId of [oldA.memory.id, oldB.memory.id]) {
+      const memory = folded.find((record) => record.id === oldId)
+      assert.ok(memory)
+      assert.equal(memory.status, "approved")
+      assert.equal(memory.revision?.supersededBy, result.successor.id)
+    }
+  })
+
+  it("replace pending creates successor intent without mutating old memory", () => {
+    const e = engine()
+    const old = e.save({ text: "Old pending replace", status: "approved", category: "project", kind: "project_fact" })
+    assert.equal(old.status, "saved")
+    if (old.status !== "saved") return
+    const logBefore = readJsonl(path.join(dir, "mem.jsonl")).length
+
+    const result = e.replace([old.memory.id], { text: "Pending replacement", status: "pending", reason: "draft", revisedBy: "cli" })
+
+    assert.equal(result.successor.status, "pending")
+    assert.deepEqual(result.successor.revision?.supersedes, [old.memory.id])
+    assert.deepEqual(result.superseded, [])
+    assert.equal(e.list({ all: true }).find((m) => m.id === old.memory.id)?.revision, undefined)
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, logBefore + 1)
+    assert.equal(readJsonl(path.join(dir, "emb.jsonl")).length, 0)
+  })
+
+  it("replace dry-run returns proposed records without writing", () => {
+    const e = engine()
+    const old = e.save({ text: "Old dry replace", status: "approved" })
+    assert.equal(old.status, "saved")
+    if (old.status !== "saved") return
+    const logBefore = readJsonl(path.join(dir, "mem.jsonl")).length
+
+    const result = e.replace([old.memory.id], { text: "New dry replace", reason: "preview", revisedBy: "cli", dryRun: true })
+
+    assert.equal(result.dryRun, true)
+    assert.equal(result.successor.text, "New dry replace")
+    assert.deepEqual(result.successor.revision?.supersedes, [old.memory.id])
+    assert.equal(result.superseded[0].revision?.supersededBy, result.successor.id)
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, logBefore)
+    assert.equal(readJsonl(path.join(dir, "emb.jsonl")).length, 0)
+  })
+
+  it("replace validates all inputs before writing", () => {
+    const e = engine()
+    const old = e.save({ text: "Old replace validation", status: "approved" })
+    const pendingOld = e.save({ text: "Pending replace validation", status: "pending" })
+    assert.equal(old.status, "saved"); assert.equal(pendingOld.status, "saved")
+    if (old.status !== "saved" || pendingOld.status !== "saved") return
+    const logBefore = readJsonl(path.join(dir, "mem.jsonl")).length
+
+    assert.throws(() => e.replace([], { text: "No old ids" }), /At least one old memory id is required/u)
+    assert.throws(() => e.replace([old.memory.id, old.memory.id], { text: "Duplicate old ids" }), /Old memory ids must be unique/u)
+    assert.throws(() => e.replace(["missing-old"], { text: "Missing old" }), /Old memory not found/u)
+    assert.throws(() => e.replace([pendingOld.memory.id], { text: "Pending old" }), /Old must be approved/u)
+    assert.throws(() => e.replace([old.memory.id], { text: "   " }), /empty/u)
+    assert.throws(() => e.replace([old.memory.id], { text: "my key is sk-abc123def456ghi789jkl" }), /secret/u)
+    assert.throws(() => e.replace([old.memory.id], { text: "Bad status", status: "rejected" as any }), /Invalid status.*rejected/u)
+    assert.throws(() => e.replace([old.memory.id], { text: "Bad actor", revisedBy: "robot" as any }), /Invalid revisedBy.*robot/u)
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, logBefore)
+  })
+
+  it("replace rejects already superseded old memories before writing", () => {
+    const e = engine()
+    const old = e.save({ text: "Old replace already", status: "approved" })
+    const newer = e.save({ text: "New replace already", status: "approved" })
+    assert.equal(old.status, "saved"); assert.equal(newer.status, "saved")
+    if (old.status !== "saved" || newer.status !== "saved") return
+
+    e.supersede(newer.memory.id, [old.memory.id])
+    const logBefore = readJsonl(path.join(dir, "mem.jsonl")).length
+
+    assert.throws(() => e.replace([old.memory.id], { text: "Another replace" }), /Old memory is already superseded/u)
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, logBefore)
+  })
+
+  it("replace warns on cross-category relationships", () => {
+    const e = engine()
+    const old = e.save({ text: "Global pref replace", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+    assert.equal(old.status, "saved")
+    if (old.status !== "saved") return
+
+    const result = e.replace([old.memory.id], { text: "Project successor replace", category: "project", kind: "workflow_rule", status: "approved", reason: "cross category", revisedBy: "cli" })
+
+    assert.ok(result.warnings.some((warning) => warning.code === "cross-category"))
   })
 
   it("status transitions return Obsidian mirror warnings", () => {

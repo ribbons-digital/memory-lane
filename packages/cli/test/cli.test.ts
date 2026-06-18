@@ -262,6 +262,247 @@ describe("CLI integration", () => {
     assert.equal(deletedMem.status, "deleted")
   })
 
+  it("update changes a memory and records revision metadata", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "old update text", "--status", "pending", "--category", "project"], env)
+    const before = JSON.parse(run(["list", "--json"], env))
+    const id = before.data.memories[0].id
+
+    const output = JSON.parse(run(["update", id, "--text", "new update text", "--category", "preference", "--kind", "workflow_rule", "--status", "approved", "--reason", "clarified", "--json"], env))
+    const after = JSON.parse(run(["list", "--json"], env))
+
+    assert.equal(output.ok, true)
+    assert.equal(output.data.updated.text, "new update text")
+    assert.equal(output.data.updated.category, "preference")
+    assert.equal(output.data.updated.kind, "workflow_rule")
+    assert.equal(output.data.updated.status, "approved")
+    assert.equal(output.data.updated.revision.reason, "clarified")
+    assert.equal(output.data.updated.revision.revisedBy, "cli")
+    assert.equal(after.data.memories[0].revision.reason, "clarified")
+  })
+
+  it("update supports stdin dry-run without writing", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "old stdin text", "--status", "approved"], env)
+    const id = JSON.parse(run(["list", "--json"], env)).data.memories[0].id
+
+    const result = runProcess(["update", id, "--stdin", "--dry-run", "--json"], { env, stdin: "new stdin text" })
+    const list = JSON.parse(run(["list", "--json"], env))
+    const payload = JSON.parse(result.stdout)
+
+    assert.equal(result.status, 0)
+    assert.equal(payload.data.dryRun, true)
+    assert.equal(payload.data.proposed.text, "new stdin text")
+    assert.equal(list.data.memories[0].text, "old stdin text")
+  })
+
+  it("update rejects missing changes and no-op patches", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "same text", "--status", "approved"], env)
+    const id = JSON.parse(run(["list", "--json"], env)).data.memories[0].id
+
+    const metadataOnly = runProcess(["update", id, "--reason", "reviewed"], { env })
+    const noOp = runProcess(["update", id, "--text", "same text"], { env })
+
+    assert.notEqual(metadataOnly.status, 0)
+    assert.match(metadataOnly.stdout + metadataOnly.stderr, /No changes to apply|At least one update field/u)
+    assert.notEqual(noOp.status, 0)
+    assert.match(noOp.stdout + noOp.stderr, /No changes to apply/u)
+  })
+
+  it("supersede links an approved successor to an old memory", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "old supersede", "--status", "approved"], env)
+    run(["save", "new supersede", "--status", "approved"], env)
+    const memories = JSON.parse(run(["list", "--json"], env)).data.memories
+    const oldId = memories.find((m: any) => m.text === "old supersede").id
+    const newId = memories.find((m: any) => m.text === "new supersede").id
+
+    const output = JSON.parse(run(["supersede", newId, oldId, "--reason", "newer", "--json"], env))
+    const after = JSON.parse(run(["list", "--json"], env)).data.memories
+
+    assert.equal(output.ok, true)
+    assert.equal(output.data.successor.revision.supersedes[0], oldId)
+    assert.equal(after.find((m: any) => m.id === oldId).revision.supersededBy, newId)
+  })
+
+  it("supersede multi-old requires --yes unless dry-run", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "old one", "--status", "approved"], env)
+    run(["save", "old two", "--status", "approved"], env)
+    run(["save", "new many", "--status", "approved"], env)
+    const memories = JSON.parse(run(["list", "--json"], env)).data.memories
+    const oldIds = memories.filter((m: any) => m.text.startsWith("old ")).map((m: any) => m.id)
+    const newId = memories.find((m: any) => m.text === "new many").id
+
+    const missingYes = runProcess(["supersede", newId, ...oldIds], { env })
+    const dryRun = runProcess(["supersede", newId, ...oldIds, "--dry-run", "--json"], { env })
+    const confirmed = runProcess(["supersede", newId, ...oldIds, "--yes", "--json"], { env })
+
+    assert.notEqual(missingYes.status, 0)
+    assert.match(missingYes.stdout + missingYes.stderr, /--yes/u)
+    assert.equal(dryRun.status, 0)
+    assert.equal(JSON.parse(dryRun.stdout).data.dryRun, true)
+    assert.equal(confirmed.status, 0)
+    assert.equal(JSON.parse(confirmed.stdout).data.superseded.length, 2)
+  })
+
+  it("replace multi-old requires --yes unless dry-run", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "old replace one", "--status", "approved"], env)
+    run(["save", "old replace two", "--status", "approved"], env)
+    const oldIds = JSON.parse(run(["list", "--json"], env)).data.memories.map((m: any) => m.id)
+
+    const missingYes = runProcess(["replace", ...oldIds, "--text", "new multi replace"], { env })
+    const dryRun = runProcess(["replace", ...oldIds, "--text", "new multi replace", "--dry-run", "--json"], { env })
+    const confirmed = runProcess(["replace", ...oldIds, "--text", "new multi replace", "--yes", "--json"], { env })
+
+    assert.notEqual(missingYes.status, 0)
+    assert.match(missingYes.stdout + missingYes.stderr, /--yes/u)
+    assert.equal(dryRun.status, 0)
+    assert.equal(JSON.parse(dryRun.stdout).data.dryRun, true)
+    assert.equal(confirmed.status, 0)
+    assert.equal(JSON.parse(confirmed.stdout).data.superseded.length, 2)
+  })
+
+  it("replace approved creates successor and supersedes old memory", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "old replace", "--status", "approved", "--category", "project"], env)
+    const oldId = JSON.parse(run(["list", "--json"], env)).data.memories[0].id
+
+    const output = JSON.parse(run(["replace", oldId, "--text", "new replace", "--kind", "workflow_rule", "--reason", "refined", "--json"], env))
+    const after = JSON.parse(run(["list", "--json"], env)).data.memories
+
+    assert.equal(output.data.successor.text, "new replace")
+    assert.equal(output.data.successor.revision.supersedes[0], oldId)
+    assert.equal(after.find((m: any) => m.id === oldId).revision.supersededBy, output.data.successor.id)
+  })
+
+  it("replace pending leaves old memory unchanged", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "old pending replacement", "--status", "approved"], env)
+    const oldId = JSON.parse(run(["list", "--json"], env)).data.memories[0].id
+
+    const output = JSON.parse(run(["replace", oldId, "--text", "draft replacement", "--status", "pending", "--json"], env))
+    const after = JSON.parse(run(["list", "--json", "--all"], env)).data.memories
+
+    assert.equal(output.data.successor.status, "pending")
+    assert.equal(output.data.superseded.length, 0)
+    assert.equal(after.find((m: any) => m.id === oldId).revision, undefined)
+  })
+
+  it("replace supports stdin dry-run without writing", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "old dry replace", "--status", "approved"], env)
+    const oldId = JSON.parse(run(["list", "--json"], env)).data.memories[0].id
+
+    const result = runProcess(["replace", oldId, "--stdin", "--dry-run", "--json"], { env, stdin: "new dry replacement" })
+    const after = JSON.parse(run(["list", "--json"], env)).data.memories
+
+    assert.equal(result.status, 0)
+    assert.equal(JSON.parse(result.stdout).data.dryRun, true)
+    assert.equal(after.length, 1)
+    assert.equal(after[0].text, "old dry replace")
+  })
+
+  it("replace and supersede validate required ids, text, and engine inputs", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "old validation replace", "--status", "approved"], env)
+    const oldId = JSON.parse(run(["list", "--json"], env)).data.memories[0].id
+
+    const missingSupersedeIds = runProcess(["supersede"], { env })
+    const missingReplaceIds = runProcess(["replace", "--text", "new text"], { env })
+    const missingText = runProcess(["replace", oldId], { env })
+    const invalidCategory = runProcess(["replace", oldId, "--text", "new text", "--category", "research"], { env })
+
+    assert.notEqual(missingSupersedeIds.status, 0)
+    assert.match(missingSupersedeIds.stdout + missingSupersedeIds.stderr, /Usage: memory-lane supersede/u)
+    assert.notEqual(missingReplaceIds.status, 0)
+    assert.match(missingReplaceIds.stdout + missingReplaceIds.stderr, /Usage: memory-lane replace/u)
+    assert.notEqual(missingText.status, 0)
+    assert.match(missingText.stdout + missingText.stderr, /Replacement text required/u)
+    assert.notEqual(invalidCategory.status, 0)
+    assert.match(invalidCategory.stdout + invalidCategory.stderr, /Invalid category/u)
+  })
+
+  it("supersede supports human output", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "old human supersede", "--status", "approved"], env)
+    run(["save", "new human supersede", "--status", "approved"], env)
+    const memories = JSON.parse(run(["list", "--json"], env)).data.memories
+    const oldId = memories.find((m: any) => m.text === "old human supersede").id
+    const newId = memories.find((m: any) => m.text === "new human supersede").id
+
+    const output = run(["supersede", newId, oldId], env)
+
+    assert.match(output, /Superseded memories:/u)
+    assert.match(output, new RegExp(`Successor: \\[${escapeRegExp(newId)}\\] new human supersede`, "u"))
+    assert.match(output, new RegExp(`Superseded old memories: ${escapeRegExp(oldId)}`, "u"))
+    assert.doesNotMatch(output, /Old memories:/u)
+  })
+
+  it("replace supports human output", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "old human replace", "--status", "approved"], env)
+    const oldId = JSON.parse(run(["list", "--json"], env)).data.memories[0].id
+
+    const output = run(["replace", oldId, "--text", "new human replace"], env)
+
+    assert.match(output, /Replaced memory:/u)
+    assert.match(output, /Successor:/u)
+    assert.match(output, /Superseded old memories:/u)
+  })
+
+  it("human list review and agreements show revision labels while recall stays unchanged", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    writeMemoryRecords(memFile, [
+      {
+        id: "agreement-current",
+        text: "PR process: open a pull request and wait for user merge approval.",
+        category: "preference",
+        scope: { type: "global" },
+        status: "approved",
+        source: "manual",
+        kind: "workflow_rule",
+        createdAt: "2026-06-18T08:00:00.000Z",
+        updatedAt: "2026-06-18T08:00:00.000Z",
+        revision: {
+          supersedes: ["agreement-old"],
+          reason: "consolidated",
+          revisedAt: "2026-06-18T09:00:00.000Z",
+          revisedBy: "cli",
+        },
+      },
+      {
+        id: "pending-old",
+        text: "Pending revision label memory",
+        category: "project",
+        scope: { type: "global" },
+        status: "pending",
+        source: "manual",
+        kind: "project_fact",
+        createdAt: "2026-06-18T07:00:00.000Z",
+        updatedAt: "2026-06-18T07:00:00.000Z",
+        revision: {
+          supersededBy: "pending-new",
+          revisedAt: "2026-06-18T09:30:00.000Z",
+          revisedBy: "cli",
+        },
+      },
+    ])
+
+    const list = run(["list"], env)
+    const review = run(["review"], env)
+    const agreements = run(["agreements"], env)
+    const recall = run(["recall", "PR process"], env)
+
+    assert.match(list, /\[supersedes: agreement-old\]/u)
+    assert.match(list, /\[superseded by: pending-new\]/u)
+    assert.match(review, /\[superseded by: pending-new\]/u)
+    assert.match(agreements, /\[supersedes: agreement-old\]/u)
+    assert.doesNotMatch(recall, /supersedes: agreement-old/u)
+  })
+
   it("JSON output", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,

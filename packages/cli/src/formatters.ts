@@ -2,7 +2,7 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { groupReviewMemories, isMetaTaskPromptText, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type OperatingAgreementList, type OperatingAgreementSummary } from "@memory-lane/core"
+import { groupReviewMemories, isMetaTaskPromptText, revisionLabel, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type OperatingAgreementList, type OperatingAgreementSummary, type UpdatePreview, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
@@ -190,13 +190,18 @@ export function formatDashboard(memories: MemoryRecord[], json: boolean, extraMe
   return lines.join("\n")
 }
 
+function revisionSuffix(memory: MemoryRecord): string {
+  const label = revisionLabel(memory)
+  return label ? ` ${label}` : ""
+}
+
 export function formatMemories(memories: MemoryRecord[], json: boolean, extraMeta?: Record<string, unknown>): string {
   if (json) {
     return JSON.stringify({ ok: true, data: { memories }, meta: meta({ count: memories.length, ...extraMeta }) }, null, 2)
   }
   if (!memories.length) return "No memories found."
   return memories.map((m) =>
-    `[${m.id}] (${m.scope.type}/${m.category}/${m.kind ?? "?"}) ${m.status !== "approved" ? `[${m.status}] ` : ""}${m.text}  (saved ${formatDate(m.createdAt)})`,
+    `[${m.id}] (${m.scope.type}/${m.category}/${m.kind ?? "?"})${revisionSuffix(m)} ${m.status !== "approved" ? `[${m.status}] ` : ""}${m.text}  (saved ${formatDate(m.createdAt)})`,
   ).join("\n")
 }
 
@@ -222,7 +227,7 @@ function reviewPreview(memory: MemoryRecord): string {
 }
 
 function reviewStatusLine(memory: MemoryRecord): string {
-  return `[${memory.id}] ${memory.status} · ${provenanceLabel(memory)} · ${memory.scope.type}/${memory.category}/${memory.kind ?? "misc"}`
+  return `[${memory.id}] ${memory.status} · ${provenanceLabel(memory)} · ${memory.scope.type}/${memory.category}/${memory.kind ?? "misc"}${revisionSuffix(memory)}`
 }
 
 function filterSummary(extraMeta?: Record<string, unknown>): string | undefined {
@@ -320,6 +325,42 @@ export function formatRecall(result: RecallResult, json: boolean): string {
     ...lines,
     ...result.memories.map((m) => `[${m.id}] (${m.scope.type}/${m.category}) ${m.text}`),
   ].join("\n").trim()
+}
+
+export function formatUpdatePreview(result: UpdatePreview, json: boolean): string {
+  if (json) return JSON.stringify({ ok: true, data: result, meta: meta() }, null, 2)
+  return [
+    "Update dry run:",
+    `Current: [${result.current.id}] ${compactPreview(result.current.text)}`,
+    `Proposed: [${result.proposed.id}] ${compactPreview(result.proposed.text)}`,
+    ...result.warnings.map((warning) => `Warning: ${warning}`),
+  ].join("\n")
+}
+
+function formatRevisionWarnings(warnings: Array<{ message: string }>): string[] {
+  return warnings.map((warning) => `Warning: ${warning.message}`)
+}
+
+export function formatSupersedeResult(result: SupersedeResult, json: boolean): string {
+  if (json) return JSON.stringify({ ok: true, data: result, meta: meta({ count: result.superseded.length }) }, null, 2)
+  return [
+    result.dryRun ? "Supersede dry run:" : "Superseded memories:",
+    `Successor: [${result.successor.id}] ${compactPreview(result.successor.text)}`,
+    `Superseded old memories: ${result.superseded.map((m) => m.id).join(", ") || "none"}`,
+    ...formatRevisionWarnings(result.warnings),
+    ...(result.mirrorWarnings ?? []).map((warning) => `Warning: ${warning}`),
+  ].join("\n")
+}
+
+export function formatReplaceResult(result: ReplaceResult, json: boolean): string {
+  if (json) return JSON.stringify({ ok: true, data: result, meta: meta({ count: result.superseded.length }) }, null, 2)
+  return [
+    result.dryRun ? "Replace dry run:" : "Replaced memory:",
+    `Successor: [${result.successor.id}] ${compactPreview(result.successor.text)}`,
+    `Superseded old memories: ${result.superseded.map((m) => m.id).join(", ") || "none"}`,
+    ...formatRevisionWarnings(result.warnings),
+    ...(result.mirrorWarnings ?? []).map((warning) => `Warning: ${warning}`),
+  ].join("\n")
 }
 
 export function formatSaveResult(result: SaveResult, json: boolean): string {
@@ -440,7 +481,7 @@ export function formatOperatingAgreements(result: OperatingAgreementList, json: 
       const kind = item.memory.kind ?? "misc"
       const recommended = item.recommendedKind ? `; recommended kind: ${item.recommendedKind}` : ""
       lines.push(
-        `- [${item.memory.id}] ${item.workflowArea} · ${item.memory.scope.type}/${item.memory.category}/${kind} · ${item.matchReason}${recommended}`,
+        `- [${item.memory.id}] ${item.workflowArea} · ${item.memory.scope.type}/${item.memory.category}/${kind}${revisionSuffix(item.memory)} · ${item.matchReason}${recommended}`,
         `  ${item.memory.text}`,
       )
     }
@@ -454,7 +495,7 @@ export function formatOperatingAgreements(result: OperatingAgreementList, json: 
   for (const item of result.relatedCandidates) {
     const kind = item.memory.kind ?? "misc"
     const recommended = item.recommendedKind ? `; recommended kind: ${item.recommendedKind}` : ""
-    lines.push(`- [${item.memory.id}] ${item.workflowArea} · ${item.memory.scope.type}/${item.memory.category}/${kind} · ${item.matchReason}${recommended}`)
+    lines.push(`- [${item.memory.id}] ${item.workflowArea} · ${item.memory.scope.type}/${item.memory.category}/${kind}${revisionSuffix(item.memory)} · ${item.matchReason}${recommended}`)
   }
 
   if (result.notes.length) {
@@ -529,6 +570,12 @@ Commands:
   delete <id>
   approve <id>
   reject <id>
+  update <id> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run]
+                  Revise an active memory with the same id
+  supersede <new-id> <old-id...> [--reason <reason>] [--dry-run] [--yes]
+                  Mark approved old memories as superseded by an approved successor
+  replace <old-id...> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run] [--yes]
+                  Create a successor memory and optionally supersede old memories
   review [--kind <kind>] [--source <source>] [--provenance <adapter/event>] [--suspect-meta] [--include-approved]
   dashboard [--all]
                   Compact continuity and review overview

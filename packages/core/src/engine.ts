@@ -4,7 +4,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import * as os from "node:os"
 import { isSafeMirrorFolder, syncObsidianMirror } from "@memory-lane/obsidian-mirror"
-import { createMemoryStore, type MemoryStore } from "./storage.js"
+import { createMemoryId, createMemoryStore, type MemoryStore } from "./storage.js"
 import {
   effectiveMemoryKind, searchMemories, findDuplicateMemory,
 } from "./search.js"
@@ -16,7 +16,10 @@ import { defaultHookDebugLogPath, hookDebugEnabled } from "./hook-debug-log.js"
 import { retrieveSemanticMemories } from "./retrieval.js"
 import { compact as compactStores, shouldCompact } from "./compact.js"
 import { diagnoseIntegrations, type IntegrationDiagnosticPaths } from "./integration-diagnostics.js"
-import { validateSaveInput } from "./storage-validation.js"
+import { VALID_REVISION_ACTORS, validateSaveInput } from "./storage-validation.js"
+import {
+  hasRealUpdateChange, revisionForSuccessor, revisionForSuperseded, revisionWarnings, sameIdRevision,
+} from "./revisions.js"
 import { isMetaTaskPromptText } from "./meta-task-filter.js"
 import { buildFreshnessStatus } from "./freshness.js"
 import { selectOperatingAgreements, summarizeOperatingAgreements } from "./operating-agreements.js"
@@ -26,13 +29,27 @@ import {
 } from "./engine-helpers.js"
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
-  MemoryKind, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, ProjectScope,
+  MemoryKind, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, UpdatePreview, ProjectScope,
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig,
   FreshnessStatus, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
+  SupersedeResult, ReplaceResult, MemoryRevisionActor,
 } from "./types.js"
 
 function displayValue(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value)
+}
+
+function allowedValues<T extends string>(allowed: Set<T>): string {
+  return [...allowed].join(", ")
+}
+
+function validateRevisionOptions(input: { reason?: string; revisedBy?: MemoryRevisionActor }): void {
+  if (input.reason !== undefined && typeof input.reason !== "string") {
+    throw new Error(`Invalid reason: ${displayValue(input.reason)}. Expected a string`)
+  }
+  if (input.revisedBy !== undefined && !VALID_REVISION_ACTORS.has(input.revisedBy)) {
+    throw new Error(`Invalid revisedBy: ${displayValue(input.revisedBy)}. Expected one of: ${allowedValues(VALID_REVISION_ACTORS)}`)
+  }
 }
 
 function validateUpdateInput(input: UpdateInput): void {
@@ -40,6 +57,7 @@ function validateUpdateInput(input: UpdateInput): void {
   if (input.status !== undefined && input.status !== "pending" && input.status !== "approved") {
     throw new Error(`Invalid status: ${displayValue(input.status)}. Expected one of: pending, approved`)
   }
+  validateRevisionOptions(input)
 }
 
 function clone(memory: MemoryRecord, update: Partial<MemoryRecord>): MemoryRecord {
@@ -57,7 +75,7 @@ const DEFAULT_DIR = path.join(os.homedir(), ".memory-lane")
 
 
 export class MemoryEngine {
-  private readonly store: MemoryStore
+  private store: MemoryStore
   private readonly config: ReturnType<typeof loadConfig>
   private scope: ProjectScope | null = null
   private readonly embProvider?: EmbeddingProvider
@@ -172,6 +190,16 @@ export class MemoryEngine {
     return { status: "saved", memory: upgraded }
   }
 
+  private appendMemoryRecords(records: MemoryRecord[]): void {
+    if (!records.length) return
+    const existing = fs.existsSync(this.memPath) ? fs.readFileSync(this.memPath, "utf8") : ""
+    const prefix = existing && !existing.endsWith("\n") ? existing + "\n" : existing
+    const tmpFile = `${this.memPath}.tmp.${createMemoryId()}`
+    fs.writeFileSync(tmpFile, prefix + records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
+    fs.renameSync(tmpFile, this.memPath)
+    this.store = createMemoryStore(this.memPath)
+  }
+
   private persistMemory(input: SaveInput, ctx: SaveContext): SaveResult {
     const memory = createNewMemory(input, ctx, this.scope)
     this.store.append(memory)
@@ -210,29 +238,172 @@ export class MemoryEngine {
     return this.mutationResultWithMirrorWarnings(updated)
   }
 
-  /** Update an active approved or pending memory by id. Returns the updated memory plus mirror warnings, or undefined. */
-  update(id: string, patch: UpdateInput): MemoryMutationResult | undefined {
+  private buildUpdatePreview(id: string, patch: UpdateInput): UpdatePreview | undefined {
     const mem = this.store.list().find((m) => m.id === id && (m.status === "approved" || m.status === "pending"))
     if (!mem) return undefined
     validateUpdateInput(patch)
 
-    const updated: MemoryRecord = {
+    const proposed: MemoryRecord = {
       ...mem,
       text: patch.text === undefined ? mem.text : patch.text.trim(),
       category: patch.category ?? mem.category,
       status: patch.status ?? mem.status,
       kind: patch.kind ?? mem.kind,
+      revision: sameIdRevision(patch) ?? mem.revision,
       updatedAt: timestamp(),
     }
-    if (!updated.text) throw new Error("Invalid text: memory text cannot be empty")
-    if (containsLikelySecret(updated.text)) throw new Error("Invalid text: memory text contains a likely secret")
+    if (!proposed.text) throw new Error("Invalid text: memory text cannot be empty")
+    if (containsLikelySecret(proposed.text)) throw new Error("Invalid text: memory text contains a likely secret")
+    if (!hasRealUpdateChange(mem, proposed)) throw new Error("No changes to apply")
 
+    return { dryRun: true, current: mem, proposed, warnings: [] }
+  }
+
+  previewUpdate(id: string, patch: UpdateInput): UpdatePreview | undefined {
+    return this.buildUpdatePreview(id, patch)
+  }
+
+  /** Update an active approved or pending memory by id. Returns the updated memory plus mirror warnings, or undefined. */
+  update(id: string, patch: UpdateInput): MemoryMutationResult | undefined {
+    const preview = this.buildUpdatePreview(id, patch)
+    if (!preview) return undefined
+    const updated = preview.proposed
     this.store.append(updated)
     this.invalidateEmbedding(id, "updated")
     if (shouldAutoEmbed(updated, this.config.semantic, this.embProvider)) {
       this._embedMemory(updated).catch(() => { /* swallowed */ })
     }
     return this.mutationResultWithMirrorWarnings(updated)
+  }
+
+  private requireApprovedMemory(id: string, label: "Successor" | "Old"): MemoryRecord {
+    const memory = this.store.list().find((m) => m.id === id && m.status !== "deleted" && m.status !== "rejected")
+    if (!memory) throw new Error(`${label} memory not found: ${id}`)
+    if (memory.status !== "approved") throw new Error(`${label} must be approved: ${id}`)
+    return memory
+  }
+
+  private validateOldIds(newId: string | undefined, oldIds: string[]): void {
+    if (!oldIds.length) throw new Error("At least one old memory id is required")
+    if (new Set(oldIds).size !== oldIds.length) throw new Error("Old memory ids must be unique")
+    if (newId !== undefined && oldIds.includes(newId)) throw new Error("A memory cannot supersede itself")
+  }
+
+  private buildSupersedePreview(
+    newId: string,
+    oldIds: string[],
+    opts?: { reason?: string; revisedBy?: MemoryRevisionActor; dryRun?: boolean },
+  ): SupersedeResult {
+    this.validateOldIds(newId, oldIds)
+    validateRevisionOptions(opts ?? {})
+
+    const successor = this.requireApprovedMemory(newId, "Successor")
+    const oldRecords = oldIds.map((id) => this.requireApprovedMemory(id, "Old"))
+    const already = oldRecords.find((memory) => memory.revision?.supersededBy)
+    if (already) throw new Error(`Old memory is already superseded: ${already.id}`)
+
+    const revisedBy = opts?.revisedBy ?? "manual"
+    const revisedSuccessor: MemoryRecord = {
+      ...successor,
+      revision: revisionForSuccessor(oldIds, opts?.reason, revisedBy),
+      updatedAt: timestamp(),
+    }
+    const superseded = oldRecords.map((memory) => ({
+      ...memory,
+      revision: revisionForSuperseded(newId, opts?.reason, revisedBy),
+      updatedAt: timestamp(),
+    }))
+    return {
+      dryRun: opts?.dryRun ?? false,
+      successor: revisedSuccessor,
+      superseded,
+      warnings: revisionWarnings(revisedSuccessor, oldRecords),
+    }
+  }
+
+  supersede(
+    newId: string,
+    oldIds: string[],
+    opts?: { reason?: string; revisedBy?: MemoryRevisionActor; dryRun?: boolean },
+  ): SupersedeResult {
+    const preview = this.buildSupersedePreview(newId, oldIds, opts)
+    if (opts?.dryRun) return preview
+
+    this.appendMemoryRecords([preview.successor, ...preview.superseded])
+    this.invalidateEmbedding(preview.successor.id, "updated")
+    for (const memory of preview.superseded) {
+      this.invalidateEmbedding(memory.id, "updated")
+    }
+    const mirrorWarnings = this.syncMirrorAndCollectWarnings()
+    return mirrorWarnings.length ? { ...preview, mirrorWarnings } : preview
+  }
+
+  replace(oldIds: string[], input: {
+    text: string
+    category?: MemoryCategory
+    kind?: MemoryKind
+    status?: Extract<MemoryStatus, "pending" | "approved">
+    reason?: string
+    revisedBy?: MemoryRevisionActor
+    dryRun?: boolean
+  }): ReplaceResult {
+    this.validateOldIds(undefined, oldIds)
+    validateRevisionOptions(input)
+    validateSaveInput({ text: input.text, category: input.category, kind: input.kind, status: input.status ?? "approved" })
+    if (input.status !== undefined && input.status !== "pending" && input.status !== "approved") {
+      throw new Error(`Invalid status: ${displayValue(input.status)}. Expected one of: pending, approved`)
+    }
+
+    const oldRecords = oldIds.map((id) => this.requireApprovedMemory(id, "Old"))
+    const already = oldRecords.find((memory) => memory.revision?.supersededBy)
+    if (already) throw new Error(`Old memory is already superseded: ${already.id}`)
+
+    const text = input.text.trim()
+    if (!text) throw new Error("Invalid text: memory text cannot be empty")
+    if (containsLikelySecret(text)) throw new Error("Invalid text: memory text contains a likely secret")
+
+    const first = oldRecords[0]
+    const status = input.status ?? "approved"
+    const now = timestamp()
+    const successor: MemoryRecord = {
+      id: createMemoryId(),
+      text,
+      category: input.category ?? first.category,
+      scope: first.scope,
+      source: "manual",
+      status,
+      kind: input.kind ?? first.kind,
+      createdAt: now,
+      updatedAt: now,
+      project: first.project,
+      revision: revisionForSuccessor(oldIds, input.reason, input.revisedBy ?? "manual"),
+    }
+    const warnings = revisionWarnings(successor, oldRecords)
+    const superseded = status === "approved"
+      ? oldRecords.map((memory) => ({
+        ...memory,
+        revision: revisionForSuperseded(successor.id, input.reason, input.revisedBy ?? "manual"),
+        updatedAt: timestamp(),
+      }))
+      : []
+    const result: ReplaceResult = {
+      dryRun: input.dryRun ?? false,
+      successor,
+      superseded,
+      warnings,
+      successorCreated: true,
+    }
+    if (input.dryRun) return result
+
+    this.appendMemoryRecords([successor, ...superseded])
+    if (shouldAutoEmbed(successor, this.config.semantic, this.embProvider)) {
+      this._embedMemory(successor).catch(() => { /* swallowed */ })
+    }
+    for (const memory of superseded) {
+      this.invalidateEmbedding(memory.id, "updated")
+    }
+    const mirrorWarnings = this.syncMirrorAndCollectWarnings()
+    return mirrorWarnings.length ? { ...result, mirrorWarnings } : result
   }
 
   /** Reject a memory by id. Returns the updated memory plus mirror warnings, or undefined. */

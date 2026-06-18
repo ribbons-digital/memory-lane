@@ -1,6 +1,6 @@
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType, MemorySource,
-  MemoryLifecycleEvent, MemoryKind, SaveInput,
+  MemoryLifecycleEvent, MemoryKind, MemoryRevisionActor, SaveInput,
 } from "./types.js"
 
 export const VALID_STATUSES = new Set<MemoryStatus>(["pending", "approved", "rejected", "deleted"])
@@ -25,6 +25,7 @@ export const VALID_LIFECYCLE_EVENTS = new Set<MemoryLifecycleEvent>([
   "session_end",
   "pre_compact",
 ])
+export const VALID_REVISION_ACTORS = new Set<MemoryRevisionActor>(["manual", "cli", "mcp"])
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -81,6 +82,24 @@ function hasValidProvenance(value: Record<string, unknown>): boolean {
     && isOptionalString(provenance.toolName)
 }
 
+function isValidIsoTimestamp(value: unknown): value is string {
+  return typeof value === "string"
+    && Number.isFinite(Date.parse(value))
+    && new Date(value).toISOString() === value
+}
+
+function hasValidRevision(value: Record<string, unknown>): boolean {
+  const revision = value.revision
+  if (revision === undefined) return true
+  if (!isPlainObject(revision)) return false
+  const supersedes = revision.supersedes
+  return (supersedes === undefined || (Array.isArray(supersedes) && supersedes.every(isNonEmptyString)))
+    && isOptionalString(revision.supersededBy)
+    && isOptionalString(revision.reason)
+    && isValidIsoTimestamp(revision.revisedAt)
+    && isEnumValue(revision.revisedBy, VALID_REVISION_ACTORS)
+}
+
 function allowedValues<T extends string>(allowed: Set<T>): string {
   return [...allowed].join(", ")
 }
@@ -105,6 +124,9 @@ export function validateSaveInput(input: SaveInput): void {
   if (input.provenance !== undefined && !hasValidProvenance({ provenance: input.provenance })) {
     throw new Error("Invalid provenance. Expected adapter, lifecycleEvent, and optional string sessionId/turnId/toolName")
   }
+  if (input.revision !== undefined && !hasValidRevision({ revision: input.revision })) {
+    throw new Error("Invalid revision. Expected optional supersedes/supersededBy/reason, ISO revisedAt, and revisedBy manual|cli|mcp")
+  }
 }
 
 function normalizeScope(value: Record<string, unknown>): MemoryRecord["scope"] | undefined {
@@ -127,7 +149,7 @@ export function normalizeMemoryRecord(value: unknown): MemoryRecord | undefined 
   const source = normalizeSource(value)
   const scope = normalizeScope(value)
   if (source === undefined || scope === undefined) return undefined
-  if (!hasValidProject(value) || !hasValidKind(value) || !hasValidProvenance(value)) return undefined
+  if (!hasValidProject(value) || !hasValidKind(value) || !hasValidProvenance(value) || !hasValidRevision(value)) return undefined
   return { ...value, source, scope } as MemoryRecord
 }
 
