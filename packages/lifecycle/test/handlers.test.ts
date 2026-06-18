@@ -121,6 +121,9 @@ test("session-start selective injects continuity notice before relevant memory",
   assert.ok(context.indexOf("Continuity notice:") < context.indexOf("## Relevant Memory"))
   assert.match(context, /Baseline memory body/u)
   assert.doesNotMatch(context, /PRIVATE WORKFLOW AGREEMENT TEXT/u)
+  assert.equal(result.contextDecision?.selected, 1)
+  assert.equal(result.contextDecision?.omitted, 0)
+  assert.deepEqual(result.contextDecision?.omittedReasons, [])
   assert.equal(result.contextDecision?.continuity?.injected, true)
 })
 

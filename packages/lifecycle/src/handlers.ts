@@ -163,7 +163,7 @@ export function handleSessionStart(
     mode: policy.mode,
     ...budget,
     selected: selected.length,
-    omitted: Math.max(0, approved.length - selected.length),
+    omitted: Math.max(0, baselineCandidates.length - selected.length),
     continuity: continuityDecision(notice),
   }))
 }
