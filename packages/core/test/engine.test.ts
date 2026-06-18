@@ -345,6 +345,14 @@ describe("MemoryEngine", () => {
       () => e.update(saved.memory.id, { kind: "research" } as any),
       /Invalid kind.*research/,
     )
+    assert.throws(
+      () => e.update(saved.memory.id, { text: "Changed by invalid actor", revisedBy: "robot" } as any),
+      /Invalid revisedBy.*robot.*manual, cli, mcp/,
+    )
+    assert.throws(
+      () => e.previewUpdate(saved.memory.id, { text: "Preview by invalid actor", revisedBy: "robot" } as any),
+      /Invalid revisedBy.*robot.*manual, cli, mcp/,
+    )
     assert.equal(e.list({ all: true }).find((memory) => memory.id === saved.memory.id)?.text, "Original valid memory")
     assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, 1)
   })

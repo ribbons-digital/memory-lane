@@ -16,7 +16,7 @@ import { defaultHookDebugLogPath, hookDebugEnabled } from "./hook-debug-log.js"
 import { retrieveSemanticMemories } from "./retrieval.js"
 import { compact as compactStores, shouldCompact } from "./compact.js"
 import { diagnoseIntegrations, type IntegrationDiagnosticPaths } from "./integration-diagnostics.js"
-import { validateSaveInput } from "./storage-validation.js"
+import { VALID_REVISION_ACTORS, validateSaveInput } from "./storage-validation.js"
 import { hasRealUpdateChange, sameIdRevision } from "./revisions.js"
 import { isMetaTaskPromptText } from "./meta-task-filter.js"
 import { buildFreshnessStatus } from "./freshness.js"
@@ -36,10 +36,17 @@ function displayValue(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value)
 }
 
+function allowedValues<T extends string>(allowed: Set<T>): string {
+  return [...allowed].join(", ")
+}
+
 function validateUpdateInput(input: UpdateInput): void {
   validateSaveInput({ text: "update validation placeholder", category: input.category, kind: input.kind })
   if (input.status !== undefined && input.status !== "pending" && input.status !== "approved") {
     throw new Error(`Invalid status: ${displayValue(input.status)}. Expected one of: pending, approved`)
+  }
+  if (input.revisedBy !== undefined && !VALID_REVISION_ACTORS.has(input.revisedBy)) {
+    throw new Error(`Invalid revisedBy: ${displayValue(input.revisedBy)}. Expected one of: ${allowedValues(VALID_REVISION_ACTORS)}`)
   }
 }
 
