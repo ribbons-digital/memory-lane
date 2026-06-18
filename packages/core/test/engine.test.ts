@@ -254,6 +254,54 @@ describe("MemoryEngine", () => {
     assert.equal(log[1].id, saved.memory.id)
   })
 
+  it("update records revision metadata when reason is provided", () => {
+    const e = engine()
+    const saved = e.save({ text: "Old workflow wording", status: "approved", category: "project", kind: "workflow_rule" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    const updated = e.update(saved.memory.id, {
+      text: "New workflow wording",
+      reason: "clarified operating agreement",
+      revisedBy: "cli",
+    })
+
+    assert.equal(updated?.id, saved.memory.id)
+    assert.equal(updated?.text, "New workflow wording")
+    assert.equal(updated?.revision?.reason, "clarified operating agreement")
+    assert.equal(updated?.revision?.revisedBy, "cli")
+    assert.match(updated?.revision?.revisedAt ?? "", /^\d{4}-\d{2}-\d{2}T/u)
+    assert.equal(updated?.revision?.supersedes, undefined)
+    assert.equal(updated?.revision?.supersededBy, undefined)
+  })
+
+  it("update rejects metadata-only and no-op patches", () => {
+    const e = engine()
+    const saved = e.save({ text: "Stable memory", status: "approved", category: "project", kind: "project_fact" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    assert.throws(() => e.update(saved.memory.id, { reason: "reviewed", revisedBy: "cli" }), /No changes to apply/u)
+    assert.throws(() => e.update(saved.memory.id, { text: "Stable memory" }), /No changes to apply/u)
+  })
+
+  it("previewUpdate returns proposed memory without writing or invalidating embeddings", () => {
+    const e = engine()
+    const saved = e.save({ text: "Preview source", status: "approved", category: "project", kind: "project_fact" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+    const logBefore = readJsonl(path.join(dir, "mem.jsonl")).length
+
+    const preview = e.previewUpdate(saved.memory.id, { text: "Preview target", reason: "dry run", revisedBy: "cli" })
+
+    assert.equal(preview?.dryRun, true)
+    assert.equal(preview?.current.text, "Preview source")
+    assert.equal(preview?.proposed.text, "Preview target")
+    assert.equal(preview?.proposed.revision?.reason, "dry run")
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, logBefore)
+    assert.equal(readJsonl(path.join(dir, "emb.jsonl")).length, 0)
+  })
+
   it("does not update rejected deleted or missing memories", () => {
     const e = engine()
     const rejectedSource = e.save({ text: "Reject before update", status: "pending" })

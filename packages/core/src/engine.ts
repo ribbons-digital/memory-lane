@@ -17,6 +17,7 @@ import { retrieveSemanticMemories } from "./retrieval.js"
 import { compact as compactStores, shouldCompact } from "./compact.js"
 import { diagnoseIntegrations, type IntegrationDiagnosticPaths } from "./integration-diagnostics.js"
 import { validateSaveInput } from "./storage-validation.js"
+import { hasRealUpdateChange, sameIdRevision } from "./revisions.js"
 import { isMetaTaskPromptText } from "./meta-task-filter.js"
 import { buildFreshnessStatus } from "./freshness.js"
 import { selectOperatingAgreements, summarizeOperatingAgreements } from "./operating-agreements.js"
@@ -26,7 +27,7 @@ import {
 } from "./engine-helpers.js"
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
-  MemoryKind, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, ProjectScope,
+  MemoryKind, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, UpdatePreview, ProjectScope,
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig,
   FreshnessStatus, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
 } from "./types.js"
@@ -210,23 +211,36 @@ export class MemoryEngine {
     return this.mutationResultWithMirrorWarnings(updated)
   }
 
-  /** Update an active approved or pending memory by id. Returns the updated memory plus mirror warnings, or undefined. */
-  update(id: string, patch: UpdateInput): MemoryMutationResult | undefined {
+  private buildUpdatePreview(id: string, patch: UpdateInput): UpdatePreview | undefined {
     const mem = this.store.list().find((m) => m.id === id && (m.status === "approved" || m.status === "pending"))
     if (!mem) return undefined
     validateUpdateInput(patch)
 
-    const updated: MemoryRecord = {
+    const proposed: MemoryRecord = {
       ...mem,
       text: patch.text === undefined ? mem.text : patch.text.trim(),
       category: patch.category ?? mem.category,
       status: patch.status ?? mem.status,
       kind: patch.kind ?? mem.kind,
+      revision: sameIdRevision(patch) ?? mem.revision,
       updatedAt: timestamp(),
     }
-    if (!updated.text) throw new Error("Invalid text: memory text cannot be empty")
-    if (containsLikelySecret(updated.text)) throw new Error("Invalid text: memory text contains a likely secret")
+    if (!proposed.text) throw new Error("Invalid text: memory text cannot be empty")
+    if (containsLikelySecret(proposed.text)) throw new Error("Invalid text: memory text contains a likely secret")
+    if (!hasRealUpdateChange(mem, proposed)) throw new Error("No changes to apply")
 
+    return { dryRun: true, current: mem, proposed, warnings: [] }
+  }
+
+  previewUpdate(id: string, patch: UpdateInput): UpdatePreview | undefined {
+    return this.buildUpdatePreview(id, patch)
+  }
+
+  /** Update an active approved or pending memory by id. Returns the updated memory plus mirror warnings, or undefined. */
+  update(id: string, patch: UpdateInput): MemoryMutationResult | undefined {
+    const preview = this.buildUpdatePreview(id, patch)
+    if (!preview) return undefined
+    const updated = preview.proposed
     this.store.append(updated)
     this.invalidateEmbedding(id, "updated")
     if (shouldAutoEmbed(updated, this.config.semantic, this.embProvider)) {
