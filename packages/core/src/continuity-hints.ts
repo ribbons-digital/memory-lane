@@ -61,7 +61,7 @@ export function buildContinuityHints(memories: MemoryRecord[], options: Continui
 
   const supersededVisible = [...visible]
     .filter((memory) => Boolean(memory.revision?.supersededBy))
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id))
     .slice(0, maxIds)
     .map(memoryMetadata)
 
@@ -132,9 +132,10 @@ export function buildContinuityHints(memories: MemoryRecord[], options: Continui
       maxNewerMetadata: maxIds,
     })
     : undefined
-  const newerApproved = freshness && freshness.newerApprovedCount > 0
+  const freshnessReferenceTime = freshness?.referenceTime
+  const newerApproved = freshness && freshness.newerApprovedCount > 0 && freshnessReferenceTime
     ? {
-      referenceTime: freshness.referenceTime!,
+      referenceTime: freshnessReferenceTime,
       count: freshness.newerApprovedCount,
       newestIds: freshness.newestNewerApproved.map((memory) => memory.id),
     }

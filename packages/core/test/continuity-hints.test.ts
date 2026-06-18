@@ -91,5 +91,5 @@ test("continuity hints respect project scope plus global visibility", () => {
     memory({ id: "global-old", scope: { type: "global" }, revision: { supersededBy: "new", revisedAt: "2026-06-18T09:00:00.000Z", revisedBy: "cli" } }),
   ], { projectScopeKey: "project-a" })
 
-  assert.deepEqual(result.supersededVisible.map((item) => item.id), ["visible-old", "global-old"])
+  assert.deepEqual(result.supersededVisible.map((item) => item.id), ["global-old", "visible-old"])
 })
