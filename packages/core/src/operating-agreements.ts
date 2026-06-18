@@ -129,7 +129,7 @@ export function selectOperatingAgreements(memories: MemoryRecord[], options: Ope
   const relatedCandidates: OperatingAgreementSelection[] = []
 
   for (const candidate of candidates) {
-    if (!selectedAreas.has(candidate.workflowArea)) {
+    if (!selectedAreas.has(candidate.workflowArea) && primaryCandidates.length < limit) {
       primaryCandidates.push(candidate)
       selectedAreas.add(candidate.workflowArea)
     } else {

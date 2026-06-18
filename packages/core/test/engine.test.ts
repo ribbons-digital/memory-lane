@@ -1233,6 +1233,32 @@ describe("operating agreement selection", () => {
     assert.deepEqual(result.workflowAreas, ["project-loop"])
   })
 
+  it("keeps distinct workflow-area candidates beyond the primary limit visible as related", () => {
+    const result = selectOperatingAgreements([
+      record({ id: "area-1-project-loop", text: "Project loop: plan first.", kind: "workflow_rule", updatedAt: "2026-06-18T06:00:00.000Z" }),
+      record({ id: "area-2-review-gate", text: "Code review gate: get approval before merge.", kind: "workflow_rule", updatedAt: "2026-06-18T05:00:00.000Z" }),
+      record({ id: "area-3-pr-process", text: "Pull request process: use feature branches.", kind: "workflow_rule", updatedAt: "2026-06-18T04:00:00.000Z" }),
+      record({ id: "area-4-release-process", text: "Release process: tag versions before publishing.", kind: "workflow_rule", updatedAt: "2026-06-18T03:00:00.000Z" }),
+      record({ id: "area-5-tooling-preference", text: "Package manager preference: use pnpm.", kind: "workflow_rule", updatedAt: "2026-06-18T02:00:00.000Z" }),
+      record({ id: "area-6-other", text: "Keep incident handoff checklist updated.", kind: "workflow_rule", updatedAt: "2026-06-18T01:00:00.000Z" }),
+    ], { projectScopeKey: "project-a", limit: 3 })
+
+    assert.deepEqual(result.primary.map((item) => item.memory.id), [
+      "area-1-project-loop",
+      "area-2-review-gate",
+      "area-3-pr-process",
+    ])
+    assert.deepEqual(result.relatedCandidates.map((item) => item.memory.id), [
+      "area-4-release-process",
+      "area-5-tooling-preference",
+      "area-6-other",
+    ])
+    assert.deepEqual(result.primary.map((item) => item.workflowArea), ["project-loop", "review-gate", "pr-process"])
+    assert.deepEqual(result.relatedCandidates.map((item) => item.workflowArea), ["release-process", "tooling-preference", "other"])
+    assert.equal(result.omittedPrimaryCount, 0)
+    assert.equal(result.omittedRelatedCandidateCount, 0)
+  })
+
   it("builds a text-free operating agreement summary", () => {
     const result = summarizeOperatingAgreements(selectOperatingAgreements([
       record({ id: "private-loop", text: "PRIVATE AGREEMENT TEXT workflow loop", kind: "project_fact" }),
