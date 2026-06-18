@@ -2,10 +2,14 @@ import {
   containsLikelySecret,
   lexicalScore,
   normalizeMemoryText,
+  type ContinuityHintCode,
+  type ContinuityHintSummary,
   type MemoryContextPolicyConfig,
   type MemoryRecord,
+  type OperatingAgreementSummary,
   type RecallResult,
 } from "@memory-lane/core"
+import type { ContinuityContextDecision } from "./types.js"
 
 export interface MemoryInjectionLimits {
   maxItems: number
@@ -246,6 +250,146 @@ export function renderMemoryManagementListGuidance(): string {
 export function renderMemoryBlock(memories: MemoryRecord[]): string {
   if (!memories.length) return ""
   return ["## Relevant Memory", "", ...memories.map((memory) => `- ${memory.text}`)].join("\n")
+}
+
+export interface ContinuityNoticeResult extends ContinuityContextDecision {
+  text: string
+}
+
+export interface ContinuityNoticeInput {
+  hints?: ContinuityHintSummary
+  operatingAgreements?: OperatingAgreementSummary
+  since?: string
+  maxChars: number
+}
+
+const SAFE_INSPECTION_ACTIONS = [
+  /^memory-lane status(?: --json)?(?: --since \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)?$/u,
+  /^memory-lane dashboard$/u,
+  /^memory-lane agreements$/u,
+  /^memory-lane list(?: --json)?$/u,
+  /^memory-lane review(?: --json)?$/u,
+] as const
+
+function uniqueValues<T>(values: T[]): T[] {
+  return [...new Set(values)]
+}
+
+function collectContinuityMetadataIds(input: ContinuityNoticeInput): string[] {
+  return uniqueValues([
+    ...(input.hints?.hints.flatMap((hint) => hint.memoryIds) ?? []),
+    ...(input.hints?.supersededVisible.flatMap((memory) => [memory.id, memory.supersededBy].filter((id): id is string => Boolean(id))) ?? []),
+    ...(input.hints?.operatingAgreementOverlaps.flatMap((overlap) => [...overlap.primaryIds, ...overlap.relatedIds]) ?? []),
+    ...(input.hints?.projectGlobalPreferenceOverlaps.flatMap((overlap) => [...overlap.projectIds, ...overlap.globalIds]) ?? []),
+    ...(input.hints?.newerApproved?.newestIds ?? []),
+    ...(input.operatingAgreements?.primary.map((agreement) => agreement.id) ?? []),
+    ...(input.operatingAgreements?.relatedCandidates.map((agreement) => agreement.id) ?? []),
+  ])
+}
+
+function isInspectionAction(action: string, blockedSubstrings: string[]): boolean {
+  const trimmed = action.trim()
+  if (!trimmed) return false
+  if (!SAFE_INSPECTION_ACTIONS.some((pattern) => pattern.test(trimmed))) return false
+  return !blockedSubstrings.some((blocked) => blocked && trimmed.includes(blocked))
+}
+
+function continuitySuggestedActions(input: ContinuityNoticeInput): string[] {
+  const blockedSubstrings = collectContinuityMetadataIds(input)
+  const actions = [
+    ...(input.hints?.suggestedActions ?? []),
+    ...(input.hints?.hints.flatMap((hint) => hint.suggestedActions) ?? []),
+  ]
+
+  if (input.hints?.newerApproved && input.since) actions.unshift(`memory-lane status --json --since ${input.since}`)
+  if ((input.operatingAgreements?.primaryCount ?? 0) > 0) actions.push("memory-lane agreements")
+
+  return uniqueValues(actions.map((action) => action.trim()).filter((action) => isInspectionAction(action, blockedSubstrings)))
+}
+
+function continuityHintCodes(hints?: ContinuityHintSummary): ContinuityHintCode[] {
+  return uniqueValues(hints?.hints.map((hint) => hint.code) ?? [])
+}
+
+function hasContinuitySignals(input: ContinuityNoticeInput): boolean {
+  return (input.hints?.hintCount ?? 0) > 0
+    || (input.hints?.newerApproved?.count ?? 0) > 0
+    || (input.hints?.supersededVisible.length ?? 0) > 0
+    || (input.operatingAgreements?.primaryCount ?? 0) > 0
+}
+
+export function renderContinuityNotice(input: ContinuityNoticeInput): ContinuityNoticeResult {
+  const hintCount = input.hints?.hintCount ?? 0
+  const hintCodes = continuityHintCodes(input.hints)
+  const newerApprovedCount = input.hints?.newerApproved?.count
+  const operatingAgreementPrimaryCount = input.operatingAgreements?.primaryCount
+  const suggestedActions = continuitySuggestedActions(input)
+
+  if (!hasContinuitySignals(input)) {
+    return {
+      generated: false,
+      injected: false,
+      text: "",
+      omittedReasons: [],
+      hintCount,
+      hintCodes,
+      newerApprovedCount,
+      operatingAgreementPrimaryCount,
+      suggestedActions: [],
+    }
+  }
+
+  const lines = ["Continuity notice:"]
+
+  if ((newerApprovedCount ?? 0) > 0 || hintCodes.includes("newer-approved")) {
+    lines.push(input.since
+      ? `- There is newer approved Memory Lane state since ${input.since}. Inspect Memory Lane before relying on older session context.`
+      : "- There is newer approved Memory Lane state. Inspect Memory Lane before relying on older session context.")
+  }
+
+  if ((operatingAgreementPrimaryCount ?? 0) > 0 || hintCodes.includes("operating-agreement-overlap")) {
+    lines.push("- Current workflow agreements are available. Inspect them before changing project process or operating agreements.")
+  }
+
+  if (hintCodes.includes("superseded-visible") || (input.hints?.supersededVisible.length ?? 0) > 0) {
+    lines.push("- Some approved memories are superseded historical guidance. Inspect current Memory Lane state before following older guidance.")
+  }
+
+  if (hintCodes.includes("project-global-overlap")) {
+    lines.push("- Project and global preferences may overlap. Inspect Memory Lane before choosing which preference applies.")
+  }
+
+  if (suggestedActions.length) {
+    lines.push("If relevant, inspect before proceeding:")
+    lines.push(...suggestedActions.map((action) => `- ${action}`))
+  }
+
+  const text = lines.join("\n")
+  if (text.length > input.maxChars) {
+    return {
+      generated: true,
+      injected: false,
+      text: "",
+      omittedReasons: ["continuity-budget"],
+      hintCount,
+      hintCodes,
+      newerApprovedCount,
+      operatingAgreementPrimaryCount,
+      suggestedActions,
+    }
+  }
+
+  return {
+    generated: true,
+    injected: true,
+    text,
+    omittedReasons: [],
+    hintCount,
+    hintCodes,
+    newerApprovedCount,
+    operatingAgreementPrimaryCount,
+    suggestedActions,
+  }
 }
 
 export function renderMemoryContext(input: { event: MemoryContextEvent; memories: MemoryRecord[]; policy?: MemoryContextPolicyConfig }): string {

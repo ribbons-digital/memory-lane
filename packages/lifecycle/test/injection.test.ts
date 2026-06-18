@@ -1,12 +1,13 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import type { MemoryRecord, RecallResult } from "@memory-lane/core"
+import type { ContinuityHintSummary, MemoryRecord, OperatingAgreementSummary, RecallResult } from "@memory-lane/core"
 import {
   shouldSkipAutomaticInjection,
   selectMemoriesForInjection,
   selectBaselineMemories,
   renderMemoryBlock,
   renderMemoryContext,
+  renderContinuityNotice,
   CODEX_MEMORY_INJECTION_LIMITS,
 } from "../src/injection.ts"
 
@@ -28,6 +29,80 @@ function recall(memories: MemoryRecord[], used = false, fallbackReason?: string)
   return {
     memories,
     semantic: { enabled: used, used, fallbackReason },
+  }
+}
+
+function continuityHints(overrides: Partial<ContinuityHintSummary> = {}): ContinuityHintSummary {
+  return {
+    projectScope: "repo",
+    hintCount: 2,
+    hints: [
+      {
+        code: "newer-approved",
+        severity: "info",
+        message: "PRIVATE MESSAGE SHOULD NOT RENDER",
+        count: 2,
+        memoryIds: ["newer-secret-id"],
+        suggestedActions: ["memory-lane status --json --since 2026-06-18T00:00:00.000Z"],
+      },
+      {
+        code: "superseded-visible",
+        severity: "review",
+        message: "PRIVATE SUPERSEDED MESSAGE SHOULD NOT RENDER",
+        count: 1,
+        memoryIds: ["old-secret-id"],
+        suggestedActions: ["memory-lane dashboard"],
+      },
+    ],
+    supersededVisible: [{
+      id: "old-secret-id",
+      status: "approved",
+      category: "project",
+      scope: { type: "project", key: "repo" },
+      source: "manual",
+      createdAt: "2026-06-17T00:00:00.000Z",
+      updatedAt: "2026-06-17T00:00:00.000Z",
+      kind: "workflow_rule",
+      supersededBy: "new-secret-id",
+    }],
+    operatingAgreementOverlaps: [],
+    projectGlobalPreferenceOverlaps: [],
+    newerApproved: {
+      referenceTime: "2026-06-18T00:00:00.000Z",
+      count: 2,
+      newestIds: ["newer-secret-id"],
+    },
+    suggestedActions: [
+      "memory-lane status --json --since 2026-06-18T00:00:00.000Z",
+      "memory-lane dashboard",
+    ],
+    notes: ["PRIVATE NOTE SHOULD NOT RENDER"],
+    ...overrides,
+  }
+}
+
+function operatingAgreements(overrides: Partial<OperatingAgreementSummary> = {}): OperatingAgreementSummary {
+  return {
+    projectScope: "repo",
+    primaryCount: 1,
+    relatedCandidateCount: 0,
+    omittedPrimaryCount: 0,
+    omittedRelatedCandidateCount: 0,
+    workflowAreas: ["project-loop"],
+    primary: [{
+      id: "agreement-secret-id",
+      category: "project",
+      scope: { type: "project", key: "repo" },
+      source: "manual",
+      createdAt: "2026-06-18T00:00:00.000Z",
+      updatedAt: "2026-06-18T00:00:00.000Z",
+      kind: "workflow_rule",
+      workflowArea: "project-loop",
+      matchReason: "explicit-kind",
+    }],
+    relatedCandidates: [],
+    notes: [],
+    ...overrides,
   }
 }
 
@@ -91,7 +166,80 @@ test("renders plain memory block without ids or labels", () => {
   assert.equal(rendered, "## Relevant Memory\n\n- This repo uses pnpm")
 })
 
- test("renderMemoryContext wraps selected memories in guarded context", () => {
+test("renderContinuityNotice renders plain-language notice without ids or private text", () => {
+  const result = renderContinuityNotice({
+    hints: continuityHints(),
+    operatingAgreements: operatingAgreements(),
+    since: "2026-06-18T00:00:00.000Z",
+    maxChars: 900,
+  })
+
+  assert.equal(result.generated, true)
+  assert.equal(result.injected, true)
+  assert.match(result.text, /^Continuity notice:/u)
+  assert.match(result.text, /There is newer approved Memory Lane state/u)
+  assert.match(result.text, /Current workflow agreements are available/u)
+  assert.match(result.text, /Some approved memories are superseded historical guidance/u)
+  assert.match(result.text, /If relevant, inspect before proceeding:/u)
+  assert.match(result.text, /memory-lane dashboard/u)
+  assert.match(result.text, /memory-lane agreements/u)
+  assert.doesNotMatch(result.text, /secret-id|PRIVATE/u)
+  assert.deepEqual(result.suggestedActions, [
+    "memory-lane status --json --since 2026-06-18T00:00:00.000Z",
+    "memory-lane dashboard",
+    "memory-lane agreements",
+  ])
+})
+
+test("renderContinuityNotice omits unsafe suggested action text", () => {
+  const result = renderContinuityNotice({
+    hints: continuityHints({
+      suggestedActions: [
+        "memory-lane dashboard --note PRIVATE SHOULD NOT RENDER",
+        "memory-lane status --json --since 2026-06-18T00:00:00.000Z newer-secret-id",
+        "memory-lane dashboard",
+      ],
+    }),
+    since: "2026-06-18T00:00:00.000Z",
+    maxChars: 900,
+  })
+
+  assert.equal(result.injected, true)
+  assert.match(result.text, /memory-lane dashboard/u)
+  assert.doesNotMatch(result.text, /PRIVATE|secret-id/u)
+  assert.deepEqual(result.suggestedActions, [
+    "memory-lane status --json --since 2026-06-18T00:00:00.000Z",
+    "memory-lane dashboard",
+  ])
+})
+
+test("renderContinuityNotice returns not generated when there are no signals", () => {
+  const result = renderContinuityNotice({
+    hints: continuityHints({ hintCount: 0, hints: [], supersededVisible: [], newerApproved: undefined, suggestedActions: [] }),
+    operatingAgreements: operatingAgreements({ primaryCount: 0, workflowAreas: [], primary: [] }),
+    maxChars: 900,
+  })
+
+  assert.equal(result.generated, false)
+  assert.equal(result.injected, false)
+  assert.equal(result.text, "")
+})
+
+test("renderContinuityNotice respects tight budget", () => {
+  const result = renderContinuityNotice({
+    hints: continuityHints(),
+    operatingAgreements: operatingAgreements(),
+    since: "2026-06-18T00:00:00.000Z",
+    maxChars: 40,
+  })
+
+  assert.equal(result.generated, true)
+  assert.equal(result.injected, false)
+  assert.equal(result.text, "")
+  assert.deepEqual(result.omittedReasons, ["continuity-budget"])
+})
+
+test("renderMemoryContext wraps selected memories in guarded context", () => {
   const rendered = renderMemoryContext({
     event: "prompt",
     memories: [memory("abc123", "This repo uses pnpm")],
