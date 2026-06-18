@@ -19,7 +19,7 @@ import type { SemanticMemoryConfig } from "@memory-lane/core"
 import { resolveBundledPlugin } from "./plugins.js"
 import {
   formatMemories, formatReviewMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
-  formatCompact, formatDashboard, formatDoctor, formatImportPlan, formatError, usage,
+  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatImportPlan, formatError, usage,
   type ObsidianImportApplyResult,
 } from "./formatters.js"
 
@@ -278,18 +278,25 @@ function handleCompact(ctx: CliContext): void {
 }
 
 function handleDoctor(ctx: CliContext): void {
-  console.log(formatDoctor(ctx.engine.doctor(), ctx.json))
+  const since = flag(ctx.argv, "since")
+  console.log(formatDoctor(ctx.engine.doctor({ freshnessSince: since }), ctx.json))
   printInitPrompt(ctx.json)
 }
 
 function handleStatus(ctx: CliContext): void {
-  const report = ctx.engine.doctor()
+  const since = flag(ctx.argv, "since")
+  const report = ctx.engine.doctor({ freshnessSince: since })
   if (ctx.json) {
     console.log(formatDoctor(report, true))
     return
   }
   const r = report as any
-  console.log(`Total: ${r.totalMemories}, Approved: ${r.approvedMemories}, Pending: ${r.pendingMemories}, Embeddings: ${r.embeddingCount}`)
+  const lines = [`Total: ${r.totalMemories}, Approved: ${r.approvedMemories}, Pending: ${r.pendingMemories}, Embeddings: ${r.embeddingCount}`]
+  if (since) {
+    const freshnessSummary = formatFreshnessSummary(r.freshness)
+    if (freshnessSummary) lines.push(freshnessSummary)
+  }
+  console.log(lines.join("\n"))
 }
 
 function createSummaryProvider(config: ReturnType<typeof loadConfig>):

@@ -6,7 +6,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
-import { MemoryEngine } from "@memory-lane/core"
+import { MemoryEngine, type MemoryRecord } from "@memory-lane/core"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -31,6 +31,60 @@ function runProcess(args: string[], options?: { env?: NodeJS.ProcessEnv; stdin?:
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function writeMemoryRecords(filePath: string, records: MemoryRecord[]): void {
+  fs.writeFileSync(filePath, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
+}
+
+function freshnessFixtureRecords(projectScope: string): MemoryRecord[] {
+  return [
+    {
+      id: "fresh-project-approved",
+      text: "APPROVED PRIVATE CLI FRESHNESS TEXT",
+      category: "project",
+      scope: { type: "project", key: projectScope },
+      status: "approved",
+      source: "session-summary",
+      kind: "project_checkpoint",
+      provenance: { adapter: "pi", lifecycleEvent: "session_end" },
+      createdAt: "2026-06-18T09:00:00.000Z",
+      updatedAt: "2026-06-18T10:00:00.000Z",
+    },
+    {
+      id: "fresh-global-approved",
+      text: "GLOBAL APPROVED PRIVATE CLI FRESHNESS TEXT",
+      category: "preference",
+      scope: { type: "global" },
+      status: "approved",
+      source: "manual",
+      kind: "preference",
+      createdAt: "2026-06-18T08:30:00.000Z",
+      updatedAt: "2026-06-18T09:30:00.000Z",
+    },
+    {
+      id: "old-project-approved",
+      text: "OLD PRIVATE CLI FRESHNESS TEXT",
+      category: "project",
+      scope: { type: "project", key: projectScope },
+      status: "approved",
+      source: "manual",
+      kind: "project_fact",
+      createdAt: "2026-06-17T08:00:00.000Z",
+      updatedAt: "2026-06-17T08:00:00.000Z",
+    },
+    {
+      id: "pending-private",
+      text: "PENDING PRIVATE CLI FRESHNESS TEXT",
+      category: "project",
+      scope: { type: "project", key: projectScope },
+      status: "pending",
+      source: "user-suggested",
+      kind: "project_fact",
+      createdAt: "2026-06-18T11:00:00.000Z",
+      updatedAt: "2026-06-18T11:00:00.000Z",
+    },
+  ]
 }
 
 describe("CLI integration", () => {
@@ -645,6 +699,93 @@ describe("CLI integration", () => {
     assert.equal(parsed.data.contextPolicySessionStartMaxItems, 4)
     assert.equal(typeof parsed.data.integrations, "object")
     assert.equal(parsed.data.integrations.summary.mcpExplicitToolsOnly, true)
+  })
+
+  it("status --json --since reports freshness metadata without memory text", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-freshness-project" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    writeMemoryRecords(memFile, freshnessFixtureRecords("cli-freshness-project"))
+
+    const result = runProcess(["status", "--json", "--since", "2026-06-18T08:00:00.000Z"], { env, cwd: project })
+
+    assert.equal(result.status, 0, result.stderr)
+    const payload = JSON.parse(result.stdout)
+    assert.equal(payload.ok, true)
+    assert.equal(payload.data.freshness.referenceTime, "2026-06-18T08:00:00.000Z")
+    assert.equal(payload.data.freshness.visibleApprovedCount, 3)
+    assert.equal(payload.data.freshness.newerApprovedCount, 2)
+    assert.equal(payload.data.freshness.newerProjectApprovedCount, 1)
+    assert.equal(payload.data.freshness.newerGlobalApprovedCount, 1)
+    assert.equal(payload.data.freshness.newerGlobalPreferenceCount, 1)
+    assert.deepEqual(payload.data.freshness.newerByKind, { project_checkpoint: 1, preference: 1 })
+    assert.deepEqual(payload.data.freshness.newestNewerApproved.map((memory: any) => memory.id), ["fresh-project-approved", "fresh-global-approved"])
+    assert.doesNotMatch(result.stdout, /APPROVED PRIVATE CLI FRESHNESS TEXT/u)
+    assert.doesNotMatch(result.stdout, /PENDING PRIVATE CLI FRESHNESS TEXT/u)
+  })
+
+  it("doctor --json --since returns the same freshness object as status", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-freshness-project" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    writeMemoryRecords(memFile, freshnessFixtureRecords("cli-freshness-project"))
+
+    const statusPayload = JSON.parse(runProcess(["status", "--json", "--since", "2026-06-18T08:00:00.000Z"], { env, cwd: project }).stdout)
+    const doctorResult = runProcess(["doctor", "--json", "--since", "2026-06-18T08:00:00.000Z"], { env, cwd: project })
+
+    assert.equal(doctorResult.status, 0, doctorResult.stderr)
+    const doctorPayload = JSON.parse(doctorResult.stdout)
+    assert.deepEqual(doctorPayload.data.freshness, statusPayload.data.freshness)
+    assert.doesNotMatch(doctorResult.stdout, /APPROVED PRIVATE CLI FRESHNESS TEXT/u)
+    assert.doesNotMatch(doctorResult.stdout, /PENDING PRIVATE CLI FRESHNESS TEXT/u)
+  })
+
+  it("doctor and status human --since output compact freshness without memory text", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-freshness-project" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+    writeMemoryRecords(memFile, freshnessFixtureRecords("cli-freshness-project"))
+
+    const doctorResult = runProcess(["doctor", "--since", "2026-06-18T08:00:00.000Z"], { env, cwd: project })
+    const statusResult = runProcess(["status", "--since", "2026-06-18T08:00:00.000Z"], { env, cwd: project })
+
+    assert.equal(doctorResult.status, 0, doctorResult.stderr)
+    assert.equal(statusResult.status, 0, statusResult.stderr)
+    for (const output of [doctorResult.stdout, statusResult.stdout]) {
+      assert.match(output, /Freshness: 2 newer approved memories since 2026-06-18T08:00:00.000Z/u)
+      assert.match(output, /visible approved: 3/u)
+      assert.doesNotMatch(output, /\[object Object\]/u)
+      assert.doesNotMatch(output, /APPROVED PRIVATE CLI FRESHNESS TEXT/u)
+      assert.doesNotMatch(output, /PENDING PRIVATE CLI FRESHNESS TEXT/u)
+    }
+  })
+
+  it("status and doctor --since reject invalid ISO timestamps through core validation", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    for (const command of ["status", "doctor"]) {
+      const result = runProcess([command, "--json", "--since", "not-a-date"], { env })
+
+      assert.notEqual(result.status, 0)
+      assert.match(result.stdout + result.stderr, /Invalid since timestamp: not-a-date/u)
+    }
   })
 
   it("doctor human output renders integration diagnostics readably", () => {
