@@ -475,6 +475,96 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(d.totalMemories, 2)
   })
 
+  it("freshnessStatus reports visible approved metadata without memory text", () => {
+    const e = engine()
+    const projectA = path.join(dir, "project-a")
+    const projectB = path.join(dir, "project-b")
+    fs.mkdirSync(projectA, { recursive: true })
+    fs.mkdirSync(projectB, { recursive: true })
+    fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "project-a" }), "utf8")
+    fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "project-b" }), "utf8")
+
+    e.refreshScope(projectA)
+    const projectApproved = e.save({
+      text: "Approved private project freshness text",
+      status: "approved",
+      kind: "project_checkpoint",
+      source: "session-summary",
+      provenance: { adapter: "pi", lifecycleEvent: "session_end" },
+    })
+    const globalApproved = e.save({
+      text: "Global approved private preference freshness text",
+      category: "preference",
+      scopeType: "global",
+      status: "approved",
+      kind: "preference",
+    })
+    e.save({ text: "Pending private freshness text", status: "pending" })
+    e.refreshScope(projectB)
+    e.save({ text: "Other project private freshness text", status: "approved" })
+    e.refreshScope(projectA)
+
+    assert.equal(projectApproved.status, "saved")
+    assert.equal(globalApproved.status, "saved")
+    if (projectApproved.status !== "saved" || globalApproved.status !== "saved") return
+
+    const status = e.freshnessStatus({ since: "2000-01-01T00:00:00.000Z" })
+    const serialized = JSON.stringify(status)
+
+    assert.equal(status.projectScope, "project-a")
+    assert.equal(status.visibleApprovedCount, 2)
+    assert.equal(status.newerApprovedCount, 2)
+    assert.equal(status.newerProjectApprovedCount, 1)
+    assert.equal(status.newerGlobalApprovedCount, 1)
+    assert.equal(status.newerGlobalPreferenceCount, 1)
+    assert.deepEqual(status.newerByKind, { project_checkpoint: 1, preference: 1 })
+    assert.deepEqual(status.newerBySource, { "session-summary": 1, manual: 1 })
+    assert.deepEqual(status.newerByProvenance, { "pi/session_end": 1, none: 1 })
+    assert.deepEqual(new Set(status.newestNewerApproved.map((memory) => memory.id)), new Set([projectApproved.memory.id, globalApproved.memory.id]))
+    assert.doesNotMatch(serialized, /Approved private project freshness text|Global approved private preference freshness text|Pending private freshness text|Other project private freshness text/u)
+  })
+
+  it("doctor includes privacy-safe freshness and accepts optional freshnessSince", () => {
+    const e = engine()
+    const projectA = path.join(dir, "doctor-project-a")
+    const projectB = path.join(dir, "doctor-project-b")
+    fs.mkdirSync(projectA, { recursive: true })
+    fs.mkdirSync(projectB, { recursive: true })
+    fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "doctor-project-a" }), "utf8")
+    fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "doctor-project-b" }), "utf8")
+
+    e.refreshScope(projectA)
+    e.save({ text: "Doctor approved private project freshness text", status: "approved", kind: "project_checkpoint" })
+    e.save({ text: "Doctor pending private freshness text", status: "pending" })
+    e.save({ text: "Doctor global approved private freshness text", category: "preference", scopeType: "global", status: "approved", kind: "preference" })
+    e.refreshScope(projectB)
+    e.save({ text: "Doctor other project private freshness text", status: "approved" })
+    e.refreshScope(projectA)
+
+    const report = e.doctor({ freshnessSince: "2000-01-01T00:00:00.000Z" }) as any
+    const serialized = JSON.stringify(report)
+
+    assert.equal(report.freshness.projectScope, "doctor-project-a")
+    assert.equal(report.freshness.visibleApprovedCount, 2)
+    assert.equal(report.freshness.newerApprovedCount, 2)
+    assert.equal(report.freshness.newerProjectApprovedCount, 1)
+    assert.equal(report.freshness.newerGlobalApprovedCount, 1)
+    assert.doesNotMatch(serialized, /Doctor approved private project freshness text|Doctor pending private freshness text|Doctor global approved private freshness text|Doctor other project private freshness text/u)
+  })
+
+  it("freshnessStatus and doctor reject invalid since timestamps", () => {
+    const e = engine()
+
+    assert.throws(
+      () => e.freshnessStatus({ since: "not-a-date" }),
+      /Invalid since timestamp/u,
+    )
+    assert.throws(
+      () => e.doctor({ freshnessSince: "not-a-date" }),
+      /Invalid since timestamp/u,
+    )
+  })
+
   it("doctor reports skipped invalid memory JSONL rows without memory text", () => {
     const memoryPath = path.join(dir, "mem.jsonl")
     fs.writeFileSync(memoryPath, [

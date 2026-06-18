@@ -1,4 +1,5 @@
 export * from "./types.js"
+export { buildFreshnessStatus } from "./freshness.js"
 export { MemoryEngine } from "./engine.js"
 export { createMemoryStore, createMemoryId, foldMemoryRecords } from "./storage.js"
 export { containsLikelySecret } from "./secret-detection.js"

@@ -288,3 +288,71 @@ test("memory_status applies projectPath before reading scope", async () => {
   assert.equal(result.data.status.projectScope, "status-project-a")
   assert.equal(result.meta.projectScope, "status-project-a")
 })
+
+test("memory_status passes since and returns freshness metadata without memory text", async () => {
+  const engine = engineInTemp(tempDir())
+  engine.save({ text: "Approved private MCP freshness text", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint", source: "session-summary" })
+  engine.save({ text: "Approved global MCP preference text", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+  engine.suggest("Pending private MCP freshness text")
+
+  const result = parseToolResult(await handleMemoryStatus(engine, { since: "1970-01-01T00:00:00.000Z" }))
+  const serialized = JSON.stringify(result)
+  const freshness = result.data.status.freshness
+
+  assert.equal(result.ok, true)
+  assert.equal(freshness.referenceTime, "1970-01-01T00:00:00.000Z")
+  assert.equal(freshness.visibleApprovedCount, 2)
+  assert.equal(freshness.newerApprovedCount, 2)
+  assert.equal(freshness.newerProjectApprovedCount, 1)
+  assert.equal(freshness.newerGlobalApprovedCount, 1)
+  assert.equal(freshness.newerGlobalPreferenceCount, 1)
+  assert.equal(freshness.newerByKind.project_checkpoint, 1)
+  assert.equal(freshness.newerByKind.preference, 1)
+  assert.equal(freshness.newerBySource["session-summary"], 1)
+  assert.equal(freshness.newerBySource.manual, 1)
+  assert.equal(freshness.newestNewerApproved.length, 2)
+  assert.ok(freshness.newestNewerApproved.every((memory: any) => memory.status === "approved"))
+  assert.ok(freshness.newestNewerApproved.every((memory: any) => !("text" in memory)))
+  assert.doesNotMatch(serialized, /Approved private MCP freshness text/u)
+  assert.doesNotMatch(serialized, /Approved global MCP preference text/u)
+  assert.doesNotMatch(serialized, /Pending private MCP freshness text/u)
+})
+
+test("memory_status applies projectPath before computing freshness", async () => {
+  const projectA = tempDir()
+  const projectB = tempDir()
+  fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "fresh-status-project-a" }))
+  fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "fresh-status-project-b" }))
+
+  const engine = engineInTemp(projectA)
+  engine.save({ text: "Fresh project A private fact", status: "approved", category: "project", scopeType: "project" })
+  engine.save({ text: "Fresh global private preference", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+  engine.refreshScope(projectB)
+  engine.save({ text: "Fresh project B private fact", status: "approved", category: "project", scopeType: "project" })
+
+  const result = parseToolResult(await handleMemoryStatus(engine, { projectPath: projectA, since: "1970-01-01T00:00:00.000Z" }))
+  const serialized = JSON.stringify(result)
+  const freshness = result.data.status.freshness
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.status.projectScope, "fresh-status-project-a")
+  assert.equal(result.meta.projectScope, "fresh-status-project-a")
+  assert.equal(freshness.projectScope, "fresh-status-project-a")
+  assert.equal(freshness.visibleApprovedCount, 2)
+  assert.equal(freshness.newerApprovedCount, 2)
+  assert.equal(freshness.newerProjectApprovedCount, 1)
+  assert.equal(freshness.newerGlobalApprovedCount, 1)
+  assert.deepEqual(freshness.newestNewerApproved.map((memory: any) => memory.scope.type).sort(), ["global", "project"])
+  assert.doesNotMatch(serialized, /Fresh project A private fact/u)
+  assert.doesNotMatch(serialized, /Fresh global private preference/u)
+  assert.doesNotMatch(serialized, /Fresh project B private fact/u)
+})
+
+test("memory_status returns an error envelope for invalid since timestamps", async () => {
+  const engine = engineInTemp()
+
+  const result = parseToolResult(await handleMemoryStatus(engine, { since: "not-a-date" }))
+
+  assert.equal(result.ok, false)
+  assert.match(result.error, /Invalid since timestamp/u)
+})

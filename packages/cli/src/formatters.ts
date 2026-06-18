@@ -2,7 +2,7 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { groupReviewMemories, isMetaTaskPromptText, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport } from "@memory-lane/core"
+import { groupReviewMemories, isMetaTaskPromptText, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
@@ -393,6 +393,22 @@ function formatContextPolicyDoctor(report: Record<string, unknown>): string[] {
   ]
 }
 
+function isFreshnessStatus(value: unknown): value is FreshnessStatus {
+  return typeof value === "object" && value !== null
+    && typeof (value as FreshnessStatus).visibleApprovedCount === "number"
+    && typeof (value as FreshnessStatus).newerApprovedCount === "number"
+    && typeof (value as FreshnessStatus).newerProjectApprovedCount === "number"
+    && typeof (value as FreshnessStatus).newerGlobalApprovedCount === "number"
+    && typeof (value as FreshnessStatus).newerGlobalPreferenceCount === "number"
+}
+
+export function formatFreshnessSummary(value: unknown): string | undefined {
+  if (!isFreshnessStatus(value)) return undefined
+  const newerLabel = value.newerApprovedCount === 1 ? "memory" : "memories"
+  const since = value.referenceTime ? ` since ${value.referenceTime}` : ""
+  return `Freshness: ${value.newerApprovedCount} newer approved ${newerLabel}${since} (visible approved: ${value.visibleApprovedCount}; project: ${value.newerProjectApprovedCount}; global: ${value.newerGlobalApprovedCount}; global preferences: ${value.newerGlobalPreferenceCount})`
+}
+
 export function formatDoctor(report: Record<string, unknown>, json: boolean): string {
   if (json) {
     return JSON.stringify({ ok: true, data: report, meta: meta() }, null, 2)
@@ -401,6 +417,7 @@ export function formatDoctor(report: Record<string, unknown>, json: boolean): st
   const detailLines = Object.entries(report)
     .filter(([k]) => !contextPolicyDoctorKeys.has(k))
     .map(([k, v]) => {
+      if (k === "freshness") return formatFreshnessSummary(v) ?? "freshness: unavailable"
       if (v && typeof v === "object") return `${k}: ${JSON.stringify(v, null, 2)}`
       return `${k}: ${v}`
     })
@@ -460,9 +477,9 @@ Commands:
   dashboard [--all]
                   Compact continuity and review overview
   compact
-  doctor
+  doctor [--since <ISO timestamp>]
   reindex [--force]
-  status
+  status [--since <ISO timestamp>]
   init [--yes|--recommended|--all|--list|--only <integrations>] [--project]
                   Run the first-time setup wizard; --only accepts comma-separated harnesses
   init --project-local [--project <path>]
