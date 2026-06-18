@@ -2,6 +2,38 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { parseClaudePayload } from "../src/payloads.ts"
 
+test("parses SessionStart since timestamp when present", () => {
+  const parsed = parseClaudePayload({
+    hook_event_name: "SessionStart",
+    cwd: "/tmp/memory-lane-fixture",
+    session_id: "session-1",
+    timestamp: "2026-06-18T12:00:00.000Z",
+  })
+
+  assert.equal(parsed.kind, "session-start")
+  assert.equal(parsed.kind === "session-start" ? parsed.input.since : undefined, "2026-06-18T12:00:00.000Z")
+})
+
+test("parses SessionStart since fallback timestamp fields when present", () => {
+  const startedAt = parseClaudePayload({
+    hook_event_name: "SessionStart",
+    cwd: "/tmp/memory-lane-fixture",
+    session_id: "session-1",
+    started_at: "2026-06-18T12:01:00.000Z",
+  })
+  const sessionStartedAt = parseClaudePayload({
+    hook_event_name: "SessionStart",
+    cwd: "/tmp/memory-lane-fixture",
+    session_id: "session-1",
+    session_started_at: "2026-06-18T12:02:00.000Z",
+  })
+
+  assert.equal(startedAt.kind, "session-start")
+  assert.equal(startedAt.kind === "session-start" ? startedAt.input.since : undefined, "2026-06-18T12:01:00.000Z")
+  assert.equal(sessionStartedAt.kind, "session-start")
+  assert.equal(sessionStartedAt.kind === "session-start" ? sessionStartedAt.input.since : undefined, "2026-06-18T12:02:00.000Z")
+})
+
 test("parses SessionEnd payload with messages and confirmation", () => {
   const parsed = parseClaudePayload({
     hook_event_name: "SessionEnd",
