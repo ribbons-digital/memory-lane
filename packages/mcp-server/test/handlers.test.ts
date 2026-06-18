@@ -318,6 +318,24 @@ test("memory_status includes text-free operating agreement summary", async () =>
   assert.doesNotMatch(serialized, /User prefers concise answers/u)
 })
 
+test("memory_status includes text-free continuity hints", async () => {
+  const project = tempDir()
+  fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "mcp-continuity" }))
+  const engine = engineInTemp(project)
+  const old = engine.save({ text: "PRIVATE MCP OLD LOOP TEXT Project workflow loop old", status: "approved", category: "project", kind: "project_fact" })
+  const current = engine.save({ text: "PRIVATE MCP CURRENT LOOP TEXT Project workflow loop current", status: "approved", category: "project", kind: "workflow_rule" })
+  assert.equal(old.status, "saved")
+  assert.equal(current.status, "saved")
+  engine.supersede(current.memory.id, [old.memory.id], { revisedBy: "manual", reason: "newer" })
+
+  const result = parseToolResult(await handleMemoryStatus(engine, { projectPath: project, since: "2000-01-01T00:00:00.000Z" }))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.status.continuityHints.supersededVisible[0].id, old.memory.id)
+  assert.equal(result.data.status.continuityHints.newerApproved.count >= 2, true)
+  assert.doesNotMatch(JSON.stringify(result.data.status.continuityHints), /PRIVATE MCP OLD LOOP TEXT|PRIVATE MCP CURRENT LOOP TEXT/u)
+})
+
 test("memory_status applies projectPath before computing operating agreements", async () => {
   const projectA = tempDir()
   const projectB = tempDir()
