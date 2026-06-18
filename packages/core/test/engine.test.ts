@@ -557,6 +557,57 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.doesNotMatch(serialized, /Doctor approved private project freshness text|Doctor pending private freshness text|Doctor global approved private freshness text|Doctor other project private freshness text/u)
   })
 
+  it("returns operating agreements through engine APIs", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "agreement-engine-project" }), "utf8")
+    const e = engine()
+    e.refreshScope(project)
+
+    e.save({
+      text: "Project workflow loop: write a spec, get approval, implement a slice.",
+      status: "approved",
+      category: "project",
+      scopeType: "project",
+      kind: "project_fact",
+    })
+    e.save({
+      text: "User prefers concise answers.",
+      status: "approved",
+      category: "preference",
+      scopeType: "global",
+      kind: "preference",
+    })
+
+    const agreements = e.operatingAgreements()
+    const summary = e.operatingAgreementSummary()
+
+    assert.equal(agreements.projectScope, "agreement-engine-project")
+    assert.equal(agreements.primary.length, 1)
+    assert.equal(agreements.primary[0].memory.text, "Project workflow loop: write a spec, get approval, implement a slice.")
+    assert.equal(summary.primaryCount, 1)
+    assert.equal(summary.primary[0].id, agreements.primary[0].memory.id)
+    assert.ok(!JSON.stringify(summary).includes("Project workflow loop: write a spec"))
+  })
+
+  it("includes text-free operating agreement summary in doctor", () => {
+    const e = engine()
+    e.save({
+      text: "PRIVATE DOCTOR AGREEMENT TEXT Project workflow loop: review before implementation.",
+      status: "approved",
+      category: "project",
+      scopeType: "global",
+      kind: "workflow_rule",
+    })
+
+    const report = e.doctor()
+    const serialized = JSON.stringify(report)
+    const operatingAgreements = report.operatingAgreements as any
+
+    assert.equal(operatingAgreements.primaryCount, 1)
+    assert.equal(operatingAgreements.primary[0].matchReason, "explicit-kind")
+    assert.doesNotMatch(serialized, /PRIVATE DOCTOR AGREEMENT TEXT/u)
+  })
+
   it("freshnessStatus and doctor reject invalid since timestamps", () => {
     const e = engine()
 
