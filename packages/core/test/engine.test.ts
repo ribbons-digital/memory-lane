@@ -513,6 +513,38 @@ describe("MemoryEngine", () => {
     assert.equal(result.superseded[0].revision?.supersededBy, result.successor.id)
   })
 
+  it("replace approved supersedes multiple old memories in order", () => {
+    const e = engine()
+    const oldA = e.save({ text: "First old replacement source", status: "approved", category: "project", kind: "project_fact" })
+    const oldB = e.save({ text: "Second old replacement source", status: "approved", category: "project", kind: "project_fact" })
+    assert.equal(oldA.status, "saved")
+    assert.equal(oldB.status, "saved")
+    if (oldA.status !== "saved" || oldB.status !== "saved") return
+
+    const result = e.replace([oldA.memory.id, oldB.memory.id], {
+      text: "Merged approved replacement",
+      status: "approved",
+      kind: "workflow_rule",
+      reason: "merged duplicate memories",
+      revisedBy: "cli",
+    })
+
+    assert.equal(result.successorCreated, true)
+    assert.equal(result.successor.text, "Merged approved replacement")
+    assert.equal(result.successor.status, "approved")
+    assert.deepEqual(result.successor.revision?.supersedes, [oldA.memory.id, oldB.memory.id])
+    assert.deepEqual(result.superseded.map((memory) => memory.id), [oldA.memory.id, oldB.memory.id])
+    assert.ok(result.superseded.every((memory) => memory.revision?.supersededBy === result.successor.id))
+
+    const folded = e.list({ all: true })
+    for (const oldId of [oldA.memory.id, oldB.memory.id]) {
+      const memory = folded.find((record) => record.id === oldId)
+      assert.ok(memory)
+      assert.equal(memory.status, "approved")
+      assert.equal(memory.revision?.supersededBy, result.successor.id)
+    }
+  })
+
   it("replace pending creates successor intent without mutating old memory", () => {
     const e = engine()
     const old = e.save({ text: "Old pending replace", status: "approved", category: "project", kind: "project_fact" })
