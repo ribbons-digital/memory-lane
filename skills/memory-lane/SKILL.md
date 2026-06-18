@@ -68,6 +68,10 @@ memory-lane agreements --area project-loop
 
 The command returns approved operating agreement text for the current project plus global scope. `memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` only expose text-free agreement metadata.
 
+### Continuity hints
+
+Use `memory-lane dashboard` for a compact human overview of continuity hints. Use `memory-lane status --json`, `memory-lane doctor --json`, or MCP `memory_status` when an agent needs text-free metadata about possible stale or overlapping continuity state. Hints are read-only and inspection-first; do not assume they cleaned up, hid, or deprioritized any memory.
+
 ### List (respects project scope by default)
 
 ```bash

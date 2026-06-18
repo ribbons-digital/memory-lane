@@ -475,7 +475,7 @@ Remaining dashboard/review-controls scope:
 
 ## Phase 16 — Freshness, Canonical Continuity, and Memory Revision
 
-**Status:** Slice 1 complete: read-only freshness/status detection is implemented. Slice 2 complete: read-only canonical workflow/operating-agreement discovery is implemented. Slice 3 complete: CLI-first update/replace/supersede revision primitives are implemented. Slice 4 continuity/status hints for duplicates and stale guidance are the next incomplete item; lifecycle bounded notices remain later follow-up slices.
+**Status:** Slice 1 complete: read-only freshness/status detection is implemented. Slice 2 complete: read-only canonical workflow/operating-agreement discovery is implemented. Slice 3 complete: CLI-first update/replace/supersede revision primitives are implemented. Slice 4 complete: read-only continuity/status hints for superseded-visible memories, operating-agreement overlaps, project/global overlaps, and newer approved state are implemented. Slice 5 lifecycle bounded notices are the next incomplete item.
 
 **Goal:** Let any session/harness cheaply notice newer approved project progress, relevant global preferences, and current canonical workflow/operating-agreement memories without injecting large memory bodies or silently saving new state.
 
@@ -503,8 +503,8 @@ Extension slices:
 
 1. **Complete — read-only freshness/status detection:** shared helper(s) compare a session start time or checkpoint timestamp against approved visible memories for the current project and global scope; metadata is exposed through `memory-lane status --json --since`, `memory-lane doctor --json --since`, and MCP `memory_status({ since })` without returning memory text by default.
 2. **Complete — canonical workflow / operating-agreement memories:** added a read-only operating agreement convention, selector, CLI `memory-lane agreements`, and text-free status/doctor/MCP status metadata for current project/global workflow contracts. Revision/supersede operations are covered by Slice 3.
-3. **Complete — update / replace / supersede primitives:** added explicit CLI-first append-only revision operations for same-id updates, new successor replacements, and approved successor supersede relationships, with dry-run/confirmation safety and revision metadata. MCP mutation parity, duplicate/stale hints, and retrieval filtering remain later work.
-4. **Continuity/status hints for duplicates and stale guidance:** make dashboard/status/review flag possible duplicate workflow memories, superseded memories, project/global preference overlap, and multiple candidate project loops without performing silent cleanup.
+3. **Complete — update / replace / supersede primitives:** added explicit CLI-first append-only revision operations for same-id updates, new successor replacements, and approved successor supersede relationships, with dry-run/confirmation safety and revision metadata. MCP mutation parity and retrieval filtering remain later work; continuity hints are covered by Slice 4.
+4. **Complete — continuity/status hints for stale and overlapping guidance:** dashboard/status/doctor/MCP status flag superseded-visible memories, multiple operating-agreement candidates, project/global preference overlap, and newer approved state without performing silent cleanup.
 5. **Lifecycle bounded notices:** route SessionStart/UserPromptSubmit lifecycle injection through the freshness/canonical helpers so harnesses can surface a compact notice when newer approved progress or current operating agreements exist, with tests for project scope, global scope, status, context budget, and privacy boundaries.
 
 Out of scope for Phase 16:

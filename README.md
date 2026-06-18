@@ -18,6 +18,7 @@ Memory Lane is not meant to be another isolated chat-history search box. Its goa
 - [CLI Commands](#cli-commands)
   - [Freshness status](#freshness-status)
   - [Operating agreements](#operating-agreements)
+  - [Continuity hints](#continuity-hints)
   - [Session-end summarization](#session-end-summarization)
   - [Obsidian mirror](#obsidian-mirror)
   - [Import from Obsidian](#import-from-obsidian)
@@ -463,6 +464,19 @@ memory-lane agreements --all
 ```
 
 `memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` include text-free operating agreement metadata so clients can notice that agreements exist without injecting the agreement bodies.
+
+### Continuity hints
+
+`memory-lane dashboard`, `memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` include read-only continuity hints. Hints are metadata-only: they may include memory ids, scope, category, kind, source, provenance, timestamps, and revision relationships, but they do not include memory text in status/MCP surfaces. The human dashboard shows compact hint counts and inspection actions without adding memory text from the hints.
+
+Current hints report:
+
+- approved memories that are marked superseded but remain visible as historical records;
+- multiple operating-agreement candidates for the same workflow area;
+- project/global preference overlap in the same workflow area;
+- newer approved memories when `--since <ISO timestamp>` is provided.
+
+Hints invite inspection with commands such as `memory-lane dashboard`, `memory-lane agreements --area <area>`, `memory-lane agreements --all`, and `memory-lane list --json`. They do not perform cleanup, hide superseded memories, change recall ranking, or suggest mutation commands.
 
 ### Session-end summarization
 
