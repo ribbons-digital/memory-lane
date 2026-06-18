@@ -743,6 +743,23 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(d.totalMemories, 2)
   })
 
+  it("continuityHints reports text-free project scoped hints", () => {
+    const e = engine()
+    const old = e.save({ text: "PRIVATE OLD WORKFLOW TEXT", status: "approved", category: "project", kind: "workflow_rule" })
+    const newer = e.save({ text: "PRIVATE NEW WORKFLOW TEXT", status: "approved", category: "project", kind: "workflow_rule" })
+    assert.equal(old.status, "saved")
+    assert.equal(newer.status, "saved")
+    if (old.status !== "saved" || newer.status !== "saved") return
+    e.supersede(newer.memory.id, [old.memory.id], { reason: "newer guidance", revisedBy: "manual" })
+
+    const hints = e.continuityHints()
+
+    assert.equal(hints.supersededVisible.length, 1)
+    assert.equal(hints.supersededVisible[0].id, old.memory.id)
+    assert.equal(hints.supersededVisible[0].supersededBy, newer.memory.id)
+    assert.doesNotMatch(JSON.stringify(hints), /PRIVATE OLD WORKFLOW TEXT|PRIVATE NEW WORKFLOW TEXT/u)
+  })
+
   it("freshnessStatus reports visible approved metadata without memory text", () => {
     const e = engine()
     const projectA = path.join(dir, "project-a")
@@ -790,6 +807,23 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.deepEqual(status.newerByProvenance, { "pi/session_end": 1, none: 1 })
     assert.deepEqual(new Set(status.newestNewerApproved.map((memory) => memory.id)), new Set([projectApproved.memory.id, globalApproved.memory.id]))
     assert.doesNotMatch(serialized, /Approved private project freshness text|Global approved private preference freshness text|Pending private freshness text|Other project private freshness text/u)
+  })
+
+  it("doctor includes text-free continuity hints and accepts freshnessSince", () => {
+    const e = engine()
+    const saved = e.save({
+      text: "PRIVATE NEW CHECKPOINT TEXT",
+      status: "approved",
+      category: "project",
+      kind: "project_checkpoint",
+    })
+    assert.equal(saved.status, "saved")
+
+    const report = e.doctor({ freshnessSince: "2000-01-01T00:00:00.000Z" }) as any
+
+    assert.equal(typeof report.continuityHints.hintCount, "number")
+    assert.equal(report.continuityHints.newerApproved.count >= 1, true)
+    assert.doesNotMatch(JSON.stringify(report.continuityHints), /PRIVATE NEW CHECKPOINT TEXT/u)
   })
 
   it("doctor includes privacy-safe freshness and accepts optional freshnessSince", () => {
