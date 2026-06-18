@@ -345,8 +345,8 @@ export function formatSupersedeResult(result: SupersedeResult, json: boolean): s
   if (json) return JSON.stringify({ ok: true, data: result, meta: meta({ count: result.superseded.length }) }, null, 2)
   return [
     result.dryRun ? "Supersede dry run:" : "Superseded memories:",
-    `Successor: ${result.successor.id}`,
-    `Old memories: ${result.superseded.map((m) => m.id).join(", ") || "none"}`,
+    `Successor: [${result.successor.id}] ${compactPreview(result.successor.text)}`,
+    `Superseded old memories: ${result.superseded.map((m) => m.id).join(", ") || "none"}`,
     ...formatRevisionWarnings(result.warnings),
     ...(result.mirrorWarnings ?? []).map((warning) => `Warning: ${warning}`),
   ].join("\n")

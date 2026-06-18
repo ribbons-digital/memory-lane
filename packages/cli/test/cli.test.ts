@@ -425,6 +425,22 @@ describe("CLI integration", () => {
     assert.match(invalidCategory.stdout + invalidCategory.stderr, /Invalid category/u)
   })
 
+  it("supersede supports human output", () => {
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    run(["save", "old human supersede", "--status", "approved"], env)
+    run(["save", "new human supersede", "--status", "approved"], env)
+    const memories = JSON.parse(run(["list", "--json"], env)).data.memories
+    const oldId = memories.find((m: any) => m.text === "old human supersede").id
+    const newId = memories.find((m: any) => m.text === "new human supersede").id
+
+    const output = run(["supersede", newId, oldId], env)
+
+    assert.match(output, /Superseded memories:/u)
+    assert.match(output, new RegExp(`Successor: \\[${escapeRegExp(newId)}\\] new human supersede`, "u"))
+    assert.match(output, new RegExp(`Superseded old memories: ${escapeRegExp(oldId)}`, "u"))
+    assert.doesNotMatch(output, /Old memories:/u)
+  })
+
   it("replace supports human output", () => {
     const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
     run(["save", "old human replace", "--status", "approved"], env)
