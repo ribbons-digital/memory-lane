@@ -2,6 +2,10 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { parseClaudePayload } from "../src/payloads.ts"
 
+function inputRecord(input: object): Record<string, unknown> {
+  return input as Record<string, unknown>
+}
+
 test("parses SessionStart since timestamp when present", () => {
   const parsed = parseClaudePayload({
     hook_event_name: "SessionStart",
@@ -32,6 +36,35 @@ test("parses SessionStart since fallback timestamp fields when present", () => {
   assert.equal(startedAt.kind === "session-start" ? startedAt.input.since : undefined, "2026-06-18T12:01:00.000Z")
   assert.equal(sessionStartedAt.kind, "session-start")
   assert.equal(sessionStartedAt.kind === "session-start" ? sessionStartedAt.input.since : undefined, "2026-06-18T12:02:00.000Z")
+})
+
+test("parses SessionStart since with timestamp precedence", () => {
+  const parsed = parseClaudePayload({
+    hook_event_name: "SessionStart",
+    cwd: "/tmp/memory-lane-fixture",
+    session_id: "session-1",
+    timestamp: "2026-06-18T12:00:00.000Z",
+    started_at: "2026-06-18T12:01:00.000Z",
+    session_started_at: "2026-06-18T12:02:00.000Z",
+  })
+
+  assert.equal(parsed.kind, "session-start")
+  assert.equal(parsed.kind === "session-start" ? parsed.input.since : undefined, "2026-06-18T12:00:00.000Z")
+})
+
+test("does not include since on non-SessionStart inputs", () => {
+  const timestamp = "2026-06-18T12:00:00.000Z"
+  const payloads = [
+    parseClaudePayload({ hook_event_name: "UserPromptSubmit", cwd: "/tmp/memory-lane-fixture", prompt: "hello", timestamp }),
+    parseClaudePayload({ hook_event_name: "Stop", cwd: "/tmp/memory-lane-fixture", timestamp }),
+    parseClaudePayload({ hook_event_name: "PostToolUse", cwd: "/tmp/memory-lane-fixture", tool_name: "Bash", timestamp }),
+    parseClaudePayload({ hook_event_name: "SessionEnd", cwd: "/tmp/memory-lane-fixture", messages: [], timestamp }),
+  ]
+
+  for (const parsed of payloads) {
+    assert.notEqual(parsed.kind, "invalid")
+    assert.equal(parsed.kind === "invalid" ? undefined : "since" in inputRecord(parsed.input), false)
+  }
 })
 
 test("parses SessionEnd payload with messages and confirmation", () => {

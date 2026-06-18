@@ -52,8 +52,11 @@ function baseContext(obj: Record<string, unknown>) {
     turnId: stringField(obj, "turn_id"),
     model: stringField(obj, "model"),
     transcriptPath: nullableStringField(obj, "transcript_path"),
-    since: stringField(obj, "timestamp") ?? stringField(obj, "started_at") ?? stringField(obj, "session_started_at"),
   }
+}
+
+function sessionStartSince(obj: Record<string, unknown>): string | undefined {
+  return stringField(obj, "timestamp") ?? stringField(obj, "started_at") ?? stringField(obj, "session_started_at")
 }
 
 export function parseClaudePayload(value: unknown): ParsedClaudePayload {
@@ -104,7 +107,10 @@ export function parseClaudePayload(value: unknown): ParsedClaudePayload {
     return {
       kind: "session-start",
       hookEventName: event,
-      input: context,
+      input: {
+        ...context,
+        since: sessionStartSince(obj),
+      },
     }
   }
 
