@@ -521,11 +521,19 @@ Out of scope for Phase 16:
 
 ## Phase 17 — Review-First Progress and Checkpoint Capture
 
+**Status:** Slice 1 complete: checkpoint candidate review labels are implemented for CLI review and MCP `memory_review`. Capture, dedup/debounce, and future review improvements remain follow-up work.
+
 **Goal:** Capture high-value continuity events such as releases, merges, major fixes, and roadmap decisions as reviewable checkpoint candidates, so another session can pick up the project state without the user restating it.
 
-This phase makes Memory Lane proactive, but still not autonomous. It should suggest durable project progress when evidence is strong and let the user approve before it affects future sessions.
+This phase should make Memory Lane more proactive in later slices, but still not autonomous. It should suggest durable project progress when evidence is strong and let the user approve before it affects future sessions. The completed first slice is review-labeling only.
 
-First-slice decisions:
+Completed Slice 1 scope:
+
+1. Added conservative checkpoint candidate classification for pending memories that look like releases, merges, verification milestones, docs syncs, roadmap decisions, major fixes, or explicit `project_checkpoint` records.
+2. Labeled checkpoint candidates in CLI `memory-lane review`, CLI `review --json`, and MCP `memory_review` with text-free structured metadata.
+3. Kept Phase 17 review-first: no automatic checkpoint capture, dedup/debounce, background writes, recall ranking changes, workstream/thread ids, new config flags, MCP mutation tools, or lifecycle context changes were added.
+
+Remaining Phase 17 follow-up decisions:
 
 - Default all inferred progress/checkpoint captures to `pending` unless the user explicitly asks to remember/save.
 - Prefer concrete evidence from commands/tool outcomes (`git tag`, release workflow success, tests/build pass, merge commits) over model inference.
@@ -533,13 +541,11 @@ First-slice decisions:
 - Deduplicate by project, event type, and nearby timestamp to avoid multiple sessions saving the same release/checkpoint.
 - Keep release/checkpoint capture harness-neutral; adapters provide bounded evidence, lifecycle/core decides what to suggest.
 
-Todos:
+Remaining todos:
 
-1. Add conservative checkpoint candidate kinds/conventions for release, merge, verification, docs-sync, and roadmap-decision events using existing `MemoryKind` where possible or a non-breaking new kind if needed.
-2. Extend lifecycle/tool-outcome capture to suggest checkpoint candidates from safe, high-confidence evidence such as successful release workflow/tag creation or explicit “released vX.Y.Z” user statements.
-3. Add duplicate/debounce logic for pending checkpoint candidates from the same project/event/version.
-4. Add review output that clearly labels checkpoint candidates and why they were suggested.
-5. Document examples of good checkpoint memories and explain why they remain review-first.
+1. Add review-first checkpoint capture from high-confidence evidence such as successful release workflow/tag creation or explicit “released vX.Y.Z” user statements.
+2. Add duplicate/debounce logic for pending checkpoint candidates from the same project/event/version.
+3. Add future review improvements only after capture and dedup behavior are deliberately designed.
 
 ## Phase 18 — Global Preference Layering and Context Policy
 

@@ -2,6 +2,7 @@
 
 ## Recent changes (since this handoff was last updated)
 
+- Phase 17 Slice 1 checkpoint candidate review labeling is complete: pending memories that look like releases, merges, verification milestones, docs syncs, roadmap decisions, major fixes, or explicit `project_checkpoint` records are labeled in CLI review and MCP `memory_review` with text-free metadata. No automatic checkpoint capture, dedup/debounce, memory writes, recall ranking changes, workstream/thread ids, new config flags, lifecycle context changes, or MCP mutation tools were added. Next recommended Phase 17 item: review-first checkpoint capture from high-confidence evidence.
 - Prompt-time continuity intents complete: natural prompts like “resume building X,” “where was X implemented,” “what were we last working on,” and “what should we work on next” now trigger bounded Memory Lane inspection guidance under existing context policy. Topic-specific prompts can use targeted budgeted recall. No checkpoint capture, memory writes, cleanup, recall ranking changes, workstream/thread ids, new config flags, or LLM classifier were added. Next recommended item remains Phase 17 review-first progress/checkpoint capture.
 - Phase 16 Slice 5 complete: added bounded SessionStart continuity notices governed by existing contextPolicy modes. Notices are plain-language, inspection-first, share the SessionStart budget, and report text-free metadata in contextDecision.continuity. No UserPromptSubmit notices, new config flags, lifecycle writes, recall filtering, cleanup, workstream ids, memory text/ids in notice text, or MCP mutation tools were added. Next recommended continuity item: Phase 17 review-first progress/checkpoint capture.
 - Phase 16 Slice 4 complete: added read-only continuity hints across core, CLI dashboard/status/doctor, and MCP `memory_status`. Hints are text-free metadata for superseded-visible memories, operating-agreement overlaps, project/global overlaps, and newer approved state. No lifecycle notices, recall filtering, automatic cleanup, workstream ids, or MCP mutation tools were added. Next recommended slice: Phase 16 Slice 5 lifecycle bounded notices.
@@ -374,7 +375,7 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Implement Phase 17 review-first progress/checkpoint capture for releases, merges, verification, and roadmap decisions.
+1. Implement the next Phase 17 item: review-first checkpoint capture from high-confidence evidence for releases, merges, verification, and roadmap decisions.
 2. Keep Phase 17 review-governed: suggest compact checkpoint candidates for approval rather than silently changing approved memory state.
 3. Only after Phase 17 foundations should Phase 18 preference layering and Phase 19 learning enhancements begin.
 4. Keep future learning enhancements harness-neutral. Core/lifecycle should own selection, token budgeting, correction/failure/procedure candidate extraction, and consolidation proposals; adapters for pi, Codex, Claude Code, Cursor, Hermes, etc. should only supply bounded lifecycle evidence and render shared outputs.
