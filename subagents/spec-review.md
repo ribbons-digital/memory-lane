@@ -11,22 +11,21 @@ Approval status: Approved.
 - None found.
 
 ### Correct
-- Pending-review notice is derived only from saved pending memories: `pendingReviewCount` filters `status === "saved"` and `memory.status === "pending"`, and the renderer emits only count, command, and approve/reject wording (`packages/lifecycle/src/review-notices.ts:3-13`).
-- Claude and Codex lifecycle outputs prefer the pending-review notice over debug counts, while falling back to `{}` when debug is off and no pending memory was saved (`packages/claude-adapter/src/outputs.ts:35-42`, `packages/codex-adapter/src/outputs.ts:31-38`).
-- Pending summary saves still emit a review notice because Claude `SessionEnd`, Codex explicit `Stop` summary intent, and Codex legacy `session-end` all route saved summary results through `lifecycleNoopOutput(result, debug)` (`packages/claude-adapter/src/runner.ts:164-178`, `packages/codex-adapter/src/runner.ts:186-197`, `packages/codex-adapter/src/runner.ts:221-232`).
-- No-candidate/no-durable explicit summary outputs are quiet without debug: no-durable tests assert `{}` for Claude SessionEnd and Codex explicit Stop summary (`packages/claude-adapter/test/runner.test.ts:324-340`, `packages/codex-adapter/test/runner.test.ts:447-460`).
-- Disabled/missing-provider explanatory messages remain for explicit Codex Stop summary intent and Claude SessionEnd (`packages/codex-adapter/src/runner.ts:176-184`, `packages/claude-adapter/src/runner.ts:148-157`), with tests covering disabled/missing Codex Stop messages (`packages/codex-adapter/test/runner.test.ts:367-405`) and Claude missing/disabled messages (`packages/claude-adapter/test/runner.test.ts:247-273`).
-- Privacy holds: helper tests assert memory body/id absence (`packages/lifecycle/test/review-notices.test.ts:46-50`); adapter tests assert prompt/tool/transcript details are not emitted in notices (`packages/claude-adapter/test/runner.test.ts:170-186`, `packages/codex-adapter/test/runner.test.ts:314-348`, `packages/codex-adapter/test/runner.test.ts:408-443`).
-- Out-of-scope behavior appears unchanged: diff is limited to docs, shared notice helper/export, adapter output routing, runner output selection for explicit summary results, and tests; candidate extraction/save heuristics/ranking were not changed.
-- README documents compact count-only pending review reminders for Claude and Codex hooks (`README.md:822`, `README.md:837`).
+- SessionStart baseline selection now matches the project-first tier order required by the design: current project, global, other project, then other/legacy when `projectScope` is known, with recency inside each tier (`docs/superpowers/specs/2026-06-19-project-first-session-start-design.md:36-45`; implemented in `packages/lifecycle/src/injection.ts:601-614`).
+- No-scope fallback remains recency-first because `baselineTier` returns `0` for every memory when `projectScope` is absent and the comparator then sorts only by `updatedAt` descending (`packages/lifecycle/src/injection.ts:601-614`). The existing no-scope budget test still expects recent IDs `2`, `3`, `4` without passing `projectScope` (`packages/lifecycle/test/injection.test.ts:497-513`).
+- Global memories remain eligible after current-project memories under the same budget: the selection loop is unchanged after sorting and still applies approved-only/secret/dedupe/fit/budget checks (`packages/lifecycle/src/injection.ts:621-645`), and the new project-first test selects a global after two project memories when budget remains (`packages/lifecycle/test/injection.test.ts:516-532`).
+- `handleSessionStart` passes the current project scope into baseline selection while preserving continuity-notice budget subtraction and rendering with the same scope (`packages/lifecycle/src/handlers.ts:206-221`), satisfying the design/API requirement (`docs/superpowers/specs/2026-06-19-project-first-session-start-design.md:80-88`).
+- Prompt-time recall/ranking is unchanged: `handleUserPromptSubmit` still calls `engine.recall(recallQuery)` and `selectMemoriesForInjection(...)` for prompt events (`packages/lifecycle/src/handlers.ts:162-166`), and `selectMemoriesForInjection` still iterates recalled order with the existing lexical/secret/dedupe/budget filters (`packages/lifecycle/src/injection.ts:216-245`).
+- Scope stayed bounded: `git diff --name-only main...HEAD` is limited to the spec/plan docs, README, lifecycle selector/handler, and lifecycle tests; no MCP, config, cleanup, or package/lock files changed.
+- README accurately documents that only `SessionStart` baseline selection is project-first and that prompt-time `UserPromptSubmit` recall remains relevance-based (`README.md:796-799`), matching acceptance criteria (`docs/superpowers/specs/2026-06-19-project-first-session-start-design.md:104-112`).
+- Tests cover the requested behavior: project-first selection, recency within tiers/other-project fallback, no-scope recency fallback, and lifecycle handler integration (`packages/lifecycle/test/injection.test.ts:497-552`; `packages/lifecycle/test/handlers.test.ts:243-260`).
 
 ### Verification
-- `pnpm --filter @memory-lane/lifecycle test -- review-notices.test.ts` passed.
-- `pnpm --filter @memory-lane/claude-adapter test -- runner.test.ts` passed.
-- `pnpm --filter @memory-lane/codex-adapter test -- runner.test.ts` passed.
-- `git diff --check` passed.
+- `pnpm --filter @memory-lane/lifecycle test -- injection.test.ts` passed.
+- `pnpm --filter @memory-lane/lifecycle test -- handlers.test.ts` passed.
+- `git diff --check main...HEAD` passed.
 - `pnpm build` passed.
 - `pnpm test` passed.
 
 ### Note
-- The requested root `plan.md` and `progress.md` paths were not present in this worktree; review used `docs/superpowers/plans/2026-06-19-pending-review-visibility.md` and `docs/superpowers/specs/2026-06-19-pending-review-visibility-design.md`.
+- The requested root `plan.md` and `progress.md` files were not present in this worktree; review used `docs/superpowers/specs/2026-06-19-project-first-session-start-design.md` and `docs/superpowers/plans/2026-06-19-project-first-session-start.md` as requested for spec/plan comparison.
