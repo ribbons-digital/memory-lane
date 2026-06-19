@@ -486,6 +486,14 @@ function memoryWithUpdatedAt(id: string, text: string, updatedAt: string): Memor
   return { ...memory(id, text), updatedAt }
 }
 
+function globalMemoryWithUpdatedAt(id: string, text: string, updatedAt: string): MemoryRecord {
+  return { ...globalMemory(id, text), updatedAt }
+}
+
+function projectMemoryWithUpdatedAt(id: string, project: string, text: string, updatedAt: string): MemoryRecord {
+  return { ...projectMemory(id, project, text), updatedAt }
+}
+
 test("selectBaselineMemories picks recent approved memories within budget", () => {
   const memories = [
     memoryWithUpdatedAt("1", "This repo uses pnpm for package management.", "2026-06-10T00:00:00.000Z"),
@@ -503,6 +511,45 @@ test("selectBaselineMemories picks recent approved memories within budget", () =
   })
 
   assert.deepEqual(selected.map((m) => m.id), ["2", "3", "4"])
+})
+
+test("selectBaselineMemories prefers current project memories before newer globals", () => {
+  const memories = [
+    globalMemoryWithUpdatedAt("global-newest", "Global preference newest", "2026-06-19T00:00:00.000Z"),
+    globalMemoryWithUpdatedAt("global-newer", "Global preference newer", "2026-06-18T00:00:00.000Z"),
+    projectMemoryWithUpdatedAt("project-checkpoint", "/repo/sitewright", "Latest Sitewright checkpoint", "2026-06-16T00:00:00.000Z"),
+    projectMemoryWithUpdatedAt("project-fact", "/repo/sitewright", "Sitewright uses pnpm", "2026-06-15T00:00:00.000Z"),
+  ]
+
+  const selected = selectBaselineMemories(memories, {
+    projectScope: "/repo/sitewright",
+    maxItems: 3,
+    targetChars: 500,
+    hardMaxChars: 1000,
+    absoluteMaxChars: 1000,
+  })
+
+  assert.deepEqual(selected.map((m) => m.id), ["project-checkpoint", "project-fact", "global-newest"])
+})
+
+test("selectBaselineMemories keeps recency order within project and global tiers", () => {
+  const memories = [
+    projectMemoryWithUpdatedAt("project-old", "/repo/sitewright", "Older project fact", "2026-06-12T00:00:00.000Z"),
+    globalMemoryWithUpdatedAt("global-new", "New global preference", "2026-06-19T00:00:00.000Z"),
+    projectMemoryWithUpdatedAt("project-new", "/repo/sitewright", "Newer project fact", "2026-06-18T00:00:00.000Z"),
+    globalMemoryWithUpdatedAt("global-old", "Old global preference", "2026-06-10T00:00:00.000Z"),
+    projectMemoryWithUpdatedAt("other-project", "/repo/other", "Other project fact", "2026-06-20T00:00:00.000Z"),
+  ]
+
+  const selected = selectBaselineMemories(memories, {
+    projectScope: "/repo/sitewright",
+    maxItems: 5,
+    targetChars: 500,
+    hardMaxChars: 1000,
+    absoluteMaxChars: 1000,
+  })
+
+  assert.deepEqual(selected.map((m) => m.id), ["project-new", "project-old", "global-new", "global-old", "other-project"])
 })
 
 test("selectBaselineMemories skips secrets and deduplicates", () => {
