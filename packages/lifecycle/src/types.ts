@@ -38,6 +38,13 @@ export interface ContinuityContextDecision {
   suggestedActions: string[]
 }
 
+export interface PromptContinuityIntentDecision {
+  detected: boolean
+  family?: "resume" | "lookup" | "project-position" | "next-work"
+  topic?: string
+  guidanceInjected: boolean
+}
+
 export interface MemoryContextDecision {
   event: "prompt" | "sessionStart"
   mode: "off" | "policy-only" | "selective"
@@ -47,6 +54,7 @@ export interface MemoryContextDecision {
   omitted: number
   omittedReasons: string[]
   continuity?: ContinuityContextDecision
+  continuityIntent?: PromptContinuityIntentDecision
 }
 
 export interface LifecycleResult {

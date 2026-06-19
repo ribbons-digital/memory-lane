@@ -1,5 +1,5 @@
 import type { MemoryEngine, MemoryProvenance, MemorySource, SaveResult } from "@memory-lane/core"
-import { isMemoryManagementListIntent, limitsFromContextPolicy, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, resolveContextPolicy, selectBaselineMemories, selectMemoriesForInjection, type MemoryInjectionLimits } from "./injection.js"
+import { detectContinuityIntent, isMemoryManagementListIntent, limitsFromContextPolicy, renderContinuityIntentGuidance, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, resolveContextPolicy, selectBaselineMemories, selectMemoriesForInjection, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
 import { summarizeToolOutcome } from "./tool-outcomes.js"
 import type { LifecycleResult, MemoryCandidate, MemoryContextDecision, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
@@ -43,6 +43,38 @@ function composeSessionStartContext(input: {
 function continuityDecision(notice: ReturnType<typeof renderContinuityNotice>): MemoryContextDecision["continuity"] {
   const { text: _text, ...decision } = notice
   return decision
+}
+
+function promptContinuityDecision(intent: ReturnType<typeof detectContinuityIntent>, guidanceInjected: boolean): MemoryContextDecision["continuityIntent"] {
+  if (!intent.detected) return undefined
+  return {
+    detected: true,
+    family: intent.family,
+    ...(intent.topic ? { topic: intent.topic } : {}),
+    guidanceInjected,
+  }
+}
+
+function composePromptContext(input: {
+  guidance: string
+  memoryContext: string
+  policy: ReturnType<typeof resolveContextPolicy>
+}): string {
+  const guidance = input.guidance.trim()
+  const memoryContext = input.memoryContext.trim()
+  if (!guidance && !memoryContext) return ""
+  if (!guidance) return memoryContext
+
+  const rawInner = memoryContext.startsWith("<memory-context")
+    ? memoryContext
+      .replace(/^<memory-context[^>]*>\n?/u, "")
+      .replace(/\n?<\/memory-context>$/u, "")
+    : memoryContext
+  const inner = input.policy.mode === "selective" && rawInner && !rawInner.includes("## Relevant Memory")
+    ? `## Relevant Memory\n\n${rawInner}`
+    : rawInner
+  const body = [guidance, inner].filter((part) => part.trim().length > 0).join("\n\n")
+  return [`<memory-context mode="${input.policy.mode}" event="prompt">`, body, "</memory-context>"].join("\n")
 }
 
 function candidateSource(candidate: MemoryCandidate, fallback: MemorySource): MemorySource {
@@ -108,11 +140,38 @@ export async function handleUserPromptSubmit(
   const policy = resolveContextPolicy(engine.getContextPolicy())
   const budget = contextBudget("prompt", policy)
   if (policy.mode === "off") return createResult(undefined, contextDecision({ event: "prompt", mode: policy.mode, ...budget, selected: 0, omitted: 0, omittedReasons: ["off"] }))
-  if (policy.mode === "policy-only") return createResult(renderMemoryContext({ event: "prompt", memories: [], policy }), contextDecision({ event: "prompt", mode: policy.mode, ...budget, selected: 0, omitted: 0, omittedReasons: ["policy-only"] }))
-  const recalled = await engine.recall(input.prompt)
-  const selected = selectMemoriesForInjection(input.prompt, recalled, limitsFromContextPolicy("prompt", policy, options))
-  const rendered = renderMemoryContext({ event: "prompt", memories: selected, policy })
-  return createResult(rendered || undefined, contextDecision({ event: "prompt", mode: policy.mode, ...budget, selected: selected.length, omitted: Math.max(0, recalled.memories.length - selected.length) }))
+
+  const intent = detectContinuityIntent(input.prompt)
+  const guidance = renderContinuityIntentGuidance(intent)
+  const continuityIntent = promptContinuityDecision(intent, Boolean(guidance))
+
+  if (policy.mode === "policy-only") {
+    const policyGuidance = renderMemoryContext({ event: "prompt", memories: [], policy })
+    const rendered = composePromptContext({ guidance, memoryContext: policyGuidance, policy })
+    return createResult(rendered || undefined, contextDecision({
+      event: "prompt",
+      mode: policy.mode,
+      ...budget,
+      selected: 0,
+      omitted: 0,
+      omittedReasons: ["policy-only"],
+      ...(continuityIntent ? { continuityIntent } : {}),
+    }))
+  }
+
+  const recallQuery = intent.detected && intent.topic ? intent.topic : input.prompt
+  const recalled = await engine.recall(recallQuery)
+  const selected = selectMemoriesForInjection(recallQuery, recalled, limitsFromContextPolicy("prompt", policy, options))
+  const memoryContext = renderMemoryContext({ event: "prompt", memories: selected, policy })
+  const rendered = composePromptContext({ guidance, memoryContext, policy })
+  return createResult(rendered || undefined, contextDecision({
+    event: "prompt",
+    mode: policy.mode,
+    ...budget,
+    selected: selected.length,
+    omitted: Math.max(0, recalled.memories.length - selected.length),
+    ...(continuityIntent ? { continuityIntent } : {}),
+  }))
 }
 
 export function handleSessionStart(
