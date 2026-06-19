@@ -27,6 +27,34 @@ function memory(id: string, text: string): MemoryRecord {
   }
 }
 
+function globalMemory(id: string, text: string, kind: MemoryRecord["kind"] = "preference"): MemoryRecord {
+  return {
+    id,
+    status: "approved",
+    text,
+    category: "preference",
+    scope: { type: "global" },
+    source: "manual",
+    createdAt: "2026-05-26T00:00:00.000Z",
+    updatedAt: "2026-05-26T00:00:00.000Z",
+    kind,
+  }
+}
+
+function projectMemory(id: string, project: string, text: string, kind: MemoryRecord["kind"] = "project_fact"): MemoryRecord {
+  return {
+    id,
+    status: "approved",
+    text,
+    category: "project",
+    scope: { type: "project", key: project },
+    source: "manual",
+    createdAt: "2026-05-26T00:00:00.000Z",
+    updatedAt: "2026-05-26T00:00:00.000Z",
+    kind,
+  }
+}
+
 function recall(memories: MemoryRecord[], used = false, fallbackReason?: string): RecallResult {
   return {
     memories,
@@ -267,9 +295,41 @@ test("deduplicates normalized text and skips likely secrets", () => {
   assert.deepEqual(selected.map((m) => m.id), ["1"])
 })
 
-test("renders plain memory block without ids or labels", () => {
-  const rendered = renderMemoryBlock([memory("abc123", "This repo uses pnpm")])
-  assert.equal(rendered, "## Relevant Memory\n\n- This repo uses pnpm")
+test("renderMemoryBlock groups current project and global memories with readable labels", () => {
+  const rendered = renderMemoryBlock([
+    projectMemory("p1", "repo", "Latest Sitewright checkpoint", "project_checkpoint"),
+    globalMemory("g1", "Always keep HANDOFF.md synced", "workflow_rule"),
+  ], { projectScope: "repo" })
+
+  assert.match(rendered, /## Relevant Memory/u)
+  assert.match(rendered, /Memory Lane selected these approved memories/u)
+  assert.match(rendered, /### Current project/u)
+  assert.match(rendered, /\*\*Project checkpoint\*\*/u)
+  assert.match(rendered, /Latest Sitewright checkpoint/u)
+  assert.match(rendered, /### Global preferences and workflow rules/u)
+  assert.match(rendered, /\*\*Workflow rule\*\*/u)
+  assert.match(rendered, /Always keep HANDOFF\.md synced/u)
+  assert.doesNotMatch(rendered, /\[global\/preference\/workflow_rule\]/u)
+})
+
+test("renderMemoryBlock labels project memories when current project scope is unknown", () => {
+  const rendered = renderMemoryBlock([
+    projectMemory("p1", "/tmp/sitewright", "This repo uses pnpm", "project_fact"),
+  ])
+
+  assert.match(rendered, /### Project-specific memory/u)
+  assert.match(rendered, /\*\*Project fact\*\*/u)
+  assert.match(rendered, /This repo uses pnpm/u)
+})
+
+test("renderMemoryBlock separates other visible project memories", () => {
+  const rendered = renderMemoryBlock([
+    projectMemory("p1", "/tmp/other", "Memory system design intent", "project_fact"),
+  ], { projectScope: "/tmp/sitewright" })
+
+  assert.match(rendered, /### Other visible project memory/u)
+  assert.match(rendered, /\*\*Project fact\*\*/u)
+  assert.match(rendered, /Memory system design intent/u)
 })
 
 test("renderContinuityNotice renders plain-language notice without ids or private text", () => {
@@ -384,15 +444,21 @@ test("renderContinuityNotice respects tight budget", () => {
   assert.deepEqual(result.omittedReasons, ["continuity-budget"])
 })
 
-test("renderMemoryContext wraps selected memories in guarded context", () => {
+test("renderMemoryContext wraps grouped readable memories in guarded context", () => {
   const rendered = renderMemoryContext({
     event: "prompt",
-    memories: [memory("abc123", "This repo uses pnpm")],
-    policy: { mode: "selective", maxItems: { sessionStart: 4, prompt: 6 }, maxChars: { sessionStart: 1600, prompt: 3000 }, includePending: false, fallbackToSearch: true },
+    memories: [
+      projectMemory("p1", "repo", "Latest Sitewright checkpoint", "project_checkpoint"),
+      globalMemory("g1", "Keep next steps constrained", "preference"),
+    ],
+    projectScope: "repo",
   })
-  assert.match(rendered, /^<memory-context/u)
-  assert.match(rendered, /mode="selective"/u)
-  assert.match(rendered, /- This repo uses pnpm/u)
+
+  assert.match(rendered, /^<memory-context mode="selective" event="prompt">/u)
+  assert.match(rendered, /### Current project/u)
+  assert.match(rendered, /\*\*Project checkpoint\*\*/u)
+  assert.match(rendered, /### Global preferences and workflow rules/u)
+  assert.match(rendered, /\*\*Preference\*\*/u)
   assert.match(rendered, /<\/memory-context>$/u)
 })
 
