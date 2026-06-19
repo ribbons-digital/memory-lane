@@ -787,6 +787,12 @@ Modes:
 - `policy-only` injects compact guidance telling the agent to use Memory Lane recall/list tools when needed, without including memory bodies.
 - `off` disables automatic context injection while leaving explicit CLI/MCP tools and automatic save hooks unchanged.
 
+### Prompt-time continuity guidance
+
+When lifecycle prompt hooks receive natural continuity questions such as “resume building X,” “where was X implemented,” “what were we last working on,” or “what should we work on next,” Memory Lane may add a compact inspection-first guidance block. The guidance tells the agent to inspect project state with commands such as `memory-lane status --json`, `memory-lane dashboard`, and targeted `memory-lane recall "X"` when a topic is detected.
+
+This prompt-time guidance is governed by `memory.contextPolicy.mode`: `off` suppresses it, `policy-only` emits guidance without memory bodies, and `selective` can render guidance before the normal budgeted relevant-memory block. It does not write memories, run cleanup, change recall ranking, or require users to know Memory Lane internal terms such as operating agreements or continuity hints.
+
 ### Lifecycle continuity notices
 
 SessionStart lifecycle context may include a compact `Continuity notice` section when `memory.contextPolicy.mode` is `policy-only` or `selective`. The notice is plain-language and inspection-first: it may say that newer approved state exists, current workflow agreements are available, or continuity hints should be inspected.

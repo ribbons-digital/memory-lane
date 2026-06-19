@@ -21,7 +21,7 @@ The product goal is not another isolated chat-history search box. Memory Lane sh
 Design implications:
 
 - If the same project is open in multiple sessions or harnesses, important progress from one session should be available to the others without the user manually restating it.
-- Users should be able to ask natural-language continuity questions such as “resume building X” or “find the thread where we implemented X,” and Memory Lane should surface the relevant project memories, session summaries, checkpoints, PRs, and successor/superseded guidance without requiring the user to remember thread ids, branch names, or dates.
+- Users should be able to ask natural-language continuity questions such as “resume building X,” “where was X implemented,” or “what should we work on next,” and Memory Lane should guide inspection of available project memories, session summaries, PRs, and successor/superseded guidance without requiring the user to remember internal terms, branch names, or dates.
 - Durable personal preferences should be consistently available across projects and harnesses so workflows stay streamlined and predictable.
 - Project continuity should be an intentional index, not a transcript dump: store and surface compact, useful state rather than raw conversations by default.
 - The system should remain non-autonomous and low-noise: prefer bounded context injection, freshness checks, and implicit reminders to add/update memories over silent broad autosave.
@@ -506,6 +506,12 @@ Extension slices:
 3. **Complete — update / replace / supersede primitives:** added explicit CLI-first append-only revision operations for same-id updates, new successor replacements, and approved successor supersede relationships, with dry-run/confirmation safety and revision metadata. MCP mutation parity and retrieval filtering remain later work; continuity hints are covered by Slice 4.
 4. **Complete — continuity/status hints for stale and overlapping guidance:** dashboard/status/doctor/MCP status flag superseded-visible memories, multiple operating-agreement candidates, project/global preference overlap, and newer approved state without performing silent cleanup.
 5. **Complete — lifecycle bounded notices:** SessionStart lifecycle context routes through freshness/operating-agreement/continuity hint helpers to surface compact plain-language notices when newer approved progress, current operating agreements, or continuity hints exist, with project/global scope, context budget, and privacy boundaries tested.
+
+Completed prompt-continuity bridge:
+
+1. Added deterministic prompt-time continuity intents for natural prompts such as “resume building X,” “where was X implemented,” “what were we last working on,” and “what should we work on next.”
+2. Kept behavior inspection-first and policy-governed: `off` suppresses guidance, `policy-only` emits guidance without memory bodies, and `selective` can render guidance before normal budgeted recall.
+3. Did not add checkpoint capture, writes, cleanup, recall ranking changes, workstream/thread ids, new config flags, or LLM intent classification.
 
 Out of scope for Phase 16:
 
