@@ -175,7 +175,7 @@ export async function runClaudeHookCommand(command: ClaudeCommand, options: RunC
       }, options.env)
       const result = saveSessionEndCandidates(options.engine, candidates)
       log("ok", lifecycleCounts(result))
-      return lifecycleNoopOutput(result, true)
+      return lifecycleNoopOutput(result, debug)
     }
 
     const result = handlePostToolUse(options.engine, parsed.input, { adapter: "claude" })

@@ -321,6 +321,25 @@ test("session-end saves confirmed provider summary without raw transcript", asyn
   })
 })
 
+test("session-end no-durable provider result remains quiet without debug", async () => {
+  await withMockSummaryProvider("NO_DURABLE_MEMORY", async (baseUrl) => {
+    const { engine, configPath } = engineWithConfigInTemp()
+    fs.writeFileSync(configPath, JSON.stringify({
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-model", requireConfirmation: false } },
+    }), "utf8")
+
+    const output = await runClaudeHookCommand("session-end", {
+      engine,
+      env: {} as NodeJS.ProcessEnv,
+      configPath,
+      payloadText: sessionEndPayload({ confirmed: true }),
+    })
+
+    assert.equal(output, "{}")
+    assert.equal(engine.list({ all: true }).length, 0)
+  })
+})
+
 test("invalid payload returns debug no-op", async () => {
   const output = await runClaudeHookCommand("user-prompt-submit", {
     engine: engineInTemp(),

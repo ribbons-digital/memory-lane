@@ -444,6 +444,23 @@ test("stop session-summary intent saves provider summary without raw transcript"
   })
 })
 
+test("stop session-summary no-durable provider result remains quiet without debug", async () => {
+  await withMockSummaryServer("NO_DURABLE_MEMORY", async (baseUrl) => {
+    const { engine, configPath } = engineFixture()
+    enableSessionEndSummary(configPath, baseUrl, false)
+
+    const output = await runCodexHookCommand("stop", {
+      engine,
+      configPath,
+      env: {} as NodeJS.ProcessEnv,
+      payloadText: stopPayload({ last_user_message: "summarize this session to memory" }),
+    })
+
+    assert.equal(output, "{}")
+    assert.equal(engine.list({ all: true }).length, 0)
+  })
+})
+
 test("debug output emits concise systemMessage", async () => {
   const output = await runCodexHookCommand("stop", {
     engine: engineInTemp(),
