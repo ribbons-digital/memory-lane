@@ -115,6 +115,12 @@ memory-lane mcp                   # run the bundled MCP server over stdio
 
 Freshness status is read-only and memory-text-free. It reports approved visible-memory changes since a checkpoint timestamp so agents can notice possible newer continuity without injecting large memory bodies.
 
+### Checkpoint candidate review labels
+
+Checkpoint candidate labels: when `memory-lane review` or MCP `memory_review` marks a pending memory as a checkpoint candidate, treat it as review-first project progress. Ask the user to approve/reject using normal review controls; do not assume it affects continuity until approved.
+
+Labels may identify pending memories that look like releases, merges, verification milestones, docs syncs, major fixes, roadmap decisions, or explicit `project_checkpoint` records. They do not create memories, approve memories, deduplicate candidates, change recall ranking, or add thread/workstream lookup.
+
 ### Session-end summarization
 
 Use `memory-lane session-end --confirm` only when the user explicitly wants to generate a manual session summary and `memory.sessionEndSummary` is configured. It reads stdin JSON with a `messages` array, sends the compact transcript to the configured OpenAI-compatible chat model, and saves the result as a pending memory with `source: "session-summary"` and `kind: "session_summary"`. In pi, use `/memory session-summary` for the supported explicit session-summary path; it reads the current branch through pi's session manager, asks for interactive confirmation, and saves a pending `session_summary` with pi `session_end` provenance. Memory Lane does not automatically summarize pi sessions on `agent_end`, `session_shutdown`, or compaction. Codex CLI also supports explicit-intent automation through the real `Stop` hook: when the latest user prompt says something like "remember this session", "save a session summary", or "summarize this session to memory", `memory-lane codex stop` treats that as confirmation and saves a pending summary if the provider is configured. Current Codex CLI hooks do not include a supported `SessionEnd` event, so do not suggest adding `SessionEnd` to `.codex/hooks.json`.

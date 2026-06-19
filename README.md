@@ -429,6 +429,12 @@ memory-lane obsidian ...          Manage optional Obsidian mirror/import workflo
 
 All commands support `--json` for machine-readable output and `--project <path>` to set the project scope.
 
+### Checkpoint candidate review labels
+
+`memory-lane review`, `memory-lane review --json`, and MCP `memory_review` label pending memories that look like high-value project progress, such as merged PRs, releases, verification milestones, docs syncs, major fixes, or roadmap decisions. These labels are review-first: approve a checkpoint candidate only if it should become durable project continuity.
+
+The labels do not create memories, approve memories, clean up duplicates, change recall ranking, or perform exact thread/workstream lookup. They only make review decisions easier.
+
 ### Memory revision commands
 
 Use explicit revision commands when an approved memory needs correction or replacement. These commands are append-only: they write newer rows instead of silently deleting history.
