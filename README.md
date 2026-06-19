@@ -795,6 +795,8 @@ Modes:
 
 When `selective` mode injects memory bodies, the `Relevant Memory` block is grouped for readability. Current-project memories are separated from global preferences/workflow rules and other visible project memories, and each memory shows a plain-language type label such as `Project checkpoint`, `Workflow rule`, `Preference`, or `Project fact`. These labels explain applicability only; they do not change recall ranking or memory selection.
 
+For `SessionStart`, baseline memory selection is project-first when a project scope is available: current-project approved memories are selected before global memories, then rendered with the same readable grouping. This applies only to session-opening baseline context; prompt-time `UserPromptSubmit` recall remains relevance-based and bounded by the prompt context policy.
+
 ### Prompt-time continuity guidance
 
 When lifecycle prompt hooks receive natural continuity questions such as “resume building X,” “where was X implemented,” “what were we last working on,” or “what should we work on next,” Memory Lane may add a compact inspection-first guidance block. The guidance tells the agent to inspect project state with commands such as `memory-lane status --json`, `memory-lane dashboard`, and targeted `memory-lane recall "X"` when a topic is detected.
