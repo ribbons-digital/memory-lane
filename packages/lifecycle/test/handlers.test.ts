@@ -156,6 +156,22 @@ test("user-prompt ordinary prompt remains unchanged", async () => {
   assert.equal(result.contextDecision?.continuityIntent, undefined)
 })
 
+test("user-prompt selective labels current project memory", async () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "selective" } })
+  engine.save({ text: "This repo uses pnpm for package management", status: "approved", category: "project", scopeType: "project", kind: "project_fact" })
+
+  const result = await handleUserPromptSubmit(engine, {
+    cwd: project,
+    prompt: "pnpm package management",
+  })
+  const context = result.additionalContext ?? ""
+
+  assert.match(context, /### Current project/u)
+  assert.match(context, /\*\*Project fact\*\*/u)
+  assert.doesNotMatch(context, /### Project-specific memory/u)
+})
+
 test("session-start off policy injects no baseline context or continuity notice", () => {
   const project = tempDir()
   const engine = engineInTemp(project, { contextPolicy: { mode: "off" } })
@@ -207,6 +223,8 @@ test("session-start selective injects continuity notice before relevant memory",
   assert.match(context, /Continuity notice:/u)
   assert.match(context, /## Relevant Memory/u)
   assert.ok(context.indexOf("Continuity notice:") < context.indexOf("## Relevant Memory"))
+  assert.match(context, /### Current project/u)
+  assert.match(context, /\*\*Project fact\*\*/u)
   assert.match(context, /Baseline memory body/u)
   assert.doesNotMatch(context, /PRIVATE WORKFLOW AGREEMENT TEXT/u)
   assert.equal(result.contextDecision?.selected, 1)

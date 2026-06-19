@@ -34,6 +34,24 @@ export const CODEX_BASELINE_INJECTION_LIMITS: MemoryInjectionLimits = {
 
 export type MemoryContextEvent = "prompt" | "sessionStart"
 
+export interface MemoryBlockRenderOptions {
+  projectScope?: string
+}
+
+type MemoryContextGroupKey =
+  | "current-project"
+  | "project-specific"
+  | "global-preferences"
+  | "global-memory"
+  | "other-project"
+  | "other"
+
+interface MemoryContextGroup {
+  key: MemoryContextGroupKey
+  title: string
+  memories: MemoryRecord[]
+}
+
 export type ResolvedMemoryContextPolicy = Required<MemoryContextPolicyConfig> & {
   maxItems: { sessionStart: number; prompt: number }
   maxChars: { sessionStart: number; prompt: number }
@@ -331,9 +349,84 @@ export function renderContinuityIntentGuidance(intent: ContinuityIntent): string
   return lines.join("\n")
 }
 
-export function renderMemoryBlock(memories: MemoryRecord[]): string {
+const MEMORY_CONTEXT_GROUPS: Array<{ key: MemoryContextGroupKey; title: string }> = [
+  { key: "current-project", title: "Current project" },
+  { key: "project-specific", title: "Project-specific memory" },
+  { key: "global-preferences", title: "Global preferences and workflow rules" },
+  { key: "global-memory", title: "Global memory" },
+  { key: "other-project", title: "Other visible project memory" },
+  { key: "other", title: "Other visible memory" },
+]
+
+function titleCaseKind(value: string): string {
+  return value
+    .split("_")
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ")
+}
+
+function readableMemoryKind(memory: MemoryRecord): string {
+  switch (memory.kind) {
+    case "project_checkpoint":
+      return "Project checkpoint"
+    case "workflow_rule":
+      return "Workflow rule"
+    case "session_summary":
+      return "Session summary"
+    case "project_fact":
+      return "Project fact"
+    case "preference":
+      return "Preference"
+    default:
+      return memory.kind ? titleCaseKind(memory.kind) : titleCaseKind(memory.category)
+  }
+}
+
+function isGlobalPreferenceLike(memory: MemoryRecord): boolean {
+  return memory.scope.type === "global"
+    && (memory.category === "preference" || memory.kind === "workflow_rule" || memory.kind === "preference")
+}
+
+function groupKeyForMemory(memory: MemoryRecord, options?: MemoryBlockRenderOptions): MemoryContextGroupKey {
+  if (memory.scope.type === "project") {
+    if (!options?.projectScope) return "project-specific"
+    return memory.scope.key === options.projectScope ? "current-project" : "other-project"
+  }
+
+  if (memory.scope.type === "global") return isGlobalPreferenceLike(memory) ? "global-preferences" : "global-memory"
+  return "other"
+}
+
+function groupMemoriesForContext(memories: MemoryRecord[], options?: MemoryBlockRenderOptions): MemoryContextGroup[] {
+  const grouped = new Map<MemoryContextGroupKey, MemoryRecord[]>()
+  for (const memory of memories) {
+    const key = groupKeyForMemory(memory, options)
+    grouped.set(key, [...(grouped.get(key) ?? []), memory])
+  }
+
+  return MEMORY_CONTEXT_GROUPS
+    .map((group) => ({ ...group, memories: grouped.get(group.key) ?? [] }))
+    .filter((group) => group.memories.length > 0)
+}
+
+export function renderMemoryBlock(memories: MemoryRecord[], options?: MemoryBlockRenderOptions): string {
   if (!memories.length) return ""
-  return ["## Relevant Memory", "", ...memories.map((memory) => `- ${memory.text}`)].join("\n")
+
+  const lines = [
+    "## Relevant Memory",
+    "",
+    "Memory Lane selected these approved memories for this turn. They may include current-project memories and global preferences or workflow rules.",
+  ]
+
+  for (const group of groupMemoriesForContext(memories, options)) {
+    lines.push("", `### ${group.title}`, "")
+    for (const memory of group.memories) {
+      lines.push(`- **${readableMemoryKind(memory)}**`, `  ${memory.text}`)
+    }
+  }
+
+  return lines.join("\n")
 }
 
 export interface ContinuityNoticeResult extends ContinuityContextDecision {
@@ -476,7 +569,7 @@ export function renderContinuityNotice(input: ContinuityNoticeInput): Continuity
   }
 }
 
-export function renderMemoryContext(input: { event: MemoryContextEvent; memories: MemoryRecord[]; policy?: MemoryContextPolicyConfig }): string {
+export function renderMemoryContext(input: { event: MemoryContextEvent; memories: MemoryRecord[]; policy?: MemoryContextPolicyConfig; projectScope?: string }): string {
   const policy = resolveContextPolicy(input.policy)
   if (policy.mode === "off") return ""
 
@@ -496,9 +589,7 @@ export function renderMemoryContext(input: { event: MemoryContextEvent; memories
   if (!input.memories.length) return ""
   return [
     header,
-    "These are selected Memory Lane memories for this turn. They are not an authoritative full memory list.",
-    "",
-    ...input.memories.map((memory) => `- ${memory.text}`),
+    renderMemoryBlock(input.memories, { projectScope: input.projectScope }),
     footer,
   ].join("\n")
 }

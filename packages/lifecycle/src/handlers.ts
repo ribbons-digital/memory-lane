@@ -162,7 +162,8 @@ export async function handleUserPromptSubmit(
   const recallQuery = intent.detected && intent.topic ? intent.topic : input.prompt
   const recalled = await engine.recall(recallQuery)
   const selected = selectMemoriesForInjection(recallQuery, recalled, limitsFromContextPolicy("prompt", policy, options))
-  const memoryContext = renderMemoryContext({ event: "prompt", memories: selected, policy })
+  const projectScope = engine.getProjectScope()?.key
+  const memoryContext = renderMemoryContext({ event: "prompt", memories: selected, policy, projectScope })
   const rendered = composePromptContext({ guidance, memoryContext, policy })
   return createResult(rendered || undefined, contextDecision({
     event: "prompt",
@@ -215,7 +216,8 @@ export function handleSessionStart(
     targetChars: remainingChars,
     absoluteMaxChars: remainingChars,
   }))
-  const memoryContext = renderMemoryContext({ event: "sessionStart", memories: selected, policy })
+  const projectScope = engine.getProjectScope()?.key
+  const memoryContext = renderMemoryContext({ event: "sessionStart", memories: selected, policy, projectScope })
   const rendered = composeSessionStartContext({ noticeText: notice.text, memoryContext, policy })
   return createResult(rendered || undefined, contextDecision({
     event: "sessionStart",
