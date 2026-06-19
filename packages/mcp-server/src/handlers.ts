@@ -1,4 +1,4 @@
-import { groupReviewMemories, type MemoryEngine, type MemoryMutationResult, type MemoryRecord, type RecallResult, type SaveResult } from "@memory-lane/core"
+import { classifyCheckpointCandidate, groupReviewMemories, type CheckpointCandidateMetadata, type MemoryEngine, type MemoryMutationResult, type MemoryRecord, type RecallResult, type SaveResult } from "@memory-lane/core"
 import type {
   ListToolInput, MemoryIdToolInput, RecallToolInput, ReviewFilters, ReviewToolInput, SaveToolInput, StatusToolInput, SuggestToolInput, ToolEnvelope,
 } from "./types.js"
@@ -137,12 +137,19 @@ function filterReviewMemories(memories: MemoryRecord[], filters: ReviewFilters):
   })
 }
 
+type ReviewMemoryOutput = MemoryRecord & { checkpointCandidate?: CheckpointCandidateMetadata }
+
+function withCheckpointCandidate(memory: MemoryRecord): ReviewMemoryOutput {
+  const checkpointCandidate = classifyCheckpointCandidate(memory)
+  return checkpointCandidate ? { ...memory, checkpointCandidate } : memory
+}
+
 export async function handleMemoryReview(engine: MemoryEngine, input: ReviewToolInput) {
   try {
     applyProjectPath(engine, input.projectPath)
     const filters = activeReviewFilters(input)
     const memories = filterReviewMemories(engine.reviewPending(), filters)
-    return jsonContent(envelope(engine, { memories, groups: groupReviewMemories(memories), notes: scopeNotes(engine) }, memories.length, filters))
+    return jsonContent(envelope(engine, { memories: memories.map(withCheckpointCandidate), groups: groupReviewMemories(memories), notes: scopeNotes(engine) }, memories.length, filters))
   } catch (error) {
     return jsonContent(errorEnvelope(error))
   }

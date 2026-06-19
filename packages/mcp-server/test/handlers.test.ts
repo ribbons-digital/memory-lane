@@ -123,6 +123,23 @@ test("memory_review returns pending memories", async () => {
   assert.equal(result.data.memories[0].status, "pending")
 })
 
+test("memory_review includes checkpoint candidate metadata", async () => {
+  const engine = engineInTemp()
+  engine.suggest("Merged PR #13 adding prompt continuity intents.", "project", "project")
+  engine.suggest("Remember to check release notes later.", "project", "project")
+
+  const result = parseToolResult(await handleMemoryReview(engine, {}))
+  const merge = result.data.memories.find((memory: any) => memory.text === "Merged PR #13 adding prompt continuity intents.")
+  const ambiguous = result.data.memories.find((memory: any) => memory.text === "Remember to check release notes later.")
+
+  assert.deepEqual(merge.checkpointCandidate, {
+    detected: true,
+    kind: "merge",
+    reason: "matched merged pull request phrase",
+  })
+  assert.equal(ambiguous.checkpointCandidate, undefined)
+})
+
 test("memory_review includes grouped project source kind and provenance metadata", async () => {
   const projectA = tempDir()
   fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "review-project-a" }))
