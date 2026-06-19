@@ -204,6 +204,8 @@ memory-lane codex post-tool-use
 
 Automatic context injection is controlled by `memory.contextPolicy`: `selective` injects bounded selected approved memories inside a guarded `<memory-context>` block, `policy-only` injects guidance to use Memory Lane tools without memory bodies, and `off` disables automatic context injection while preserving explicit CLI/MCP tools and save hooks.
 
+Prompt-time continuity guidance: if the user asks natural questions like “resume building X,” “where was X implemented,” “where are we,” “what were we last working on,” or “what should we work on next,” Memory Lane may inject inspection-first guidance. Treat it as a cue to inspect status/dashboard/recall/roadmap before answering from chat context alone. It is not a memory body and does not mean Memory Lane performed cleanup or saved new progress.
+
 ### Lifecycle continuity notices
 
 At SessionStart, Memory Lane may inject a compact `Continuity notice` when context policy is `policy-only` or `selective`. Treat it as a prompt to inspect authoritative surfaces such as `memory-lane dashboard`, `memory-lane agreements`, or `memory-lane status --json --since <timestamp>`; it is not a memory body and does not mean cleanup or recall filtering happened.

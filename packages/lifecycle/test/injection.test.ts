@@ -8,6 +8,8 @@ import {
   renderMemoryBlock,
   renderMemoryContext,
   renderContinuityNotice,
+  detectContinuityIntent,
+  renderContinuityIntentGuidance,
   CODEX_MEMORY_INJECTION_LIMITS,
 } from "../src/injection.ts"
 
@@ -105,6 +107,110 @@ function operatingAgreements(overrides: Partial<OperatingAgreementSummary> = {})
     ...overrides,
   }
 }
+
+test("detects resume/build continuity intents with topic", () => {
+  assert.deepEqual(detectContinuityIntent("Let's resume building prompt continuity intents"), {
+    detected: true,
+    family: "resume",
+    topic: "prompt continuity intents",
+  })
+  assert.deepEqual(detectContinuityIntent("continue working on lifecycle notices"), {
+    detected: true,
+    family: "resume",
+    topic: "lifecycle notices",
+  })
+  assert.deepEqual(detectContinuityIntent("Pick up the dashboard slice again!"), {
+    detected: true,
+    family: "resume",
+    topic: "dashboard slice",
+  })
+})
+
+test("detects prior-work lookup continuity intents with topic", () => {
+  assert.deepEqual(detectContinuityIntent("Where was lifecycle continuity implemented?"), {
+    detected: true,
+    family: "lookup",
+    topic: "lifecycle continuity",
+  })
+  assert.deepEqual(detectContinuityIntent("Find the session where prompt intents happened"), {
+    detected: true,
+    family: "lookup",
+    topic: "prompt intents",
+  })
+  assert.deepEqual(detectContinuityIntent("Find the thread where we built prompt continuity"), {
+    detected: true,
+    family: "lookup",
+    topic: "prompt continuity",
+  })
+})
+
+test("detects project-position and next-work continuity intents", () => {
+  assert.deepEqual(detectContinuityIntent("Where are we in the project?"), {
+    detected: true,
+    family: "project-position",
+  })
+  assert.deepEqual(detectContinuityIntent("What's the latest progress?"), {
+    detected: true,
+    family: "project-position",
+  })
+  assert.deepEqual(detectContinuityIntent("What should we work on next?"), {
+    detected: true,
+    family: "next-work",
+  })
+  assert.deepEqual(detectContinuityIntent("What's the next slice?"), {
+    detected: true,
+    family: "next-work",
+  })
+})
+
+test("does not detect ordinary prompts as continuity intents", () => {
+  assert.deepEqual(detectContinuityIntent("How do I run tests?"), { detected: false })
+  assert.deepEqual(detectContinuityIntent("Use pnpm for installs"), { detected: false })
+})
+
+test("renders text-free continuity intent guidance", () => {
+  const guidance = renderContinuityIntentGuidance({
+    detected: true,
+    family: "lookup",
+    topic: "lifecycle continuity",
+  })
+
+  assert.match(guidance, /Memory Lane continuity guidance/u)
+  assert.match(guidance, /prior or ongoing project work/u)
+  assert.match(guidance, /memory-lane status --json/u)
+  assert.match(guidance, /memory-lane dashboard/u)
+  assert.match(guidance, /memory-lane recall 'lifecycle continuity'/u)
+  assert.doesNotMatch(guidance, /operating agreement/u)
+  assert.doesNotMatch(guidance, /continuity hint/u)
+  assert.doesNotMatch(guidance, /memory_[a-z0-9]+|raw transcript|tool output/iu)
+})
+
+test("shell-quotes continuity recall topics with shell metacharacters", () => {
+  const topic = 'release $(touch /tmp/pwn) `whoami` \\tmp\\pwn "quoted" user\'s slice'
+  const guidance = renderContinuityIntentGuidance({
+    detected: true,
+    family: "lookup",
+    topic,
+  })
+  const expectedRecall = "- memory-lane recall 'release $(touch /tmp/pwn) `whoami` \\tmp\\pwn \"quoted\" user'\\''s slice'"
+
+  assert.ok(guidance.split("\n").includes(expectedRecall), guidance)
+  assert.doesNotMatch(guidance, /memory-lane recall "/u)
+  assert.doesNotMatch(guidance, /memory-lane recall ".*\$\(/u)
+  assert.doesNotMatch(guidance, /memory-lane recall ".*`whoami`/u)
+})
+
+test("renders broad continuity guidance without topic recall", () => {
+  const guidance = renderContinuityIntentGuidance({
+    detected: true,
+    family: "next-work",
+  })
+
+  assert.match(guidance, /memory-lane status --json/u)
+  assert.match(guidance, /memory-lane dashboard/u)
+  assert.match(guidance, /review current plan, roadmap, and review queue/u)
+  assert.doesNotMatch(guidance, /memory-lane recall/u)
+})
 
 test("skips generic prompts", () => {
   for (const prompt of ["", "   ", "ok", "okay", "yes", "continue", "sounds good", "thank you"]) {

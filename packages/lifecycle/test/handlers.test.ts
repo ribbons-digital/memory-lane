@@ -68,6 +68,94 @@ test("user-prompt policy-only returns guidance without recalling memory bodies",
   })
 })
 
+test("user-prompt policy-only emits continuity guidance without memory bodies", async () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "policy-only" } })
+  engine.save({ text: "PRIVATE CONTINUITY BODY", status: "approved", category: "project", scopeType: "project" })
+
+  const result = await handleUserPromptSubmit(engine, {
+    cwd: project,
+    prompt: "Where are we in the project?",
+  })
+
+  assert.match(result.additionalContext ?? "", /<memory-context mode="policy-only" event="prompt">/u)
+  assert.match(result.additionalContext ?? "", /Memory Lane continuity guidance/u)
+  assert.match(result.additionalContext ?? "", /memory-lane status --json/u)
+  assert.match(result.additionalContext ?? "", /memory-lane dashboard/u)
+  assert.match(result.additionalContext ?? "", /Use Memory Lane recall\/list tools/u)
+  assert.doesNotMatch(result.additionalContext ?? "", /PRIVATE CONTINUITY BODY/u)
+  assert.deepEqual(result.contextDecision?.continuityIntent, {
+    detected: true,
+    family: "project-position",
+    guidanceInjected: true,
+  })
+})
+
+test("user-prompt off policy suppresses continuity guidance", async () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "off" } })
+
+  const result = await handleUserPromptSubmit(engine, {
+    cwd: project,
+    prompt: "What should we work on next?",
+  })
+
+  assert.equal(result.additionalContext, undefined)
+  assert.equal(result.contextDecision?.continuityIntent, undefined)
+  assert.deepEqual(result.contextDecision?.omittedReasons, ["off"])
+})
+
+test("user-prompt selective emits continuity guidance before relevant memory", async () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "selective" } })
+  engine.save({
+    text: "Prompt continuity intents were implemented in the lifecycle package.",
+    status: "approved",
+    category: "project",
+    scopeType: "project",
+  })
+  const originalRecall = engine.recall.bind(engine)
+  let recallQuery: string | undefined
+  engine.recall = async (query, options) => {
+    recallQuery = query
+    return originalRecall(query, options)
+  }
+
+  const result = await handleUserPromptSubmit(engine, {
+    cwd: project,
+    prompt: "Where was prompt continuity intents implemented?",
+  })
+  const context = result.additionalContext ?? ""
+
+  assert.equal(recallQuery, "prompt continuity intents")
+  assert.match(context, /<memory-context mode="selective" event="prompt">/u)
+  assert.match(context, /Memory Lane continuity guidance/u)
+  assert.match(context, /memory-lane recall 'prompt continuity intents'/u)
+  assert.match(context, /## Relevant Memory/u)
+  assert.match(context, /Prompt continuity intents were implemented/u)
+  assert.ok(context.indexOf("Memory Lane continuity guidance") < context.indexOf("## Relevant Memory"))
+  assert.deepEqual(result.contextDecision?.continuityIntent, {
+    detected: true,
+    family: "lookup",
+    topic: "prompt continuity intents",
+    guidanceInjected: true,
+  })
+})
+
+test("user-prompt ordinary prompt remains unchanged", async () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "selective" } })
+  engine.save({ text: "This repo uses pnpm", status: "approved", category: "project", scopeType: "project" })
+
+  const result = await handleUserPromptSubmit(engine, {
+    cwd: project,
+    prompt: "How do I run tests in this repo?",
+  })
+
+  assert.doesNotMatch(result.additionalContext ?? "", /Memory Lane continuity guidance/u)
+  assert.equal(result.contextDecision?.continuityIntent, undefined)
+})
+
 test("session-start off policy injects no baseline context or continuity notice", () => {
   const project = tempDir()
   const engine = engineInTemp(project, { contextPolicy: { mode: "off" } })

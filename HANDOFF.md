@@ -2,6 +2,7 @@
 
 ## Recent changes (since this handoff was last updated)
 
+- Prompt-time continuity intents complete: natural prompts like “resume building X,” “where was X implemented,” “what were we last working on,” and “what should we work on next” now trigger bounded Memory Lane inspection guidance under existing context policy. Topic-specific prompts can use targeted budgeted recall. No checkpoint capture, memory writes, cleanup, recall ranking changes, workstream/thread ids, new config flags, or LLM classifier were added. Next recommended item remains Phase 17 review-first progress/checkpoint capture.
 - Phase 16 Slice 5 complete: added bounded SessionStart continuity notices governed by existing contextPolicy modes. Notices are plain-language, inspection-first, share the SessionStart budget, and report text-free metadata in contextDecision.continuity. No UserPromptSubmit notices, new config flags, lifecycle writes, recall filtering, cleanup, workstream ids, memory text/ids in notice text, or MCP mutation tools were added. Next recommended continuity item: Phase 17 review-first progress/checkpoint capture.
 - Phase 16 Slice 4 complete: added read-only continuity hints across core, CLI dashboard/status/doctor, and MCP `memory_status`. Hints are text-free metadata for superseded-visible memories, operating-agreement overlaps, project/global overlaps, and newer approved state. No lifecycle notices, recall filtering, automatic cleanup, workstream ids, or MCP mutation tools were added. Next recommended slice: Phase 16 Slice 5 lifecycle bounded notices.
 - Phase 16 Slice 3 memory revision primitives are implemented: CLI `update`, `replace`, and `supersede` provide append-only same-id updates and explicit successor relationships with dry-run/`--yes` safety and revision metadata. Superseded memories remain approved and are not hidden from recall/context/agreements yet. No MCP mutation tools, lifecycle injection changes, history command, compaction changes, or automatic cleanup were added. The continuity/status hint follow-up is now complete in Slice 4.
@@ -44,7 +45,7 @@
 
 ## Current state
 
-Current `main` is tagged at `v0.2.9`. A follow-up docs-only change is in progress to center future roadmap/design work around the newly approved continuity north star (`344a3af2`).
+Current `main` is ahead of the last documented `v0.2.9` release tag; use `git describe --tags --always` for the exact local state.
 
 Historical JSONL hardening is complete and committed:
 - `d0c7620 fix(core): normalize historical memory records`
@@ -373,15 +374,14 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Commit this docs-only roadmap reorder after verification.
-2. Next Phase 15 follow-up after this dashboard PR should be review controls for pending session summaries/continuity candidates by source/kind/provenance, plus safe bulk actions with dry-run/confirmation semantics.
-3. After Phase 15 controls are good enough, implement Phase 16 read-only freshness/status detection so a session can notice newer approved project progress from another session/harness without injecting large memory bodies or saving anything.
-4. Then Phase 17 should add review-first progress/checkpoint capture for releases, merges, verification, and roadmap decisions. Only after those foundations should Phase 18 preference layering and Phase 19 learning enhancements begin.
-5. Keep future learning enhancements harness-neutral. Core/lifecycle should own selection, token budgeting, correction/failure/procedure candidate extraction, and consolidation proposals; adapters for pi, Codex, Claude Code, Cursor, Hermes, etc. should only supply bounded lifecycle evidence and render shared outputs.
-6. Do not add automatic pi `agent_end`, `session_shutdown`, or compaction summarization without a separate supported-event design and explicit approval.
-7. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
-8. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
-9. Only schedule hardening backlog items or deferred improvements from `ROADMAP.md` after explicit user approval or clear real-world user value.
+1. Implement Phase 17 review-first progress/checkpoint capture for releases, merges, verification, and roadmap decisions.
+2. Keep Phase 17 review-governed: suggest compact checkpoint candidates for approval rather than silently changing approved memory state.
+3. Only after Phase 17 foundations should Phase 18 preference layering and Phase 19 learning enhancements begin.
+4. Keep future learning enhancements harness-neutral. Core/lifecycle should own selection, token budgeting, correction/failure/procedure candidate extraction, and consolidation proposals; adapters for pi, Codex, Claude Code, Cursor, Hermes, etc. should only supply bounded lifecycle evidence and render shared outputs.
+5. Do not add automatic pi `agent_end`, `session_shutdown`, or compaction summarization without a separate supported-event design and explicit approval.
+6. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
+7. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
+8. Only schedule hardening backlog items or deferred improvements from `ROADMAP.md` after explicit user approval or clear real-world user value.
 
 ## Suggested skills for future agents
 

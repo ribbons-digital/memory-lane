@@ -247,6 +247,90 @@ export function renderMemoryManagementListGuidance(): string {
   ].join("\n")
 }
 
+export type ContinuityIntentFamily = "resume" | "lookup" | "project-position" | "next-work"
+
+export type ContinuityIntent =
+  | { detected: false }
+  | { detected: true; family: ContinuityIntentFamily; topic?: string }
+
+function cleanContinuityTopic(topic: string | undefined): string | undefined {
+  const cleaned = (topic ?? "")
+    .replace(/[?.!]+$/u, "")
+    .replace(/^["'`“”‘’]+|["'`“”‘’]+$/gu, "")
+    .replace(/^the\s+/iu, "")
+    .trim()
+    .replace(/\s+/gu, " ")
+  return cleaned.length > 0 ? cleaned : undefined
+}
+
+export function detectContinuityIntent(prompt: string): ContinuityIntent {
+  const input = prompt.trim()
+  const normalized = normalizedPrompt(prompt)
+  if (!normalized) return { detected: false }
+
+  const resumePatterns = [
+    /^(?:let'?s\s+)?resume\s+(?:building|working\s+on|work\s+on)\s+(.+?)\s*$/iu,
+    /^continue\s+(?:building|working\s+on|work\s+on)\s+(.+?)\s*$/iu,
+    /^pick\s+up\s+(.+?)(?:\s+again)?[?.!]*\s*$/iu,
+  ]
+  for (const pattern of resumePatterns) {
+    const match = input.match(pattern)
+    const topic = cleanContinuityTopic(match?.[1])
+    if (topic) return { detected: true, family: "resume", topic }
+  }
+
+  const lookupPatterns = [
+    /^where\s+was\s+(.+?)\s+implemented\??$/iu,
+    /^when\s+did\s+we\s+implement\s+(.+?)\??$/iu,
+    /^where\s+did\s+we\s+(?:build|implement)\s+(.+?)\??$/iu,
+    /^find\s+the\s+(?:thread|session)\s+where\s+we\s+(?:built|implemented)\s+(.+?)\??$/iu,
+    /^find\s+the\s+(?:thread|session)\s+where\s+(.+?)\s+(?:was\s+built|was\s+implemented|happened)\??$/iu,
+  ]
+  for (const pattern of lookupPatterns) {
+    const match = input.match(pattern)
+    const topic = cleanContinuityTopic(match?.[1])
+    if (topic) return { detected: true, family: "lookup", topic }
+  }
+
+  if (/\bwhere\s+are\s+we\s+(?:in|on)\s+(?:the\s+)?project\b/iu.test(normalized)
+    || /\bwhat(?:\s+s|\s+is)\s+the\s+latest\s+progress\b/iu.test(normalized)
+    || /\bwhat\s+were\s+we\s+last\s+working\s+on\b/iu.test(normalized)) {
+    return { detected: true, family: "project-position" }
+  }
+
+  if (/\bwhat\s+should\s+we\s+work\s+on\s+next\b/iu.test(normalized)
+    || /\bwhat(?:\s+s|\s+is)\s+next\b/iu.test(normalized)
+    || /\bwhat(?:\s+s|\s+is)\s+the\s+next\s+slice\b/iu.test(normalized)) {
+    return { detected: true, family: "next-work" }
+  }
+
+  return { detected: false }
+}
+
+function shellQuoteRecallTopic(topic: string): string {
+  return `'${topic.replace(/'/gu, `'\\''`)}'`
+}
+
+export function renderContinuityIntentGuidance(intent: ContinuityIntent): string {
+  if (!intent.detected) return ""
+
+  const lines = [
+    "## Memory Lane continuity guidance",
+    "",
+    "This prompt appears to ask about prior or ongoing project work.",
+    "Before answering from chat context alone, inspect Memory Lane project state and current project workflow when available.",
+    "",
+    "Suggested inspection:",
+    "- memory-lane status --json",
+    "- memory-lane dashboard",
+  ]
+
+  if (intent.topic) lines.push(`- memory-lane recall ${shellQuoteRecallTopic(intent.topic)}`)
+  if (intent.family === "project-position" || intent.family === "next-work") lines.push("- review current plan, roadmap, and review queue when present")
+
+  return lines.join("\n")
+}
+
 export function renderMemoryBlock(memories: MemoryRecord[]): string {
   if (!memories.length) return ""
   return ["## Relevant Memory", "", ...memories.map((memory) => `- ${memory.text}`)].join("\n")
