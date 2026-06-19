@@ -638,7 +638,7 @@ describe("CLI integration", () => {
     }
     const legacyPollution = {
       id: "oldmeta2",
-      text: "Task: You are a delegated subagent running from a fork of the parent session. Treat inherited conversation as reference-only context.",
+      text: "Task: You are a delegated subagent running from a fork of the parent session. Treat inherited conversation as reference-only context. Merged PR #13 after prompt-continuity work.",
       category: "project",
       scope: { type: "global" },
       status: "pending",
@@ -658,6 +658,7 @@ describe("CLI integration", () => {
     assert.equal(typeof payload.meta.projectScope, "string")
     assert.notEqual(payload.meta.projectScope, "none")
     assert.equal(payload.data.memories[0].id, "oldmeta2")
+    assert.equal(payload.data.memories[0].checkpointCandidate, undefined)
   })
 
   it("review --suspect-meta JSON includes historical records missing newer source and scope fields", () => {
@@ -784,6 +785,50 @@ describe("CLI integration", () => {
     assert.match(output, /Preview:/u)
     assert.match(output, /memory-lane delete approvedmeta3/u)
     assert.doesNotMatch(output, /This trailing sentence should be omitted/u)
+  })
+
+  it("review labels checkpoint candidates in human output", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+    run(["suggest", "Merged PR #13 adding prompt continuity intents.", "--category", "project"], env)
+    run(["suggest", "Remember to check the release notes later.", "--category", "project"], env)
+
+    const output = run(["review"], env)
+
+    assert.match(output, /Checkpoint candidate: merge/u)
+    assert.match(output, /matched merged pull request phrase/u)
+    assert.match(output, /approve if this should become durable project continuity/u)
+    assert.equal(output.match(/Checkpoint candidate:/gu)?.length, 1)
+    const ambiguousLines = output.split(/\r?\n/u)
+    const ambiguousPreviewIndex = ambiguousLines.findIndex((line) => line.includes("Remember to check the release notes later"))
+    assert.notEqual(ambiguousPreviewIndex, -1)
+    const ambiguousBlock = ambiguousLines.slice(ambiguousPreviewIndex, ambiguousPreviewIndex + 3).join("\n")
+    assert.doesNotMatch(ambiguousBlock, /Checkpoint candidate/u)
+  })
+
+  it("review --json includes structured checkpoint metadata", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    run(["suggest", "Released v0.2.9.", "--category", "project"], env)
+    run(["suggest", "Remember to test release command later.", "--category", "project"], env)
+
+    const payload = JSON.parse(run(["review", "--json"], env))
+    const release = payload.data.memories.find((memory: any) => memory.text === "Released v0.2.9.")
+    const ambiguous = payload.data.memories.find((memory: any) => memory.text === "Remember to test release command later.")
+
+    assert.deepEqual(release.checkpointCandidate, {
+      detected: true,
+      kind: "release",
+      reason: "matched release version phrase",
+    })
+    assert.equal(ambiguous.checkpointCandidate, undefined)
   })
 
   it("review groups pending memories by project source kind and provenance", () => {

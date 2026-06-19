@@ -2,7 +2,7 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { buildContinuityHints, groupReviewMemories, isMetaTaskPromptText, revisionLabel, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type OperatingAgreementList, type OperatingAgreementSummary, type UpdatePreview, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
+import { buildContinuityHints, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, type CheckpointCandidateMetadata, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type OperatingAgreementList, type OperatingAgreementSummary, type UpdatePreview, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
@@ -236,6 +236,22 @@ function reviewPreview(memory: MemoryRecord): string {
   return memory.kind === "session_summary" ? sessionSummaryPreview(memory.text) : compactPreview(memory.text)
 }
 
+type ReviewMemoryOutput = MemoryRecord & { checkpointCandidate?: CheckpointCandidateMetadata }
+
+function withCheckpointCandidate(memory: MemoryRecord): ReviewMemoryOutput {
+  const checkpointCandidate = classifyCheckpointCandidate(memory)
+  return checkpointCandidate ? { ...memory, checkpointCandidate } : memory
+}
+
+function checkpointCandidateLines(memory: MemoryRecord): string[] {
+  const checkpoint = classifyCheckpointCandidate(memory)
+  if (!checkpoint) return []
+  return [
+    `    Checkpoint candidate: ${checkpoint.kind} — ${checkpoint.reason}`,
+    "    Review: approve if this should become durable project continuity.",
+  ]
+}
+
 function reviewStatusLine(memory: MemoryRecord): string {
   return `[${memory.id}] ${memory.status} · ${provenanceLabel(memory)} · ${memory.scope.type}/${memory.category}/${memory.kind ?? "misc"}${revisionSuffix(memory)}`
 }
@@ -252,7 +268,8 @@ function filterSummary(extraMeta?: Record<string, unknown>): string | undefined 
 export function formatReviewMemories(memories: MemoryRecord[], json: boolean, extraMeta?: Record<string, unknown>): string {
   const groups = groupReviewMemories(memories)
   if (json) {
-    return JSON.stringify({ ok: true, data: { memories, groups }, meta: meta({ count: memories.length, ...extraMeta }) }, null, 2)
+    const outputMemories = extraMeta?.suspectMeta ? memories : memories.map(withCheckpointCandidate)
+    return JSON.stringify({ ok: true, data: { memories: outputMemories, groups }, meta: meta({ count: memories.length, ...extraMeta }) }, null, 2)
   }
   if (!memories.length) return extraMeta?.suspectMeta ? "No likely operational prompt pollution found." : "No pending memories found."
 
@@ -310,6 +327,7 @@ export function formatReviewMemories(memories: MemoryRecord[], json: boolean, ex
       lines.push(
         `  ${figures.bullet} ${reviewStatusLine(memory)}`,
         `    ${reviewPreview(memory)}  (saved ${formatDate(memory.createdAt)})`,
+        ...checkpointCandidateLines(memory),
         `    Suggested: ${reviewAction(memory)}`,
       )
     }
