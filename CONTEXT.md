@@ -63,6 +63,10 @@ _Avoid_: Thread id, branch id, transcript, subagent task log
 A compact, plain-language lifecycle signal that Memory Lane has newer approved state, current operating agreements, or continuity hints worth inspecting. It is guidance inside lifecycle context, not a memory body, transcript summary, or cleanup recommendation.
 _Avoid_: Relevant memory, session summary, automatic handoff, cleanup recommendation
 
+**Continuity intent**:
+A natural-language user prompt that asks an agent to resume prior work, locate where or when prior work happened, understand current project progress, or decide the next work item. It triggers bounded Memory Lane inspection guidance and, when topic-specific, targeted recall/search. It is not a lifecycle continuity notice, session summary, or automatic handoff.
+_Avoid_: Continuity notice, session summary, automatic handoff, lifecycle event
+
 **Obsidian mirror**:
 An optional one-way Markdown projection of Memory Lane's JSONL memory records into an Obsidian vault. The JSONL memory store remains the source of truth; edits to mirrored Markdown are not imported by the mirror.
 _Avoid_: Obsidian-backed storage, import, sync
