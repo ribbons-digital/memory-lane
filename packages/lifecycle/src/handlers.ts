@@ -210,13 +210,14 @@ export function handleSessionStart(
     ...operatingAgreements.relatedCandidates.map((agreement) => agreement.id),
   ])
   const baselineCandidates = approved.filter((memory) => !operatingAgreementIds.has(memory.id))
-  const selected = selectBaselineMemories(baselineCandidates, limitsFromContextPolicy("sessionStart", policy, {
+  const projectScope = engine.getProjectScope()?.key
+  const selectionLimits = limitsFromContextPolicy("sessionStart", policy, {
     ...options,
     hardMaxChars: remainingChars,
     targetChars: remainingChars,
     absoluteMaxChars: remainingChars,
-  }))
-  const projectScope = engine.getProjectScope()?.key
+  })
+  const selected = selectBaselineMemories(baselineCandidates, { ...selectionLimits, projectScope })
   const memoryContext = renderMemoryContext({ event: "sessionStart", memories: selected, policy, projectScope })
   const rendered = composeSessionStartContext({ noticeText: notice.text, memoryContext, policy })
   return createResult(rendered || undefined, contextDecision({

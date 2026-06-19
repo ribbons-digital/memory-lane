@@ -28,6 +28,13 @@ function saveWorkflowAgreement(engine: MemoryEngine): void {
   })
 }
 
+function waitForNextMillisecond(): void {
+  const started = Date.now()
+  while (Date.now() === started) {
+    // Wait for storage timestamps to differ in tests that assert recency behavior.
+  }
+}
+
 test("user-prompt list-memory intent returns authoritative list guidance instead of filtered relevant memory", async () => {
   const project = tempDir()
   const engine = engineInTemp(project)
@@ -231,6 +238,26 @@ test("session-start selective injects continuity notice before relevant memory",
   assert.equal(result.contextDecision?.omitted, 0)
   assert.deepEqual(result.contextDecision?.omittedReasons, [])
   assert.equal(result.contextDecision?.continuity?.injected, true)
+})
+
+test("session-start selects current project memory before newer global memory", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "selective", maxItems: { sessionStart: 1, prompt: 6 } } })
+  engine.save({ text: "Current project checkpoint should win baseline selection", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint" })
+  waitForNextMillisecond()
+  engine.save({ text: "Global preference newest for all projects", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+
+  const result = handleSessionStart(engine, { cwd: project }, {
+    maxItems: 1,
+    targetChars: 500,
+    hardMaxChars: 1000,
+    absoluteMaxChars: 1000,
+  })
+  const context = result.additionalContext ?? ""
+
+  assert.match(context, /Current project checkpoint should win baseline selection/u)
+  assert.doesNotMatch(context, /Global preference newest for all projects/u)
+  assert.match(context, /### Current project/u)
 })
 
 test("session-start continuity notice reports newer approved state from since", () => {
