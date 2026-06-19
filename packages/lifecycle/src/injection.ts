@@ -307,8 +307,8 @@ export function detectContinuityIntent(prompt: string): ContinuityIntent {
   return { detected: false }
 }
 
-function escapedRecallTopic(topic: string): string {
-  return topic.replace(/"/gu, "\\\"")
+function shellQuoteRecallTopic(topic: string): string {
+  return `'${topic.replace(/'/gu, `'\\''`)}'`
 }
 
 export function renderContinuityIntentGuidance(intent: ContinuityIntent): string {
@@ -325,7 +325,7 @@ export function renderContinuityIntentGuidance(intent: ContinuityIntent): string
     "- memory-lane dashboard",
   ]
 
-  if (intent.topic) lines.push(`- memory-lane recall "${escapedRecallTopic(intent.topic)}"`)
+  if (intent.topic) lines.push(`- memory-lane recall ${shellQuoteRecallTopic(intent.topic)}`)
   if (intent.family === "project-position" || intent.family === "next-work") lines.push("- review current plan, roadmap, and review queue when present")
 
   return lines.join("\n")

@@ -179,10 +179,25 @@ test("renders text-free continuity intent guidance", () => {
   assert.match(guidance, /prior or ongoing project work/u)
   assert.match(guidance, /memory-lane status --json/u)
   assert.match(guidance, /memory-lane dashboard/u)
-  assert.match(guidance, /memory-lane recall "lifecycle continuity"/u)
+  assert.match(guidance, /memory-lane recall 'lifecycle continuity'/u)
   assert.doesNotMatch(guidance, /operating agreement/u)
   assert.doesNotMatch(guidance, /continuity hint/u)
   assert.doesNotMatch(guidance, /memory_[a-z0-9]+|raw transcript|tool output/iu)
+})
+
+test("shell-quotes continuity recall topics with shell metacharacters", () => {
+  const topic = 'release $(touch /tmp/pwn) `whoami` \\tmp\\pwn "quoted" user\'s slice'
+  const guidance = renderContinuityIntentGuidance({
+    detected: true,
+    family: "lookup",
+    topic,
+  })
+  const expectedRecall = "- memory-lane recall 'release $(touch /tmp/pwn) `whoami` \\tmp\\pwn \"quoted\" user'\\''s slice'"
+
+  assert.ok(guidance.split("\n").includes(expectedRecall), guidance)
+  assert.doesNotMatch(guidance, /memory-lane recall "/u)
+  assert.doesNotMatch(guidance, /memory-lane recall ".*\$\(/u)
+  assert.doesNotMatch(guidance, /memory-lane recall ".*`whoami`/u)
 })
 
 test("renders broad continuity guidance without topic recall", () => {
