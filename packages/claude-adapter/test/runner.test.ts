@@ -48,7 +48,7 @@ function userPromptPayload(prompt = "How do tests run?"): string {
   })
 }
 
-function stopPayload(): string {
+function stopPayload(fields: Record<string, unknown> = {}): string {
   return JSON.stringify({
     hook_event_name: "Stop",
     session_id: "session-1",
@@ -57,10 +57,14 @@ function stopPayload(): string {
     permission_mode: "default",
     last_user_message: "remember that this repo uses pnpm",
     last_assistant_message: "I'll remember that this repo uses pnpm.",
+    ...fields,
   })
 }
 
-function postToolUsePayload(toolResponse: unknown = { exit_code: 0, stdout: "pass" }): string {
+function postToolUsePayload(
+  toolResponse: unknown = { exit_code: 0, stdout: "pass" },
+  toolInput: unknown = { command: "pnpm test" },
+): string {
   return JSON.stringify({
     hook_event_name: "PostToolUse",
     session_id: "session-1",
@@ -68,7 +72,7 @@ function postToolUsePayload(toolResponse: unknown = { exit_code: 0, stdout: "pas
     transcript_path: null,
     permission_mode: "default",
     tool_name: "Bash",
-    tool_input: { command: "pnpm test" },
+    tool_input: toolInput,
     tool_response: toolResponse,
   })
 }
@@ -163,6 +167,25 @@ test("stop saves with claude provenance", async () => {
   assert.equal(saved[0].provenance?.lifecycleEvent, "turn_stop")
 })
 
+test("stop shows pending review notice without debug when pending memory is saved", async () => {
+  const engine = engineInTemp()
+
+  const output = await runClaudeHookCommand("stop", {
+    engine,
+    env: {} as NodeJS.ProcessEnv,
+    payloadText: stopPayload({
+      last_user_message: "I prefer review-first memory suggestions in Claude hooks",
+      last_assistant_message: "Understood.",
+    }),
+  })
+
+  const parsed = JSON.parse(output)
+  assert.match(parsed.systemMessage, /Memory Lane: suggested 1 pending memory for review/u)
+  assert.match(parsed.systemMessage, /memory-lane review/u)
+  assert.match(parsed.systemMessage, /approve or reject it/u)
+  assert.doesNotMatch(parsed.systemMessage, /review-first memory suggestions|PRIVATE|secret-id/u)
+})
+
 test("stop reads latest turn from transcript", async () => {
   const engine = engineInTemp()
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-claude-transcript-"))
@@ -204,6 +227,21 @@ test("post-tool-use saves with claude tool provenance", async () => {
   assert.equal(saved[0].provenance?.adapter, "claude")
   assert.equal(saved[0].provenance?.lifecycleEvent, "post_tool_use")
   assert.equal(saved[0].provenance?.toolName, "Bash")
+})
+
+test("post-tool-use remains quiet without debug when only approved memory is saved", async () => {
+  const engine = engineInTemp()
+
+  const output = await runClaudeHookCommand("post-tool-use", {
+    engine,
+    env: {} as NodeJS.ProcessEnv,
+    payloadText: postToolUsePayload(),
+  })
+
+  assert.equal(output, "{}")
+  const saved = engine.list({ all: true })
+  assert.equal(saved.length, 1)
+  assert.equal(saved[0].status, "approved")
 })
 
 test("session-end returns no-op when summarization is disabled", async () => {
@@ -268,7 +306,9 @@ test("session-end saves confirmed provider summary without raw transcript", asyn
       payloadText: sessionEndPayload({ confirmed: true }),
     })
 
-    assert.match(JSON.parse(output).systemMessage, /saved 1, skipped 0, discarded 0/)
+    const parsed = JSON.parse(output)
+    assert.match(parsed.systemMessage, /suggested 1 pending memory for review/u)
+    assert.match(parsed.systemMessage, /memory-lane review/u)
     const saved = engine.list({ all: true })
     assert.equal(saved.length, 1)
     assert.equal(saved[0].status, "pending")
@@ -278,6 +318,25 @@ test("session-end saves confirmed provider summary without raw transcript", asyn
     assert.equal(saved[0].provenance?.lifecycleEvent, "session_end")
     assert.match(saved[0].text, /Sanitized Claude summary/)
     assert.doesNotMatch(saved[0].text, /RAW_USER_SENTINEL|RAW_ASSISTANT_SENTINEL|RAW_TOOL_SENTINEL/)
+  })
+})
+
+test("session-end no-durable provider result remains quiet without debug", async () => {
+  await withMockSummaryProvider("NO_DURABLE_MEMORY", async (baseUrl) => {
+    const { engine, configPath } = engineWithConfigInTemp()
+    fs.writeFileSync(configPath, JSON.stringify({
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-model", requireConfirmation: false } },
+    }), "utf8")
+
+    const output = await runClaudeHookCommand("session-end", {
+      engine,
+      env: {} as NodeJS.ProcessEnv,
+      configPath,
+      payloadText: sessionEndPayload({ confirmed: true }),
+    })
+
+    assert.equal(output, "{}")
+    assert.equal(engine.list({ all: true }).length, 0)
   })
 })
 

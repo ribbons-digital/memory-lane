@@ -194,7 +194,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
       }, options.env)
       const result = saveSessionEndCandidates(options.engine, candidates)
       log("ok", lifecycleCounts(result))
-      return systemMessageOutput(`saved ${lifecycleCounts(result).saved}, skipped ${lifecycleCounts(result).skipped}, discarded ${lifecycleCounts(result).discarded}.`)
+      return lifecycleNoopOutput(result, debug)
     }
 
     if (parsed.kind === "session-start") {

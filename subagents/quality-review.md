@@ -2,20 +2,20 @@
 
 Approval status: Approved
 
-- Correct: `renderMemoryBlock` now groups memories in the required stable readability order and preserves selected-memory order within each group (`packages/lifecycle/src/injection.ts:352-410`, `packages/lifecycle/src/injection.ts:422-426`).
-- Correct: Plain-language memory kind labels cover the requested known kinds with category fallback (`packages/lifecycle/src/injection.ts:369-383`).
-- Correct: Prompt and session-start lifecycle handlers refresh scope first, then pass `engine.getProjectScope()?.key` into selective rendering, so current-project memories can be labeled in both injection paths (`packages/lifecycle/src/handlers.ts:162-166`, `packages/lifecycle/src/handlers.ts:206-220`).
-- Correct: Policy-only/off behavior remains separated from body rendering; selective mode returns no context when there are no selected memories (`packages/lifecycle/src/injection.ts:572-594`).
-- Correct: Tests cover current project + global grouping, unknown project scope, other visible project memory, guarded context composition, and lifecycle handler integration (`packages/lifecycle/test/injection.test.ts:298-333`, `packages/lifecycle/test/injection.test.ts:447-462`, `packages/lifecycle/test/handlers.test.ts:159-172`, `packages/lifecycle/test/handlers.test.ts:214-230`).
-- Correct: README documents grouped/labeled selective injection and clarifies that labels do not change ranking or selection (`README.md:790-797`).
+### Correct
+- Adapter output JSON shape is preserved: both adapters still route visible notices through `noopOutput(..., true)`, which emits exactly `{ "systemMessage": "Memory Lane: ..." }`, and no-pending/no-debug still returns `{}` (`packages/claude-adapter/src/outputs.ts:7-9`, `packages/claude-adapter/src/outputs.ts:35-42`, `packages/codex-adapter/src/outputs.ts:7-9`, `packages/codex-adapter/src/outputs.ts:31-38`).
+- Pending-review behavior is count-only and privacy-safe: the shared helper counts only `saved` pending memories and renders only count, `memory-lane review`, and approve/reject guidance; it does not interpolate ids or memory text (`packages/lifecycle/src/review-notices.ts:3-13`).
+- Debug/no-debug behavior matches the design: pending saves are visible regardless of debug via `noopOutput(pendingReviewNotice, true)`, while no-pending paths continue to use the caller's `debug` flag for generic saved/skipped/discarded counts (`packages/claude-adapter/src/outputs.ts:35-42`, `packages/codex-adapter/src/outputs.ts:31-38`).
+- Session summary/no-durable paths are aligned: Claude SessionEnd and Codex supported Stop+summary now use `lifecycleNoopOutput(result, debug)`, so pending summaries get the review notice and no-durable/no-pending results remain quiet without debug (`packages/claude-adapter/src/runner.ts:176-178`, `packages/codex-adapter/src/runner.ts:195-197`). Codex manual session-end already uses the same helper (`packages/codex-adapter/src/runner.ts:230-232`).
+- Existing explanatory no-save messages are preserved for disabled/missing-provider/confirmation cases (`packages/claude-adapter/src/runner.ts:150-161`, `packages/codex-adapter/src/runner.ts:176-183`, `packages/codex-adapter/src/runner.ts:207-219`).
+- Tests cover lifecycle counting/pluralization/privacy (`packages/lifecycle/test/review-notices.test.ts:26-50`), Claude pending Stop and quiet approved PostToolUse (`packages/claude-adapter/test/runner.test.ts:170-187`, `packages/claude-adapter/test/runner.test.ts:232-245`), Claude pending SessionEnd and no-durable quiet behavior (`packages/claude-adapter/test/runner.test.ts:295-340`), Codex pending SessionEnd, Stop, PostToolUse privacy, supported Stop+summary, and no-durable quiet behavior (`packages/codex-adapter/test/runner.test.ts:226-251`, `packages/codex-adapter/test/runner.test.ts:314-348`, `packages/codex-adapter/test/runner.test.ts:408-461`).
+- README documents compact count-only review reminders and privacy constraints for both Claude and Codex hooks (`README.md:822`, `README.md:837`).
 
-Findings by severity:
-
+### Findings by severity
 - Blocker: None.
 - Major: None.
 - Minor: None.
 
-Notes:
-
-- The requested root files `plan.md` and `progress.md` were not present at the provided paths. I reviewed the checked-in plan/spec changed in this diff instead.
-- Verified commands: `pnpm --filter @memory-lane/lifecycle test`, `pnpm --filter @memory-lane/lifecycle build`, and `pnpm -r test` all passed.
+### Notes
+- The requested root files `plan.md` and `progress.md` were not present at the provided paths; I reviewed the checked-in pending-review visibility plan/spec in `docs/superpowers/` plus `git diff main...HEAD`.
+- Verification passed: `git diff --check main...HEAD`; `pnpm --filter @memory-lane/lifecycle test -- review-notices.test.ts`; `pnpm --filter @memory-lane/claude-adapter test -- runner.test.ts`; `pnpm --filter @memory-lane/codex-adapter test -- runner.test.ts`; `pnpm --filter @memory-lane/lifecycle build`; `pnpm --filter @memory-lane/claude-adapter build`; `pnpm --filter @memory-lane/codex-adapter build`.

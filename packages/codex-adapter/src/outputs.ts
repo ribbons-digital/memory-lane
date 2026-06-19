@@ -1,4 +1,4 @@
-import type { LifecycleResult } from "@memory-lane/lifecycle"
+import { renderPendingReviewNotice, type LifecycleResult } from "@memory-lane/lifecycle"
 
 export function debugEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.MEMORY_LANE_HOOK_DEBUG === "1" || env.MEMORY_LANE_HOOK_DEBUG === "true"
@@ -29,6 +29,9 @@ export function userPromptSubmitOutput(result: LifecycleResult, debug = debugEna
 }
 
 export function lifecycleNoopOutput(result: LifecycleResult, debug = debugEnabled()): string {
+  const pendingReviewNotice = renderPendingReviewNotice(result)
+  if (pendingReviewNotice) return noopOutput(pendingReviewNotice, true)
+
   const saved = result.saved.filter((saveResult) => saveResult.status === "saved").length
   const skipped = result.saved.filter((saveResult) => saveResult.status === "skipped").length
   const discarded = result.discarded.length
