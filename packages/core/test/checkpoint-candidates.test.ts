@@ -3,10 +3,10 @@ import assert from "node:assert/strict"
 import { classifyCheckpointCandidate } from "../src/checkpoint-candidates.ts"
 import type { MemoryRecord } from "../src/types.ts"
 
-function memory(text: string, kind?: MemoryRecord["kind"]): MemoryRecord {
+function memory(text: string, kind?: MemoryRecord["kind"], status: MemoryRecord["status"] = "pending"): MemoryRecord {
   return {
     id: "mem-1",
-    status: "pending",
+    status,
     text,
     category: "project",
     scope: { type: "project", key: "test-project" },
@@ -40,6 +40,11 @@ test("classifies verification checkpoint candidates", () => {
     detected: true,
     kind: "verification",
     reason: "matched verification passed phrase",
+  })
+  assert.deepEqual(classifyCheckpointCandidate(memory("Verified lifecycle tests and build after prompt continuity slice.")), {
+    detected: true,
+    kind: "verification",
+    reason: "matched verified tests and build phrase",
   })
 })
 
@@ -79,4 +84,11 @@ test("does not classify ambiguous memories", () => {
   assert.equal(classifyCheckpointCandidate(memory("Please test the release command later.")), undefined)
   assert.equal(classifyCheckpointCandidate(memory("We may merge this eventually.")), undefined)
   assert.equal(classifyCheckpointCandidate(memory("Remember to update docs sometime.")), undefined)
+})
+
+test("does not classify non-pending memories", () => {
+  for (const status of ["approved", "rejected", "deleted"] satisfies Array<MemoryRecord["status"]>) {
+    assert.equal(classifyCheckpointCandidate(memory("Released v0.2.9.", undefined, status)), undefined)
+    assert.equal(classifyCheckpointCandidate(memory("Prompt continuity checkpoint recorded.", "project_checkpoint", status)), undefined)
+  }
 })
