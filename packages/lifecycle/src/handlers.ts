@@ -102,16 +102,17 @@ function provenance(
 }
 
 function filterSameTurnCheckpointCandidates(existingCandidates: MemoryCandidate[], checkpointCandidates: MemoryCandidate[]): MemoryCandidate[] {
-  const existingKeys = new Set(
+  const explicitSameTurnKeys = new Set(
     existingCandidates
+      .filter((candidate) => candidate.source === "user-suggested")
       .map((candidate) => checkpointKeyFromText(candidate.text))
       .filter((key): key is string => Boolean(key)),
   )
-  if (existingKeys.size === 0) return checkpointCandidates
+  if (explicitSameTurnKeys.size === 0) return checkpointCandidates
 
   return checkpointCandidates.filter((candidate) => {
     const key = checkpointKeyFromText(candidate.text)
-    return !key || !existingKeys.has(key)
+    return !key || !explicitSameTurnKeys.has(key)
   })
 }
 
@@ -252,7 +253,7 @@ export function handleStop(engine: MemoryEngine, input: StopInput, options?: Lif
     stopCandidates,
     filterDuplicateCheckpointCandidates(engine, extractCheckpointCandidatesFromStop(input)),
   )
-  return persistCandidates(engine, [...stopCandidates, ...checkpointCandidates], input, "turn_stop", options)
+  return persistCandidates(engine, [...checkpointCandidates, ...stopCandidates], input, "turn_stop", options)
 }
 
 export function handlePostToolUse(engine: MemoryEngine, input: PostToolUseInput, options?: LifecycleHandlerOptions): LifecycleResult {

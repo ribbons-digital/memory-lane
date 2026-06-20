@@ -351,6 +351,38 @@ test("stop captures checkpoint progress as pending project checkpoint", () => {
   assert.equal(result.saved[0].memory.provenance?.turnId, "turn-1")
 })
 
+test("stop keeps inferred checkpoint for release text that also looks like a project fact", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: "This project released v0.2.12.",
+  })
+
+  const savedMemories = result.saved.flatMap((save) => save.status === "saved" ? [save.memory] : [])
+  const pendingCheckpoints = savedMemories.filter((memory) => memory.status === "pending" && memory.kind === "project_checkpoint")
+  assert.equal(pendingCheckpoints.length, 1)
+  assert.equal(pendingCheckpoints[0]?.text, "This project released v0.2.12.")
+  assert.equal(pendingCheckpoints[0]?.source, "agent-suggested")
+})
+
+test("stop keeps inferred checkpoint for merged PR text that also looks like a project fact", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: "This repo PR #19 merged after review.",
+  })
+
+  const savedMemories = result.saved.flatMap((save) => save.status === "saved" ? [save.memory] : [])
+  const pendingCheckpoints = savedMemories.filter((memory) => memory.status === "pending" && memory.kind === "project_checkpoint")
+  assert.equal(pendingCheckpoints.length, 1)
+  assert.equal(pendingCheckpoints[0]?.text, "This repo PR #19 merged after review.")
+  assert.equal(pendingCheckpoints[0]?.source, "agent-suggested")
+})
+
 test("stop does not infer duplicate checkpoint for explicit release memory request", () => {
   const project = tempDir()
   const engine = engineInTemp(project)
