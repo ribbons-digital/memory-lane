@@ -5,8 +5,11 @@ import type {
   ContinuityHintMemoryMetadata,
   ContinuityHintOptions,
   ContinuityHintSummary,
+  MemoryKind,
   MemoryRecord,
   OperatingAgreementSelection,
+  ScopeHygieneCandidateMetadata,
+  ScopeHygieneReason,
   WorkflowArea,
 } from "./types.js"
 
@@ -53,11 +56,51 @@ function ids(selections: OperatingAgreementSelection[]): string[] {
   return selections.map((selection) => selection.memory.id)
 }
 
+const PROJECT_SPECIFIC_KINDS = new Set<MemoryKind>(["project_fact", "project_checkpoint", "session_summary"])
+
+const PROJECT_PATH_PATTERNS = [
+  /(?:^|\s)(?:~|\/Users\/[^\s]+)\/projects\/[^\s]+/iu,
+  /(?:^|\s)packages\/[\w.-]+\/src\//iu,
+  /(?:^|\s)docs\/superpowers\//iu,
+] as const
+
+function scopeHygieneReason(memory: MemoryRecord): ScopeHygieneReason | undefined {
+  if (memory.status !== "approved" || memory.scope.type !== "global") return undefined
+  if (memory.category === "project") return "project-category-global-scope"
+  if (memory.kind && PROJECT_SPECIFIC_KINDS.has(memory.kind)) return "project-kind-global-scope"
+  if (PROJECT_PATH_PATTERNS.some((pattern) => pattern.test(memory.text))) return "project-path-global-scope"
+  return undefined
+}
+
+function scopeHygieneMetadata(memory: MemoryRecord, reason: ScopeHygieneReason): ScopeHygieneCandidateMetadata {
+  return {
+    id: memory.id,
+    status: "approved",
+    category: memory.category,
+    scope: memory.scope,
+    source: memory.source,
+    createdAt: memory.createdAt,
+    updatedAt: memory.updatedAt,
+    kind: memory.kind,
+    provenance: memory.provenance,
+    reason,
+  }
+}
+
 export function buildContinuityHints(memories: MemoryRecord[], options: ContinuityHintOptions = {}): ContinuityHintSummary {
   const maxIds = options.maxIds ?? 5
   const projectScope = options.projectScopeKey ?? "none"
   const visible = memories.filter((memory) => visibleApproved(memory, options.projectScopeKey))
   const hints: ContinuityHint[] = []
+
+  const allScopeHygieneCandidates = memories
+    .map((memory): ScopeHygieneCandidateMetadata | undefined => {
+      const reason = scopeHygieneReason(memory)
+      return reason ? scopeHygieneMetadata(memory, reason) : undefined
+    })
+    .filter((candidate): candidate is ScopeHygieneCandidateMetadata => Boolean(candidate))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  const scopeHygieneCandidates = allScopeHygieneCandidates.slice(0, maxIds)
 
   const supersededVisible = [...visible]
     .filter((memory) => Boolean(memory.revision?.supersededBy))
@@ -72,6 +115,17 @@ export function buildContinuityHints(memories: MemoryRecord[], options: Continui
       message: `${supersededVisible.length} approved ${supersededVisible.length === 1 ? "memory is" : "memories are"} marked superseded and still visible as historical records.`,
       count: supersededVisible.length,
       memoryIds: supersededVisible.map((memory) => memory.id),
+      suggestedActions: ["memory-lane list --json"],
+    })
+  }
+
+  if (allScopeHygieneCandidates.length) {
+    hints.push({
+      code: "scope-hygiene-candidate",
+      severity: "review",
+      message: "Some global memories look project-specific and may need manual scope review.",
+      count: allScopeHygieneCandidates.length,
+      memoryIds: scopeHygieneCandidates.map((memory) => memory.id),
       suggestedActions: ["memory-lane list --json"],
     })
   }
@@ -162,6 +216,7 @@ export function buildContinuityHints(memories: MemoryRecord[], options: Continui
     hintCount: hints.length,
     hints,
     supersededVisible,
+    scopeHygieneCandidates,
     operatingAgreementOverlaps,
     projectGlobalPreferenceOverlaps,
     newerApproved,

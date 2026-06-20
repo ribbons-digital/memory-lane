@@ -107,6 +107,7 @@ export type ContinuityHintCode =
   | "superseded-visible"
   | "operating-agreement-overlap"
   | "project-global-overlap"
+  | "scope-hygiene-candidate"
   | "newer-approved"
 
 export interface ContinuityHintMemoryMetadata {
@@ -120,6 +121,24 @@ export interface ContinuityHintMemoryMetadata {
   kind?: MemoryKind
   provenance?: MemoryProvenance
   supersededBy?: string
+}
+
+export type ScopeHygieneReason =
+  | "project-category-global-scope"
+  | "project-kind-global-scope"
+  | "project-path-global-scope"
+
+export interface ScopeHygieneCandidateMetadata {
+  id: string
+  status: Extract<MemoryStatus, "approved">
+  category: MemoryCategory
+  scope: MemoryScope
+  source: MemorySource
+  createdAt: string
+  updatedAt: string
+  kind?: MemoryKind
+  provenance?: MemoryProvenance
+  reason: ScopeHygieneReason
 }
 
 export interface ContinuityHint {
@@ -137,6 +156,7 @@ export interface ContinuityHintSummary {
   hintCount: number
   hints: ContinuityHint[]
   supersededVisible: ContinuityHintMemoryMetadata[]
+  scopeHygieneCandidates: ScopeHygieneCandidateMetadata[]
   operatingAgreementOverlaps: Array<{
     workflowArea: WorkflowArea
     primaryIds: string[]
