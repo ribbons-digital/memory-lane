@@ -278,6 +278,43 @@ test("memory_continuity applies projectPath before reading continuity", async ()
   assert.ok(result.data.notes.some((note: string) => /explicit tools only/u.test(note)))
 })
 
+test("memory_continuity includes pending captured checkpoint candidates", async () => {
+  const project = tempDir()
+  fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "mcp-captured-checkpoint" }))
+  const engine = engineInTemp(project)
+  const saved = engine.save({
+    text: "Released v0.2.12.",
+    status: "pending",
+    category: "project",
+    scopeType: "project",
+    kind: "project_checkpoint",
+    source: "agent-suggested",
+    provenance: { adapter: "codex", lifecycleEvent: "turn_stop" },
+  })
+  assert.equal(saved.status, "saved")
+
+  const result = parseToolResult(await handleMemoryContinuity(engine, { projectPath: project }))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.meta.projectScope, "mcp-captured-checkpoint")
+  assert.equal(result.data.continuity.projectScope, "mcp-captured-checkpoint")
+  assert.equal(result.data.continuity.status.pendingReviewCount, 1)
+  assert.equal(result.data.continuity.status.pendingContinuityCount, 1)
+  assert.equal(result.data.continuity.pendingContinuity.length, 1)
+  const pending = result.data.continuity.pendingContinuity[0]
+  assert.equal(pending.id, saved.memory.id)
+  assert.equal(pending.status, "pending")
+  assert.equal(pending.kind, "project_checkpoint")
+  assert.equal(pending.source, "agent-suggested")
+  assert.equal(pending.provenance.adapter, "codex")
+  assert.equal(pending.provenance.lifecycleEvent, "turn_stop")
+  assert.deepEqual(pending.checkpointCandidate, {
+    detected: true,
+    kind: "project",
+    reason: "kind is project_checkpoint",
+  })
+})
+
 test("memory_continuity explains missing projectPath when no project scope is active", async () => {
   const previousCwd = process.cwd()
   const cwd = tempDir()
