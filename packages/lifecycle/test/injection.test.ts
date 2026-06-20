@@ -10,6 +10,7 @@ import {
   renderContinuityNotice,
   detectContinuityIntent,
   renderContinuityIntentGuidance,
+  limitsFromContextPolicy,
   CODEX_MEMORY_INJECTION_LIMITS,
 } from "../src/injection.ts"
 
@@ -302,6 +303,40 @@ test("deduplicates normalized text and skips likely secrets", () => {
   assert.deepEqual(selected.map((m) => m.id), ["1"])
 })
 
+test("limitsFromContextPolicy preserves prompt preference caps", () => {
+  assert.deepEqual(limitsFromContextPolicy("prompt", {
+    mode: "selective",
+    maxItems: { sessionStart: 4, prompt: 6 },
+    maxChars: { sessionStart: 1600, prompt: 3000 },
+    preferenceMaxItems: { sessionStart: 1, prompt: 3 },
+    preferenceMaxChars: { sessionStart: 400, prompt: 700 },
+  }), {
+    maxItems: 6,
+    targetChars: 3000,
+    hardMaxChars: 3000,
+    absoluteMaxChars: 3000,
+    preferenceMaxItems: 3,
+    preferenceMaxChars: 700,
+  })
+})
+
+test("selectMemoriesForInjection includes relevant global preferences within preference budget", () => {
+  const selected = selectMemoriesForInjection("pnpm package installation", recall([
+    globalMemory("global-pref", "User prefers pnpm for package installation", "preference"),
+    globalMemory("global-second", "User prefers pnpm package commands through sfw", "preference"),
+    globalMemory("global-other", "User prefers short final answers", "preference"),
+  ], false, "No semantic matches"), {
+    maxItems: 4,
+    targetChars: 1000,
+    hardMaxChars: 1000,
+    absoluteMaxChars: 1000,
+    preferenceMaxItems: 1,
+    preferenceMaxChars: 1000,
+  })
+
+  assert.deepEqual(selected.map((memory) => memory.id), ["global-pref"])
+})
+
 test("renderMemoryBlock groups current project and global memories with readable labels", () => {
   const rendered = renderMemoryBlock([
     projectMemory("p1", "repo", "Latest Sitewright checkpoint", "project_checkpoint"),
@@ -557,6 +592,65 @@ test("selectBaselineMemories keeps recency order within project and global tiers
   })
 
   assert.deepEqual(selected.map((m) => m.id), ["project-new", "project-old", "global-new", "global-old", "other-project"])
+})
+
+test("selectBaselineMemories includes bounded global preferences after current project context", () => {
+  const memories = [
+    projectMemoryWithUpdatedAt("project-checkpoint", "repo", "Current project release checkpoint", "2026-06-20T00:00:00.000Z"),
+    globalMemoryWithUpdatedAt("global-one", "User prefers concise final answers", "2026-06-19T00:00:00.000Z"),
+    globalMemoryWithUpdatedAt("global-two", "User prefers pnpm for package installation", "2026-06-18T00:00:00.000Z"),
+    globalMemoryWithUpdatedAt("global-three", "User prefers extra verbose summaries", "2026-06-17T00:00:00.000Z"),
+  ]
+
+  const selected = selectBaselineMemories(memories, {
+    projectScope: "repo",
+    maxItems: 4,
+    targetChars: 1000,
+    hardMaxChars: 1000,
+    absoluteMaxChars: 1000,
+    preferenceMaxItems: 2,
+    preferenceMaxChars: 1000,
+  })
+
+  assert.deepEqual(selected.map((memory) => memory.id), ["project-checkpoint", "global-one", "global-two"])
+})
+
+test("selectBaselineMemories prefers project preference over exact duplicate global preference", () => {
+  const memories = [
+    { ...globalMemoryWithUpdatedAt("global-pref", "Use pnpm for package installation", "2026-06-20T00:00:00.000Z"), category: "preference" as const },
+    { ...projectMemoryWithUpdatedAt("project-pref", "repo", "Use pnpm for package installation", "2026-06-19T00:00:00.000Z"), category: "preference" as const, kind: "preference" as const },
+  ]
+
+  const selected = selectBaselineMemories(memories, {
+    projectScope: "repo",
+    maxItems: 2,
+    targetChars: 1000,
+    hardMaxChars: 1000,
+    absoluteMaxChars: 1000,
+    preferenceMaxItems: 2,
+    preferenceMaxChars: 1000,
+  })
+
+  assert.deepEqual(selected.map((memory) => memory.id), ["project-pref"])
+})
+
+test("selectBaselineMemories enforces preference character budget separately", () => {
+  const memories = [
+    projectMemoryWithUpdatedAt("project-checkpoint", "repo", "Current project checkpoint remains", "2026-06-20T00:00:00.000Z"),
+    globalMemoryWithUpdatedAt("global-pref", "User prefers detailed verification summaries", "2026-06-19T00:00:00.000Z"),
+  ]
+
+  const selected = selectBaselineMemories(memories, {
+    projectScope: "repo",
+    maxItems: 3,
+    targetChars: 1000,
+    hardMaxChars: 1000,
+    absoluteMaxChars: 1000,
+    preferenceMaxItems: 1,
+    preferenceMaxChars: 1,
+  })
+
+  assert.deepEqual(selected.map((memory) => memory.id), ["project-checkpoint"])
 })
 
 test("selectBaselineMemories skips secrets and deduplicates", () => {

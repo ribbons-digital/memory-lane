@@ -185,6 +185,56 @@ test("user-prompt selective labels current project memory", async () => {
   assert.doesNotMatch(context, /### Project-specific memory/u)
 })
 
+test("user-prompt selective applies project scope before global preferences", async () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, {
+    contextPolicy: {
+      mode: "selective",
+      maxItems: { prompt: 1 },
+      preferenceMaxItems: { prompt: 1 },
+    },
+  })
+  engine.save({ text: "Use pnpm package manager for this repo", status: "approved", category: "preference", scopeType: "project", kind: "preference" })
+  waitForNextMillisecond()
+  engine.save({ text: "Use pnpm package manager globally", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+
+  const result = await handleUserPromptSubmit(engine, {
+    cwd: project,
+    prompt: "pnpm package manager",
+  })
+  const context = result.additionalContext ?? ""
+
+  assert.match(context, /Use pnpm package manager for this repo/u)
+  assert.doesNotMatch(context, /Use pnpm package manager globally/u)
+  assert.match(context, /### Current project/u)
+})
+
+test("user-prompt selective renders project preference before relevant global preference", async () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, {
+    contextPolicy: {
+      mode: "selective",
+      maxItems: { prompt: 4 },
+      preferenceMaxItems: { prompt: 2 },
+    },
+  })
+  engine.save({ text: "Use pnpm package manager for this repo", status: "approved", category: "preference", scopeType: "project", kind: "preference" })
+  waitForNextMillisecond()
+  engine.save({ text: "Use pnpm package manager globally", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+
+  const result = await handleUserPromptSubmit(engine, {
+    cwd: project,
+    prompt: "pnpm package manager",
+  })
+  const context = result.additionalContext ?? ""
+
+  assert.match(context, /### Current project/u)
+  assert.match(context, /### Global preferences and workflow rules/u)
+  assert.match(context, /Use pnpm package manager for this repo/u)
+  assert.match(context, /Use pnpm package manager globally/u)
+  assert.ok(context.indexOf("Use pnpm package manager for this repo") < context.indexOf("Use pnpm package manager globally"))
+})
+
 test("session-start off policy injects no baseline context or continuity notice", () => {
   const project = tempDir()
   const engine = engineInTemp(project, { contextPolicy: { mode: "off" } })
@@ -264,6 +314,29 @@ test("session-start selects current project memory before newer global memory", 
   assert.match(context, /Current project checkpoint should win baseline selection/u)
   assert.doesNotMatch(context, /Global preference newest for all projects/u)
   assert.match(context, /### Current project/u)
+})
+
+test("session-start selective preserves preference caps while applying remaining continuity budget", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, {
+    contextPolicy: {
+      mode: "selective",
+      maxItems: { sessionStart: 4, prompt: 6 },
+      preferenceMaxItems: { sessionStart: 1, prompt: 2 },
+    },
+  })
+  engine.save({ text: "Project checkpoint should remain in baseline context", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint" })
+  waitForNextMillisecond()
+  engine.save({ text: "User prefers pnpm globally", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+  waitForNextMillisecond()
+  engine.save({ text: "User prefers concise replies globally", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+
+  const result = handleSessionStart(engine, { cwd: project })
+  const context = result.additionalContext ?? ""
+
+  assert.match(context, /Project checkpoint should remain in baseline context/u)
+  assert.match(context, /User prefers pnpm globally|User prefers concise replies globally/u)
+  assert.equal((context.match(/User prefers/gu) ?? []).length, 1)
 })
 
 test("session-start continuity notice reports newer approved state from since", () => {

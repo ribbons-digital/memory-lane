@@ -800,6 +800,8 @@ Lifecycle hooks use `memory.contextPolicy` to decide how much context to inject.
       "mode": "selective",
       "maxItems": { "sessionStart": 4, "prompt": 6 },
       "maxChars": { "sessionStart": 1600, "prompt": 3000 },
+      "preferenceMaxItems": { "sessionStart": 2, "prompt": 2 },
+      "preferenceMaxChars": { "sessionStart": 600, "prompt": 900 },
       "includePending": false,
       "fallbackToSearch": true
     }
@@ -813,9 +815,37 @@ Modes:
 - `policy-only` injects compact guidance telling the agent to use Memory Lane recall/list tools when needed, without including memory bodies.
 - `off` disables automatic context injection while leaving explicit CLI/MCP tools and automatic save hooks unchanged.
 
-When `selective` mode injects memory bodies, the `Relevant Memory` block is grouped for readability. Current-project memories are separated from global preferences/workflow rules and other visible project memories, and each memory shows a plain-language type label such as `Project checkpoint`, `Workflow rule`, `Preference`, or `Project fact`. These labels explain applicability only; they do not change recall ranking or memory selection.
+When `selective` mode injects memory bodies, the `Relevant Memory` block is grouped for readability. Current-project memories are separated from global preferences/workflow rules and other visible project memories, and each memory shows a plain-language type label such as `Project checkpoint`, `Workflow rule`, `Preference`, or `Project fact`. These labels explain applicability only; they do not change recall ranking or memory status.
 
-For `SessionStart`, baseline memory selection is project-first when a project scope is available: current-project approved memories are selected before global memories, then rendered with the same readable grouping. This applies only to session-opening baseline context; prompt-time `UserPromptSubmit` recall remains relevance-based and bounded by the prompt context policy.
+Global preferences (`category: "preference"`, `kind: "preference"`, or `kind: "workflow_rule"` with `scope: "global"`) are selected in a bounded preference layer so user-wide guidance can travel across projects without crowding out current-project facts, checkpoints, or decisions. Project-scoped preferences render before global preferences for the same project, which lets narrower project guidance take precedence in context without creating an automatic supersede, cleanup, or override relationship.
+
+For `SessionStart`, baseline memory selection is layered when a project scope is available: current-project preferences, then current-project content, then bounded global preferences, then other global memory and other visible project memory if budget remains. Prompt-time `UserPromptSubmit` recall remains relevance-based; global preferences are not injected merely because they are global, but relevant global preferences can appear within the `preferenceMaxItems` and `preferenceMaxChars` caps.
+
+To save a user-wide preference from the CLI:
+
+```bash
+memory-lane save "Prefer concise final answers" --category preference --scope global
+```
+
+To narrow that preference for one project, save a project-scoped preference from that project or pass `--project` explicitly:
+
+```bash
+memory-lane save "In this repo, include full verification output" --category preference --scope project --project /path/to/project
+```
+
+For MCP clients, use the existing save tool with the same category/scope idea:
+
+```json
+memory_save({ "text": "Prefer concise final answers", "category": "preference", "scope": "global" })
+memory_save({ "text": "In this repo, include full verification output", "category": "preference", "scope": "project", "projectPath": "/path/to/project" })
+```
+
+Use existing inspection surfaces before changing or relying on preference state:
+
+- CLI: `memory-lane list --json`, `memory-lane review --json`, `memory-lane status --json`, and `memory-lane continuity --json`
+- MCP: `memory_list`, `memory_review`, `memory_status`, and `memory_continuity({ projectPath })`
+
+The optional `preferenceMaxItems` and `preferenceMaxChars` fields are caps, not guarantees. Overall `maxItems` and `maxChars` still cap the full rendered memory block.
 
 ### Prompt-time continuity guidance
 

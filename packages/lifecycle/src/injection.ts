@@ -16,11 +16,15 @@ export interface MemoryInjectionLimits {
   targetChars: number
   hardMaxChars: number
   absoluteMaxChars: number
+  preferenceMaxItems?: number
+  preferenceMaxChars?: number
 }
 
-export interface BaselineSelectionOptions extends Partial<MemoryInjectionLimits> {
+export interface MemorySelectionOptions extends Partial<MemoryInjectionLimits> {
   projectScope?: string
 }
+
+export interface BaselineSelectionOptions extends MemorySelectionOptions {}
 
 export const CODEX_MEMORY_INJECTION_LIMITS: MemoryInjectionLimits = {
   maxItems: 6,
@@ -65,6 +69,8 @@ export const DEFAULT_CONTEXT_POLICY: ResolvedMemoryContextPolicy = {
   mode: "selective",
   maxItems: { sessionStart: 4, prompt: 6 },
   maxChars: { sessionStart: 1600, prompt: 3000 },
+  preferenceMaxItems: { sessionStart: 2, prompt: 2 },
+  preferenceMaxChars: { sessionStart: 600, prompt: 900 },
   includePending: false,
   fallbackToSearch: true,
 }
@@ -154,12 +160,20 @@ export function resolveContextPolicy(policy?: MemoryContextPolicyConfig): Resolv
       sessionStart: policy?.maxChars?.sessionStart ?? DEFAULT_CONTEXT_POLICY.maxChars.sessionStart,
       prompt: policy?.maxChars?.prompt ?? DEFAULT_CONTEXT_POLICY.maxChars.prompt,
     },
+    preferenceMaxItems: {
+      sessionStart: policy?.preferenceMaxItems?.sessionStart ?? DEFAULT_CONTEXT_POLICY.preferenceMaxItems.sessionStart,
+      prompt: policy?.preferenceMaxItems?.prompt ?? DEFAULT_CONTEXT_POLICY.preferenceMaxItems.prompt,
+    },
+    preferenceMaxChars: {
+      sessionStart: policy?.preferenceMaxChars?.sessionStart ?? DEFAULT_CONTEXT_POLICY.preferenceMaxChars.sessionStart,
+      prompt: policy?.preferenceMaxChars?.prompt ?? DEFAULT_CONTEXT_POLICY.preferenceMaxChars.prompt,
+    },
     includePending: policy?.includePending ?? DEFAULT_CONTEXT_POLICY.includePending,
     fallbackToSearch: policy?.fallbackToSearch ?? DEFAULT_CONTEXT_POLICY.fallbackToSearch,
   }
 }
 
-export function limitsFromContextPolicy(event: MemoryContextEvent, policy?: MemoryContextPolicyConfig, overrides?: Partial<MemoryInjectionLimits>): Partial<MemoryInjectionLimits> {
+export function limitsFromContextPolicy(event: MemoryContextEvent, policy?: MemoryContextPolicyConfig, overrides?: MemorySelectionOptions): MemorySelectionOptions {
   const resolved = resolveContextPolicy(policy)
   const key = event === "sessionStart" ? "sessionStart" : "prompt"
   return {
@@ -167,23 +181,29 @@ export function limitsFromContextPolicy(event: MemoryContextEvent, policy?: Memo
     targetChars: resolved.maxChars[key],
     hardMaxChars: resolved.maxChars[key],
     absoluteMaxChars: resolved.maxChars[key],
+    preferenceMaxItems: resolved.preferenceMaxItems[key],
+    preferenceMaxChars: resolved.preferenceMaxChars[key],
     ...overrides,
   }
 }
 
-function capLimits(options?: Partial<MemoryInjectionLimits>): MemoryInjectionLimits {
+function capLimits(options?: MemorySelectionOptions): MemoryInjectionLimits {
   const merged = { ...CODEX_MEMORY_INJECTION_LIMITS, ...options }
   const absoluteMaxChars = Math.min(
     Math.max(1, merged.absoluteMaxChars),
     CODEX_MEMORY_INJECTION_LIMITS.absoluteMaxChars,
   )
   const hardMaxChars = Math.min(Math.max(0, merged.hardMaxChars), absoluteMaxChars)
+  const preferenceMaxItems = merged.preferenceMaxItems === undefined ? undefined : Math.max(0, merged.preferenceMaxItems)
+  const preferenceMaxChars = merged.preferenceMaxChars === undefined ? undefined : Math.min(Math.max(0, merged.preferenceMaxChars), absoluteMaxChars)
 
   return {
     maxItems: Math.max(0, merged.maxItems),
     targetChars: Math.min(Math.max(0, merged.targetChars), absoluteMaxChars),
     hardMaxChars,
     absoluteMaxChars,
+    ...(preferenceMaxItems === undefined ? {} : { preferenceMaxItems }),
+    ...(preferenceMaxChars === undefined ? {} : { preferenceMaxChars }),
   }
 }
 
@@ -213,39 +233,111 @@ function requiresLexicalOverlap(result: RecallResult): boolean {
   return !result.semantic.used || result.semantic.fallbackReason === "No semantic matches"
 }
 
+interface LayeredSelectionState {
+  selected: MemoryRecord[]
+  seen: Set<string>
+  chars: number
+  preferenceChars: number
+  preferenceCount: number
+}
+
+function isPreferenceLikeMemory(memory: MemoryRecord): boolean {
+  return memory.category === "preference" || memory.kind === "preference" || memory.kind === "workflow_rule"
+}
+
+function preferenceBudget(limits: MemoryInjectionLimits): { maxItems: number; maxChars: number } {
+  return {
+    maxItems: Math.max(0, limits.preferenceMaxItems ?? 2),
+    maxChars: Math.max(0, limits.preferenceMaxChars ?? Math.min(limits.hardMaxChars, 900)),
+  }
+}
+
+function appendLayeredMemory(memory: MemoryRecord, limits: MemoryInjectionLimits, state: LayeredSelectionState): void {
+  if (state.selected.length >= limits.maxItems) return
+  if (containsLikelySecret(memory.text)) return
+
+  const key = normalizedMemoryKey(memory.text)
+  if (!key || state.seen.has(key)) return
+
+  const isPreference = isPreferenceLikeMemory(memory)
+  const preferences = preferenceBudget(limits)
+  if (isPreference && state.preferenceCount >= preferences.maxItems) return
+
+  const remainingTotalChars = limits.hardMaxChars - state.chars
+  const remainingPreferenceChars = isPreference ? preferences.maxChars - state.preferenceChars : remainingTotalChars
+  const remainingChars = Math.min(remainingTotalChars, remainingPreferenceChars)
+  const fitted = fitMemoryWithinBudget(memory, remainingChars)
+  if (!fitted) return
+
+  state.selected.push(fitted)
+  state.seen.add(key)
+  state.chars += fitted.text.length
+  if (isPreference) {
+    state.preferenceCount += 1
+    state.preferenceChars += fitted.text.length
+  }
+}
+
+function appendLayer(state: LayeredSelectionState, limits: MemoryInjectionLimits, memories: MemoryRecord[]): void {
+  for (const memory of memories) {
+    if (state.selected.length >= limits.maxItems) break
+    appendLayeredMemory(memory, limits, state)
+  }
+}
+
+function sortByUpdatedAtDesc(memories: MemoryRecord[]): MemoryRecord[] {
+  return [...memories].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+}
+
+function layeredMemoryGroups(memories: MemoryRecord[], projectScope?: string): MemoryRecord[][] {
+  const currentProjectPreferences = projectScope
+    ? memories.filter((memory) => memory.scope.type === "project" && memory.scope.key === projectScope && isPreferenceLikeMemory(memory))
+    : []
+  const currentProjectContent = projectScope
+    ? memories.filter((memory) => memory.scope.type === "project" && memory.scope.key === projectScope && !isPreferenceLikeMemory(memory))
+    : []
+  const globalPreferences = memories.filter((memory) => memory.scope.type === "global" && isPreferenceLikeMemory(memory))
+  const globalMemory = memories.filter((memory) => memory.scope.type === "global" && !isPreferenceLikeMemory(memory))
+  const otherProject = memories.filter((memory) => memory.scope.type === "project" && (!projectScope || memory.scope.key !== projectScope))
+  const other = memories.filter((memory) => memory.scope.type !== "project" && memory.scope.type !== "global")
+
+  return [
+    currentProjectPreferences,
+    currentProjectContent,
+    globalPreferences,
+    globalMemory,
+    otherProject,
+    other,
+  ]
+}
+
 export function selectMemoriesForInjection(
   prompt: string,
   result: RecallResult,
-  options?: Partial<MemoryInjectionLimits>,
+  options?: MemorySelectionOptions,
 ): MemoryRecord[] {
   if (shouldSkipAutomaticInjection(prompt)) return []
 
   const limits = capLimits(options)
   const requireLexical = requiresLexicalOverlap(result)
-  const seen = new Set<string>()
-  const selected: MemoryRecord[] = []
-  let chars = 0
-
-  for (const memory of result.memories) {
-    if (selected.length >= limits.maxItems) break
-    if (containsLikelySecret(memory.text)) continue
-
+  const eligible = result.memories.filter((memory) => {
+    if (containsLikelySecret(memory.text)) return false
     const overlap = lexicalScore(prompt, memory.text)
-    if (requireLexical && overlap <= 0) continue
-
-    const key = normalizedMemoryKey(memory.text)
-    if (!key || seen.has(key)) continue
-
-    const remainingChars = limits.hardMaxChars - chars
-    const fitted = fitMemoryWithinBudget(memory, remainingChars)
-    if (!fitted) continue
-
-    selected.push(fitted)
-    seen.add(key)
-    chars += fitted.text.length
+    return !requireLexical || overlap > 0
+  })
+  const state: LayeredSelectionState = {
+    selected: [],
+    seen: new Set<string>(),
+    chars: 0,
+    preferenceChars: 0,
+    preferenceCount: 0,
   }
 
-  return selected
+  for (const layer of layeredMemoryGroups(eligible, options?.projectScope)) {
+    appendLayer(state, limits, layer)
+  }
+
+  return state.selected
 }
 
 export function isMemoryManagementListIntent(prompt: string): boolean {
@@ -391,8 +483,7 @@ function readableMemoryKind(memory: MemoryRecord): string {
 }
 
 function isGlobalPreferenceLike(memory: MemoryRecord): boolean {
-  return memory.scope.type === "global"
-    && (memory.category === "preference" || memory.kind === "workflow_rule" || memory.kind === "preference")
+  return memory.scope.type === "global" && isPreferenceLikeMemory(memory)
 }
 
 function groupKeyForMemory(memory: MemoryRecord, options?: MemoryBlockRenderOptions): MemoryContextGroupKey {
@@ -601,49 +692,23 @@ export function renderMemoryContext(input: { event: MemoryContextEvent; memories
   ].join("\n")
 }
 
-function baselineTier(memory: MemoryRecord, projectScope?: string): number {
-  if (!projectScope) return 0
-  if (memory.scope.type === "project" && memory.scope.key === projectScope) return 0
-  if (memory.scope.type === "global") return 1
-  if (memory.scope.type === "project") return 2
-  return 3
-}
-
-function compareBaselineRelevance(projectScope?: string): (a: MemoryRecord, b: MemoryRecord) => number {
-  return (a, b) => {
-    const tierCompare = baselineTier(a, projectScope) - baselineTier(b, projectScope)
-    if (tierCompare !== 0) return tierCompare
-    return b.updatedAt.localeCompare(a.updatedAt)
-  }
-}
-
 export function selectBaselineMemories(
   memories: MemoryRecord[],
   options?: BaselineSelectionOptions,
 ): MemoryRecord[] {
   const limits = capLimits({ ...CODEX_BASELINE_INJECTION_LIMITS, ...options })
-  const seen = new Set<string>()
-  const selected: MemoryRecord[] = []
-  let chars = 0
-
-  const candidates = [...memories]
-    .filter((memory) => memory.status === "approved" && !containsLikelySecret(memory.text))
-    .sort(compareBaselineRelevance(options?.projectScope))
-
-  for (const memory of candidates) {
-    if (selected.length >= limits.maxItems) break
-
-    const key = normalizedMemoryKey(memory.text)
-    if (!key || seen.has(key)) continue
-
-    const remainingChars = limits.hardMaxChars - chars
-    const fitted = fitMemoryWithinBudget(memory, remainingChars)
-    if (!fitted) continue
-
-    selected.push(fitted)
-    seen.add(key)
-    chars += fitted.text.length
+  const candidates = memories.filter((memory) => memory.status === "approved" && !containsLikelySecret(memory.text))
+  const state: LayeredSelectionState = {
+    selected: [],
+    seen: new Set<string>(),
+    chars: 0,
+    preferenceChars: 0,
+    preferenceCount: 0,
   }
 
-  return selected
+  for (const layer of layeredMemoryGroups(candidates, options?.projectScope).map(sortByUpdatedAtDesc)) {
+    appendLayer(state, limits, layer)
+  }
+
+  return state.selected
 }

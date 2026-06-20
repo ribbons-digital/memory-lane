@@ -177,8 +177,11 @@ export async function handleUserPromptSubmit(
 
   const recallQuery = intent.detected && intent.topic ? intent.topic : input.prompt
   const recalled = await engine.recall(recallQuery)
-  const selected = selectMemoriesForInjection(recallQuery, recalled, limitsFromContextPolicy("prompt", policy, options))
   const projectScope = engine.getProjectScope()?.key
+  const selected = selectMemoriesForInjection(recallQuery, recalled, {
+    ...limitsFromContextPolicy("prompt", policy, options),
+    projectScope,
+  })
   const memoryContext = renderMemoryContext({ event: "prompt", memories: selected, policy, projectScope })
   const rendered = composePromptContext({ guidance, memoryContext, policy })
   return createResult(rendered || undefined, contextDecision({

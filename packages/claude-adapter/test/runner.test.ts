@@ -125,7 +125,7 @@ function sessionEndPayload(overrides: Record<string, unknown> = {}): string {
 
 test("session-start emits Claude additionalContext output", async () => {
   const engine = engineInTemp()
-  engine.save({ text: "This repo runs tests with pnpm test", category: "project", scopeType: "global", status: "approved" })
+  engine.save({ text: "User likes concise replies", category: "preference", scopeType: "global", status: "approved", kind: "preference" })
 
   const output = await runClaudeHookCommand("session-start", {
     engine,
@@ -135,20 +135,24 @@ test("session-start emits Claude additionalContext output", async () => {
   const parsed = JSON.parse(output)
   assert.equal(parsed.hookSpecificOutput.hookEventName, "SessionStart")
   assert.match(parsed.hookSpecificOutput.additionalContext, /<memory-context mode="selective" event="sessionStart">/)
+  assert.match(parsed.hookSpecificOutput.additionalContext, /### Global preferences and workflow rules/u)
+  assert.match(parsed.hookSpecificOutput.additionalContext, /\*\*Preference\*\*/u)
 })
 
 test("user-prompt-submit emits Claude additionalContext output", async () => {
   const engine = engineInTemp()
-  engine.save({ text: "This repo runs tests with pnpm test", category: "project", scopeType: "global", status: "approved" })
+  engine.save({ text: "User likes concise replies", category: "preference", scopeType: "global", status: "approved", kind: "preference" })
 
   const output = await runClaudeHookCommand("user-prompt-submit", {
     engine,
-    payloadText: userPromptPayload(),
+    payloadText: userPromptPayload("concise replies"),
   })
 
   const parsed = JSON.parse(output)
   assert.equal(parsed.hookSpecificOutput.hookEventName, "UserPromptSubmit")
   assert.match(parsed.hookSpecificOutput.additionalContext, /<memory-context mode="selective" event="prompt">/)
+  assert.match(parsed.hookSpecificOutput.additionalContext, /### Global preferences and workflow rules/u)
+  assert.match(parsed.hookSpecificOutput.additionalContext, /User likes concise replies/u)
 })
 
 test("stop saves with claude provenance", async () => {

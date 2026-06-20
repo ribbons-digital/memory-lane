@@ -209,6 +209,8 @@ test("before_agent_start injects shared lifecycle memory block for relevant appr
 
   assert.equal(result?.message.customType, "memory-lane")
   assert.match(result?.message.content ?? "", /<memory-context mode="selective" event="prompt">/)
+  assert.match(result?.message.content ?? "", /### Current project/u)
+  assert.match(result?.message.content ?? "", /\*\*Project fact\*\*/u)
   assert.match(result?.message.content ?? "", /This repo uses pnpm test for verification/u)
   assert.equal(result?.message.display, false)
   assert.deepEqual(result?.message.details, {

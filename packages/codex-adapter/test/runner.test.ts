@@ -140,14 +140,16 @@ function enableSessionEndSummary(configPath: string, baseUrl: string, requireCon
 
 test("user-prompt-submit emits additionalContext", async () => {
   const engine = engineInTemp()
-  engine.save({ text: "This repo runs tests with pnpm test", category: "project", scopeType: "global", status: "approved" })
+  engine.save({ text: "User likes concise replies", category: "preference", scopeType: "global", status: "approved", kind: "preference" })
   const output = await runCodexHookCommand("user-prompt-submit", {
     engine,
-    payloadText: userPromptPayload(),
+    payloadText: userPromptPayload("concise replies"),
   })
   const parsed = JSON.parse(output)
   assert.equal(parsed.hookSpecificOutput.hookEventName, "UserPromptSubmit")
   assert.match(parsed.hookSpecificOutput.additionalContext, /<memory-context mode="selective" event="prompt">/)
+  assert.match(parsed.hookSpecificOutput.additionalContext, /### Global preferences and workflow rules/u)
+  assert.match(parsed.hookSpecificOutput.additionalContext, /User likes concise replies/u)
 })
 
 test("invalid JSON returns no-op", async () => {
@@ -696,7 +698,7 @@ test("debug log omits raw prompt transcript tool memory and injected context tex
 
 test("session-start emits baseline additionalContext", async () => {
   const engine = engineInTemp()
-  engine.save({ text: "This repo runs tests with pnpm test", category: "project", scopeType: "global", status: "approved" })
+  engine.save({ text: "User likes concise replies", category: "preference", scopeType: "global", status: "approved", kind: "preference" })
   const output = await runCodexHookCommand("session-start", {
     engine,
     payloadText: JSON.stringify({
@@ -711,4 +713,6 @@ test("session-start emits baseline additionalContext", async () => {
   const parsed = JSON.parse(output)
   assert.equal(parsed.hookSpecificOutput.hookEventName, "SessionStart")
   assert.match(parsed.hookSpecificOutput.additionalContext, /<memory-context mode="selective" event="sessionStart">/)
+  assert.match(parsed.hookSpecificOutput.additionalContext, /### Global preferences and workflow rules/u)
+  assert.match(parsed.hookSpecificOutput.additionalContext, /\*\*Preference\*\*/u)
 })

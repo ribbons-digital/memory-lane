@@ -948,6 +948,56 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.doesNotMatch(serialized, /Do not expose this memory text|Also do not expose/u)
   })
 
+  it("loads default preference context budgets", () => {
+    const e = engine()
+
+    assert.deepEqual(e.getContextPolicy()?.preferenceMaxItems, { sessionStart: 2, prompt: 2 })
+    assert.deepEqual(e.getContextPolicy()?.preferenceMaxChars, { sessionStart: 600, prompt: 900 })
+  })
+
+  it("rejects invalid preference context budget config", () => {
+    const invalidPolicies = [
+      {
+        policy: { preferenceMaxItems: "two" },
+        message: /memory\.contextPolicy\.preferenceMaxItems must be object/u,
+      },
+      {
+        policy: { preferenceMaxChars: "many" },
+        message: /memory\.contextPolicy\.preferenceMaxChars must be object/u,
+      },
+      {
+        policy: { preferenceMaxItems: { sessionStart: -1 } },
+        message: /memory\.contextPolicy\.preferenceMaxItems\.sessionStart must be a non-negative integer/u,
+      },
+      {
+        policy: { preferenceMaxItems: { prompt: 1.5 } },
+        message: /memory\.contextPolicy\.preferenceMaxItems\.prompt must be a non-negative integer/u,
+      },
+      {
+        policy: { preferenceMaxChars: { sessionStart: -1 } },
+        message: /memory\.contextPolicy\.preferenceMaxChars\.sessionStart must be a non-negative integer/u,
+      },
+      {
+        policy: { preferenceMaxChars: { prompt: 1.5 } },
+        message: /memory\.contextPolicy\.preferenceMaxChars\.prompt must be a non-negative integer/u,
+      },
+    ]
+
+    for (const [index, { policy, message }] of invalidPolicies.entries()) {
+      const configPath = path.join(dir, `cfg-invalid-preference-budget-${index}.json`)
+      fs.writeFileSync(configPath, JSON.stringify({ memory: { contextPolicy: policy } }), "utf8")
+
+      assert.throws(
+        () => new MemoryEngine({
+          memoryPath: path.join(dir, `mem-invalid-preference-budget-${index}.jsonl`),
+          embeddingsPath: path.join(dir, `emb-invalid-preference-budget-${index}.jsonl`),
+          configPath,
+        }),
+        message,
+      )
+    }
+  })
+
   it("doctor reports context policy config without memory text", () => {
     fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({
       memory: {
