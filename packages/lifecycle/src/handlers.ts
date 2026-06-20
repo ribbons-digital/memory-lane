@@ -1,6 +1,7 @@
 import type { MemoryEngine, MemoryProvenance, MemorySource, SaveResult } from "@memory-lane/core"
 import { detectContinuityIntent, isMemoryManagementListIntent, limitsFromContextPolicy, renderContinuityIntentGuidance, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, resolveContextPolicy, selectBaselineMemories, selectMemoriesForInjection, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
+import { extractCheckpointCandidatesFromPostToolUse, extractCheckpointCandidatesFromStop, filterDuplicateCheckpointCandidates } from "./checkpoint-capture.js"
 import { summarizeToolOutcome } from "./tool-outcomes.js"
 import type { LifecycleResult, MemoryCandidate, MemoryContextDecision, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
 
@@ -232,10 +233,18 @@ export function handleSessionStart(
 
 export function handleStop(engine: MemoryEngine, input: StopInput, options?: LifecycleHandlerOptions): LifecycleResult {
   engine.refreshScope(input.cwd)
-  return persistCandidates(engine, extractStopCandidates(input), input, "turn_stop", options)
+  const candidates = [
+    ...extractStopCandidates(input),
+    ...filterDuplicateCheckpointCandidates(engine, extractCheckpointCandidatesFromStop(input)),
+  ]
+  return persistCandidates(engine, candidates, input, "turn_stop", options)
 }
 
 export function handlePostToolUse(engine: MemoryEngine, input: PostToolUseInput, options?: LifecycleHandlerOptions): LifecycleResult {
   engine.refreshScope(input.cwd)
-  return persistCandidates(engine, summarizeToolOutcome(input), input, "post_tool_use", options)
+  const candidates = [
+    ...summarizeToolOutcome(input),
+    ...filterDuplicateCheckpointCandidates(engine, extractCheckpointCandidatesFromPostToolUse(input)),
+  ]
+  return persistCandidates(engine, candidates, input, "post_tool_use", options)
 }

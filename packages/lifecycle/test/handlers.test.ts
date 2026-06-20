@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import * as path from "node:path"
 import { MemoryEngine, writeConfig } from "@memory-lane/core"
 import { tempDir } from "../../core/test/helpers.js"
-import { handleSessionStart, handleUserPromptSubmit } from "../src/handlers.ts"
+import { handlePostToolUse, handleSessionStart, handleStop, handleUserPromptSubmit } from "../src/handlers.ts"
 
 function engineInTemp(cwd?: string, memoryConfig?: Record<string, unknown>): MemoryEngine {
   const dir = tempDir()
@@ -324,4 +324,107 @@ test("session-start selective policy uses configured item budget", () => {
     },
     omittedReasons: ["budget-or-filter"],
   })
+})
+
+test("stop captures checkpoint progress as pending project checkpoint", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handleStop(engine, {
+    cwd: project,
+    sessionId: "session-1",
+    turnId: "turn-1",
+    lastUserMessage: "Released v0.2.12 and verified the release workflow.",
+  }, { adapter: "test" })
+
+  assert.equal(result.saved.length, 1)
+  assert.equal(result.saved[0]?.status, "saved")
+  if (result.saved[0]?.status !== "saved") throw new Error("expected saved checkpoint")
+  assert.equal(result.saved[0].memory.status, "pending")
+  assert.equal(result.saved[0].memory.kind, "project_checkpoint")
+  assert.equal(result.saved[0].memory.category, "project")
+  assert.equal(result.saved[0].memory.scope.type, "project")
+  assert.equal(result.saved[0].memory.source, "agent-suggested")
+  assert.equal(result.saved[0].memory.provenance?.adapter, "test")
+  assert.equal(result.saved[0].memory.provenance?.lifecycleEvent, "turn_stop")
+  assert.equal(result.saved[0].memory.provenance?.sessionId, "session-1")
+  assert.equal(result.saved[0].memory.provenance?.turnId, "turn-1")
+})
+
+test("stop skips duplicate checkpoint candidates", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+  engine.save({ text: "Released v0.2.12.", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint" })
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: "Released v0.2.12.",
+  })
+
+  assert.equal(result.saved.length, 0)
+  assert.equal(engine.list({ status: "pending" }).length, 0)
+})
+
+test("post-tool-use captures successful release command as pending checkpoint", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handlePostToolUse(engine, {
+    cwd: project,
+    toolName: "Bash",
+    toolInput: { command: "gh release create v0.2.12 --notes-file release.md" },
+    toolResponse: { stdout: "https://github.com/ribbons-digital/memory-lane/releases/tag/v0.2.12", exit_code: 0 },
+  }, { adapter: "test" })
+
+  assert.equal(result.saved.length, 1)
+  assert.equal(result.saved[0]?.status, "saved")
+  if (result.saved[0]?.status !== "saved") throw new Error("expected saved checkpoint")
+  assert.equal(result.saved[0].memory.text, "Released v0.2.12.")
+  assert.equal(result.saved[0].memory.status, "pending")
+  assert.equal(result.saved[0].memory.kind, "project_checkpoint")
+  assert.equal(result.saved[0].memory.category, "project")
+  assert.equal(result.saved[0].memory.scope.type, "project")
+  assert.equal(result.saved[0].memory.source, "agent-suggested")
+  assert.equal(result.saved[0].memory.provenance?.adapter, "test")
+  assert.equal(result.saved[0].memory.provenance?.lifecycleEvent, "post_tool_use")
+  assert.equal(result.saved[0].memory.provenance?.toolName, "Bash")
+})
+
+test("post-tool-use captures successful merge command as pending checkpoint", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handlePostToolUse(engine, {
+    cwd: project,
+    toolName: "Bash",
+    toolInput: { command: "gh pr merge 19 --squash --delete-branch" },
+    toolResponse: { stdout: "Merged pull request #19", exit_code: 0 },
+  }, { adapter: "test" })
+
+  assert.equal(result.saved.length, 1)
+  assert.equal(result.saved[0]?.status, "saved")
+  if (result.saved[0]?.status !== "saved") throw new Error("expected saved checkpoint")
+  assert.equal(result.saved[0].memory.text, "Merged PR #19.")
+  assert.equal(result.saved[0].memory.status, "pending")
+  assert.equal(result.saved[0].memory.kind, "project_checkpoint")
+  assert.equal(result.saved[0].memory.category, "project")
+  assert.equal(result.saved[0].memory.scope.type, "project")
+  assert.equal(result.saved[0].memory.source, "agent-suggested")
+  assert.equal(result.saved[0].memory.provenance?.adapter, "test")
+  assert.equal(result.saved[0].memory.provenance?.lifecycleEvent, "post_tool_use")
+  assert.equal(result.saved[0].memory.provenance?.toolName, "Bash")
+})
+
+test("post-tool-use ignores failed release command", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handlePostToolUse(engine, {
+    cwd: project,
+    toolName: "Bash",
+    toolInput: { command: "gh release create v0.2.12" },
+    toolResponse: { stderr: "failed", exit_code: 1 },
+  })
+
+  assert.equal(result.saved.length, 0)
 })
