@@ -521,17 +521,18 @@ Out of scope for Phase 16:
 
 ## Phase 17 — Review-First Progress and Checkpoint Capture
 
-**Status:** Slice 1 complete: checkpoint candidate review labels are implemented for CLI review and MCP `memory_review`. Capture, dedup/debounce, and future review improvements remain follow-up work.
+**Status:** Slice 1 complete: checkpoint candidate review labels are implemented for CLI review and MCP `memory_review`. The unified continuity contract slice is complete: core exposes a canonical continuity read model, CLI exposes `memory-lane continuity`, MCP exposes `memory_continuity`, and lifecycle/docs guidance now points continuity questions to those read-only surfaces before topic recall. Capture, dedup/debounce, and future review improvements remain follow-up work.
 
 **Goal:** Capture high-value continuity events such as releases, merges, major fixes, and roadmap decisions as reviewable checkpoint candidates, so another session can pick up the project state without the user restating it.
 
 This phase should make Memory Lane more proactive in later slices, but still not autonomous. It should suggest durable project progress when evidence is strong and let the user approve before it affects future sessions. The completed first slice is review-labeling only.
 
-Completed Slice 1 scope:
+Completed scope:
 
 1. Added conservative checkpoint candidate classification for pending memories that look like releases, merges, verification milestones, docs syncs, roadmap decisions, major fixes, or explicit `project_checkpoint` records.
 2. Labeled checkpoint candidates in CLI `memory-lane review`, CLI `review --json`, and MCP `memory_review` with text-free structured metadata.
-3. Kept Phase 17 review-first: no automatic checkpoint capture, dedup/debounce, background writes, recall ranking changes, workstream/thread ids, new config flags, MCP mutation tools, or lifecycle context changes were added.
+3. Added the unified continuity contract: core continuity read model, `memory-lane continuity`, MCP `memory_continuity`, and prompt-time/docs guidance that treats continuity as canonical before topic-specific recall.
+4. Kept Phase 17 review-first: no automatic checkpoint capture, dedup/debounce, background writes, recall ranking changes, workstream/thread ids, new config flags, or MCP mutation tools were added.
 
 Remaining Phase 17 follow-up decisions:
 
@@ -579,6 +580,7 @@ First-slice decisions:
 - Do not expand `MemoryCategory` for learning taxonomy in the first slice; keep existing `preference`, `personal`, and `project` categories stable.
 - Add learning semantics primarily through additional `MemoryKind` values such as `failure`, `correction`, `insight`, `tool_quirk`, `convention`, and `procedure` only after review/dashboard and freshness foundations are in place.
 - Default new automatic learning outputs to `pending` unless the user explicitly asks Memory Lane to remember something.
+- Workflow-violation corrections are first-class learning candidates: when a user points out that an agent violated an established project workflow or operating agreement, Memory Lane should suggest a pending correction/procedure memory so future continuity surfaces can reinforce the guardrail.
 - Store procedural memory as Memory Lane records first; exporting approved procedures into Pi/Claude/Codex/Cursor/Hermes-native skill/rule formats is a later optional integration layer.
 - Keep raw transcripts, raw tool outputs, secrets, and harness-internal markers out of saved memory text.
 
@@ -586,9 +588,10 @@ Todos:
 
 1. Add non-breaking `MemoryKind` values for learning taxonomy and update validation, formatting, docs, Obsidian mirror/import handling, MCP schemas, and tests.
 2. Add shared correction detection in `@memory-lane/lifecycle` using high-confidence heuristics plus negative patterns; adapters provide recent bounded turn context, and detected corrections save as pending candidates by default.
-3. Expand post-tool-use learning beyond current package-manager/test-command heuristics to capture conservative failure/tool-quirk candidates when a failed action and safe recovery evidence are both available.
-4. Add structured procedure-memory support (`kind: "procedure"`) with fields or conventions for when-to-use, steps, pitfalls, and verification, while keeping native skill export out of the first slice.
-5. Add opt-in background learning config and lifecycle review plumbing only after token-aware policy and dashboard/review controls are in place; reviews must be bounded, best-effort, privacy-safe, and harness-neutral.
+3. Add review-first workflow-violation capture for moments like “you forgot our PR-protected workflow”: detect the correction, suggest a pending `correction` or `procedure` memory, and surface it through continuity/operating-agreement inspection before future high-risk actions such as merge, release, cleanup, or branch deletion.
+4. Expand post-tool-use learning beyond current package-manager/test-command heuristics to capture conservative failure/tool-quirk candidates when a failed action and safe recovery evidence are both available.
+5. Add structured procedure-memory support (`kind: "procedure"`) with fields or conventions for when-to-use, steps, pitfalls, and verification, while keeping native skill export out of the first slice.
+6. Add opt-in background learning config and lifecycle review plumbing only after token-aware policy and dashboard/review controls are in place; reviews must be bounded, best-effort, privacy-safe, and harness-neutral.
 
 ## Phase 20 — Time-Aware Memory and Consolidation
 

@@ -6,6 +6,7 @@ import * as path from "node:path"
 import { MemoryEngine } from "@memory-lane/core"
 import {
   handleMemoryApprove,
+  handleMemoryContinuity,
   handleMemoryDelete,
   handleMemoryList,
   handleMemoryRecall,
@@ -250,6 +251,50 @@ test("review mutation tools report missing ids without throwing", async () => {
 
   assert.equal(result.ok, true)
   assert.deepEqual(result.data, { status: "not_found", id: "missing-id" })
+})
+
+test("memory_continuity applies projectPath before reading continuity", async () => {
+  const projectA = tempDir()
+  const projectB = tempDir()
+  fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "mcp-continuity-project-a" }))
+  fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "mcp-continuity-project-b" }))
+
+  const engine = engineInTemp(projectB)
+  engine.save({ text: "Approved project B checkpoint", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint" })
+  engine.refreshScope(projectA)
+  engine.save({ text: "Approved project A checkpoint", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint" })
+  engine.save({ text: "Merged PR #18 adding project A continuity hints.", status: "pending", category: "project", scopeType: "project", kind: "project_fact" })
+  engine.refreshScope(projectB)
+
+  const result = parseToolResult(await handleMemoryContinuity(engine, { projectPath: projectA }))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.meta.projectScope, "mcp-continuity-project-a")
+  assert.equal(result.data.continuity.projectScope, "mcp-continuity-project-a")
+  assert.match(result.data.continuity.latestApproved.project.preview, /Approved project A checkpoint/u)
+  assert.equal(result.data.continuity.pendingContinuity.length, 1)
+  assert.match(result.data.continuity.pendingContinuity[0].preview, /project A continuity/u)
+  assert.ok(result.data.continuity.warnings.some((warning: any) => warning.code === "mcp-explicit-tools-only"))
+  assert.ok(result.data.notes.some((note: string) => /explicit tools only/u.test(note)))
+})
+
+test("memory_continuity explains missing projectPath when no project scope is active", async () => {
+  const previousCwd = process.cwd()
+  const cwd = tempDir()
+  try {
+    process.chdir(cwd)
+    const engine = engineInTemp()
+
+    const result = parseToolResult(await handleMemoryContinuity(engine, {}))
+
+    assert.equal(result.ok, true)
+    assert.equal(result.meta.projectScope, "none")
+    assert.equal(result.data.continuity.projectScope, "none")
+    assert.match(result.data.notes.join("\n"), /No projectPath was provided/u)
+    assert.ok(result.data.continuity.warnings.some((warning: any) => warning.code === "no-project-scope"))
+  } finally {
+    process.chdir(previousCwd)
+  }
 })
 
 test("memory_status returns doctor counts without memory text", async () => {

@@ -1,6 +1,6 @@
 import { classifyCheckpointCandidate, groupReviewMemories, type CheckpointCandidateMetadata, type MemoryEngine, type MemoryMutationResult, type MemoryRecord, type RecallResult, type SaveResult } from "@memory-lane/core"
 import type {
-  ListToolInput, MemoryIdToolInput, RecallToolInput, ReviewFilters, ReviewToolInput, SaveToolInput, StatusToolInput, SuggestToolInput, ToolEnvelope,
+  ContinuityToolInput, ListToolInput, MemoryIdToolInput, RecallToolInput, ReviewFilters, ReviewToolInput, SaveToolInput, StatusToolInput, SuggestToolInput, ToolEnvelope,
 } from "./types.js"
 
 type ToolResult<T> = {
@@ -102,6 +102,22 @@ export async function handleMemoryStatus(engine: MemoryEngine, input: StatusTool
   try {
     applyProjectPath(engine, input.projectPath)
     return jsonContent(envelope(engine, statusData(engine, input.since)))
+  } catch (error) {
+    return jsonContent(errorEnvelope(error))
+  }
+}
+
+export async function handleMemoryContinuity(engine: MemoryEngine, input: ContinuityToolInput) {
+  try {
+    applyProjectPath(engine, input.projectPath)
+    return jsonContent(envelope(engine, {
+      continuity: engine.continuity({ caller: "mcp" }),
+      notes: [
+        "Use memory_continuity for last-worked-on, accomplished, next-action, resume, and project-status questions.",
+        "MCP provides explicit tools only; it does not run lifecycle hooks or automatic context injection.",
+        ...scopeNotes(engine),
+      ],
+    }))
   } catch (error) {
     return jsonContent(errorEnvelope(error))
   }

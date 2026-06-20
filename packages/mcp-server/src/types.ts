@@ -40,6 +40,8 @@ export interface StatusToolInput extends ProjectPathInput {
   since?: string
 }
 
+export interface ContinuityToolInput extends ProjectPathInput {}
+
 export interface MemoryIdToolInput extends ProjectPathInput {
   id: string
 }

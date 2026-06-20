@@ -2,7 +2,7 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { buildContinuityHints, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, type CheckpointCandidateMetadata, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type OperatingAgreementList, type OperatingAgreementSummary, type UpdatePreview, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
+import { buildContinuityHints, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, type CheckpointCandidateMetadata, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type UpdatePreview, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
@@ -504,6 +504,36 @@ function formatContinuityHintSummary(value: unknown): string | undefined {
   return `Continuity hints: ${value.hintCount} (${codes}). Use memory-lane dashboard for inspection actions.`
 }
 
+export function formatContinuityReadModel(model: ContinuityReadModel, json: boolean, extraMeta?: Record<string, unknown>): string {
+  if (json) {
+    return JSON.stringify({ ok: true, data: model, meta: meta(extraMeta) }, null, 2)
+  }
+
+  const lines = [
+    boxen([
+      `Project: ${model.projectScope}`,
+      `${figures.pointerSmall} Approved visible ${model.status.visibleApprovedCount}   Pending continuity ${model.status.pendingContinuityCount}`,
+    ].join("\n"), { title: "Memory Lane Continuity", titleAlignment: "center", padding: 1, borderStyle: "round", borderColor: supportsColor() ? "cyan" : undefined }),
+  ]
+
+  if (model.latestApproved.project) {
+    lines.push("", colorize("Latest approved", "bold"), `  [${model.latestApproved.project.id}] ${model.latestApproved.project.preview}`)
+  }
+  if (model.latestApproved.global) {
+    lines.push("", colorize("Latest approved (global)", "bold"), `  [${model.latestApproved.global.id}] ${model.latestApproved.global.preview}`)
+  }
+  if (model.pendingContinuity.length) {
+    lines.push("", colorize("Pending continuity", "bold"))
+    for (const item of model.pendingContinuity) lines.push(`  [${item.id}] ${item.preview}`)
+  }
+  if (model.warnings.length) {
+    lines.push("", colorize("Warnings", "yellow"))
+    for (const warning of model.warnings) lines.push(`  ${figures.warning} ${warning.code}: ${warning.message}`)
+  }
+  lines.push("", colorize("Suggested actions", "bold"), ...model.suggestedActions.map((action) => `  ${figures.pointerSmall} ${action}`))
+  return lines.join("\n")
+}
+
 export function formatOperatingAgreements(result: OperatingAgreementList, json: boolean): string {
   if (json) {
     return JSON.stringify({ ok: true, data: result, meta: meta({ count: result.primary.length, relatedCount: result.relatedCandidates.length }) }, null, 2)
@@ -623,6 +653,7 @@ Commands:
                   Compact continuity and review overview
   agreements [--area <area>] [--limit <n>] [--related-limit <n>] [--all]
                   Show approved operating agreements for the current project and global scope
+  continuity [--json]    Canonical continuity read model for resumption/status questions
   compact
   doctor [--since <ISO timestamp>]
   reindex [--force]

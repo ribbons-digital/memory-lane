@@ -46,6 +46,13 @@ function registeredToolNames(server: unknown): string[] {
   return Object.keys(registeredTools).sort()
 }
 
+function registeredTool(server: unknown, name: string): any {
+  const registeredTools = (server as { _registeredTools?: Record<string, unknown> })._registeredTools
+  assert.equal(typeof registeredTools, "object")
+  assert.notEqual(registeredTools, null)
+  return registeredTools[name]
+}
+
 test("direct index entrypoint detection supports existing client configs", () => {
   const dir = tempDir("memory-lane-mcp-entrypoint-")
   const indexPath = path.join(dir, "index.js")
@@ -56,7 +63,7 @@ test("direct index entrypoint detection supports existing client configs", () =>
   assert.equal(isDirectExecution(pathToFileURL(indexPath).href, path.join(dir, "cli.js")), false)
 })
 
-test("exports status and review-complete MCP tool names", () => {
+test("exports status review-complete and continuity MCP tool names", () => {
   assert.deepEqual(MEMORY_LANE_TOOL_NAMES, [
     "memory_save",
     "memory_suggest",
@@ -64,6 +71,7 @@ test("exports status and review-complete MCP tool names", () => {
     "memory_status",
     "memory_list",
     "memory_review",
+    "memory_continuity",
     "memory_approve",
     "memory_reject",
     "memory_delete",
@@ -154,11 +162,12 @@ test("createMemoryLaneEngine loads bundled plugins", async () => {
   assert.equal(plugins[0].mcpTools[0].name, "fake_bundled_tool")
 })
 
-test("registers status and review-complete tools on the MCP server", () => {
+test("registers status review-complete and continuity tools on the MCP server", () => {
   const server = createMemoryLaneMcpServer({ engine: engineInTemp() })
 
   assert.deepEqual(registeredToolNames(server), [
     "memory_approve",
+    "memory_continuity",
     "memory_delete",
     "memory_list",
     "memory_recall",
@@ -168,6 +177,10 @@ test("registers status and review-complete tools on the MCP server", () => {
     "memory_status",
     "memory_suggest",
   ])
+
+  const continuityTool = registeredTool(server, "memory_continuity")
+  assert.match(continuityTool.description, /Prefer this over memory_recall for continuity questions/u)
+  assert.match(continuityTool.description, /Pass projectPath/u)
 })
 
 test("createMemoryLaneEngine uses explicit environment paths", async () => {

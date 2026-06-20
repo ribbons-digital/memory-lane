@@ -67,6 +67,10 @@ _Avoid_: Relevant memory, session summary, automatic handoff, cleanup recommenda
 A natural-language user prompt that asks an agent to resume prior work, locate where or when prior work happened, understand current project progress, or decide the next work item. It triggers bounded Memory Lane inspection guidance and, when topic-specific, targeted recall/search. It is not a lifecycle continuity notice, session summary, or automatic handoff.
 _Avoid_: Continuity notice, session summary, automatic handoff, lifecycle event
 
+**Continuity read model**:
+A read-only, project-scoped summary of Memory Lane continuity state for resumption/status questions. It combines approved project state, pending continuity candidates, freshness and hygiene signals, operating-agreement metadata, and harness guidance into one bounded structured result. It does not mutate memories, approve pending records, run cleanup, or replace repository inspection when current repo access is available.
+_Avoid_: Recall result, lifecycle injection, session summary, automatic checkpoint capture
+
 **Checkpoint candidate**:
 A pending Memory Lane memory that represents high-value project progress, such as a merge, release, verification milestone, docs sync, major fix, or roadmap decision. It is review-first: Memory Lane may suggest it from strong evidence, but it does not affect future continuity until approved.
 _Avoid_: Approved checkpoint, session summary, automatic handoff, lifecycle notice

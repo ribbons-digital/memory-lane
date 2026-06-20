@@ -18,6 +18,7 @@ Memory Lane is not meant to be another isolated chat-history search box. Its goa
 - [CLI Commands](#cli-commands)
   - [Freshness status](#freshness-status)
   - [Operating agreements](#operating-agreements)
+  - [Continuity read model](#continuity-read-model)
   - [Continuity hints](#continuity-hints)
   - [Session-end summarization](#session-end-summarization)
   - [Obsidian mirror](#obsidian-mirror)
@@ -414,6 +415,7 @@ memory-lane review --provenance pi/session_end Filter pending review by adapter/
 memory-lane review --suspect-meta Show likely old pending operational prompt pollution only
 memory-lane review --suspect-meta --include-approved Show pending+approved suspect pollution
 memory-lane dashboard [--all]     Compact continuity/review overview without long memory bodies
+memory-lane continuity [--json]   Canonical continuity read model for resumption/status questions
 memory-lane agreements            Show approved operating agreements for the current project/global scope
 memory-lane update <id>           Revise an active memory with the same id
 memory-lane supersede <new-id> <old-id...> Link approved old memories to an approved successor
@@ -470,6 +472,14 @@ memory-lane agreements --all
 ```
 
 `memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` include text-free operating agreement metadata so clients can notice that agreements exist without injecting the agreement bodies.
+
+### Continuity read model
+
+Use `memory-lane continuity --json` as the canonical CLI surface for continuity questions such as “what were we last working on?”, “what changed?”, “what did we accomplish?”, “what should we do next?”, and project status/resumption checks. The read model combines latest approved project/global continuity, pending continuity review candidates, freshness, operating-agreement metadata, continuity hints, warnings, suggested actions, and harness guidance in one bounded response.
+
+For MCP clients, call `memory_continuity({ projectPath })` first for the same continuity questions; pass `projectPath` when the desktop/client process is not already scoped to the project. Do not answer continuity questions from `memory_recall` alone. Use recall only as a topic-specific follow-up after continuity inspection, for example when the continuity read model points to an area that needs more detail.
+
+The continuity read model is read-only. It may include bounded previews of selected memory records, but it does not inject additional memory bodies into lifecycle prompts, approve pending memories, mutate records, clean up scopes, or replace the review queue.
 
 ### Continuity hints
 
@@ -712,12 +722,15 @@ The MCP server exposes explicit tools only:
 - `memory_save` — save an approved memory
 - `memory_suggest` — queue a pending suggestion, or save approved when `status: "approved"`
 - `memory_recall` — recall relevant memories for a query
+- `memory_continuity` — canonical continuity read model for project resumption, last-worked-on, accomplished, next-action, and project-status questions
 - `memory_status` — read Memory Lane counts, config paths, project scope, and integration diagnostics
 - `memory_list` — list memories visible to the current project scope by default
 - `memory_review` — list pending memories for review; supports `kind`, `source`, and `provenance` filters such as `kind: "session_summary"`, `source: "session-summary"`, and `provenance: "pi/session_end"`
 - `memory_approve` — approve a memory by id
 - `memory_reject` — reject a memory by id
 - `memory_delete` — soft-delete a memory by id
+
+Use `memory_continuity({ projectPath })` from MCP clients before answering continuity questions such as project resumption, last-worked-on, accomplished, next-action, or project-status prompts. Prefer it over `memory_recall` for continuity; `memory_recall` is a topic-specific follow-up after continuity inspection, not an authority by itself.
 
 Use `memory_status` from MCP clients when you want the same kind of read-only setup/status overview that `memory-lane doctor` provides in a terminal. It reports counts and diagnostics only; it does not return raw memory text or run lifecycle hooks. Use filtered `memory_review` calls when you want an MCP client to inspect only pending session summaries or continuity candidates from a specific adapter/event before approving or rejecting them.
 
@@ -802,9 +815,11 @@ For `SessionStart`, baseline memory selection is project-first when a project sc
 
 ### Prompt-time continuity guidance
 
-When lifecycle prompt hooks receive natural continuity questions such as “resume building X,” “where was X implemented,” “what were we last working on,” or “what should we work on next,” Memory Lane may add a compact inspection-first guidance block. The guidance tells the agent to inspect project state with commands such as `memory-lane status --json`, `memory-lane dashboard`, and targeted `memory-lane recall "X"` when a topic is detected.
+When lifecycle prompt hooks receive natural continuity questions such as “resume building X,” “where was X implemented,” “what were we last working on,” or “what should we work on next,” Memory Lane may add a compact inspection-first guidance block. The guidance leads CLI-capable harnesses to `memory-lane continuity --json` and MCP clients to `memory_continuity({ projectPath })`, then keeps existing status/dashboard and targeted `memory-lane recall "X"` follow-up when a topic is detected.
 
-This prompt-time guidance is governed by `memory.contextPolicy.mode`: `off` suppresses it, `policy-only` emits guidance without memory bodies, and `selective` can render guidance before the normal budgeted relevant-memory block. It does not write memories, run cleanup, change recall ranking, or require users to know Memory Lane internal terms such as operating agreements or continuity hints.
+Do not answer continuity questions from `memory_recall` alone. Recall is useful for topic-specific follow-up after continuity inspection, but canonical continuity state comes from `memory-lane continuity --json` or MCP `memory_continuity({ projectPath })`.
+
+This prompt-time guidance is governed by `memory.contextPolicy.mode`: `off` suppresses it, `policy-only` emits guidance without memory bodies, and `selective` can render guidance before the normal budgeted relevant-memory block. It does not write memories, run cleanup, change recall ranking, inject additional memory bodies, or require users to know Memory Lane internal terms such as operating agreements or continuity hints.
 
 ### Lifecycle continuity notices
 

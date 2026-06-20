@@ -206,12 +206,15 @@ test("renders text-free continuity intent guidance", () => {
 
   assert.match(guidance, /Memory Lane continuity guidance/u)
   assert.match(guidance, /prior or ongoing project work/u)
+  assert.match(guidance, /memory-lane continuity --json/u)
+  assert.match(guidance, /memory_continuity\(\{ projectPath \}\)/u)
+  assert.match(guidance, /Do not answer from memory_recall alone/u)
   assert.match(guidance, /memory-lane status --json/u)
   assert.match(guidance, /memory-lane dashboard/u)
   assert.match(guidance, /memory-lane recall 'lifecycle continuity'/u)
   assert.doesNotMatch(guidance, /operating agreement/u)
   assert.doesNotMatch(guidance, /continuity hint/u)
-  assert.doesNotMatch(guidance, /memory_[a-z0-9]+|raw transcript|tool output/iu)
+  assert.doesNotMatch(guidance, /raw transcript|tool output/iu)
 })
 
 test("shell-quotes continuity recall topics with shell metacharacters", () => {
@@ -235,6 +238,9 @@ test("renders broad continuity guidance without topic recall", () => {
     family: "next-work",
   })
 
+  assert.match(guidance, /memory-lane continuity --json/u)
+  assert.match(guidance, /memory_continuity\(\{ projectPath \}\)/u)
+  assert.match(guidance, /Do not answer from memory_recall alone/u)
   assert.match(guidance, /memory-lane status --json/u)
   assert.match(guidance, /memory-lane dashboard/u)
   assert.match(guidance, /review current plan, roadmap, and review queue/u)

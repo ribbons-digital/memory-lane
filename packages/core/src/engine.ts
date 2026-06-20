@@ -23,6 +23,7 @@ import {
 import { isMetaTaskPromptText } from "./meta-task-filter.js"
 import { buildFreshnessStatus } from "./freshness.js"
 import { buildContinuityHints } from "./continuity-hints.js"
+import { buildContinuityReadModel } from "./continuity-read-model.js"
 import { selectOperatingAgreements, summarizeOperatingAgreements } from "./operating-agreements.js"
 import {
   contentHash, createNewMemory, saveContext, shouldAutoEmbed, timestamp, visibleInScope,
@@ -32,7 +33,7 @@ import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
   MemoryKind, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, UpdatePreview, ProjectScope,
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig,
-  FreshnessStatus, ContinuityHintSummary, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
+  FreshnessStatus, ContinuityHintSummary, ContinuityReadModel, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
   SupersedeResult, ReplaceResult, MemoryRevisionActor,
 } from "./types.js"
 
@@ -711,6 +712,13 @@ export class MemoryEngine {
     return buildContinuityHints(this.store.list(), {
       projectScopeKey: this.scope?.key,
       since: opts?.since,
+    })
+  }
+
+  continuity(opts?: { caller?: "cli" | "mcp" | "lifecycle" | "core" }): ContinuityReadModel {
+    return buildContinuityReadModel(this.store.list(), {
+      projectScopeKey: this.scope?.key,
+      caller: opts?.caller,
     })
   }
 
