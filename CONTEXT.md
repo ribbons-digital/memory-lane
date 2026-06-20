@@ -47,6 +47,14 @@ _Avoid_: Canonical revision, automatic cleanup, superseded memory
 An approved visible memory that looks like an operating agreement but overlaps with a primary agreement or was matched heuristically. Related candidates are surfaced for human review and future revision/supersede workflows, not hidden or cleaned up automatically.
 _Avoid_: Rejected duplicate, cleanup recommendation, superseded memory
 
+**Global preference layer**:
+A bounded automatic-context selection layer for approved global preference-like memories, including global `preference` category records, `preference` kind records, and `workflow_rule` records. It lets durable user-wide preferences influence sessions across harnesses without crowding out current-project continuity.
+_Avoid_: Unbounded global memory injection, automatic preference approval, override rule
+
+**Project preference layer**:
+The automatic-context selection layer for approved current-project preference-like memories. It renders before global preferences so narrower project guidance is easier to follow, without creating an explicit supersede, cleanup, or conflict-resolution relationship.
+_Avoid_: Supersede relationship, automatic override, project memory cleanup
+
 **Same-id update**:
 An append-only revision of an active memory that keeps the same memory id while changing fields such as text, category, kind, or approved/pending status. It corrects or refines the same durable memory and preserves created-at identity.
 _Avoid_: Replacement memory, supersede relationship, deletion

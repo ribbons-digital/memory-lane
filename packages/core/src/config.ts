@@ -30,6 +30,8 @@ export const DEFAULT_CONFIG: SemanticMemoryConfig = {
       mode: "selective",
       maxItems: { sessionStart: 4, prompt: 6 },
       maxChars: { sessionStart: 1600, prompt: 3000 },
+      preferenceMaxItems: { sessionStart: 2, prompt: 2 },
+      preferenceMaxChars: { sessionStart: 600, prompt: 900 },
       includePending: false,
       fallbackToSearch: true,
     },
@@ -152,6 +154,16 @@ function validateContextPolicyConfig(v: unknown): void {
     const maxChars = obj(o.maxChars, "memory.contextPolicy.maxChars")
     if (maxChars.sessionStart !== undefined) positiveInt(maxChars.sessionStart, "memory.contextPolicy.maxChars.sessionStart")
     if (maxChars.prompt !== undefined) positiveInt(maxChars.prompt, "memory.contextPolicy.maxChars.prompt")
+  }
+  if (o.preferenceMaxItems !== undefined) {
+    const preferenceMaxItems = obj(o.preferenceMaxItems, "memory.contextPolicy.preferenceMaxItems")
+    if (preferenceMaxItems.sessionStart !== undefined) positiveInt(preferenceMaxItems.sessionStart, "memory.contextPolicy.preferenceMaxItems.sessionStart")
+    if (preferenceMaxItems.prompt !== undefined) positiveInt(preferenceMaxItems.prompt, "memory.contextPolicy.preferenceMaxItems.prompt")
+  }
+  if (o.preferenceMaxChars !== undefined) {
+    const preferenceMaxChars = obj(o.preferenceMaxChars, "memory.contextPolicy.preferenceMaxChars")
+    if (preferenceMaxChars.sessionStart !== undefined) positiveInt(preferenceMaxChars.sessionStart, "memory.contextPolicy.preferenceMaxChars.sessionStart")
+    if (preferenceMaxChars.prompt !== undefined) positiveInt(preferenceMaxChars.prompt, "memory.contextPolicy.preferenceMaxChars.prompt")
   }
   if (o.includePending !== undefined) bool(o.includePending, "memory.contextPolicy.includePending")
   if (o.fallbackToSearch !== undefined) bool(o.fallbackToSearch, "memory.contextPolicy.fallbackToSearch")

@@ -544,24 +544,25 @@ Future follow-up boundaries:
 
 ## Phase 18 — Global Preference Layering and Context Policy
 
+**Status:** Slice 1 implemented locally on `feature/phase-18-preference-layering`: automatic context selection now treats preference-like memories as a bounded layer for SessionStart and UserPromptSubmit, adds optional preference budget fields to `memory.contextPolicy`, and documents existing inspection surfaces. Rich status/doctor/MCP selected/omitted preference-count diagnostics remain a deferred Phase 18 follow-up.
+
 **Goal:** Make durable personal preferences consistently available across projects and harnesses while preventing preferences from overpowering project-specific state.
 
 This phase addresses the “workflow feels different in each session” problem. Global preferences should be stable and portable, but still bounded by context policy and easy to inspect.
 
-First-slice decisions:
+Slice 1 completed scope:
 
-- Global preferences are not the same as project facts. They should be grouped, budgeted, and explained separately.
-- Project-specific preferences can override or narrow global preferences when clearly scoped.
-- Preference injection must remain token-aware and should prefer concise summaries or policy hints when the budget is tight.
-- Users need an authoritative way to inspect which preferences may be influencing a session.
+1. Added shared preference-layer selection that separates current-project preferences, current-project content, bounded global preferences, other global memory, and other visible project memory before context rendering.
+2. Extended `memory.contextPolicy` with optional `preferenceMaxItems` and `preferenceMaxChars` budgets without breaking existing defaults.
+3. Kept prompt-time selection relevance-driven while allowing relevant global preferences within the preference caps.
+4. Added cross-harness regression coverage through shared lifecycle tests plus existing Claude Code, Codex, and pi lifecycle-output tests.
+5. Documented how to save, inspect, and narrow global preferences safely through existing CLI/MCP surfaces.
 
-Todos:
+Deferred Phase 18 follow-ups:
 
-1. Add a shared preference-selection layer that separates global personal/preferences from project memories before context rendering.
-2. Extend `memory.contextPolicy` with preference-specific budgets or priority rules without breaking existing defaults.
-3. Add status/doctor/MCP metadata showing selected/omitted preference counts without exposing full preference text in diagnostics.
-4. Add tests for global preference inclusion, project override behavior, and bounded prompt/session-start rendering across Codex, Claude Code, pi, and MCP guidance.
-5. Document how to save, inspect, and override global preferences safely.
+1. Add status/doctor/MCP metadata showing selected/omitted preference counts without exposing full preference text in diagnostics.
+2. Improve preference conflict/override inspection beyond conservative project-first ordering and exact normalized duplicate omission.
+3. Expand dashboard/review guidance if users need a richer preference influence view after Slice 1 lands.
 
 ## Phase 19 — Harness-Neutral Learning Enhancements
 

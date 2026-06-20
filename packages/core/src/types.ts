@@ -426,6 +426,14 @@ export interface MemoryContextPolicyConfig {
     sessionStart?: number
     prompt?: number
   }
+  preferenceMaxItems?: {
+    sessionStart?: number
+    prompt?: number
+  }
+  preferenceMaxChars?: {
+    sessionStart?: number
+    prompt?: number
+  }
   includePending?: boolean
   fallbackToSearch?: boolean
 }
