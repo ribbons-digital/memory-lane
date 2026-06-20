@@ -330,6 +330,31 @@ test("stop shows pending review notice without debug when pending memory is save
   assert.doesNotMatch(parsed.systemMessage, /Codex hooks to surface|secret-id/u)
 })
 
+test("stop shows pending review notice for checkpoint capture without leaking checkpoint text", async () => {
+  const engine = engineInTemp()
+
+  const output = await runCodexHookCommand("stop", {
+    engine,
+    env: {} as NodeJS.ProcessEnv,
+    payloadText: stopPayload({
+      last_user_message: "PR #19 merged after review.",
+      last_assistant_message: "Done.",
+    }),
+  })
+
+  const parsed = JSON.parse(output)
+  assert.match(parsed.systemMessage, /Memory Lane: suggested 1 pending memory for review/u)
+  assert.match(parsed.systemMessage, /memory-lane review/u)
+  assert.doesNotMatch(parsed.systemMessage, /PR #19|merged after review/u)
+
+  const saved = engine.list({ all: true })
+  assert.equal(saved.length, 1)
+  assert.equal(saved[0].status, "pending")
+  assert.equal(saved[0].kind, "project_checkpoint")
+  assert.equal(saved[0].provenance?.adapter, "codex")
+  assert.equal(saved[0].provenance?.lifecycleEvent, "turn_stop")
+})
+
 test("post-tool-use shows pending review notice for pending tool outcome", async () => {
   const engine = engineInTemp()
 
