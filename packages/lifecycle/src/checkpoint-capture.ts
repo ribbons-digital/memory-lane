@@ -80,7 +80,8 @@ function safeNormalize(text: string): string | undefined {
 }
 
 function isQuestion(text: string): boolean {
-  return /^(?:what|how|why|when|where|who|do|does|did|is|are|can|could|should)\b/iu.test(text.trim())
+  const trimmed = text.trim()
+  return trimmed.endsWith("?") || /^(?:what|how|why|when|where|who|do|does|did|is|are|has|have|had|was|were|will|would|may|might|can|could|should)\b/iu.test(trimmed)
 }
 
 function isFutureOrReminder(text: string): boolean {
@@ -220,7 +221,7 @@ function majorFixMatchFromText(text: string): CheckpointMatch | undefined {
 
 function matchCheckpointText(text: string): CheckpointMatch | undefined {
   const normalized = compactWhitespace(text)
-  if (!normalizeMemoryText(normalized) || containsLikelySecret(normalized)) return undefined
+  if (!normalizeMemoryText(normalized) || containsLikelySecret(normalized) || isNegativeCheckpointEvidence(normalized)) return undefined
 
   const match = releaseMatchFromText(normalized)
     ?? mergeMatchFromText(normalized)

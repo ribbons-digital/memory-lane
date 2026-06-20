@@ -55,11 +55,26 @@ test("does not extract ambiguous future-tense checkpoint-like statements", () =>
   assert.deepEqual(extractCheckpointCandidatesFromStop({ cwd: process.cwd(), lastUserMessage: "Remember to update ROADMAP.md eventually." }), [])
 })
 
+test("does not extract question-shaped Stop checkpoint statements", () => {
+  for (const message of [
+    "Has PR #19 merged?",
+    "Please confirm PR #19 merged?",
+    "Was PR #19 merged?",
+    "Have we released v0.2.12?",
+    "Released v0.2.12?",
+    "PR #19 merged?",
+  ]) {
+    assert.deepEqual(extractCheckpointCandidatesFromStop({ cwd: process.cwd(), lastUserMessage: message }), [])
+  }
+})
+
 test("does not extract failed or negative Stop checkpoint statements", () => {
   for (const message of [
     "Released v0.2.12 failed.",
     "Tagged v0.2.12 was unsuccessful.",
     "Published v0.2.12 but could not complete release.",
+    "Released v0.2.12. It failed.",
+    "Published v0.2.12. Release failed.",
     "Merged PR #19 failed.",
     "PR #19 merged with error.",
     "Merged pull request 19 but was cancelled.",
