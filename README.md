@@ -845,6 +845,8 @@ Use existing inspection surfaces before changing or relying on preference state:
 - CLI: `memory-lane list --json`, `memory-lane review --json`, `memory-lane status --json`, and `memory-lane continuity --json`
 - MCP: `memory_list`, `memory_review`, `memory_status`, and `memory_continuity({ projectPath })`
 
+`memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` include text-free `preferenceDiagnostics` counts. These diagnostics show the visible preference pool and SessionStart preference-cap selection counts without returning preference bodies, ids, or previews. Use `memory-lane list --json`, `memory-lane review --json`, targeted recall, or MCP `memory_list`/`memory_recall` when you need the actual preference text.
+
 The optional `preferenceMaxItems` and `preferenceMaxChars` fields are caps, not guarantees. Overall `maxItems` and `maxChars` still cap the full rendered memory block.
 
 ### Prompt-time continuity guidance

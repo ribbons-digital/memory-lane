@@ -19,7 +19,7 @@ import type { SemanticMemoryConfig } from "@memory-lane/core"
 import { resolveBundledPlugin } from "./plugins.js"
 import {
   formatMemories, formatReviewMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
-  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatImportPlan, formatOperatingAgreements, formatContinuityReadModel, formatError, formatUpdatePreview, formatSupersedeResult, formatReplaceResult, usage,
+  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatPreferenceDiagnosticsSummary, formatImportPlan, formatOperatingAgreements, formatContinuityReadModel, formatError, formatUpdatePreview, formatSupersedeResult, formatReplaceResult, usage,
   type ObsidianImportApplyResult,
 } from "./formatters.js"
 
@@ -417,6 +417,7 @@ function handleStatus(ctx: CliContext): void {
   }
   const r = report as any
   const lines = [`Total: ${r.totalMemories}, Approved: ${r.approvedMemories}, Pending: ${r.pendingMemories}, Embeddings: ${r.embeddingCount}`]
+  lines.push(...formatPreferenceDiagnosticsSummary(r.preferenceDiagnostics, report))
   if (since) {
     const freshnessSummary = formatFreshnessSummary(r.freshness)
     if (freshnessSummary) lines.push(freshnessSummary)

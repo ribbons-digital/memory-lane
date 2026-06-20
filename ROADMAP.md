@@ -544,7 +544,7 @@ Future follow-up boundaries:
 
 ## Phase 18 — Global Preference Layering and Context Policy
 
-**Status:** Slice 1 implemented locally on `feature/phase-18-preference-layering`: automatic context selection now treats preference-like memories as a bounded layer for SessionStart and UserPromptSubmit, adds optional preference budget fields to `memory.contextPolicy`, and documents existing inspection surfaces. Rich status/doctor/MCP selected/omitted preference-count diagnostics remain a deferred Phase 18 follow-up.
+**Status:** Slice 1 merged via PR #21: automatic context selection treats preference-like memories as a bounded layer for SessionStart and UserPromptSubmit, adds optional preference budget fields to `memory.contextPolicy`, and documents existing inspection surfaces. The preference diagnostics follow-up is implemented locally on `feature/phase-18-preference-diagnostics`: status/doctor/MCP status expose text-free preference pool and SessionStart cap counts without adding new commands/tools or returning preference bodies.
 
 **Goal:** Make durable personal preferences consistently available across projects and harnesses while preventing preferences from overpowering project-specific state.
 
@@ -558,11 +558,16 @@ Slice 1 completed scope:
 4. Added cross-harness regression coverage through shared lifecycle tests plus existing Claude Code, Codex, and pi lifecycle-output tests.
 5. Documented how to save, inspect, and narrow global preferences safely through existing CLI/MCP surfaces.
 
+Preference diagnostics follow-up scope:
+
+1. Added text-free `preferenceDiagnostics` metadata to existing status/doctor/MCP status surfaces.
+2. Reported visible/current-project/global preference counts plus baseline SessionStart selected/omitted preference-cap counts.
+3. Kept diagnostics bounded and inspection-only: no new CLI commands, MCP tools, lifecycle behavior changes, prompt-time selected-count claims, automatic preference learning, cleanup, or preference text in status surfaces.
+
 Deferred Phase 18 follow-ups:
 
-1. Add status/doctor/MCP metadata showing selected/omitted preference counts without exposing full preference text in diagnostics.
-2. Improve preference conflict/override inspection beyond conservative project-first ordering and exact normalized duplicate omission.
-3. Expand dashboard/review guidance if users need a richer preference influence view after Slice 1 lands.
+1. Improve preference conflict/override inspection beyond conservative project-first ordering and exact normalized duplicate omission.
+2. Expand dashboard/review guidance if users need a richer preference influence view after diagnostics lands.
 
 ## Phase 19 — Harness-Neutral Learning Enhancements
 

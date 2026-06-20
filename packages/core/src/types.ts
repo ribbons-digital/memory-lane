@@ -376,6 +376,25 @@ export interface RecallResult {
   notice?: string
 }
 
+export interface PreferenceSessionStartDiagnostics {
+  maxPreferenceItems: number
+  maxPreferenceChars: number
+  selectedPreferenceCount: number
+  omittedPreferenceCount: number
+  selectedCurrentProjectPreferenceCount: number
+  selectedGlobalPreferenceCount: number
+}
+
+export interface PreferenceDiagnostics {
+  projectScope: string | "none"
+  visiblePreferenceCount: number
+  currentProjectPreferenceCount: number
+  globalPreferenceCount: number
+  workflowRulePreferenceCount: number
+  sessionStart: PreferenceSessionStartDiagnostics
+  notes: string[]
+}
+
 export interface EmbeddingRecord {
   memoryId: string
   memoryUpdatedAt: string
