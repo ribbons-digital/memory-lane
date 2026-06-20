@@ -71,6 +71,10 @@ _Avoid_: Continuity notice, session summary, automatic handoff, lifecycle event
 A pending Memory Lane memory that represents high-value project progress, such as a merge, release, verification milestone, docs sync, major fix, or roadmap decision. It is review-first: Memory Lane may suggest it from strong evidence, but it does not affect future continuity until approved.
 _Avoid_: Approved checkpoint, session summary, automatic handoff, lifecycle notice
 
+**Scope hygiene candidate**:
+An approved visible memory whose scope metadata may be broader than its content warrants, such as a global memory that appears to describe a specific project, repository, session, checkpoint, release, or implementation detail. It is an inspection signal only; Memory Lane does not automatically rescope, delete, reject, or supersede it.
+_Avoid_: Scope error, automatic cleanup, rejected memory, rescope recommendation
+
 **Obsidian mirror**:
 An optional one-way Markdown projection of Memory Lane's JSONL memory records into an Obsidian vault. The JSONL memory store remains the source of truth; edits to mirrored Markdown are not imported by the mirror.
 _Avoid_: Obsidian-backed storage, import, sync

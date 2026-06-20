@@ -480,7 +480,10 @@ Current hints report:
 - approved memories that are marked superseded but remain visible as historical records;
 - multiple operating-agreement candidates for the same workflow area;
 - project/global preference overlap in the same workflow area;
+- scope hygiene candidates: approved global memories that look project-specific because of their category, kind, or path-like content;
 - newer approved memories when `--since <ISO timestamp>` is provided.
+
+Scope hygiene hints are text-free inspection signals only. Memory Lane does not automatically rescope or clean up those memories; use `memory-lane list --json` to inspect them before deciding whether to update, supersede, or leave them alone.
 
 Hints invite inspection with commands such as `memory-lane dashboard`, `memory-lane agreements --area <area>`, `memory-lane agreements --all`, and `memory-lane list --json`. They do not perform cleanup, hide superseded memories, change recall ranking, or suggest mutation commands.
 

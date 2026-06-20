@@ -95,6 +95,7 @@ function continuityHints(overrides: Partial<ContinuityHintSummary> = {}): Contin
       kind: "workflow_rule",
       supersededBy: "new-secret-id",
     }],
+    scopeHygieneCandidates: [],
     operatingAgreementOverlaps: [],
     projectGlobalPreferenceOverlaps: [],
     newerApproved: {

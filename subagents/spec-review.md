@@ -11,21 +11,21 @@ Approval status: Approved.
 - None found.
 
 ### Correct
-- SessionStart baseline selection now matches the project-first tier order required by the design: current project, global, other project, then other/legacy when `projectScope` is known, with recency inside each tier (`docs/superpowers/specs/2026-06-19-project-first-session-start-design.md:36-45`; implemented in `packages/lifecycle/src/injection.ts:601-614`).
-- No-scope fallback remains recency-first because `baselineTier` returns `0` for every memory when `projectScope` is absent and the comparator then sorts only by `updatedAt` descending (`packages/lifecycle/src/injection.ts:601-614`). The existing no-scope budget test still expects recent IDs `2`, `3`, `4` without passing `projectScope` (`packages/lifecycle/test/injection.test.ts:497-513`).
-- Global memories remain eligible after current-project memories under the same budget: the selection loop is unchanged after sorting and still applies approved-only/secret/dedupe/fit/budget checks (`packages/lifecycle/src/injection.ts:621-645`), and the new project-first test selects a global after two project memories when budget remains (`packages/lifecycle/test/injection.test.ts:516-532`).
-- `handleSessionStart` passes the current project scope into baseline selection while preserving continuity-notice budget subtraction and rendering with the same scope (`packages/lifecycle/src/handlers.ts:206-221`), satisfying the design/API requirement (`docs/superpowers/specs/2026-06-19-project-first-session-start-design.md:80-88`).
-- Prompt-time recall/ranking is unchanged: `handleUserPromptSubmit` still calls `engine.recall(recallQuery)` and `selectMemoriesForInjection(...)` for prompt events (`packages/lifecycle/src/handlers.ts:162-166`), and `selectMemoriesForInjection` still iterates recalled order with the existing lexical/secret/dedupe/budget filters (`packages/lifecycle/src/injection.ts:216-245`).
-- Scope stayed bounded: `git diff --name-only main...HEAD` is limited to the spec/plan docs, README, lifecycle selector/handler, and lifecycle tests; no MCP, config, cleanup, or package/lock files changed.
-- README accurately documents that only `SessionStart` baseline selection is project-first and that prompt-time `UserPromptSubmit` recall remains relevance-based (`README.md:796-799`), matching acceptance criteria (`docs/superpowers/specs/2026-06-19-project-first-session-start-design.md:104-112`).
-- Tests cover the requested behavior: project-first selection, recency within tiers/other-project fallback, no-scope recency fallback, and lifecycle handler integration (`packages/lifecycle/test/injection.test.ts:497-552`; `packages/lifecycle/test/handlers.test.ts:243-260`).
+- `ContinuityHintSummary` now carries text-free scope hygiene metadata and a typed `scope-hygiene-candidate` hint code/reason set; the metadata includes ids/status/category/scope/source/timestamps/kind/provenance/reason but no memory body text (`packages/core/src/types.ts:106-160`).
+- Candidate detection is conservative and read-only: it only considers approved global memories, flags project category, project-specific kinds, or high-signal path-like text, and returns structured reason codes without text (`packages/core/src/continuity-hints.ts:59-87`).
+- `buildContinuityHints` emits one aggregate `scope-hygiene-candidate` review hint only when candidates exist, caps `memoryIds`/metadata by `maxIds`, uses the non-mutating inspection action `memory-lane list --json`, and retains the existing read-only continuity note (`packages/core/src/continuity-hints.ts:96-130`, `packages/core/src/continuity-hints.ts:209-225`).
+- Non-detection requirements are covered and implemented: pending/non-approved records and project-scoped records are excluded by the approved/global guard, and ordinary global workflow preferences with generic project/PR/roadmap language are not flagged by the tested path/category/kind rules (`packages/core/src/continuity-hints.ts:67-72`; `packages/core/test/continuity-hints.test.ts:107-136`).
+- Text-free JSON/human surface coverage exists for dashboard/status/doctor and MCP `memory_status`: CLI tests assert metadata/reason exposure plus private text absence, and MCP tests assert the candidate reason/hint code with no text leak (`packages/cli/test/cli.test.ts:1005-1061`; `packages/mcp-server/test/handlers.test.ts:338-363`).
+- No source changes were made to recall, ranking/scoring, save/review mutation paths, config, or MCP mutation handlers; the only runtime source changes in the diff are core continuity hint types/detection, with lifecycle test fixture adjustment for the new required summary field (`packages/core/src/types.ts:106-160`; `packages/core/src/continuity-hints.ts:59-225`; `packages/lifecycle/test/injection.test.ts:95-99`).
+- Docs/glossary match the design: `CONTEXT.md` defines “Scope hygiene candidate” as an inspection signal with no automatic rescope/delete/reject/supersede, and README documents scope hygiene hints as text-free inspection-only diagnostics using `memory-lane list --json` (`CONTEXT.md:71-76`; `README.md:480-487`).
 
 ### Verification
-- `pnpm --filter @memory-lane/lifecycle test -- injection.test.ts` passed.
-- `pnpm --filter @memory-lane/lifecycle test -- handlers.test.ts` passed.
 - `git diff --check main...HEAD` passed.
+- `pnpm --filter @memory-lane/core test -- continuity-hints.test.ts` passed.
+- `pnpm --filter @memory-lane/cli test -- cli.test.ts` passed.
+- `pnpm --filter @memory-lane/mcp-server test -- handlers.test.ts` passed.
 - `pnpm build` passed.
 - `pnpm test` passed.
 
 ### Note
-- The requested root `plan.md` and `progress.md` files were not present in this worktree; review used `docs/superpowers/specs/2026-06-19-project-first-session-start-design.md` and `docs/superpowers/plans/2026-06-19-project-first-session-start.md` as requested for spec/plan comparison.
+- The requested root `plan.md` and `progress.md` files were not present in this worktree; review used `docs/superpowers/specs/2026-06-19-global-memory-hygiene-hints-design.md` and `docs/superpowers/plans/2026-06-19-global-memory-hygiene-hints.md` for the spec/plan comparison.

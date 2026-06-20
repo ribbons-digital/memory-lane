@@ -69,6 +69,85 @@ test("continuity hints report project global preference overlap", () => {
   assert.match(result.suggestedActions.join("\n"), /memory-lane agreements --all/u)
 })
 
+test("continuity hints report global memories that look project-specific without text", () => {
+  const result = buildContinuityHints([
+    memory({
+      id: "global-project-category",
+      text: "SECRET PROJECT CATEGORY TEXT",
+      category: "project",
+      scope: { type: "global" },
+      kind: "misc",
+    }),
+    memory({
+      id: "global-project-kind",
+      text: "SECRET PROJECT KIND TEXT",
+      category: "preference",
+      scope: { type: "global" },
+      kind: "project_fact",
+    }),
+    memory({
+      id: "global-project-path",
+      text: "SECRET PATH TEXT implemented in docs/superpowers/specs/example.md",
+      category: "preference",
+      scope: { type: "global" },
+      kind: "preference",
+    }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.deepEqual(result.scopeHygieneCandidates.map((candidate) => ({ id: candidate.id, reason: candidate.reason })), [
+    { id: "global-project-category", reason: "project-category-global-scope" },
+    { id: "global-project-kind", reason: "project-kind-global-scope" },
+    { id: "global-project-path", reason: "project-path-global-scope" },
+  ])
+  assert.ok(result.hints.some((hint) => hint.code === "scope-hygiene-candidate" && hint.severity === "review"))
+  assert.match(result.suggestedActions.join("\n"), /memory-lane list --json/u)
+  assert.doesNotMatch(json(result), /SECRET PROJECT CATEGORY TEXT|SECRET PROJECT KIND TEXT|SECRET PATH TEXT/u)
+})
+
+test("continuity hints do not flag ordinary global workflow preferences or non-approved records", () => {
+  const result = buildContinuityHints([
+    memory({
+      id: "valid-global-workflow",
+      text: "Global workflow preference: use PRs and keep roadmap updated.",
+      category: "preference",
+      scope: { type: "global" },
+      kind: "workflow_rule",
+    }),
+    memory({
+      id: "pending-global-project",
+      text: "SECRET PENDING PROJECT TEXT",
+      category: "project",
+      scope: { type: "global" },
+      status: "pending",
+      kind: "project_fact",
+    }),
+    memory({
+      id: "project-scoped-fact",
+      text: "SECRET PROJECT SCOPED TEXT",
+      category: "project",
+      scope: { type: "project", key: "project-a" },
+      kind: "project_fact",
+    }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.deepEqual(result.scopeHygieneCandidates, [])
+  assert.equal(result.hints.some((hint) => hint.code === "scope-hygiene-candidate"), false)
+  assert.doesNotMatch(json(result), /SECRET PENDING PROJECT TEXT|SECRET PROJECT SCOPED TEXT/u)
+})
+
+test("continuity hints limit scope hygiene candidate metadata and ids", () => {
+  const result = buildContinuityHints([
+    memory({ id: "one", category: "project", scope: { type: "global" } }),
+    memory({ id: "two", category: "project", scope: { type: "global" } }),
+    memory({ id: "three", category: "project", scope: { type: "global" } }),
+  ], { maxIds: 2 })
+
+  assert.deepEqual(result.scopeHygieneCandidates.map((candidate) => candidate.id), ["one", "two"])
+  const hint = result.hints.find((item) => item.code === "scope-hygiene-candidate")
+  assert.deepEqual(hint?.memoryIds, ["one", "two"])
+  assert.equal(hint?.count, 3)
+})
+
 test("continuity hints include newer approved metadata when since is provided", () => {
   const result = buildContinuityHints([
     memory({ id: "newer-project", updatedAt: "2026-06-18T10:00:00.000Z", provenance: { adapter: "pi", lifecycleEvent: "session_end" } }),
