@@ -1002,6 +1002,49 @@ describe("CLI integration", () => {
     assert.ok(payload.data.suggestedActions.includes("memory-lane review"))
   })
 
+  it("continuity --json returns canonical continuity state", () => {
+    const dir = tempDir()
+    const project = path.join(dir, "project")
+    fs.mkdirSync(project)
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-continuity-project" }))
+    const mem = path.join(dir, "memory.jsonl")
+    const env = { MEMORY_LANE_FILE: mem, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json") }
+    writeMemoryRecords(mem, [
+      { id: "approved", text: "Approved project checkpoint", category: "project", scope: { type: "project", key: "cli-continuity-project" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" },
+      { id: "pending", text: "Merged PR #18 adding global hygiene hints.", category: "project", scope: { type: "project", key: "cli-continuity-project" }, status: "pending", source: "user-suggested", kind: "project_fact", createdAt: "2026-06-18T09:00:00.000Z", updatedAt: "2026-06-18T09:00:00.000Z" },
+    ] as MemoryRecord[])
+
+    const output = runProcess(["continuity", "--json"], { env, cwd: project })
+    assert.equal(output.status, 0, output.stderr)
+    const parsed = JSON.parse(output.stdout)
+    assert.equal(parsed.ok, true)
+    assert.equal(parsed.data.projectScope, "cli-continuity-project")
+    assert.equal(parsed.data.latestApproved.project.id, "approved")
+    assert.deepEqual(parsed.data.pendingContinuity.map((item: any) => item.id), ["pending"])
+    assert.ok(parsed.data.warnings.some((item: any) => item.code === "pending-continuity-newer-than-approved"))
+  })
+
+  it("continuity human output is compact and labels pending continuity", () => {
+    const dir = tempDir()
+    const project = path.join(dir, "project")
+    fs.mkdirSync(project)
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-continuity-human" }))
+    const mem = path.join(dir, "memory.jsonl")
+    const env = { MEMORY_LANE_FILE: mem, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json"), NO_COLOR: "1" }
+    writeMemoryRecords(mem, [
+      { id: "approved", text: "Approved project checkpoint", category: "project", scope: { type: "project", key: "cli-continuity-human" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" },
+      { id: "pending", text: "## Session Summary\nNext action: inspect review queue.", category: "project", scope: { type: "project", key: "cli-continuity-human" }, status: "pending", source: "session-summary", kind: "session_summary", createdAt: "2026-06-18T09:00:00.000Z", updatedAt: "2026-06-18T09:00:00.000Z" },
+    ] as MemoryRecord[])
+
+    const output = runProcess(["continuity"], { env, cwd: project })
+    assert.equal(output.status, 0, output.stderr)
+    assert.match(output.stdout, /Memory Lane Continuity/u)
+    assert.match(output.stdout, /Project: cli-continuity-human/u)
+    assert.match(output.stdout, /Latest approved/u)
+    assert.match(output.stdout, /Pending continuity/u)
+    assert.match(output.stdout, /memory-lane review --json/u)
+  })
+
   it("dashboard --json includes text-free continuity hints", () => {
     const dir = tempDir()
     const project = tempDir()
@@ -1798,9 +1841,10 @@ describe("CLI integration", () => {
     assert.equal(list.data.memories[0].text, "Valid memory")
   })
 
-  it("mcp command is documented in help output", () => {
+  it("mcp and continuity commands are documented in help output", () => {
     const result = runProcess(["help"])
     assert.equal(result.status, 0)
+    assert.match(result.stdout, /continuity \[--json\]\s+Canonical continuity read model for resumption\/status questions/u)
     assert.match(result.stdout, /mcp\s+Run the bundled Memory Lane MCP server over stdio/)
   })
 
