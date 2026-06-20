@@ -340,9 +340,12 @@ export function renderContinuityIntentGuidance(intent: ContinuityIntent): string
     "## Memory Lane continuity guidance",
     "",
     "This prompt appears to ask about prior or ongoing project work.",
-    "Before answering from chat context alone, inspect Memory Lane project state and current project workflow when available.",
+    "Before answering from chat context alone, inspect the canonical Memory Lane continuity state and current project workflow when available.",
     "",
     "Suggested inspection:",
+    "- CLI: memory-lane continuity --json",
+    "- MCP: memory_continuity({ projectPath })",
+    "- Do not answer from memory_recall alone; use recall only for topic-specific follow-up after continuity inspection.",
     "- memory-lane status --json",
     "- memory-lane dashboard",
   ]

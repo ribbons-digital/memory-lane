@@ -19,7 +19,7 @@ import type { SemanticMemoryConfig } from "@memory-lane/core"
 import { resolveBundledPlugin } from "./plugins.js"
 import {
   formatMemories, formatReviewMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
-  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatImportPlan, formatOperatingAgreements, formatError, formatUpdatePreview, formatSupersedeResult, formatReplaceResult, usage,
+  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatImportPlan, formatOperatingAgreements, formatContinuityReadModel, formatError, formatUpdatePreview, formatSupersedeResult, formatReplaceResult, usage,
   type ObsidianImportApplyResult,
 } from "./formatters.js"
 
@@ -392,6 +392,10 @@ function handleAgreements(ctx: CliContext): void {
     relatedLimit: optionalNonNegativeInteger(ctx.argv, "related-limit"),
   })
   console.log(formatOperatingAgreements(result, ctx.json))
+}
+
+function handleContinuity(ctx: CliContext): void {
+  console.log(formatContinuityReadModel(ctx.engine.continuity({ caller: "cli" }), ctx.json, { projectScope: ctx.engine.getProjectScope()?.key ?? "none" }))
 }
 
 function handleCompact(ctx: CliContext): void {
@@ -862,6 +866,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   review: handleReview,
   dashboard: handleDashboard,
   agreements: handleAgreements,
+  continuity: handleContinuity,
   compact: handleCompact,
   doctor: handleDoctor,
   status: handleStatus,

@@ -521,17 +521,18 @@ Out of scope for Phase 16:
 
 ## Phase 17 — Review-First Progress and Checkpoint Capture
 
-**Status:** Slice 1 complete: checkpoint candidate review labels are implemented for CLI review and MCP `memory_review`. Capture, dedup/debounce, and future review improvements remain follow-up work.
+**Status:** Slice 1 complete: checkpoint candidate review labels are implemented for CLI review and MCP `memory_review`. The unified continuity contract slice is complete: core exposes a canonical continuity read model, CLI exposes `memory-lane continuity`, MCP exposes `memory_continuity`, and lifecycle/docs guidance now points continuity questions to those read-only surfaces before topic recall. Capture, dedup/debounce, and future review improvements remain follow-up work.
 
 **Goal:** Capture high-value continuity events such as releases, merges, major fixes, and roadmap decisions as reviewable checkpoint candidates, so another session can pick up the project state without the user restating it.
 
 This phase should make Memory Lane more proactive in later slices, but still not autonomous. It should suggest durable project progress when evidence is strong and let the user approve before it affects future sessions. The completed first slice is review-labeling only.
 
-Completed Slice 1 scope:
+Completed scope:
 
 1. Added conservative checkpoint candidate classification for pending memories that look like releases, merges, verification milestones, docs syncs, roadmap decisions, major fixes, or explicit `project_checkpoint` records.
 2. Labeled checkpoint candidates in CLI `memory-lane review`, CLI `review --json`, and MCP `memory_review` with text-free structured metadata.
-3. Kept Phase 17 review-first: no automatic checkpoint capture, dedup/debounce, background writes, recall ranking changes, workstream/thread ids, new config flags, MCP mutation tools, or lifecycle context changes were added.
+3. Added the unified continuity contract: core continuity read model, `memory-lane continuity`, MCP `memory_continuity`, and prompt-time/docs guidance that treats continuity as canonical before topic-specific recall.
+4. Kept Phase 17 review-first: no automatic checkpoint capture, dedup/debounce, background writes, recall ranking changes, workstream/thread ids, new config flags, or MCP mutation tools were added.
 
 Remaining Phase 17 follow-up decisions:
 
