@@ -4,6 +4,7 @@ import type { MemoryEngine } from "@memory-lane/core"
 import type { LoadedPlugin, McpResourceDefinition, McpToolDefinition } from "@memory-lane/plugin-api"
 import {
   handleMemoryApprove,
+  handleMemoryContinuity,
   handleMemoryDelete,
   handleMemoryList,
   handleMemoryRecall,
@@ -21,6 +22,7 @@ export const MEMORY_LANE_TOOL_NAMES = [
   "memory_status",
   "memory_list",
   "memory_review",
+  "memory_continuity",
   "memory_approve",
   "memory_reject",
   "memory_delete",
@@ -142,6 +144,16 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
       },
     },
     async (input) => handleMemoryReview(engine, input),
+  )
+
+  server.registerTool(
+    "memory_continuity",
+    {
+      title: "Memory Lane Continuity",
+      description: "Canonical continuity read model for project resumption, last-worked-on, accomplished, next-action, and project-status questions. Prefer this over memory_recall for continuity questions. Pass projectPath for project-scoped results in desktop MCP clients.",
+      inputSchema: { projectPath },
+    },
+    async (input) => handleMemoryContinuity(engine, input),
   )
 
   server.registerTool(
