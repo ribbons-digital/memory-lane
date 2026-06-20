@@ -69,8 +69,12 @@ function previewResponse(response: unknown): string {
     .slice(0, MAX_EVIDENCE_CHARS)
 }
 
+function compactWhitespace(text: string): string {
+  return text.trim().replace(/\s+/gu, " ")
+}
+
 function safeNormalize(text: string): string | undefined {
-  const normalized = text.trim().replace(/\s+/gu, " ")
+  const normalized = compactWhitespace(text)
   if (!normalizeMemoryText(normalized) || normalized.length > MAX_CHECKPOINT_TEXT_CHARS || containsLikelySecret(normalized)) return undefined
   return normalized
 }
@@ -87,9 +91,36 @@ function isAmbiguous(text: string): boolean {
   return isQuestion(text) || isFutureOrReminder(text)
 }
 
+function isNegativeCheckpointEvidence(text: string): boolean {
+  return /\b(?:failed|failure|errors?|errored|unsuccessful(?:ly)?|aborted?|cancelled|canceled)\b|\bcould\s+not\b|\bcouldn't\b|\bcannot\b|\bunable\s+to\b|\bdid\s+not\b|\bdidn't\b|\bnot\s+(?:released|merged|published|tagged|successful|completed)\b|\bwas(?:n't|\s+not)\s+(?:successful|completed)\b/iu.test(text)
+}
+
+function candidateCheckpointText(text: string): string | undefined {
+  const normalized = safeNormalize(text)
+  if (!normalized || isAmbiguous(normalized) || isNegativeCheckpointEvidence(normalized)) return undefined
+  return normalized
+}
+
 function sentenceContainingMatch(text: string, pattern: RegExp): string {
-  const sentences = text.match(/[^.!?]+[.!?]?/gu) ?? [text]
-  return sentences.find((sentence) => pattern.test(sentence))?.trim() ?? text.trim()
+  const match = pattern.exec(text)
+  if (!match) return text.trim()
+
+  let sentenceStart = 0
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]
+    if (!char || !/[.!?]/u.test(char)) continue
+    const nextChar = text[index + 1]
+    if (nextChar !== undefined && !/\s/u.test(nextChar)) continue
+
+    const sentenceEnd = index + 1
+    if (match.index >= sentenceStart && match.index + match[0].length <= sentenceEnd) {
+      return text.slice(sentenceStart, sentenceEnd).trim()
+    }
+    sentenceStart = sentenceEnd
+    while (sentenceStart < text.length && /\s/u.test(text[sentenceStart] ?? "")) sentenceStart += 1
+  }
+
+  return text.slice(sentenceStart).trim() || text.trim()
 }
 
 function keyPhrase(text: string): string {
@@ -101,8 +132,8 @@ function keyPhrase(text: string): string {
 }
 
 function checkpointCandidate(match: CheckpointMatch): MemoryCandidate[] {
-  const normalized = safeNormalize(match.text)
-  if (!normalized || isAmbiguous(normalized)) return []
+  const normalized = candidateCheckpointText(match.text)
+  if (!normalized) return []
 
   return [{
     text: normalized,
@@ -188,14 +219,19 @@ function majorFixMatchFromText(text: string): CheckpointMatch | undefined {
 }
 
 function matchCheckpointText(text: string): CheckpointMatch | undefined {
-  const normalized = safeNormalize(text)
-  if (!normalized || isAmbiguous(normalized)) return undefined
-  return releaseMatchFromText(normalized)
+  const normalized = compactWhitespace(text)
+  if (!normalizeMemoryText(normalized) || containsLikelySecret(normalized)) return undefined
+
+  const match = releaseMatchFromText(normalized)
     ?? mergeMatchFromText(normalized)
     ?? verificationMatchFromText(normalized)
     ?? docsSyncMatchFromText(normalized)
     ?? roadmapDecisionMatchFromText(normalized)
     ?? majorFixMatchFromText(normalized)
+  if (!match) return undefined
+
+  const candidateText = candidateCheckpointText(match.text)
+  return candidateText ? { ...match, text: candidateText } : undefined
 }
 
 function releaseMatchFromToolEvidence(command: string, preview: string): CheckpointMatch | undefined {
@@ -244,10 +280,17 @@ export function checkpointKeyFromText(text: string): string | undefined {
 }
 
 export function extractCheckpointCandidatesFromStop(input: StopInput): MemoryCandidate[] {
-  const text = input.lastUserMessage?.trim() ?? input.lastAssistantMessage?.trim() ?? ""
-  if (!text) return []
-  const match = matchCheckpointText(text)
-  return match ? checkpointCandidate(match) : []
+  const messages = [input.lastAssistantMessage, input.lastUserMessage]
+    .map((message) => message?.trim() ?? "")
+    .filter(Boolean)
+
+  for (const text of messages) {
+    const match = matchCheckpointText(text)
+    const candidates = match ? checkpointCandidate(match) : []
+    if (candidates.length > 0) return candidates
+  }
+
+  return []
 }
 
 export function extractCheckpointCandidatesFromPostToolUse(input: PostToolUseInput): MemoryCandidate[] {

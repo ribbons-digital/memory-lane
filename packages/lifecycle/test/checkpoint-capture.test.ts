@@ -55,6 +55,41 @@ test("does not extract ambiguous future-tense checkpoint-like statements", () =>
   assert.deepEqual(extractCheckpointCandidatesFromStop({ cwd: process.cwd(), lastUserMessage: "Remember to update ROADMAP.md eventually." }), [])
 })
 
+test("does not extract failed or negative Stop checkpoint statements", () => {
+  for (const message of [
+    "Released v0.2.12 failed.",
+    "Tagged v0.2.12 was unsuccessful.",
+    "Published v0.2.12 but could not complete release.",
+    "Merged PR #19 failed.",
+    "PR #19 merged with error.",
+    "Merged pull request 19 but was cancelled.",
+  ]) {
+    assert.deepEqual(extractCheckpointCandidatesFromStop({ cwd: process.cwd(), lastUserMessage: message }), [])
+  }
+})
+
+test("extracts Stop checkpoint from assistant response when user prompt is not a checkpoint", () => {
+  const candidates = extractCheckpointCandidatesFromStop({
+    cwd: process.cwd(),
+    lastUserMessage: "Please summarize what changed.",
+    lastAssistantMessage: "Released v0.2.12.",
+  })
+
+  assert.equal(candidates.length, 1)
+  assert.equal(candidates[0].text, "Released v0.2.12.")
+  assert.equal(candidates[0].kind, "project_checkpoint")
+})
+
+test("extracts valid checkpoint sentence before separate future reminder sentence", () => {
+  const candidates = extractCheckpointCandidatesFromStop({
+    cwd: process.cwd(),
+    lastAssistantMessage: "Released v0.2.12. Next time update docs.",
+  })
+
+  assert.equal(candidates.length, 1)
+  assert.equal(candidates[0].text, "Released v0.2.12.")
+})
+
 test("extracts release checkpoint from successful shell tool evidence", () => {
   const candidates = extractCheckpointCandidatesFromPostToolUse({
     cwd: process.cwd(),
