@@ -341,6 +341,13 @@ test("memory_status includes text-free continuity hints", async () => {
   const engine = engineInTemp(project)
   const old = engine.save({ text: "PRIVATE MCP OLD LOOP TEXT Project workflow loop old", status: "approved", category: "project", kind: "project_fact" })
   const current = engine.save({ text: "PRIVATE MCP CURRENT LOOP TEXT Project workflow loop current", status: "approved", category: "project", kind: "workflow_rule" })
+  engine.save({
+    text: "PRIVATE MCP GLOBAL PROJECT-LIKE TEXT docs/superpowers/specs/mcp-specific.md",
+    status: "approved",
+    category: "preference",
+    scopeType: "global",
+    kind: "preference",
+  })
   assert.equal(old.status, "saved")
   assert.equal(current.status, "saved")
   engine.supersede(current.memory.id, [old.memory.id], { revisedBy: "manual", reason: "newer" })
@@ -349,8 +356,10 @@ test("memory_status includes text-free continuity hints", async () => {
 
   assert.equal(result.ok, true)
   assert.equal(result.data.status.continuityHints.supersededVisible[0].id, old.memory.id)
+  assert.equal(result.data.status.continuityHints.scopeHygieneCandidates[0].reason, "project-path-global-scope")
+  assert.ok(result.data.status.continuityHints.hints.some((hint: any) => hint.code === "scope-hygiene-candidate"))
   assert.equal(result.data.status.continuityHints.newerApproved.count >= 2, true)
-  assert.doesNotMatch(JSON.stringify(result.data.status.continuityHints), /PRIVATE MCP OLD LOOP TEXT|PRIVATE MCP CURRENT LOOP TEXT/u)
+  assert.doesNotMatch(JSON.stringify(result.data.status.continuityHints), /PRIVATE MCP OLD LOOP TEXT|PRIVATE MCP CURRENT LOOP TEXT|PRIVATE MCP GLOBAL PROJECT-LIKE TEXT/u)
 })
 
 test("memory_status applies projectPath before computing operating agreements", async () => {

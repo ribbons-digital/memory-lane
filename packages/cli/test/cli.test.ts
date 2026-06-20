@@ -173,6 +173,17 @@ function continuityFixtureRecords(projectScope: string): MemoryRecord[] {
       createdAt: "2026-06-18T08:00:00.000Z",
       updatedAt: "2026-06-18T08:00:00.000Z",
     },
+    {
+      id: "global-project-like",
+      text: "PRIVATE GLOBAL PROJECT-LIKE TEXT docs/superpowers/specs/sitewright-specific.md",
+      category: "preference",
+      scope: { type: "global" },
+      status: "approved",
+      source: "manual",
+      kind: "preference",
+      createdAt: "2026-06-18T07:30:00.000Z",
+      updatedAt: "2026-06-18T07:30:00.000Z",
+    },
   ]
 }
 
@@ -1003,8 +1014,11 @@ describe("CLI integration", () => {
 
     assert.equal(parsed.ok, true)
     assert.equal(parsed.data.continuityHints.supersededVisible[0].id, "old-loop")
+    assert.equal(parsed.data.continuityHints.scopeHygieneCandidates[0].id, "global-project-like")
+    assert.equal(parsed.data.continuityHints.scopeHygieneCandidates[0].reason, "project-path-global-scope")
     assert.ok(parsed.data.continuityHints.hints.some((hint: any) => hint.code === "superseded-visible"))
-    assert.doesNotMatch(JSON.stringify(parsed.data.continuityHints), /PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT/u)
+    assert.ok(parsed.data.continuityHints.hints.some((hint: any) => hint.code === "scope-hygiene-candidate"))
+    assert.doesNotMatch(JSON.stringify(parsed.data.continuityHints), /PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT|PRIVATE GLOBAL PROJECT-LIKE TEXT/u)
   })
 
   it("dashboard human output shows compact continuity hints without memory text", () => {
@@ -1018,11 +1032,12 @@ describe("CLI integration", () => {
 
     assert.match(output, /Continuity hints/u)
     assert.match(output, /superseded-visible/u)
+    assert.match(output, /scope-hygiene-candidate/u)
     assert.match(output, /Suggested actions/u)
     assert.match(output, /memory-lane list --json/u)
     assert.doesNotMatch(output, /Continuity inspection/u)
     assert.equal(output.match(/memory-lane list --json/gu)?.length, 1)
-    assert.doesNotMatch(output, /PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT/u)
+    assert.doesNotMatch(output, /PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT|PRIVATE GLOBAL PROJECT-LIKE TEXT/u)
   })
 
   it("status and doctor json include text-free continuity hints", () => {
@@ -1037,12 +1052,12 @@ describe("CLI integration", () => {
     const doctor = JSON.parse(run(["doctor", "--json", "--since", "2026-06-18T07:00:00.000Z", "--project", project], env))
     const humanDoctor = run(["doctor", "--since", "2026-06-18T07:00:00.000Z", "--project", project], env)
 
-    assert.equal(status.data.continuityHints.newerApproved.count, 3)
-    assert.equal(doctor.data.continuityHints.newerApproved.count, 3)
-    assert.doesNotMatch(JSON.stringify(status.data.continuityHints), /PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT/u)
-    assert.doesNotMatch(JSON.stringify(doctor.data.continuityHints), /PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT/u)
+    assert.equal(status.data.continuityHints.newerApproved.count, 4)
+    assert.equal(doctor.data.continuityHints.newerApproved.count, 4)
+    assert.doesNotMatch(JSON.stringify(status.data.continuityHints), /PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT|PRIVATE GLOBAL PROJECT-LIKE TEXT/u)
+    assert.doesNotMatch(JSON.stringify(doctor.data.continuityHints), /PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT|PRIVATE GLOBAL PROJECT-LIKE TEXT/u)
     assert.match(humanDoctor, /Continuity hints: \d+ \(/u)
-    assert.doesNotMatch(humanDoctor, /supersededVisible|PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT/u)
+    assert.doesNotMatch(humanDoctor, /supersededVisible|PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT|PRIVATE GLOBAL PROJECT-LIKE TEXT/u)
   })
 
   it("dashboard human output gives session-summary previews enough context without full dumps", () => {
