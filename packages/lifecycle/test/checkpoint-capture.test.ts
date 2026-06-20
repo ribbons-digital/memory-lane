@@ -68,6 +68,16 @@ test("does not extract question-shaped Stop checkpoint statements", () => {
   }
 })
 
+test("does not extract request-wrapped Stop checkpoint checks", () => {
+  for (const message of [
+    "Please confirm PR #19 merged.",
+    "Please check if released v0.2.12.",
+    "Please verify tests passed.",
+  ]) {
+    assert.deepEqual(extractCheckpointCandidatesFromStop({ cwd: process.cwd(), lastUserMessage: message }), [])
+  }
+})
+
 test("does not extract failed or negative Stop checkpoint statements", () => {
   for (const message of [
     "Released v0.2.12 failed.",
@@ -78,6 +88,10 @@ test("does not extract failed or negative Stop checkpoint statements", () => {
     "Merged PR #19 failed.",
     "PR #19 merged with error.",
     "Merged pull request 19 but was cancelled.",
+    "Released v0.2.12 was rolled back.",
+    "Released v0.2.12 hit rollback.",
+    "Merged PR #19 but reverted it.",
+    "Merged PR #19 but will revert.",
   ]) {
     assert.deepEqual(extractCheckpointCandidatesFromStop({ cwd: process.cwd(), lastUserMessage: message }), [])
   }

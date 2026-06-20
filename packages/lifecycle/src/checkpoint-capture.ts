@@ -88,12 +88,16 @@ function isFutureOrReminder(text: string): boolean {
   return /\b(?:should|later|eventually|next time|remember to|need to|needs to|todo|plan to|planning to|will release|will merge|going to release|going to merge)\b/iu.test(text)
 }
 
+function isRequestWrapper(text: string): boolean {
+  return /^(?:please\s+)?(?:confirm|check(?:\s+(?:if|whether))?|verify)\b/iu.test(text.trim())
+}
+
 function isAmbiguous(text: string): boolean {
-  return isQuestion(text) || isFutureOrReminder(text)
+  return isQuestion(text) || isFutureOrReminder(text) || isRequestWrapper(text)
 }
 
 function isNegativeCheckpointEvidence(text: string): boolean {
-  return /\b(?:failed|failure|errors?|errored|unsuccessful(?:ly)?|aborted?|cancelled|canceled)\b|\bcould\s+not\b|\bcouldn't\b|\bcannot\b|\bunable\s+to\b|\bdid\s+not\b|\bdidn't\b|\bnot\s+(?:released|merged|published|tagged|successful|completed)\b|\bwas(?:n't|\s+not)\s+(?:successful|completed)\b/iu.test(text)
+  return /\b(?:failed|failure|errors?|errored|unsuccessful(?:ly)?|aborted?|cancelled|canceled|rollback|reverted|revert)\b|\brolled\s+back\b|\bcould\s+not\b|\bcouldn't\b|\bcannot\b|\bunable\s+to\b|\bdid\s+not\b|\bdidn't\b|\bnot\s+(?:released|merged|published|tagged|successful|completed)\b|\bwas(?:n't|\s+not)\s+(?:successful|completed)\b/iu.test(text)
 }
 
 function candidateCheckpointText(text: string): string | undefined {
