@@ -2,6 +2,7 @@ export * from "./types.js"
 export { classifyCheckpointCandidate, type CheckpointCandidateKind, type CheckpointCandidateMetadata } from "./checkpoint-candidates.js"
 export { buildFreshnessStatus } from "./freshness.js"
 export { buildContinuityHints } from "./continuity-hints.js"
+export { buildContinuityReadModel } from "./continuity-read-model.js"
 export { revisionNow, sameIdRevision, revisionLabel, hasRealUpdateChange } from "./revisions.js"
 export {
   WORKFLOW_AREAS,

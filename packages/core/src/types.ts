@@ -182,6 +182,71 @@ export interface ContinuityHintOptions {
   maxIds?: number
 }
 
+export type ContinuityWarningCode =
+  | "pending-continuity-newer-than-approved"
+  | "no-project-scope"
+  | "scope-hygiene-candidate"
+  | "operating-agreement-overlap"
+  | "mcp-explicit-tools-only"
+
+export interface ContinuityMemoryPreview {
+  id: string
+  status: Extract<MemoryStatus, "approved" | "pending">
+  category: MemoryCategory
+  scope: MemoryScope
+  source: MemorySource
+  createdAt: string
+  updatedAt: string
+  kind?: MemoryKind
+  provenance?: MemoryProvenance
+  preview: string
+  checkpointCandidate?: import("./checkpoint-candidates.js").CheckpointCandidateMetadata
+}
+
+export interface ContinuityWarning {
+  code: ContinuityWarningCode
+  severity: "info" | "review" | "warning"
+  message: string
+  memoryIds?: string[]
+}
+
+export interface ContinuityHarnessGuidance {
+  summary: string[]
+  cli: string[]
+  mcp: string[]
+}
+
+export interface ContinuityReadModel {
+  projectScope: string | "none"
+  generatedAt: string
+  status: {
+    visibleApprovedCount: number
+    pendingReviewCount: number
+    pendingContinuityCount: number
+  }
+  latestApproved: {
+    project?: ContinuityMemoryPreview
+    global?: ContinuityMemoryPreview
+  }
+  pendingContinuity: ContinuityMemoryPreview[]
+  freshness: FreshnessStatus
+  continuityHints: ContinuityHintSummary
+  operatingAgreements: OperatingAgreementSummary
+  warnings: ContinuityWarning[]
+  suggestedActions: string[]
+  answerGuidance: string[]
+  harnessGuidance: ContinuityHarnessGuidance
+  notes: string[]
+}
+
+export interface ContinuityReadModelOptions {
+  projectScopeKey?: string
+  previewMaxChars?: number
+  maxPendingContinuity?: number
+  generatedAt?: string
+  caller?: "cli" | "mcp" | "lifecycle" | "core"
+}
+
 export type WorkflowArea =
   | "project-loop"
   | "review-gate"
