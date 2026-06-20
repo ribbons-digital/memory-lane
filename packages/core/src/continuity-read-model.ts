@@ -15,7 +15,7 @@ import type {
 const DEFAULT_PREVIEW_MAX_CHARS = 240
 const DEFAULT_MAX_PENDING_CONTINUITY = 5
 const CONTINUITY_KINDS = new Set<MemoryKind>(["project_checkpoint", "session_summary", "decision", "project_fact"])
-const GLOBAL_WORKFLOW_TEXT_PATTERN = /\b(?:workflow|tool(?:s|ing)?|review|pr|pull request|release|project[- ]loop|harness|mcp|cli|memory-lane)\b/iu
+const GLOBAL_WORKFLOW_TEXT_PATTERN = /\b(?:workflow|tooling|code review|review gate|pr process|pull request|release process|project[- ]loop|harness|mcp|memory-lane|(?:cli|command(?:s)?)\s+(?:workflow|tooling|inspection|usage))\b/iu
 const REQUIRED_CONTINUITY_ACTIONS = [
   "memory-lane continuity --json",
   "memory-lane review --json",
@@ -86,6 +86,10 @@ function isPendingContinuity(memory: MemoryRecord): boolean {
 function isWorkflowRelevantGlobal(memory: MemoryRecord): boolean {
   if (memory.scope.type !== "global") return false
   if (memory.kind === "workflow_rule") return true
+  if (memory.category === "personal" || memory.kind === "personal_context") return false
+  if (memory.category !== "preference") return false
+  if (memory.source !== "manual") return false
+  if (memory.kind && memory.kind !== "preference" && memory.kind !== "misc") return false
   return GLOBAL_WORKFLOW_TEXT_PATTERN.test(memory.text)
 }
 
@@ -101,7 +105,7 @@ function unique(values: string[]): string[] {
 function buildWarnings(input: {
   projectScope?: string
   latestProject?: ContinuityMemoryPreview
-  pendingContinuity: ContinuityMemoryPreview[]
+  pendingContinuityCandidates: MemoryRecord[]
   hintCodes: Set<string>
   caller?: string
 }): ContinuityWarning[] {
@@ -116,8 +120,8 @@ function buildWarnings(input: {
 
   const latestApprovedAt = input.latestProject?.updatedAt
   const newerPending = latestApprovedAt
-    ? input.pendingContinuity.filter((memory) => memory.updatedAt > latestApprovedAt)
-    : input.pendingContinuity
+    ? input.pendingContinuityCandidates.filter((memory) => memory.updatedAt > latestApprovedAt)
+    : input.pendingContinuityCandidates
   if (newerPending.length) {
     warnings.push({
       code: "pending-continuity-newer-than-approved",
@@ -151,9 +155,10 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
     .filter((memory) => isWorkflowRelevantGlobal(memory))
     .sort(compareNewest)
   const pendingReview = memories.filter((memory) => memory.status === "pending" && visibleInProject(memory, projectScope))
-  const pendingContinuity = pendingReview
+  const pendingContinuityCandidates = pendingReview
     .filter((memory) => projectScoped(memory, projectScope) && isPendingContinuity(memory))
     .sort(compareNewest)
+  const pendingContinuity = pendingContinuityCandidates
     .slice(0, maxPendingContinuity)
     .map((memory) => preview(memory, previewMaxChars))
     .filter((item): item is ContinuityMemoryPreview => Boolean(item))
@@ -164,10 +169,10 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
   const latestProject = approvedProject.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
   const latestGlobal = approvedGlobal.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
   const hintCodes = new Set(continuityHints.hints.map((hint) => hint.code))
-  const warnings = buildWarnings({ projectScope, latestProject, pendingContinuity, hintCodes, caller: options.caller })
+  const warnings = buildWarnings({ projectScope, latestProject, pendingContinuityCandidates, hintCodes, caller: options.caller })
 
   const suggestedActions = unique([
-    ...requiredContinuityActions(Boolean(pendingContinuity.length)),
+    ...requiredContinuityActions(Boolean(pendingContinuityCandidates.length)),
     ...continuityHints.suggestedActions,
   ])
 
@@ -177,7 +182,7 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
     status: {
       visibleApprovedCount: visibleApproved.length,
       pendingReviewCount: pendingReview.length,
-      pendingContinuityCount: pendingContinuity.length,
+      pendingContinuityCount: pendingContinuityCandidates.length,
     },
     latestApproved: {
       ...(latestProject ? { project: latestProject } : {}),

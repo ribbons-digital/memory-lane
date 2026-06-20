@@ -47,6 +47,15 @@ test("continuity read model omits arbitrary non-workflow global approved memory"
   assert.equal(result.latestApproved.global, undefined)
 })
 
+test("continuity read model does not select global personal memory via workflow keyword", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "Approved project checkpoint", kind: "project_checkpoint" }),
+    memory({ id: "global-personal-review", text: "Remember to review my medical bill.", category: "personal", scope: { type: "global" }, kind: "personal_context", updatedAt: "2026-06-18T12:00:00.000Z" }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.latestApproved.global, undefined)
+})
+
 test("continuity read model includes pending checkpoint and session-summary candidates", () => {
   const result = buildContinuityReadModel([
     memory({ id: "approved", text: "Approved checkpoint", kind: "project_checkpoint", updatedAt: "2026-06-18T08:00:00.000Z" }),
@@ -127,6 +136,22 @@ test("continuity previews are bounded and omit likely secrets", () => {
   assert.equal(result.latestApproved.project?.preview.endsWith("…"), true)
   assert.equal(result.pendingContinuity.some((item) => item.id === "secret"), false)
   assert.doesNotMatch(JSON.stringify(result), /sk-1234567890/u)
+})
+
+test("continuity accounts for secret-filtered pending continuity candidates without unsafe preview text", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "approved", text: "Approved checkpoint", kind: "project_checkpoint", updatedAt: "2026-06-18T08:00:00.000Z" }),
+    memory({ id: "secret-pending", text: "## Session Summary\nNext token = sk-1234567890abcdef1234567890abcdef", status: "pending", kind: "session_summary", source: "session-summary", updatedAt: "2026-06-18T11:00:00.000Z" }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.status.pendingContinuityCount, 1)
+  assert.equal(result.pendingContinuity.some((item) => item.id === "secret-pending"), false)
+  assert.equal(result.suggestedActions[0], "memory-lane review --json")
+  const warning = result.warnings.find((item) => item.code === "pending-continuity-newer-than-approved")
+  assert.equal(warning?.severity, "review")
+  assert.deepEqual(warning?.memoryIds, ["secret-pending"])
+  assert.doesNotMatch(JSON.stringify(result), /sk-1234567890/u)
+  assert.doesNotMatch(JSON.stringify(result), /Next token/u)
 })
 
 test("memory engine continuity returns canonical read model for current scope", () => {
