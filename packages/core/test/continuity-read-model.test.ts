@@ -26,14 +26,25 @@ test("continuity read model selects latest approved project continuity with boun
   const result = buildContinuityReadModel([
     memory({ id: "old", text: "Old project fact", kind: "project_fact", updatedAt: "2026-06-18T08:00:00.000Z" }),
     memory({ id: "checkpoint", text: "Released v0.2.11 with unified release assets and checks passing.", kind: "project_checkpoint", updatedAt: "2026-06-18T10:00:00.000Z" }),
-    memory({ id: "global", text: "Global workflow preference", category: "preference", scope: { type: "global" }, kind: "workflow_rule", updatedAt: "2026-06-18T11:00:00.000Z" }),
+    memory({ id: "global-workflow", text: "Global workflow preference", category: "preference", scope: { type: "global" }, kind: "workflow_rule", updatedAt: "2026-06-18T11:00:00.000Z" }),
+    memory({ id: "global-personal", text: "My favorite coffee is espresso.", category: "personal", scope: { type: "global" }, kind: "personal_context", updatedAt: "2026-06-18T12:00:00.000Z" }),
   ], { projectScopeKey: "project-a" })
 
   assert.equal(result.projectScope, "project-a")
   assert.equal(result.latestApproved.project?.id, "checkpoint")
   assert.equal(result.latestApproved.project?.preview, "Released v0.2.11 with unified release assets and checks passing.")
-  assert.equal(result.latestApproved.global?.id, "global")
-  assert.equal(result.status.visibleApprovedCount, 3)
+  assert.equal(result.latestApproved.global?.id, "global-workflow")
+  assert.equal(result.status.visibleApprovedCount, 4)
+})
+
+
+test("continuity read model omits arbitrary non-workflow global approved memory", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "Approved project checkpoint", kind: "project_checkpoint" }),
+    memory({ id: "global-personal", text: "My favorite coffee is espresso.", category: "personal", scope: { type: "global" }, kind: "personal_context", updatedAt: "2026-06-18T12:00:00.000Z" }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.latestApproved.global, undefined)
 })
 
 test("continuity read model includes pending checkpoint and session-summary candidates", () => {
@@ -47,7 +58,41 @@ test("continuity read model includes pending checkpoint and session-summary cand
   assert.deepEqual(result.pendingContinuity.map((item) => item.id), ["pending-summary", "pending-checkpoint"])
   assert.equal(result.status.pendingContinuityCount, 2)
   assert.equal(result.pendingContinuity[1].checkpointCandidate?.kind, "merge")
+  assert.equal(result.suggestedActions[0], "memory-lane review --json")
   assert.ok(result.suggestedActions.includes("memory-lane review --json"))
+})
+
+
+test("continuity read model includes authoritative inspection actions and MCP guidance", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "approved", text: "Approved checkpoint", kind: "project_checkpoint" }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.deepEqual(result.suggestedActions.slice(0, 5), [
+    "memory-lane continuity --json",
+    "memory-lane review --json",
+    "memory-lane list --json",
+    "memory-lane agreements --json",
+    "memory-lane status --json",
+  ])
+  for (const command of result.suggestedActions.slice(0, 5)) {
+    assert.ok(result.harnessGuidance.cli.some((item) => item.includes(command)), `missing CLI guidance for ${command}`)
+  }
+  for (const tool of ["memory_continuity", "memory_review", "memory_list", "memory_status"]) {
+    assert.ok(result.harnessGuidance.mcp.some((item) => item.includes(tool)), `missing MCP guidance for ${tool}`)
+  }
+})
+
+
+test("continuity read model scopes pending review count to visible current-scope memories", () => {
+  const memories = [
+    memory({ id: "current-project", status: "pending", scope: { type: "project", key: "project-a" }, kind: "session_summary" }),
+    memory({ id: "global", status: "pending", category: "preference", scope: { type: "global" }, kind: "workflow_rule" }),
+    memory({ id: "other-project", status: "pending", scope: { type: "project", key: "project-b" }, kind: "session_summary" }),
+  ]
+
+  assert.equal(buildContinuityReadModel(memories, { projectScopeKey: "project-a" }).status.pendingReviewCount, 2)
+  assert.equal(buildContinuityReadModel(memories).status.pendingReviewCount, 1)
 })
 
 test("continuity read model warns when pending continuity is newer than approved project continuity", () => {

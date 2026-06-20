@@ -15,6 +15,15 @@ import type {
 const DEFAULT_PREVIEW_MAX_CHARS = 240
 const DEFAULT_MAX_PENDING_CONTINUITY = 5
 const CONTINUITY_KINDS = new Set<MemoryKind>(["project_checkpoint", "session_summary", "decision", "project_fact"])
+const GLOBAL_WORKFLOW_TEXT_PATTERN = /\b(?:workflow|tool(?:s|ing)?|review|pr|pull request|release|project[- ]loop|harness|mcp|cli|memory-lane)\b/iu
+const REQUIRED_CONTINUITY_ACTIONS = [
+  "memory-lane continuity --json",
+  "memory-lane review --json",
+  "memory-lane list --json",
+  "memory-lane agreements --json",
+  "memory-lane status --json",
+]
+const REQUIRED_MCP_TOOLS = ["memory_continuity", "memory_review", "memory_list", "memory_status"]
 const PROJECT_KIND_PRIORITY = new Map<MemoryKind, number>([
   ["project_checkpoint", 0],
   ["session_summary", 1],
@@ -74,6 +83,17 @@ function isPendingContinuity(memory: MemoryRecord): boolean {
   return Boolean(classifyCheckpointCandidate(memory))
 }
 
+function isWorkflowRelevantGlobal(memory: MemoryRecord): boolean {
+  if (memory.scope.type !== "global") return false
+  if (memory.kind === "workflow_rule") return true
+  return GLOBAL_WORKFLOW_TEXT_PATTERN.test(memory.text)
+}
+
+function requiredContinuityActions(hasPendingContinuity: boolean): string[] {
+  if (!hasPendingContinuity) return REQUIRED_CONTINUITY_ACTIONS
+  return ["memory-lane review --json", ...REQUIRED_CONTINUITY_ACTIONS.filter((action) => action !== "memory-lane review --json")]
+}
+
 function unique(values: string[]): string[] {
   return [...new Set(values)]
 }
@@ -128,9 +148,9 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
     .filter((memory) => projectScoped(memory, projectScope) && (!memory.kind || CONTINUITY_KINDS.has(memory.kind)))
     .sort(compareApprovedProject)
   const approvedGlobal = visibleApproved
-    .filter((memory) => memory.scope.type === "global")
+    .filter((memory) => isWorkflowRelevantGlobal(memory))
     .sort(compareNewest)
-  const pendingReview = memories.filter((memory) => memory.status === "pending")
+  const pendingReview = memories.filter((memory) => memory.status === "pending" && visibleInProject(memory, projectScope))
   const pendingContinuity = pendingReview
     .filter((memory) => projectScoped(memory, projectScope) && isPendingContinuity(memory))
     .sort(compareNewest)
@@ -147,11 +167,7 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
   const warnings = buildWarnings({ projectScope, latestProject, pendingContinuity, hintCodes, caller: options.caller })
 
   const suggestedActions = unique([
-    "memory-lane continuity --json",
-    ...(pendingContinuity.length ? ["memory-lane review --json"] : []),
-    "memory-lane status --json",
-    "memory-lane list --json",
-    ...(operatingAgreements.primaryCount || operatingAgreements.relatedCandidateCount ? ["memory-lane agreements --json"] : []),
+    ...requiredContinuityActions(Boolean(pendingContinuity.length)),
     ...continuityHints.suggestedActions,
   ])
 
@@ -180,8 +196,8 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
     ],
     harnessGuidance: {
       summary: ["Memory Lane owns continuity semantics; harnesses should use this read model rather than recall alone."],
-      cli: ["Run memory-lane continuity --json for authoritative continuity inspection."],
-      mcp: ["Call memory_continuity with projectPath for project-scoped continuity in desktop MCP clients."],
+      cli: REQUIRED_CONTINUITY_ACTIONS.map((command) => `Run ${command} for authoritative Memory Lane inspection.`),
+      mcp: REQUIRED_MCP_TOOLS.map((tool) => `Call ${tool} with projectPath when project-scoped results are needed in MCP clients.`),
     },
     notes: ["Continuity is read-only; no memory cleanup, approval, or mutation is performed."],
   }
