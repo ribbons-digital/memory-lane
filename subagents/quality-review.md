@@ -1,21 +1,25 @@
-## Review
+# Quality Review: Slice B project-first SessionStart selection
 
-Approval status: Approved
+Approval status: **Approved**
 
-### Correct
-- Adapter output JSON shape is preserved: both adapters still route visible notices through `noopOutput(..., true)`, which emits exactly `{ "systemMessage": "Memory Lane: ..." }`, and no-pending/no-debug still returns `{}` (`packages/claude-adapter/src/outputs.ts:7-9`, `packages/claude-adapter/src/outputs.ts:35-42`, `packages/codex-adapter/src/outputs.ts:7-9`, `packages/codex-adapter/src/outputs.ts:31-38`).
-- Pending-review behavior is count-only and privacy-safe: the shared helper counts only `saved` pending memories and renders only count, `memory-lane review`, and approve/reject guidance; it does not interpolate ids or memory text (`packages/lifecycle/src/review-notices.ts:3-13`).
-- Debug/no-debug behavior matches the design: pending saves are visible regardless of debug via `noopOutput(pendingReviewNotice, true)`, while no-pending paths continue to use the caller's `debug` flag for generic saved/skipped/discarded counts (`packages/claude-adapter/src/outputs.ts:35-42`, `packages/codex-adapter/src/outputs.ts:31-38`).
-- Session summary/no-durable paths are aligned: Claude SessionEnd and Codex supported Stop+summary now use `lifecycleNoopOutput(result, debug)`, so pending summaries get the review notice and no-durable/no-pending results remain quiet without debug (`packages/claude-adapter/src/runner.ts:176-178`, `packages/codex-adapter/src/runner.ts:195-197`). Codex manual session-end already uses the same helper (`packages/codex-adapter/src/runner.ts:230-232`).
-- Existing explanatory no-save messages are preserved for disabled/missing-provider/confirmation cases (`packages/claude-adapter/src/runner.ts:150-161`, `packages/codex-adapter/src/runner.ts:176-183`, `packages/codex-adapter/src/runner.ts:207-219`).
-- Tests cover lifecycle counting/pluralization/privacy (`packages/lifecycle/test/review-notices.test.ts:26-50`), Claude pending Stop and quiet approved PostToolUse (`packages/claude-adapter/test/runner.test.ts:170-187`, `packages/claude-adapter/test/runner.test.ts:232-245`), Claude pending SessionEnd and no-durable quiet behavior (`packages/claude-adapter/test/runner.test.ts:295-340`), Codex pending SessionEnd, Stop, PostToolUse privacy, supported Stop+summary, and no-durable quiet behavior (`packages/codex-adapter/test/runner.test.ts:226-251`, `packages/codex-adapter/test/runner.test.ts:314-348`, `packages/codex-adapter/test/runner.test.ts:408-461`).
-- README documents compact count-only review reminders and privacy constraints for both Claude and Codex hooks (`README.md:822`, `README.md:837`).
+## Findings by severity
 
-### Findings by severity
-- Blocker: None.
-- Major: None.
-- Minor: None.
+### Blocker
+- None found.
 
-### Notes
-- The requested root files `plan.md` and `progress.md` were not present at the provided paths; I reviewed the checked-in pending-review visibility plan/spec in `docs/superpowers/` plus `git diff main...HEAD`.
-- Verification passed: `git diff --check main...HEAD`; `pnpm --filter @memory-lane/lifecycle test -- review-notices.test.ts`; `pnpm --filter @memory-lane/claude-adapter test -- runner.test.ts`; `pnpm --filter @memory-lane/codex-adapter test -- runner.test.ts`; `pnpm --filter @memory-lane/lifecycle build`; `pnpm --filter @memory-lane/claude-adapter build`; `pnpm --filter @memory-lane/codex-adapter build`.
+### Major
+- None found.
+
+### Minor
+- None found.
+
+### Notes / evidence
+- Requested `plan.md` and `progress.md` at the repo root were not present; review proceeded from `main...HEAD`, the committed docs, and changed files.
+- TypeScript correctness verified: `pnpm --filter @memory-lane/lifecycle build` passed.
+- Test coverage verified: `pnpm --filter @memory-lane/lifecycle test` passed (76/76).
+- Comparator behavior matches the Slice B intent: `BaselineSelectionOptions` adds optional `projectScope`, `baselineTier` prioritizes current-project, global, other-project, then other memories, and recency is preserved within each tier (`packages/lifecycle/src/injection.ts:21`, `packages/lifecycle/src/injection.ts:601`, `packages/lifecycle/src/injection.ts:609`). With no project scope, all candidates remain in tier 0, preserving recency-first selection (`packages/lifecycle/src/injection.ts:602`, `packages/lifecycle/src/injection.ts:613`).
+- Budget, deduplication, secret filtering, and truncation behavior are preserved: `selectBaselineMemories` still filters approved non-secret records, uses the same normalized-text `seen` set, calculates remaining hard budget, and calls `fitMemoryWithinBudget` in the existing selection loop (`packages/lifecycle/src/injection.ts:621`, `packages/lifecycle/src/injection.ts:626`, `packages/lifecycle/src/injection.ts:633`, `packages/lifecycle/src/injection.ts:636`).
+- Lifecycle SessionStart scope passing is correct: `handleSessionStart` refreshes scope, reads `engine.getProjectScope()?.key`, carries existing remaining-char policy limits, passes `projectScope` into baseline selection, and still passes it to rendering (`packages/lifecycle/src/handlers.ts:206`, `packages/lifecycle/src/handlers.ts:213`, `packages/lifecycle/src/handlers.ts:214`, `packages/lifecycle/src/handlers.ts:220`, `packages/lifecycle/src/handlers.ts:221`).
+- Prompt-time recall path was not changed by this slice; `handleUserPromptSubmit` still uses `selectMemoriesForInjection` rather than `selectBaselineMemories` (`packages/lifecycle/src/handlers.ts:166`).
+- Tests cover no-scope recency-first behavior, project-first current-project priority over newer globals, recency within tiers, secret/dedup preservation, and lifecycle integration under a tight item budget (`packages/lifecycle/test/injection.test.ts:497`, `packages/lifecycle/test/injection.test.ts:516`, `packages/lifecycle/test/injection.test.ts:535`, `packages/lifecycle/test/injection.test.ts:555`, `packages/lifecycle/test/handlers.test.ts:243`).
+- Documentation was updated to explain SessionStart project-first baseline selection and to clarify that prompt-time `UserPromptSubmit` recall remains relevance-based (`README.md:798`).

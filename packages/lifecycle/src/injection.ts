@@ -18,6 +18,10 @@ export interface MemoryInjectionLimits {
   absoluteMaxChars: number
 }
 
+export interface BaselineSelectionOptions extends Partial<MemoryInjectionLimits> {
+  projectScope?: string
+}
+
 export const CODEX_MEMORY_INJECTION_LIMITS: MemoryInjectionLimits = {
   maxItems: 6,
   targetChars: 1800,
@@ -594,17 +598,25 @@ export function renderMemoryContext(input: { event: MemoryContextEvent; memories
   ].join("\n")
 }
 
-function compareBaselineRelevance(a: MemoryRecord, b: MemoryRecord): number {
-  const dateCompare = b.updatedAt.localeCompare(a.updatedAt)
-  if (dateCompare !== 0) return dateCompare
-  const aProject = a.scope.type === "project" ? 1 : 0
-  const bProject = b.scope.type === "project" ? 1 : 0
-  return bProject - aProject
+function baselineTier(memory: MemoryRecord, projectScope?: string): number {
+  if (!projectScope) return 0
+  if (memory.scope.type === "project" && memory.scope.key === projectScope) return 0
+  if (memory.scope.type === "global") return 1
+  if (memory.scope.type === "project") return 2
+  return 3
+}
+
+function compareBaselineRelevance(projectScope?: string): (a: MemoryRecord, b: MemoryRecord) => number {
+  return (a, b) => {
+    const tierCompare = baselineTier(a, projectScope) - baselineTier(b, projectScope)
+    if (tierCompare !== 0) return tierCompare
+    return b.updatedAt.localeCompare(a.updatedAt)
+  }
 }
 
 export function selectBaselineMemories(
   memories: MemoryRecord[],
-  options?: Partial<MemoryInjectionLimits>,
+  options?: BaselineSelectionOptions,
 ): MemoryRecord[] {
   const limits = capLimits({ ...CODEX_BASELINE_INJECTION_LIMITS, ...options })
   const seen = new Set<string>()
@@ -613,7 +625,7 @@ export function selectBaselineMemories(
 
   const candidates = [...memories]
     .filter((memory) => memory.status === "approved" && !containsLikelySecret(memory.text))
-    .sort(compareBaselineRelevance)
+    .sort(compareBaselineRelevance(options?.projectScope))
 
   for (const memory of candidates) {
     if (selected.length >= limits.maxItems) break
