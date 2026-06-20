@@ -160,7 +160,7 @@ EOF
 
 Replace `/absolute/path/to/memory-lane` with your checkout path, then run `/reload` in pi. The timestamp query avoids stale module caches while iterating locally. Re-run `pnpm build` after changing Memory Lane source, then `/reload` pi again.
 
-The pi adapter provides manual `memory_save`, `memory_suggest`, and `memory_recall` tools plus `/memory ...` commands. It also injects relevant approved memories through pi's `before_agent_start` event. To reduce memory noise, pi `input` only saves explicit memory requests such as “Remember that ...”; ordinary prompt submissions are not auto-saved. `turn_end` and `tool_result` still capture higher-signal lifecycle evidence such as completed durable project statements and successful workflow commands (e.g., `pnpm test`, `pnpm build`, `pnpm install`) through the shared lifecycle policy. For session summaries, pi uses the explicit `/memory session-summary` command: it reads the current branch through pi's session manager, asks for interactive confirmation, and saves any generated summary as a pending `session_summary` memory with pi `session_end` provenance. It does not automatically summarize on `agent_end`, `session_shutdown`, or compaction.
+The pi adapter provides manual `memory_save`, `memory_suggest`, and `memory_recall` tools plus `/memory ...` commands. It also injects relevant approved memories through pi's `before_agent_start` event. To reduce memory noise, pi `input` only saves explicit memory requests such as “Remember that ...”; ordinary prompt submissions are not auto-saved. `turn_end` and `tool_result` still capture higher-signal lifecycle evidence such as completed durable project statements, successful workflow commands (e.g., `pnpm test`, `pnpm build`, `pnpm install`), and strong checkpoint evidence such as completed releases or merged PRs through the shared lifecycle policy. Inferred checkpoint captures are pending by default and require review before they affect approved continuity. For session summaries, pi uses the explicit `/memory session-summary` command: it reads the current branch through pi's session manager, asks for interactive confirmation, and saves any generated summary as a pending `session_summary` memory with pi `session_end` provenance. It does not automatically summarize on `agent_end`, `session_shutdown`, or compaction.
 
 #### Claude Code CLI: paste hooks manually
 
@@ -431,11 +431,13 @@ memory-lane obsidian ...          Manage optional Obsidian mirror/import workflo
 
 All commands support `--json` for machine-readable output and `--project <path>` to set the project scope.
 
-### Checkpoint candidate review labels
+### Checkpoint candidates and review-first capture
 
 `memory-lane review`, `memory-lane review --json`, and MCP `memory_review` label pending memories that look like high-value project progress, such as merged PRs, releases, verification milestones, docs syncs, major fixes, or roadmap decisions. These labels are review-first: approve a checkpoint candidate only if it should become durable project continuity.
 
-The labels do not create memories, approve memories, clean up duplicates, change recall ranking, or perform exact thread/workstream lookup. They only make review decisions easier.
+Memory Lane can also suggest pending checkpoint candidates from strong lifecycle evidence, such as a successful release command, merged PR command, or explicit completed-progress statement. These inferred checkpoints are pending by default, deduplicated against nearby pending/approved project checkpoints, and do not affect approved continuity until reviewed. When a hook saves a pending checkpoint candidate, Memory Lane emits the existing compact pending-review reminder where the hook transport supports it; Claude/Codex hook output uses the count-only reminder, while pi uses the same shared lifecycle capture policy and renders lifecycle-save notifications through the pi UI. MCP clients do not run lifecycle hooks, but they see the same pending state through `memory_review`, `memory_status`, and `memory_continuity`.
+
+No new command, MCP tool, config flag, or explicit memory API is required for checkpoint capture. Review with `memory-lane review` or MCP `memory_review`, approve/reject through the existing review flow, and inspect continuity with `memory-lane continuity` or MCP `memory_continuity`. Checkpoint capture does not automatically approve memories, dump transcripts, change recall ranking, or perform exact thread/workstream lookup.
 
 ### Memory revision commands
 
@@ -479,7 +481,7 @@ Use `memory-lane continuity --json` as the canonical CLI surface for continuity 
 
 For MCP clients, call `memory_continuity({ projectPath })` first for the same continuity questions; pass `projectPath` when the desktop/client process is not already scoped to the project. Do not answer continuity questions from `memory_recall` alone. Use recall only as a topic-specific follow-up after continuity inspection, for example when the continuity read model points to an area that needs more detail.
 
-The continuity read model is read-only. It may include bounded previews of selected memory records, but it does not inject additional memory bodies into lifecycle prompts, approve pending memories, mutate records, clean up scopes, or replace the review queue.
+The continuity read model is read-only. It may include bounded previews of selected memory records, including pending checkpoint candidates that were captured from lifecycle evidence, but it does not inject additional memory bodies into lifecycle prompts, approve pending memories, mutate records, clean up scopes, or replace the review queue. Pending checkpoint captures become approved continuity only after review approval.
 
 ### Continuity hints
 
@@ -771,6 +773,8 @@ Run `memory-lane init` to auto-detect and configure supported harnesses, or see 
 
 Lifecycle autosave intentionally filters transient reviewer, subagent, and task prompts such as commit review requests, “do not modify files” review tasks, and delegated status-report instructions. Those operational prompts are not durable memory. Explicit memory requests remain supported and authoritative: use `memory-lane save ...` or phrases like “Remember that ...” for durable workflow rules, preferences, or project facts.
 
+Shared lifecycle handlers can also queue compact `project_checkpoint` candidates from strong Stop/PostToolUse evidence such as completed release statements, successful release commands, or merged PR commands. These inferred captures are pending by default, deduplicated before saving, and never change approved continuity until the existing review flow approves them; no new CLI or MCP command is required.
+
 ### pi adapter
 
 The pi adapter supports manual Memory Lane tools and commands (`memory_save`, `memory_suggest`, `memory_recall`, and `/memory ...`). It performs read-only lifecycle recall injection through pi's documented `before_agent_start` event: relevant approved memories may be injected as hidden `memory-lane` context before the agent starts.
@@ -778,10 +782,10 @@ The pi adapter supports manual Memory Lane tools and commands (`memory_save`, `m
 pi also writes memories through higher-signal lifecycle events:
 
 - `input` — explicit memory requests only ("Remember that..."); ordinary prompt submissions are ignored to avoid noisy memory queues.
-- `turn_end` — the last user and assistant messages are evaluated for memory-worthy candidates after a turn completes.
-- `tool_result` — successful shell workflow commands such as `pnpm test`, `pnpm build`, and `pnpm install` are captured as project workflow rules.
+- `turn_end` — the last user and assistant messages are evaluated for memory-worthy candidates and strong completed-progress checkpoint evidence after a turn completes.
+- `tool_result` — successful shell workflow commands such as `pnpm test`, `pnpm build`, and `pnpm install` are captured as project workflow rules; successful release/merge commands may queue pending checkpoint candidates.
 
-Automatic writes skip secrets, transient imperatives, reviewer/subagent meta-prompts, and duplicates within a turn. Set `MEMORY_LANE_DEBUG=1` to append privacy-safe debug records to `~/.memory-lane/pi-debug.jsonl` (no prompts or tool outputs are logged).
+Automatic writes skip secrets, transient imperatives, reviewer/subagent meta-prompts, and duplicates within a turn. Inferred checkpoint candidates stay pending until review; use `/memory review` in pi or the normal CLI/MCP review surfaces to approve or reject them. Set `MEMORY_LANE_DEBUG=1` to append privacy-safe debug records to `~/.memory-lane/pi-debug.jsonl` (no prompts or tool outputs are logged).
 
 For session summaries, use `/memory session-summary` in pi. The command reads the current conversation branch through pi's session manager, asks for interactive confirmation, sends the compact transcript to the configured `memory.sessionEndSummary` provider, and saves any result as a pending `session_summary` memory with pi `session_end` provenance. Memory Lane does not automatically summarize pi sessions on `agent_end`, `session_shutdown`, or compaction.
 

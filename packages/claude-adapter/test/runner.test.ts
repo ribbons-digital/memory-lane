@@ -186,6 +186,31 @@ test("stop shows pending review notice without debug when pending memory is save
   assert.doesNotMatch(parsed.systemMessage, /review-first memory suggestions|PRIVATE|secret-id/u)
 })
 
+test("stop shows pending review notice for checkpoint capture without leaking checkpoint text", async () => {
+  const engine = engineInTemp()
+
+  const output = await runClaudeHookCommand("stop", {
+    engine,
+    env: {} as NodeJS.ProcessEnv,
+    payloadText: stopPayload({
+      last_user_message: "Released v0.2.12 and verified the release workflow.",
+      last_assistant_message: "Done.",
+    }),
+  })
+
+  const parsed = JSON.parse(output)
+  assert.match(parsed.systemMessage, /Memory Lane: suggested 1 pending memory for review/u)
+  assert.match(parsed.systemMessage, /memory-lane review/u)
+  assert.doesNotMatch(parsed.systemMessage, /v0\.2\.12|release workflow/u)
+
+  const saved = engine.list({ all: true })
+  assert.equal(saved.length, 1)
+  assert.equal(saved[0].status, "pending")
+  assert.equal(saved[0].kind, "project_checkpoint")
+  assert.equal(saved[0].provenance?.adapter, "claude")
+  assert.equal(saved[0].provenance?.lifecycleEvent, "turn_stop")
+})
+
 test("stop reads latest turn from transcript", async () => {
   const engine = engineInTemp()
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-claude-transcript-"))

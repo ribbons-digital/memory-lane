@@ -842,6 +842,65 @@ describe("CLI integration", () => {
     assert.equal(ambiguous.checkpointCandidate, undefined)
   })
 
+  it("captured checkpoint candidates appear in review and continuity", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-captured-checkpoint" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const capture = runProcess(["codex", "stop"], {
+      env,
+      cwd: project,
+      stdin: JSON.stringify({
+        hook_event_name: "Stop",
+        session_id: "session-1",
+        turn_id: "turn-1",
+        cwd: project,
+        transcript_path: null,
+        model: "gpt-5-codex",
+        permission_mode: "default",
+        last_user_message: "Released v0.2.12.",
+        last_assistant_message: "Done.",
+      }),
+    })
+    assert.equal(capture.status, 0, capture.stderr)
+
+    const review = runProcess(["review", "--json"], { env, cwd: project })
+    assert.equal(review.status, 0, review.stderr)
+    const reviewPayload = JSON.parse(review.stdout)
+    assert.equal(reviewPayload.data.memories.length, 1)
+    const memory = reviewPayload.data.memories[0]
+    assert.equal(memory.status, "pending")
+    assert.equal(memory.kind, "project_checkpoint")
+    assert.equal(memory.source, "agent-suggested")
+    assert.equal(memory.provenance.adapter, "codex")
+    assert.equal(memory.provenance.lifecycleEvent, "turn_stop")
+    assert.deepEqual(memory.checkpointCandidate, {
+      detected: true,
+      kind: "project",
+      reason: "kind is project_checkpoint",
+    })
+
+    const continuity = runProcess(["continuity", "--json"], { env, cwd: project })
+    assert.equal(continuity.status, 0, continuity.stderr)
+    const continuityPayload = JSON.parse(continuity.stdout)
+    assert.equal(continuityPayload.data.projectScope, "cli-captured-checkpoint")
+    assert.equal(continuityPayload.data.status.pendingReviewCount, 1)
+    assert.equal(continuityPayload.data.status.pendingContinuityCount, 1)
+    assert.equal(continuityPayload.data.pendingContinuity.length, 1)
+    assert.equal(continuityPayload.data.pendingContinuity[0].id, memory.id)
+    assert.equal(continuityPayload.data.pendingContinuity[0].kind, "project_checkpoint")
+    assert.match(continuityPayload.data.pendingContinuity[0].preview, /Released v0\.2\.12/u)
+    assert.deepEqual(continuityPayload.data.pendingContinuity[0].checkpointCandidate, {
+      detected: true,
+      kind: "project",
+      reason: "kind is project_checkpoint",
+    })
+  })
+
   it("review groups pending memories by project source kind and provenance", () => {
     const project = tempDir()
     fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-review-project" }))

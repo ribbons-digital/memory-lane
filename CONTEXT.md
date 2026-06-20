@@ -75,6 +75,10 @@ _Avoid_: Recall result, lifecycle injection, session summary, automatic checkpoi
 A pending Memory Lane memory that represents high-value project progress, such as a merge, release, verification milestone, docs sync, major fix, or roadmap decision. It is review-first: Memory Lane may suggest it from strong evidence, but it does not affect future continuity until approved.
 _Avoid_: Approved checkpoint, session summary, automatic handoff, lifecycle notice
 
+**Checkpoint capture**:
+A lifecycle-driven suggestion of a compact checkpoint candidate from high-confidence project progress evidence such as a release, merged PR, verification milestone, docs sync, major fix, or roadmap decision. It writes only pending Memory Lane records, deduplicates near-duplicate events, and relies on automatic review reminders before affecting future continuity.
+_Avoid_: Approved checkpoint, automatic approval, transcript capture, explicit memory API
+
 **Scope hygiene candidate**:
 An approved visible memory whose scope metadata may be broader than its content warrants, such as a global memory that appears to describe a specific project, repository, session, checkpoint, release, or implementation detail. It is an inspection signal only; Memory Lane does not automatically rescope, delete, reject, or supersede it.
 _Avoid_: Scope error, automatic cleanup, rejected memory, rescope recommendation

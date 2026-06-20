@@ -1,6 +1,7 @@
 import type { MemoryEngine, MemoryProvenance, MemorySource, SaveResult } from "@memory-lane/core"
 import { detectContinuityIntent, isMemoryManagementListIntent, limitsFromContextPolicy, renderContinuityIntentGuidance, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, resolveContextPolicy, selectBaselineMemories, selectMemoriesForInjection, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
+import { checkpointKeyFromText, extractCheckpointCandidatesFromPostToolUse, extractCheckpointCandidatesFromStop, filterDuplicateCheckpointCandidates } from "./checkpoint-capture.js"
 import { summarizeToolOutcome } from "./tool-outcomes.js"
 import type { LifecycleResult, MemoryCandidate, MemoryContextDecision, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
 
@@ -98,6 +99,21 @@ function provenance(
     turnId: input.turnId,
     toolName,
   }
+}
+
+function filterSameTurnCheckpointCandidates(existingCandidates: MemoryCandidate[], checkpointCandidates: MemoryCandidate[]): MemoryCandidate[] {
+  const explicitSameTurnKeys = new Set(
+    existingCandidates
+      .filter((candidate) => candidate.source === "user-suggested")
+      .map((candidate) => checkpointKeyFromText(candidate.text))
+      .filter((key): key is string => Boolean(key)),
+  )
+  if (explicitSameTurnKeys.size === 0) return checkpointCandidates
+
+  return checkpointCandidates.filter((candidate) => {
+    const key = checkpointKeyFromText(candidate.text)
+    return !key || !explicitSameTurnKeys.has(key)
+  })
 }
 
 function persistCandidates(
@@ -232,10 +248,19 @@ export function handleSessionStart(
 
 export function handleStop(engine: MemoryEngine, input: StopInput, options?: LifecycleHandlerOptions): LifecycleResult {
   engine.refreshScope(input.cwd)
-  return persistCandidates(engine, extractStopCandidates(input), input, "turn_stop", options)
+  const stopCandidates = extractStopCandidates(input)
+  const checkpointCandidates = filterSameTurnCheckpointCandidates(
+    stopCandidates,
+    filterDuplicateCheckpointCandidates(engine, extractCheckpointCandidatesFromStop(input)),
+  )
+  return persistCandidates(engine, [...checkpointCandidates, ...stopCandidates], input, "turn_stop", options)
 }
 
 export function handlePostToolUse(engine: MemoryEngine, input: PostToolUseInput, options?: LifecycleHandlerOptions): LifecycleResult {
   engine.refreshScope(input.cwd)
-  return persistCandidates(engine, summarizeToolOutcome(input), input, "post_tool_use", options)
+  const candidates = [
+    ...summarizeToolOutcome(input),
+    ...filterDuplicateCheckpointCandidates(engine, extractCheckpointCandidatesFromPostToolUse(input)),
+  ]
+  return persistCandidates(engine, candidates, input, "post_tool_use", options)
 }

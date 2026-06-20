@@ -521,32 +521,26 @@ Out of scope for Phase 16:
 
 ## Phase 17 — Review-First Progress and Checkpoint Capture
 
-**Status:** Slice 1 complete: checkpoint candidate review labels are implemented for CLI review and MCP `memory_review`. The unified continuity contract slice is complete: core exposes a canonical continuity read model, CLI exposes `memory-lane continuity`, MCP exposes `memory_continuity`, and lifecycle/docs guidance now points continuity questions to those read-only surfaces before topic recall. Capture, dedup/debounce, and future review improvements remain follow-up work.
+**Status:** Complete for the current continuity sequence. Checkpoint candidate review labels are implemented for CLI review and MCP `memory_review`; the unified continuity contract is implemented across core, `memory-lane continuity`, MCP `memory_continuity`, and lifecycle/docs guidance; and review-first checkpoint capture now queues deduplicated pending `project_checkpoint` candidates from strong lifecycle evidence without adding new commands, tools, config flags, or automatic approval.
 
 **Goal:** Capture high-value continuity events such as releases, merges, major fixes, and roadmap decisions as reviewable checkpoint candidates, so another session can pick up the project state without the user restating it.
 
-This phase should make Memory Lane more proactive in later slices, but still not autonomous. It should suggest durable project progress when evidence is strong and let the user approve before it affects future sessions. The completed first slice is review-labeling only.
+This phase makes Memory Lane more proactive while keeping review as the safety boundary. It suggests durable project progress when evidence is strong and lets the user approve before it affects future sessions.
 
 Completed scope:
 
 1. Added conservative checkpoint candidate classification for pending memories that look like releases, merges, verification milestones, docs syncs, roadmap decisions, major fixes, or explicit `project_checkpoint` records.
 2. Labeled checkpoint candidates in CLI `memory-lane review`, CLI `review --json`, and MCP `memory_review` with text-free structured metadata.
 3. Added the unified continuity contract: core continuity read model, `memory-lane continuity`, MCP `memory_continuity`, and prompt-time/docs guidance that treats continuity as canonical before topic-specific recall.
-4. Kept Phase 17 review-first: no automatic checkpoint capture, dedup/debounce, background writes, recall ranking changes, workstream/thread ids, new config flags, or MCP mutation tools were added.
+4. Added review-first checkpoint capture from high-confidence lifecycle evidence, including explicit completed release/merge statements on Stop and successful release/merge shell command evidence on PostToolUse.
+5. Added first-slice dedup/debounce for inferred checkpoint candidates against visible pending and approved project checkpoints, so repeated harness events do not queue the same release/PR checkpoint repeatedly.
+6. Kept Phase 17 review-first and API-stable: inferred captures are pending by default; approval still determines durable continuity; compact pending-review reminders use existing hook/review surfaces; no new CLI commands, MCP tools, config flags, automatic approval, recall ranking changes, workstream/thread ids, or transcript capture were added.
 
-Remaining Phase 17 follow-up decisions:
+Future follow-up boundaries:
 
-- Default all inferred progress/checkpoint captures to `pending` unless the user explicitly asks to remember/save.
-- Prefer concrete evidence from commands/tool outcomes (`git tag`, release workflow success, tests/build pass, merge commits) over model inference.
-- Store compact checkpoint memories, not transcripts or logs.
-- Deduplicate by project, event type, and nearby timestamp to avoid multiple sessions saving the same release/checkpoint.
-- Keep release/checkpoint capture harness-neutral; adapters provide bounded evidence, lifecycle/core decides what to suggest.
-
-Remaining todos:
-
-1. Add review-first checkpoint capture from high-confidence evidence such as successful release workflow/tag creation or explicit “released vX.Y.Z” user statements.
-2. Add duplicate/debounce logic for pending checkpoint candidates from the same project/event/version.
-3. Add future review improvements only after capture and dedup behavior are deliberately designed.
+- Broader evidence classes such as richer verification milestones, docs-sync decisions, or major-fix detection should be designed as deliberate later slices, not broad LLM inference.
+- Deeper duplicate consolidation, temporal metadata, and stale/overlap repair belong to Phase 20's time-aware memory/consolidation work.
+- Phase 18 should proceed next for global preference layering and context policy before adding wider harness-neutral learning enhancements.
 
 ## Phase 18 — Global Preference Layering and Context Policy
 
