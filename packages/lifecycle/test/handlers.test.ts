@@ -351,6 +351,44 @@ test("stop captures checkpoint progress as pending project checkpoint", () => {
   assert.equal(result.saved[0].memory.provenance?.turnId, "turn-1")
 })
 
+test("stop does not infer duplicate checkpoint for explicit release memory request", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: "Remember that we released v0.2.12.",
+  })
+
+  assert.equal(result.saved.length, 1)
+  assert.equal(result.saved[0]?.status, "saved")
+  if (result.saved[0]?.status !== "saved") throw new Error("expected saved explicit memory")
+  assert.equal(result.saved[0].memory.text, "we released v0.2.12")
+  assert.equal(result.saved[0].memory.status, "approved")
+  assert.equal(result.saved[0].memory.kind, "personal_context")
+  assert.equal(result.saved[0].memory.source, "user-suggested")
+  assert.equal(engine.list({ status: "pending" }).length, 0)
+})
+
+test("stop does not infer duplicate checkpoint for explicit merge memory request", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: "remember that PR #19 merged after review",
+  })
+
+  assert.equal(result.saved.length, 1)
+  assert.equal(result.saved[0]?.status, "saved")
+  if (result.saved[0]?.status !== "saved") throw new Error("expected saved explicit memory")
+  assert.equal(result.saved[0].memory.text, "PR #19 merged after review")
+  assert.equal(result.saved[0].memory.status, "approved")
+  assert.equal(result.saved[0].memory.kind, "personal_context")
+  assert.equal(result.saved[0].memory.source, "user-suggested")
+  assert.equal(engine.list({ status: "pending" }).length, 0)
+})
+
 test("stop skips duplicate checkpoint candidates", () => {
   const project = tempDir()
   const engine = engineInTemp(project)
