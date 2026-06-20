@@ -521,7 +521,7 @@ Out of scope for Phase 16:
 
 ## Phase 17 — Review-First Progress and Checkpoint Capture
 
-**Status:** Slice 1 complete: checkpoint candidate review labels are implemented for CLI review and MCP `memory_review`. Capture, dedup/debounce, and future review improvements remain follow-up work.
+**Status:** Slice 1 complete: checkpoint candidate review labels are implemented for CLI review and MCP `memory_review`. Unified continuity contract design is in progress as the bridge between review labels and consistent cross-harness continuity. Capture, dedup/debounce, and future review improvements remain follow-up work.
 
 **Goal:** Capture high-value continuity events such as releases, merges, major fixes, and roadmap decisions as reviewable checkpoint candidates, so another session can pick up the project state without the user restating it.
 
