@@ -17,10 +17,17 @@ export interface StopInput extends LifecycleContext {
   lastAssistantMessage?: string
 }
 
+export interface RecentToolUse {
+  toolName: string
+  toolInput: unknown
+  toolResponse: unknown
+}
+
 export interface PostToolUseInput extends LifecycleContext {
   toolName: string
   toolInput: unknown
   toolResponse: unknown
+  recentToolUses?: RecentToolUse[]
 }
 
 export interface SessionStartInput extends LifecycleContext {
