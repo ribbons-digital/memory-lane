@@ -133,6 +133,9 @@ function buildWarnings(input: {
     })
   }
 
+  if (input.hintCodes.has("freshness-advisory")) {
+    warnings.push({ code: "freshness-advisory", severity: "review", message: "Some approved visible memories have expired or stale freshness metadata; inspect status before relying on time-sensitive guidance." })
+  }
   if (input.hintCodes.has("scope-hygiene-candidate")) {
     warnings.push({ code: "scope-hygiene-candidate", severity: "review", message: "Some visible global memories look project-specific; inspect scope hygiene before relying on them." })
   }

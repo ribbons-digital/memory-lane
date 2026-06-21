@@ -76,6 +76,8 @@ export interface MemoryRecord {
   freshness?: MemoryFreshness
 }
 
+export type FreshnessClassification = "none" | "current" | "stale" | "expired"
+
 export interface FreshnessMemoryMetadata {
   id: string
   status: Extract<MemoryStatus, "approved">
@@ -86,11 +88,27 @@ export interface FreshnessMemoryMetadata {
   updatedAt: string
   kind?: MemoryKind
   provenance?: MemoryProvenance
+  freshness?: {
+    classification: FreshnessClassification
+    expiresAt?: string
+    staleAfterDays?: number
+    capturedAt?: string
+    staleAnchor?: string
+  }
 }
 
 export interface FreshnessStatus {
   projectScope: string | "none"
   referenceTime?: string
+  advisory: {
+    referenceNow: string
+    withFreshnessCount: number
+    currentCount: number
+    staleCount: number
+    expiredCount: number
+    stale: FreshnessMemoryMetadata[]
+    expired: FreshnessMemoryMetadata[]
+  }
   visibleApprovedCount: number
   latestApproved?: FreshnessMemoryMetadata
   latestProjectApproved?: FreshnessMemoryMetadata
@@ -109,10 +127,12 @@ export interface FreshnessStatus {
 export interface FreshnessStatusOptions {
   projectScopeKey?: string
   since?: string
+  referenceNow?: string
   maxNewerMetadata?: number
 }
 
 export type ContinuityHintCode =
+  | "freshness-advisory"
   | "superseded-visible"
   | "operating-agreement-overlap"
   | "project-global-overlap"
@@ -192,6 +212,7 @@ export interface ContinuityHintOptions {
 }
 
 export type ContinuityWarningCode =
+  | "freshness-advisory"
   | "pending-continuity-newer-than-approved"
   | "no-project-scope"
   | "scope-hygiene-candidate"

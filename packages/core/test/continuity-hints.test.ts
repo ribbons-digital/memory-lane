@@ -16,6 +16,7 @@ function memory(overrides: Partial<MemoryRecord> & { id: string; text?: string }
     provenance: overrides.provenance,
     revision: overrides.revision,
     project: overrides.project,
+    freshness: overrides.freshness,
   }
 }
 
@@ -161,6 +162,29 @@ test("continuity hints include newer approved metadata when since is provided", 
   })
   assert.ok(result.hints.some((hint) => hint.code === "newer-approved"))
   assert.match(result.suggestedActions.join("\n"), /memory-lane status --json --since 2026-06-18T09:00:00.000Z/u)
+})
+
+test("continuity hints report expired and stale freshness advisories without text", () => {
+  const result = buildContinuityHints([
+    memory({ id: "expired", text: "SECRET expired body", freshness: { expiresAt: "2026-06-18T00:00:00.000Z" } }),
+    memory({ id: "stale", text: "SECRET stale body", updatedAt: "2026-06-01T00:00:00.000Z", freshness: { staleAfterDays: 1 } }),
+    memory({ id: "current", text: "SECRET current body", freshness: { staleAfterDays: 30 } }),
+  ], { projectScopeKey: "project-a" })
+
+  const hint = result.hints.find((item) => item.code === "freshness-advisory")
+  assert.equal(hint?.severity, "review")
+  assert.equal(hint?.count, 2)
+  assert.deepEqual(hint?.memoryIds.sort(), ["expired", "stale"])
+  assert.match(result.suggestedActions.join("\n"), /memory-lane status --json/u)
+  assert.doesNotMatch(json(result), /SECRET/u)
+})
+
+test("continuity hints omit freshness advisory when all freshness is current", () => {
+  const result = buildContinuityHints([
+    memory({ id: "current", freshness: { staleAfterDays: 30, capturedAt: new Date().toISOString() } }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.hints.some((item) => item.code === "freshness-advisory"), false)
 })
 
 test("continuity hints respect project scope plus global visibility", () => {

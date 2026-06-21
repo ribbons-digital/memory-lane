@@ -441,7 +441,7 @@ memory-lane suggest "Recheck this after launch" --stale-after-days 30
 memory-lane save "Release note" --captured-at 2026-06-21T00:00:00.000Z
 ```
 
-Freshness metadata is advisory in Phase 20. Memory Lane stores, validates, and displays it, but does not automatically delete, hide, refresh, consolidate, or deprioritize memories yet. Generated session summaries can also carry `freshness.capturedAt` when the source messages include canonical ISO timestamps; this captured time is the session as-of/source timestamp and may differ from the summary heading/write date.
+Freshness metadata is advisory in Phase 20. Memory Lane stores, validates, displays, and classifies it for status/continuity inspection, but does not automatically delete, hide, refresh, consolidate, deprioritize, or filter memories. Generated session summaries can also carry `freshness.capturedAt` when the source messages include canonical ISO timestamps; this captured time is the session as-of/source timestamp and may differ from the summary heading/write date.
 
 ### Checkpoint candidates and review-first capture
 
@@ -484,7 +484,7 @@ Use `--dry-run` to preview any revision command. Multi-old `replace` and `supers
 
 ### Freshness status
 
-`memory-lane status --json --since <ISO timestamp>` and `memory-lane doctor --json --since <ISO timestamp>` include a read-only `freshness` object. It reports counts and metadata for approved memories visible to the current project scope plus global memories that were updated after the timestamp. Freshness output intentionally excludes memory text; use `memory-lane list --json` or targeted recall when you need the actual memory bodies.
+`memory-lane status --json --since <ISO timestamp>` and `memory-lane doctor --json --since <ISO timestamp>` include a read-only `freshness` object. It reports counts and metadata for approved memories visible to the current project scope plus global memories that were updated after the timestamp. The same object includes advisory freshness classifications for visible approved memories with explicit freshness metadata: `expired`, `stale`, `current`, or `none`. Expired/stale classifications are inspection signals only; Memory Lane does not hide, delete, reject, down-rank, or skip those memories. Freshness output intentionally excludes memory text; use `memory-lane list --json` or targeted recall when you need the actual memory bodies.
 
 ### Operating agreements
 
@@ -517,6 +517,7 @@ Current hints report:
 - multiple operating-agreement candidates for the same workflow area;
 - project/global preference overlap in the same workflow area;
 - scope hygiene candidates: approved global memories that look project-specific because of their category, kind, or path-like content;
+- freshness advisories: approved visible memories with explicit freshness metadata that are expired or stale;
 - newer approved memories when `--since <ISO timestamp>` is provided.
 
 Scope hygiene hints are text-free inspection signals only. Memory Lane does not automatically rescope or clean up those memories; use `memory-lane list --json` to inspect them before deciding whether to update, supersede, or leave them alone.

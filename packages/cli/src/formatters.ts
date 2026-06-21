@@ -522,7 +522,11 @@ export function formatFreshnessSummary(value: unknown): string | undefined {
   if (!isFreshnessStatus(value)) return undefined
   const newerLabel = value.newerApprovedCount === 1 ? "memory" : "memories"
   const since = value.referenceTime ? ` since ${value.referenceTime}` : ""
-  return `Freshness: ${value.newerApprovedCount} newer approved ${newerLabel}${since} (visible approved: ${value.visibleApprovedCount}; project: ${value.newerProjectApprovedCount}; global: ${value.newerGlobalApprovedCount}; global preferences: ${value.newerGlobalPreferenceCount})`
+  const advisory = value.advisory
+  const advisoryText = advisory
+    ? `; advisory: ${advisory.expiredCount} expired, ${advisory.staleCount} stale, ${advisory.currentCount} current with freshness`
+    : ""
+  return `Freshness: ${value.newerApprovedCount} newer approved ${newerLabel}${since} (visible approved: ${value.visibleApprovedCount}; project: ${value.newerProjectApprovedCount}; global: ${value.newerGlobalApprovedCount}; global preferences: ${value.newerGlobalPreferenceCount}${advisoryText})`
 }
 
 function isOperatingAgreementSummary(value: unknown): value is OperatingAgreementSummary {

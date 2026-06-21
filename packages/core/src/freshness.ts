@@ -1,13 +1,13 @@
-import type { FreshnessMemoryMetadata, FreshnessStatus, FreshnessStatusOptions, MemoryRecord } from "./types.js"
+import type { FreshnessClassification, FreshnessMemoryMetadata, FreshnessStatus, FreshnessStatusOptions, MemoryRecord } from "./types.js"
 
 function isValidIsoTimestamp(value: string): boolean {
   const ms = Date.parse(value)
   return Number.isFinite(ms) && new Date(ms).toISOString() === value
 }
 
-function assertValidSince(since?: string): void {
-  if (since !== undefined && !isValidIsoTimestamp(since)) {
-    throw new Error(`Invalid since timestamp: ${since}. Expected an ISO timestamp such as 2026-06-18T00:00:00.000Z`)
+function assertValidIsoOption(name: string, value?: string): void {
+  if (value !== undefined && !isValidIsoTimestamp(value)) {
+    throw new Error(`Invalid ${name} timestamp: ${value}. Expected an ISO timestamp such as 2026-06-18T00:00:00.000Z`)
   }
 }
 
@@ -17,7 +17,21 @@ function visibleApproved(memory: MemoryRecord, projectScopeKey?: string): boolea
   return Boolean(projectScopeKey) && memory.scope.key === projectScopeKey
 }
 
-function metadata(memory: MemoryRecord): FreshnessMemoryMetadata {
+function classifyFreshness(memory: MemoryRecord, referenceNow: string): FreshnessClassification {
+  if (!memory.freshness || (!memory.freshness.expiresAt && !memory.freshness.staleAfterDays && !memory.freshness.capturedAt)) {
+    return "none"
+  }
+  if (memory.freshness.expiresAt && memory.freshness.expiresAt <= referenceNow) return "expired"
+  if (memory.freshness.staleAfterDays !== undefined) {
+    const staleAnchor = memory.freshness.capturedAt ?? memory.updatedAt
+    const staleAt = new Date(Date.parse(staleAnchor) + memory.freshness.staleAfterDays * 24 * 60 * 60 * 1000).toISOString()
+    if (staleAt <= referenceNow) return "stale"
+  }
+  return "current"
+}
+
+function metadata(memory: MemoryRecord, referenceNow?: string): FreshnessMemoryMetadata {
+  const classification = referenceNow ? classifyFreshness(memory, referenceNow) : "none"
   return {
     id: memory.id,
     status: "approved",
@@ -28,6 +42,17 @@ function metadata(memory: MemoryRecord): FreshnessMemoryMetadata {
     updatedAt: memory.updatedAt,
     kind: memory.kind,
     provenance: memory.provenance,
+    ...(referenceNow && classification !== "none"
+      ? {
+        freshness: {
+          classification,
+          expiresAt: memory.freshness?.expiresAt,
+          staleAfterDays: memory.freshness?.staleAfterDays,
+          capturedAt: memory.freshness?.capturedAt,
+          staleAnchor: memory.freshness?.staleAfterDays !== undefined ? memory.freshness?.capturedAt ?? memory.updatedAt : undefined,
+        },
+      }
+      : {}),
   }
 }
 
@@ -46,9 +71,11 @@ function latest(memories: MemoryRecord[]): FreshnessMemoryMetadata | undefined {
 }
 
 export function buildFreshnessStatus(memories: MemoryRecord[], options: FreshnessStatusOptions = {}): FreshnessStatus {
-  assertValidSince(options.since)
+  assertValidIsoOption("since", options.since)
+  assertValidIsoOption("referenceNow", options.referenceNow)
 
   const maxNewerMetadata = options.maxNewerMetadata ?? 5
+  const referenceNow = options.referenceNow ?? new Date().toISOString()
   const visible = memories.filter((memory) => visibleApproved(memory, options.projectScopeKey))
   const newer = options.since ? visible.filter((memory) => memory.updatedAt > options.since!) : []
   const newerSorted = [...newer].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -65,10 +92,27 @@ export function buildFreshnessStatus(memories: MemoryRecord[], options: Freshnes
   const newerProjectApprovedCount = newer.filter((memory) => memory.scope.type === "project").length
   const newerGlobalApprovedCount = newer.filter((memory) => memory.scope.type === "global").length
   const newerGlobalPreferenceCount = newer.filter((memory) => memory.scope.type === "global" && memory.category === "preference").length
+  const visibleWithClassifications = visible.map((memory) => ({ memory, classification: classifyFreshness(memory, referenceNow) }))
+  const withFreshness = visibleWithClassifications.filter((item) => item.classification !== "none")
+  const stale = visibleWithClassifications
+    .filter((item) => item.classification === "stale")
+    .sort((a, b) => b.memory.updatedAt.localeCompare(a.memory.updatedAt))
+  const expired = visibleWithClassifications
+    .filter((item) => item.classification === "expired")
+    .sort((a, b) => b.memory.updatedAt.localeCompare(a.memory.updatedAt))
 
   return {
     projectScope: options.projectScopeKey ?? "none",
     referenceTime: options.since,
+    advisory: {
+      referenceNow,
+      withFreshnessCount: withFreshness.length,
+      currentCount: withFreshness.filter((item) => item.classification === "current").length,
+      staleCount: stale.length,
+      expiredCount: expired.length,
+      stale: stale.slice(0, maxNewerMetadata).map((item) => metadata(item.memory, referenceNow)),
+      expired: expired.slice(0, maxNewerMetadata).map((item) => metadata(item.memory, referenceNow)),
+    },
     visibleApprovedCount: visible.length,
     latestApproved: latest(visible),
     latestProjectApproved: latest(visible.filter((memory) => memory.scope.type === "project")),
@@ -80,7 +124,7 @@ export function buildFreshnessStatus(memories: MemoryRecord[], options: Freshnes
     newerByKind,
     newerBySource,
     newerByProvenance,
-    newestNewerApproved: newerSorted.slice(0, maxNewerMetadata).map(metadata),
+    newestNewerApproved: newerSorted.slice(0, maxNewerMetadata).map((memory) => metadata(memory, referenceNow)),
     notice: options.since && newer.length > 0
       ? `${newer.length} approved Memory Lane ${newer.length === 1 ? "memory has" : "memories have"} changed since ${options.since}. Use memory-lane list/recall for details if relevant.`
       : undefined,
