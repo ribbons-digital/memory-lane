@@ -1,5 +1,6 @@
 import {
   containsLikelySecret,
+  isPreferenceLikeMemory,
   lexicalScore,
   normalizeMemoryText,
   type ContinuityHintCode,
@@ -239,10 +240,6 @@ interface LayeredSelectionState {
   chars: number
   preferenceChars: number
   preferenceCount: number
-}
-
-function isPreferenceLikeMemory(memory: MemoryRecord): boolean {
-  return memory.category === "preference" || memory.kind === "preference" || memory.kind === "workflow_rule"
 }
 
 function preferenceBudget(limits: MemoryInjectionLimits): { maxItems: number; maxChars: number } {

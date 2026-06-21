@@ -2,7 +2,7 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { buildContinuityHints, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, type CheckpointCandidateMetadata, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type UpdatePreview, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
+import { buildContinuityHints, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, type CheckpointCandidateMetadata, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type UpdatePreview, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
@@ -446,6 +446,10 @@ const contextPolicyDoctorKeys = new Set([
   "contextPolicyPromptMaxItems",
   "contextPolicySessionStartMaxChars",
   "contextPolicyPromptMaxChars",
+  "contextPolicySessionStartPreferenceMaxItems",
+  "contextPolicyPromptPreferenceMaxItems",
+  "contextPolicySessionStartPreferenceMaxChars",
+  "contextPolicyPromptPreferenceMaxChars",
   "contextPolicyIncludePending",
   "contextPolicyFallbackToSearch",
 ])
@@ -457,8 +461,34 @@ function formatContextPolicyDoctor(report: Record<string, unknown>): string[] {
     `  mode: ${report.contextPolicyMode}`,
     `  prompt budget: ${report.contextPolicyPromptMaxItems} items / ${report.contextPolicyPromptMaxChars} chars`,
     `  session-start budget: ${report.contextPolicySessionStartMaxItems} items / ${report.contextPolicySessionStartMaxChars} chars`,
+    `  preference budget: SessionStart ${report.contextPolicySessionStartPreferenceMaxItems} items / ${report.contextPolicySessionStartPreferenceMaxChars} chars; Prompt ${report.contextPolicyPromptPreferenceMaxItems} items / ${report.contextPolicyPromptPreferenceMaxChars} chars`,
     `  include pending: ${report.contextPolicyIncludePending}`,
     `  fallback to search: ${report.contextPolicyFallbackToSearch}`,
+  ]
+}
+
+function isPreferenceDiagnostics(value: unknown): value is PreferenceDiagnostics {
+  if (typeof value !== "object" || value === null) return false
+  const diagnostics = value as PreferenceDiagnostics
+  return typeof diagnostics.visiblePreferenceCount === "number"
+    && typeof diagnostics.currentProjectPreferenceCount === "number"
+    && typeof diagnostics.globalPreferenceCount === "number"
+    && typeof diagnostics.workflowRulePreferenceCount === "number"
+    && typeof diagnostics.sessionStart === "object"
+    && diagnostics.sessionStart !== null
+    && typeof diagnostics.sessionStart.selectedPreferenceCount === "number"
+    && typeof diagnostics.sessionStart.omittedPreferenceCount === "number"
+    && typeof diagnostics.sessionStart.maxPreferenceItems === "number"
+    && typeof diagnostics.sessionStart.maxPreferenceChars === "number"
+}
+
+export function formatPreferenceDiagnosticsSummary(value: unknown, report?: Record<string, unknown>): string[] {
+  if (!isPreferenceDiagnostics(value)) return []
+  const promptMaxItems = typeof report?.contextPolicyPromptPreferenceMaxItems === "number" ? report.contextPolicyPromptPreferenceMaxItems : "?"
+  const promptMaxChars = typeof report?.contextPolicyPromptPreferenceMaxChars === "number" ? report.contextPolicyPromptPreferenceMaxChars : "?"
+  return [
+    `Preference context: visible ${value.visiblePreferenceCount}, selected for SessionStart ${value.sessionStart.selectedPreferenceCount}, omitted ${value.sessionStart.omittedPreferenceCount}`,
+    `Preference caps: SessionStart ${value.sessionStart.maxPreferenceItems} items / ${value.sessionStart.maxPreferenceChars} chars, Prompt ${promptMaxItems} items / ${promptMaxChars} chars`,
   ]
 }
 
@@ -581,8 +611,9 @@ export function formatDoctor(report: Record<string, unknown>, json: boolean): st
     return JSON.stringify({ ok: true, data: report, meta: meta() }, null, 2)
   }
   const contextLines = formatContextPolicyDoctor(report)
+  const preferenceLines = formatPreferenceDiagnosticsSummary(report.preferenceDiagnostics, report)
   const detailLines = Object.entries(report)
-    .filter(([k]) => !contextPolicyDoctorKeys.has(k))
+    .filter(([k]) => !contextPolicyDoctorKeys.has(k) && k !== "preferenceDiagnostics")
     .map(([k, v]) => {
       if (k === "freshness") return formatFreshnessSummary(v) ?? "freshness: unavailable"
       if (k === "continuityHints") return formatContinuityHintSummary(v) ?? "continuityHints: unavailable"
@@ -590,7 +621,7 @@ export function formatDoctor(report: Record<string, unknown>, json: boolean): st
       if (v && typeof v === "object") return `${k}: ${JSON.stringify(v, null, 2)}`
       return `${k}: ${v}`
     })
-  return [...contextLines, ...detailLines].join("\n")
+  return [...contextLines, ...preferenceLines, ...detailLines].join("\n")
 }
 
 export function formatImportPlan(result: ObsidianImportPlan | ObsidianImportApplyResult, json: boolean, dryRun: boolean): string {

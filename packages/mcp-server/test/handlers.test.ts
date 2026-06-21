@@ -359,6 +359,26 @@ test("memory_status returns doctor counts without memory text", async () => {
   assert.doesNotMatch(serialized, /Do not leak this pending text/u)
 })
 
+test("memory_status includes text-free preference diagnostics", async () => {
+  const project = tempDir()
+  fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "mcp-pref-diagnostics" }))
+  const engine = engineInTemp(project)
+  engine.save({ text: "MCP_SECRET_GLOBAL_PREF", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+  engine.refreshScope(project)
+  engine.save({ text: "MCP_SECRET_PROJECT_PREF", status: "approved", category: "preference", scopeType: "project", kind: "preference" })
+
+  const result = parseToolResult(await handleMemoryStatus(engine, { projectPath: project }))
+  const serialized = JSON.stringify(result)
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.status.preferenceDiagnostics.projectScope, "mcp-pref-diagnostics")
+  assert.equal(result.data.status.preferenceDiagnostics.visiblePreferenceCount, 2)
+  assert.equal(result.data.status.preferenceDiagnostics.currentProjectPreferenceCount, 1)
+  assert.equal(result.data.status.preferenceDiagnostics.globalPreferenceCount, 1)
+  assert.match(result.data.notes.join("\n"), /Preference diagnostics in memory_status are counts\/metadata only/u)
+  assert.doesNotMatch(serialized, /MCP_SECRET_GLOBAL_PREF|MCP_SECRET_PROJECT_PREF/u)
+})
+
 test("memory_status explains missing projectPath when no project scope is active", async () => {
   const previousCwd = process.cwd()
   const cwd = tempDir()

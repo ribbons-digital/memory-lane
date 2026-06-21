@@ -1247,6 +1247,52 @@ describe("CLI integration", () => {
     assert.equal(parsed.data.integrations.summary.mcpExplicitToolsOnly, true)
   })
 
+  it("status and doctor json include text-free preference diagnostics", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-pref-diagnostics" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const engine = new MemoryEngine({ memoryPath: memFile, embeddingsPath: embFile, configPath: cfgFile })
+    engine.save({ text: "CLI_SECRET_GLOBAL_PREF prefer concise answers", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+    engine.refreshScope(project)
+    engine.save({ text: "CLI_SECRET_PROJECT_PREF include verification output", status: "approved", category: "preference", scopeType: "project", kind: "preference" })
+
+    const status = JSON.parse(runProcess(["status", "--json"], { env, cwd: project }).stdout)
+    const doctor = JSON.parse(runProcess(["doctor", "--json"], { env, cwd: project }).stdout)
+
+    assert.equal(status.data.preferenceDiagnostics.projectScope, "cli-pref-diagnostics")
+    assert.equal(status.data.preferenceDiagnostics.visiblePreferenceCount, 2)
+    assert.equal(status.data.preferenceDiagnostics.currentProjectPreferenceCount, 1)
+    assert.equal(status.data.preferenceDiagnostics.globalPreferenceCount, 1)
+    assert.equal(doctor.data.preferenceDiagnostics.visiblePreferenceCount, 2)
+    assert.doesNotMatch(JSON.stringify(status), /CLI_SECRET_GLOBAL_PREF|CLI_SECRET_PROJECT_PREF/u)
+    assert.doesNotMatch(JSON.stringify(doctor), /CLI_SECRET_GLOBAL_PREF|CLI_SECRET_PROJECT_PREF/u)
+  })
+
+  it("doctor and status human output summarize preference diagnostics without preference text", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+    const engine = new MemoryEngine({ memoryPath: memFile, embeddingsPath: embFile, configPath: cfgFile })
+    engine.save({ text: "HUMAN_SECRET_PREF_BODY", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+
+    const doctorOutput = run(["doctor"], env)
+    const statusOutput = run(["status"], env)
+
+    for (const output of [doctorOutput, statusOutput]) {
+      assert.match(output, /Preference context: visible 1, selected for SessionStart 1, omitted 0/u)
+      assert.match(output, /Preference caps: SessionStart 2 items \/ 600 chars, Prompt 2 items \/ 900 chars/u)
+      assert.doesNotMatch(output, /HUMAN_SECRET_PREF_BODY/u)
+      assert.doesNotMatch(output, /\[object Object\]/u)
+    }
+  })
+
   it("status --json --since reports freshness metadata without memory text", () => {
     const project = tempDir()
     fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-freshness-project" }))

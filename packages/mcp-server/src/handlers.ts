@@ -50,6 +50,7 @@ function mutationData(id: string, result: MemoryMutationResult | undefined): { s
 const STATUS_NOTES = [
   "MCP provides explicit Memory Lane tools only; it does not run lifecycle hooks.",
   "Use memory-lane doctor in a terminal for the same read-only diagnostics outside MCP.",
+  "Preference diagnostics in memory_status are counts/metadata only; use memory_list or memory_recall when you need preference text.",
 ]
 
 function scopeNotes(engine: MemoryEngine): string[] {

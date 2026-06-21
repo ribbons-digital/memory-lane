@@ -3,6 +3,7 @@ export { classifyCheckpointCandidate, type CheckpointCandidateKind, type Checkpo
 export { buildFreshnessStatus } from "./freshness.js"
 export { buildContinuityHints } from "./continuity-hints.js"
 export { buildContinuityReadModel } from "./continuity-read-model.js"
+export { buildPreferenceDiagnostics, isPreferenceLikeMemory } from "./preference-diagnostics.js"
 export { revisionNow, sameIdRevision, revisionLabel, hasRealUpdateChange } from "./revisions.js"
 export {
   WORKFLOW_AREAS,

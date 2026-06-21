@@ -998,6 +998,95 @@ You are continuing the same subagent session. Before this run can be accepted, c
     }
   })
 
+  it("doctor includes text-free preference diagnostics for visible scope", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "pref-diagnostics-project" }))
+    const e = engine()
+    e.save({ text: "GLOBAL_SECRET_PREF_BODY prefer concise answers", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+    e.refreshScope(project)
+    e.save({ text: "PROJECT_SECRET_PREF_BODY include verification output", status: "approved", category: "preference", scopeType: "project", kind: "preference" })
+    e.save({ text: "Workflow rule should count as preference-like", status: "approved", category: "project", scopeType: "project", kind: "workflow_rule" })
+    e.save({ text: "Pending preference should not count", status: "pending", category: "preference", scopeType: "global", kind: "preference" })
+
+    const report = e.doctor() as any
+    const diagnostics = report.preferenceDiagnostics
+    const serialized = JSON.stringify(report)
+
+    assert.equal(diagnostics.projectScope, "pref-diagnostics-project")
+    assert.equal(diagnostics.visiblePreferenceCount, 3)
+    assert.equal(diagnostics.currentProjectPreferenceCount, 2)
+    assert.equal(diagnostics.globalPreferenceCount, 1)
+    assert.equal(diagnostics.workflowRulePreferenceCount, 1)
+    assert.equal(diagnostics.sessionStart.maxPreferenceItems, 2)
+    assert.equal(diagnostics.sessionStart.maxPreferenceChars, 600)
+    assert.equal(typeof diagnostics.sessionStart.selectedPreferenceCount, "number")
+    assert.equal(typeof diagnostics.sessionStart.omittedPreferenceCount, "number")
+    assert.doesNotMatch(serialized, /GLOBAL_SECRET_PREF_BODY|PROJECT_SECRET_PREF_BODY|Pending preference should not count/u)
+  })
+
+  it("doctor preference diagnostics apply session-start preference caps and dedupe", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "pref-diagnostics-dedupe" }))
+    fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({
+      memory: {
+        contextPolicy: {
+          mode: "selective",
+          maxItems: { sessionStart: 4, prompt: 6 },
+          maxChars: { sessionStart: 1000, prompt: 3000 },
+          preferenceMaxItems: { sessionStart: 2, prompt: 2 },
+          preferenceMaxChars: { sessionStart: 1000, prompt: 900 },
+        },
+      },
+    }), "utf8")
+    const e = engine()
+    e.save({ text: "Prefer blue review badges", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+    e.save({ text: "Prefer concise answers", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+    e.refreshScope(project)
+    e.save({ text: "Prefer blue review badges", status: "approved", category: "preference", scopeType: "project", kind: "preference" })
+
+    const diagnostics = (e.doctor() as any).preferenceDiagnostics
+
+    assert.equal(diagnostics.visiblePreferenceCount, 3)
+    assert.equal(diagnostics.sessionStart.selectedPreferenceCount, 2)
+    assert.equal(diagnostics.sessionStart.omittedPreferenceCount, 1)
+    assert.equal(diagnostics.sessionStart.selectedCurrentProjectPreferenceCount, 1)
+    assert.equal(diagnostics.sessionStart.selectedGlobalPreferenceCount, 1)
+  })
+
+  it("doctor preference diagnostics respect preference char cap and disabled body modes", () => {
+    fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({
+      memory: {
+        contextPolicy: {
+          mode: "policy-only",
+          maxItems: { sessionStart: 4, prompt: 6 },
+          maxChars: { sessionStart: 1000, prompt: 3000 },
+          preferenceMaxItems: { sessionStart: 2, prompt: 2 },
+          preferenceMaxChars: { sessionStart: 1, prompt: 900 },
+        },
+      },
+    }), "utf8")
+    const policyOnlyEngine = engine()
+    policyOnlyEngine.save({ text: "Preference too long for one char cap", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+
+    let diagnostics = (policyOnlyEngine.doctor() as any).preferenceDiagnostics
+    assert.equal(diagnostics.visiblePreferenceCount, 1)
+    assert.equal(diagnostics.sessionStart.selectedPreferenceCount, 0)
+    assert.equal(diagnostics.sessionStart.omittedPreferenceCount, 1)
+
+    const offDir = tempDir()
+    fs.writeFileSync(path.join(offDir, "cfg.json"), JSON.stringify({ memory: { contextPolicy: { mode: "off" } } }), "utf8")
+    const offEngine = new MemoryEngine({
+      memoryPath: path.join(offDir, "mem.jsonl"),
+      embeddingsPath: path.join(offDir, "emb.jsonl"),
+      configPath: path.join(offDir, "cfg.json"),
+    })
+    offEngine.save({ text: "Another global preference", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
+    diagnostics = (offEngine.doctor() as any).preferenceDiagnostics
+    assert.equal(diagnostics.visiblePreferenceCount, 1)
+    assert.equal(diagnostics.sessionStart.selectedPreferenceCount, 0)
+    assert.equal(diagnostics.sessionStart.omittedPreferenceCount, 1)
+  })
+
   it("doctor reports context policy config without memory text", () => {
     fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({
       memory: {

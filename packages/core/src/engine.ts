@@ -25,6 +25,7 @@ import { buildFreshnessStatus } from "./freshness.js"
 import { buildContinuityHints } from "./continuity-hints.js"
 import { buildContinuityReadModel } from "./continuity-read-model.js"
 import { selectOperatingAgreements, summarizeOperatingAgreements } from "./operating-agreements.js"
+import { buildPreferenceDiagnostics } from "./preference-diagnostics.js"
 import {
   contentHash, createNewMemory, saveContext, shouldAutoEmbed, timestamp, visibleInScope,
   type SaveContext,
@@ -595,6 +596,10 @@ export class MemoryEngine {
       contextPolicyPromptMaxItems: policy?.maxItems?.prompt ?? 6,
       contextPolicySessionStartMaxChars: policy?.maxChars?.sessionStart ?? 1600,
       contextPolicyPromptMaxChars: policy?.maxChars?.prompt ?? 3000,
+      contextPolicySessionStartPreferenceMaxItems: policy?.preferenceMaxItems?.sessionStart ?? 2,
+      contextPolicyPromptPreferenceMaxItems: policy?.preferenceMaxItems?.prompt ?? 2,
+      contextPolicySessionStartPreferenceMaxChars: policy?.preferenceMaxChars?.sessionStart ?? 600,
+      contextPolicyPromptPreferenceMaxChars: policy?.preferenceMaxChars?.prompt ?? 900,
       contextPolicyIncludePending: policy?.includePending ?? false,
       contextPolicyFallbackToSearch: policy?.fallbackToSearch ?? true,
     }
@@ -729,6 +734,12 @@ export class MemoryEngine {
     const embs = embStore.listEmbeddings()
     const total = mems.length
     const config = this.config.semantic
+    const operatingAgreements = this.operatingAgreements()
+    const operatingAgreementSummary = summarizeOperatingAgreements(operatingAgreements)
+    const operatingAgreementIds = new Set([
+      ...operatingAgreements.primary.map((selection) => selection.memory.id),
+      ...operatingAgreements.relatedCandidates.map((selection) => selection.memory.id),
+    ])
 
     return {
       configFile: this.configPath,
@@ -747,7 +758,12 @@ export class MemoryEngine {
       integrations: diagnoseIntegrations({ cwd: this.scope?.cwd ?? null, paths: this.integrationPaths }),
       freshness: this.freshnessStatus({ since: opts?.freshnessSince }),
       continuityHints: this.continuityHints({ since: opts?.freshnessSince }),
-      operatingAgreements: this.operatingAgreementSummary(),
+      operatingAgreements: operatingAgreementSummary,
+      preferenceDiagnostics: buildPreferenceDiagnostics(mems, {
+        projectScopeKey: this.scope?.key,
+        contextPolicy: this.config.memory?.contextPolicy,
+        operatingAgreementIds,
+      }),
       ...this.semanticDoctor(mems),
       ...this.contextPolicyDoctor(),
       ...this.memoryFileDoctor(),
