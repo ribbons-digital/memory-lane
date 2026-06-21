@@ -186,13 +186,14 @@ export function buildContinuityHints(memories: MemoryRecord[], options: Continui
   })
   const advisoryCount = freshness.advisory.expiredCount + freshness.advisory.staleCount
   if (advisoryCount) {
+    const advisoryMemories = [...freshness.advisory.expired, ...freshness.advisory.stale].slice(0, maxIds)
     hints.push({
       code: "freshness-advisory",
       severity: "review",
       message: `${advisoryCount} approved ${advisoryCount === 1 ? "memory has" : "memories have"} expired or stale freshness metadata; inspect before relying on time-sensitive guidance.`,
       count: advisoryCount,
-      memoryIds: [...freshness.advisory.expired, ...freshness.advisory.stale].map((memory) => memory.id).slice(0, maxIds),
-      suggestedActions: ["memory-lane status --json"],
+      memoryIds: advisoryMemories.map((memory) => memory.id),
+      suggestedActions: action(["memory-lane status --json", ...advisoryMemories.flatMap((memory) => memory.freshness?.suggestedActions ?? [])]),
     })
   }
   const freshnessReferenceTime = freshness?.referenceTime

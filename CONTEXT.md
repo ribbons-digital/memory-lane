@@ -104,7 +104,7 @@ Optional time-awareness metadata on a memory record describing when its content 
 _Avoid_: Expired status, automatic deletion, recall filtering, lifecycle injection behavior
 
 **Freshness advisory**:
-A deterministic read-only classification of approved visible memories with explicit freshness metadata as `current`, `stale`, or `expired`, plus counts/ids for inspection. It is shown through status/doctor/MCP status and continuity warnings without memory text. It does not mutate records, hide memories, down-rank recall, or trigger refresh/consolidation.
+A deterministic read-only classification of approved visible memories with explicit freshness metadata as `current`, `stale`, or `expired`, plus counts/ids for inspection. It is shown through status/doctor/MCP status and continuity warnings without memory text. Stale/expired entries may include bounded per-id dry-run revision commands using existing `update`, `replace`, and `supersede` workflows. It does not mutate records, hide memories, down-rank recall, trigger refresh/consolidation, or suggest destructive reject/delete actions.
 _Avoid_: Stale classifier, refresh command, cleanup recommendation, memory text preview
 
 **Continuity record temporal context**:

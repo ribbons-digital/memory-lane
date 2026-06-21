@@ -72,6 +72,7 @@ function freshnessFixtureRecords(projectScope: string): MemoryRecord[] {
       kind: "project_fact",
       createdAt: "2026-06-17T08:00:00.000Z",
       updatedAt: "2026-06-17T08:00:00.000Z",
+      freshness: { staleAfterDays: 1, capturedAt: "2026-06-17T08:00:00.000Z" },
     },
     {
       id: "pending-private",
@@ -1199,6 +1200,7 @@ describe("CLI integration", () => {
     const env = { MEMORY_LANE_FILE: mem, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json") }
     writeMemoryRecords(mem, [
       { id: "approved", text: "Approved project checkpoint", category: "project", scope: { type: "project", key: "cli-continuity-project" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" },
+      { id: "stale-continuity", text: "SECRET stale continuity body", category: "project", scope: { type: "project", key: "cli-continuity-project" }, status: "approved", source: "manual", kind: "project_fact", createdAt: "2026-06-17T08:00:00.000Z", updatedAt: "2026-06-17T08:00:00.000Z", freshness: { staleAfterDays: 1, capturedAt: "2026-06-17T08:00:00.000Z" } },
       { id: "pending", text: "Merged PR #18 adding global hygiene hints.", category: "project", scope: { type: "project", key: "cli-continuity-project" }, status: "pending", source: "user-suggested", kind: "project_fact", createdAt: "2026-06-18T09:00:00.000Z", updatedAt: "2026-06-18T09:00:00.000Z" },
     ] as MemoryRecord[])
 
@@ -1210,6 +1212,9 @@ describe("CLI integration", () => {
     assert.equal(parsed.data.latestApproved.project.id, "approved")
     assert.deepEqual(parsed.data.pendingContinuity.map((item: any) => item.id), ["pending"])
     assert.ok(parsed.data.warnings.some((item: any) => item.code === "pending-continuity-newer-than-approved"))
+    assert.ok(parsed.data.warnings.some((item: any) => item.code === "freshness-advisory"))
+    assert.match(parsed.data.suggestedActions.join("\n"), /memory-lane update stale-continuity --text <updated-memory-text> --dry-run/u)
+    assert.doesNotMatch(output.stdout, /SECRET stale continuity body/u)
   })
 
   it("continuity human output is compact and labels pending continuity", () => {
@@ -1445,6 +1450,10 @@ describe("CLI integration", () => {
     assert.equal(payload.data.freshness.newerGlobalPreferenceCount, 1)
     assert.deepEqual(payload.data.freshness.newerByKind, { project_checkpoint: 1, preference: 1 })
     assert.deepEqual(payload.data.freshness.newestNewerApproved.map((memory: any) => memory.id), ["fresh-project-approved", "fresh-global-approved"])
+    assert.equal(payload.data.freshness.advisory.staleCount, 1)
+    assert.deepEqual(payload.data.freshness.advisory.stale[0].freshness.suggestedActions, ["memory-lane update old-project-approved --text <updated-memory-text> --dry-run"])
+    const suggestedUpdate = runProcess(["update", "old-project-approved", "--text", "Updated old project approved", "--dry-run", "--json"], { env, cwd: project })
+    assert.equal(suggestedUpdate.status, 0, suggestedUpdate.stderr)
     assert.doesNotMatch(result.stdout, /APPROVED PRIVATE CLI FRESHNESS TEXT/u)
     assert.doesNotMatch(result.stdout, /PENDING PRIVATE CLI FRESHNESS TEXT/u)
   })

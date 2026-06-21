@@ -94,6 +94,7 @@ export interface FreshnessMemoryMetadata {
     staleAfterDays?: number
     capturedAt?: string
     staleAnchor?: string
+    suggestedActions?: string[]
   }
 }
 

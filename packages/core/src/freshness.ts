@@ -30,6 +30,18 @@ function classifyFreshness(memory: MemoryRecord, referenceNow: string): Freshnes
   return "current"
 }
 
+function suggestedFreshnessActions(id: string, classification: FreshnessClassification): string[] | undefined {
+  if (classification === "stale") return [`memory-lane update ${id} --text <updated-memory-text> --dry-run`]
+  if (classification === "expired") {
+    return [
+      `memory-lane update ${id} --text <updated-memory-text> --dry-run`,
+      `memory-lane replace ${id} --text <new-memory-text> --dry-run`,
+      `memory-lane supersede <new-id> ${id} --dry-run`,
+    ]
+  }
+  return undefined
+}
+
 function metadata(memory: MemoryRecord, referenceNow?: string): FreshnessMemoryMetadata {
   const classification = referenceNow ? classifyFreshness(memory, referenceNow) : "none"
   return {
@@ -50,6 +62,7 @@ function metadata(memory: MemoryRecord, referenceNow?: string): FreshnessMemoryM
           staleAfterDays: memory.freshness?.staleAfterDays,
           capturedAt: memory.freshness?.capturedAt,
           staleAnchor: memory.freshness?.staleAfterDays !== undefined ? memory.freshness?.capturedAt ?? memory.updatedAt : undefined,
+          suggestedActions: suggestedFreshnessActions(memory.id, classification),
         },
       }
       : {}),
