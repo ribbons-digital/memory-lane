@@ -117,4 +117,5 @@ export interface SessionEndOptions {
   requireConfirmation?: boolean
   confirmed?: boolean
   includeToolOutputs?: boolean
+  adapter?: string
 }

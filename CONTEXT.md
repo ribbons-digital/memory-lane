@@ -103,6 +103,10 @@ _Avoid_: Raw tool-output memory, automatic approval, failure log, background lea
 Optional time-awareness metadata on a memory record describing when its content expires, when it should be reconsidered as stale, or what event/session time it represents. It is advisory until explicit refresh, consolidation, recall, or injection behavior uses it; it is not a new memory status.
 _Avoid_: Expired status, automatic deletion, freshness notice, lifecycle continuity signal
 
+**Pending continuity candidate debounce**:
+Deterministic suppression of a newly generated pending session summary or checkpoint candidate when an equivalent pending or approved candidate is already visible for the same project or session. It prevents duplicate review-queue entries before writing; it does not delete, reject, approve, merge, supersede, or consolidate existing memories.
+_Avoid_: Consolidation, cleanup, automatic rejection, fuzzy duplicate classifier
+
 **Scope hygiene candidate**:
 An approved visible memory whose scope metadata may be broader than its content warrants, such as a global memory that appears to describe a specific project, repository, session, checkpoint, release, or implementation detail. It is an inspection signal only; Memory Lane does not automatically rescope, delete, reject, or supersede it.
 _Avoid_: Scope error, automatic cleanup, rejected memory, rescope recommendation

@@ -191,6 +191,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         requireConfirmation: false,
         confirmed: true,
         includeToolOutputs: summaryProvider.config.includeToolOutputs,
+        adapter: "codex",
       }, options.env)
       const result = saveSessionEndCandidates(options.engine, candidates)
       log("ok", lifecycleCounts(result))
@@ -226,6 +227,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         requireConfirmation: false,
         confirmed: true,
         includeToolOutputs: summaryProvider.config.includeToolOutputs,
+        adapter: "codex",
       }, options.env)
       const result = saveSessionEndCandidates(options.engine, candidates)
       log("ok", lifecycleCounts(result))

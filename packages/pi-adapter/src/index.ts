@@ -234,6 +234,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
       requireConfirmation: false,
       confirmed: true,
       includeToolOutputs: summaryConfig.includeToolOutputs,
+      adapter: "pi",
     }, memoryEnv())
     const saved = candidates
       .map((candidate) => e.save({

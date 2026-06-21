@@ -172,6 +172,7 @@ export async function runClaudeHookCommand(command: ClaudeCommand, options: RunC
         requireConfirmation: false,
         confirmed: true,
         includeToolOutputs: summaryProvider.config.includeToolOutputs,
+        adapter: "claude",
       }, options.env)
       const result = saveSessionEndCandidates(options.engine, candidates)
       log("ok", lifecycleCounts(result))

@@ -63,6 +63,112 @@ test("returns a pending session-summary candidate", async () => {
   assert.strictEqual(candidate.provenance.sessionId, "s1")
 })
 
+test("skips duplicate session summary for same adapter and session id", async () => {
+  const engine = makeEngine()
+  engine.save({
+    text: "## Session Summary (2026-06-20)\n\n- Decided to use pnpm.",
+    category: "project",
+    scopeType: "global",
+    status: "pending",
+    source: "session-summary",
+    kind: "session_summary",
+    provenance: { adapter: "codex", lifecycleEvent: "session_end", sessionId: "s1" },
+  })
+  const provider: LLMProvider = { complete: async () => "- Decided to use pnpm.\n- Next: update docs." }
+  const result = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    sessionId: "s1",
+    messages: [{ role: "user", content: "summarize this session" }],
+  }, { requireConfirmation: false, provider, adapter: "codex" })
+  assert.deepStrictEqual(result, [])
+})
+
+test("skips duplicate session summary with equivalent durable content despite heading date", async () => {
+  const engine = makeEngine()
+  engine.save({
+    text: "## Session Summary (2026-06-20)\n\n- Decisions made: keep summaries explicit.\n- Next steps: update docs.",
+    category: "project",
+    scopeType: "global",
+    status: "approved",
+    source: "session-summary",
+    kind: "session_summary",
+  })
+  const provider: LLMProvider = { complete: async () => "- Decisions made: keep summaries explicit.\n- Next steps: update docs." }
+  const result = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    sessionId: "different-session",
+    messages: [{ role: "user", content: "summarize this session" }],
+  }, { requireConfirmation: false, provider, adapter: "pi" })
+  assert.deepStrictEqual(result, [])
+})
+
+test("keeps distinct session summary with different session id and content", async () => {
+  const engine = makeEngine()
+  engine.save({
+    text: "## Session Summary (2026-06-20)\n\n- Decisions made: keep summaries explicit.",
+    category: "project",
+    scopeType: "global",
+    status: "pending",
+    source: "session-summary",
+    kind: "session_summary",
+    provenance: { adapter: "codex", lifecycleEvent: "session_end", sessionId: "s1" },
+  })
+  const provider: LLMProvider = { complete: async () => "- Decisions made: add debounce.\n- Next steps: test it." }
+  const result = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    sessionId: "s2",
+    messages: [{ role: "user", content: "summarize this session" }],
+  }, { requireConfirmation: false, provider, adapter: "codex" })
+  assert.strictEqual(result.length, 1)
+  assert.match(result[0].text, /add debounce/u)
+})
+
+test("removes obvious Memory Lane review-management chatter from generated summaries", async () => {
+  const engine = makeEngine()
+  const provider: LLMProvider = {
+    complete: async () => [
+      "- Decisions made: Phase 20 debounce was designed.",
+      "- Run memory-lane review to approve memory IDs.",
+      "- Next steps: implement tests.",
+    ].join("\n"),
+  }
+  const result = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    messages: [{ role: "user", content: "summarize this session" }],
+  }, { requireConfirmation: false, provider })
+  assert.strictEqual(result.length, 1)
+  assert.match(result[0].text, /Phase 20 debounce/u)
+  assert.doesNotMatch(result[0].text, /memory-lane review/u)
+  assert.doesNotMatch(result[0].text, /memory IDs/u)
+})
+
+test("keeps durable Memory Lane review work while removing review-management instructions", async () => {
+  const engine = makeEngine()
+  const provider: LLMProvider = {
+    complete: async () => [
+      "- Fixed memory-lane review duplicate display for pending summaries.",
+      "- Run memory-lane review to approve memory IDs.",
+    ].join("\n"),
+  }
+  const result = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    messages: [{ role: "user", content: "summarize this session" }],
+  }, { requireConfirmation: false, provider })
+  assert.strictEqual(result.length, 1)
+  assert.match(result[0].text, /Fixed memory-lane review duplicate display/u)
+  assert.doesNotMatch(result[0].text, /approve memory IDs/u)
+})
+
+test("returns empty when generated summary is only review-management chatter", async () => {
+  const engine = makeEngine()
+  const provider: LLMProvider = { complete: async () => "Run memory-lane review to approve memory IDs." }
+  const result = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    messages: [{ role: "user", content: "summarize this session" }],
+  }, { requireConfirmation: false, provider })
+  assert.deepStrictEqual(result, [])
+})
+
 test("redacts secret lines from transcript", async () => {
   const engine = makeEngine()
   let captured = ""

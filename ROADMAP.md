@@ -601,17 +601,17 @@ Todos:
 
 Time-sensitive statements like “I'm traveling next week” or “the build is broken” become wrong as time passes. Separately, automatic summaries, checkpoint candidates, and learning candidates can create overlap. This phase handles both through reviewable revisions and consolidation proposals rather than silent destructive rewrites.
 
-**Status:** Slice 1 implemented locally on `feature/phase-20-expiration-metadata`: optional `freshness` metadata adds `expiresAt`, `staleAfterDays`, and `capturedAt` to memory records/save surfaces with validation and compact rendering. No refresh, consolidation, recall/injection filtering, or cleanup behavior is added in this slice.
+**Status:** Slice 1 released in `v0.2.15`: optional `freshness` metadata adds `expiresAt`, `staleAfterDays`, and `capturedAt` to memory records/save surfaces with validation and compact rendering. No refresh, consolidation, recall/injection filtering, or cleanup behavior was added in Slice 1. Slice 2 is implemented locally on `feature/phase-20-duplicate-debounce`: repeated session-summary/checkpoint continuity candidates are debounced before writing, and generated session summaries drop obvious Memory Lane review-management chatter without adding destructive consolidation.
 
 Todos:
 
 1. Added optional memory freshness metadata with `expiresAt`, `staleAfterDays`, and `capturedAt` fields to memory records and save/suggest APIs.
-2. Add a `memory-lane refresh` command that scans approved memories, uses an LLM or heuristics to identify stale entries, and presents them as pending revisions or deletions.
-3. Update recall/injection to deprioritize or skip memories that are past their expiration.
-4. Add time metadata to session summaries and checkpoint memories so later refreshes can reason about temporal context.
-5. Add `memory-lane consolidate --dry-run` and `memory-lane consolidate --apply` to propose duplicate/overlap merges and replacement memories, preserving append-only auditability.
-6. Add duplicate/debounce handling for pending session summaries and checkpoint candidates, especially back-to-back summaries generated from the same session/review flow.
-7. Improve session-summary prompt/filtering so summaries avoid self-referential review chatter like “approve memory IDs” unless the user explicitly asks to preserve review decisions.
+2. Add duplicate/debounce handling for pending session summaries and checkpoint candidates, especially back-to-back summaries generated from the same session/review flow.
+3. Improve session-summary prompt/filtering so summaries avoid self-referential review chatter like “approve memory IDs” unless the user explicitly asks to preserve review decisions.
+4. Add a `memory-lane refresh` command that scans approved memories, uses an LLM or heuristics to identify stale entries, and presents them as pending revisions or deletions.
+5. Update recall/injection to deprioritize or skip memories that are past their expiration.
+6. Add time metadata to session summaries and checkpoint memories so later refreshes can reason about temporal context.
+7. Add `memory-lane consolidate --dry-run` and `memory-lane consolidate --apply` to propose duplicate/overlap merges and replacement memories, preserving append-only auditability.
 
 ## Phase 21 — Handoff-Free Sessions
 
