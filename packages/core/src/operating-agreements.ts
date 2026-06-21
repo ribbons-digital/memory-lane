@@ -20,14 +20,15 @@ export const WORKFLOW_AREAS: readonly WorkflowArea[] = [
 
 const DEFAULT_LIMIT = 5
 const DEFAULT_RELATED_LIMIT = 10
-const AGREEMENT_COMPATIBLE_KINDS = new Set<MemoryKind>(["preference", "project_fact"])
+const AGREEMENT_COMPATIBLE_KINDS = new Set<MemoryKind>(["preference", "project_fact", "correction", "procedure"])
 
 const AREA_PATTERNS: Array<{ area: WorkflowArea; pattern: RegExp }> = [
-  { area: "project-loop", pattern: /\b(project loop|workflow loop|collaboration workflow|working preference|operating agreement|workflow|loop-engineering|review-gated loop|plan\/spec|roadmap)\b/iu },
+  { area: "project-loop", pattern: /\b(project loop|workflow loop|collaboration workflow|loop-engineering|review-gated loop|plan\/spec|roadmap)\b/iu },
   { area: "review-gate", pattern: /\b(review gate|code review|spec review|quality review|approval gate|approved? before|review\/?approve)\b/iu },
   { area: "pr-process", pattern: /\b(pr|pull request|feature branch|branch|merge|merged|worktree cleanup|delete local|delete remote)\b/iu },
   { area: "release-process", pattern: /\b(release|tag|version|publish|published|npm publish|github releases?)\b/iu },
   { area: "tooling-preference", pattern: /\b(package manager|installer|installation|onboarding|harness setup|setup wizard|pnpm|npm|bun|command preference|use sfw)\b/iu },
+  { area: "project-loop", pattern: /\b(working preference|operating agreement|workflow)\b/iu },
 ]
 
 const OPERATING_AGREEMENT_PATTERN = /\b(workflow|loop|operating agreement|working preference|review gate|code review|spec review|quality review|approval gate|pr|pull request|branch|merge|worktree|release|tag|version|publish|package manager|installer|onboarding|harness setup|setup wizard|pnpm|use sfw|process)\b/iu

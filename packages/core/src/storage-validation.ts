@@ -14,6 +14,8 @@ export const VALID_KINDS = new Set<MemoryKind>([
   "project_checkpoint",
   "workflow_rule",
   "decision",
+  "correction",
+  "procedure",
   "session_summary",
   "misc",
 ])

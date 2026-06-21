@@ -14,7 +14,7 @@ import type {
 
 const DEFAULT_PREVIEW_MAX_CHARS = 240
 const DEFAULT_MAX_PENDING_CONTINUITY = 5
-const CONTINUITY_KINDS = new Set<MemoryKind>(["project_checkpoint", "session_summary", "decision", "project_fact"])
+const CONTINUITY_KINDS = new Set<MemoryKind>(["project_checkpoint", "session_summary", "decision", "correction", "procedure", "project_fact"])
 const GLOBAL_WORKFLOW_TEXT_PATTERN = /\b(?:workflow|tooling|code review|review gate|pr process|pull request|release process|project[- ]loop|harness|mcp|memory-lane|(?:cli|command(?:s)?)\s+(?:workflow|tooling|inspection|usage))\b/iu
 const REQUIRED_CONTINUITY_ACTIONS = [
   "memory-lane continuity --json",
@@ -28,7 +28,9 @@ const PROJECT_KIND_PRIORITY = new Map<MemoryKind, number>([
   ["project_checkpoint", 0],
   ["session_summary", 1],
   ["decision", 2],
-  ["project_fact", 3],
+  ["correction", 3],
+  ["procedure", 4],
+  ["project_fact", 5],
 ])
 
 function visibleInProject(memory: MemoryRecord, projectScopeKey?: string): boolean {
@@ -79,7 +81,7 @@ function compareApprovedProject(a: MemoryRecord, b: MemoryRecord): number {
 
 function isPendingContinuity(memory: MemoryRecord): boolean {
   if (memory.status !== "pending") return false
-  if (memory.kind === "project_checkpoint" || memory.kind === "session_summary") return true
+  if (memory.kind === "project_checkpoint" || memory.kind === "session_summary" || memory.kind === "correction" || memory.kind === "procedure") return true
   return Boolean(classifyCheckpointCandidate(memory))
 }
 

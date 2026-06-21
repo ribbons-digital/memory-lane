@@ -120,7 +120,7 @@ function hashText(text: string): string {
 }
 
 function effectiveKind(m: MemoryRecord): string {
-  const validKinds = new Set(["preference","personal_context","project_fact","project_checkpoint","workflow_rule","decision","misc"])
+  const validKinds = new Set(["preference","personal_context","project_fact","project_checkpoint","workflow_rule","decision","correction","procedure","session_summary","misc"])
   if (m.kind && validKinds.has(m.kind)) return m.kind
   return "misc"
 }

@@ -901,6 +901,48 @@ describe("CLI integration", () => {
     })
   })
 
+  it("captured workflow corrections appear in review and continuity", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-captured-correction" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+
+    const capture = runProcess(["codex", "stop"], {
+      env,
+      cwd: project,
+      stdin: JSON.stringify({
+        hook_event_name: "Stop",
+        session_id: "session-1",
+        turn_id: "turn-1",
+        cwd: project,
+        transcript_path: null,
+        model: "gpt-5-codex",
+        permission_mode: "default",
+        last_user_message: "You forgot our PR-protected workflow. Do not merge directly to main; open a PR and wait for me to merge before cleanup.",
+        last_assistant_message: "Acknowledged.",
+      }),
+    })
+    assert.equal(capture.status, 0, capture.stderr)
+
+    const review = runProcess(["review"], { env, cwd: project })
+    assert.equal(review.status, 0, review.stderr)
+    assert.match(review.stdout, /Kind: correction/u)
+    assert.match(review.stdout, /Workflow correction candidate/u)
+    assert.match(review.stdout, /review-first learning/u)
+    assert.match(review.stdout, /PR-protected workflow/u)
+    assert.doesNotMatch(review.stdout, /You forgot/u)
+
+    const continuity = runProcess(["continuity", "--json"], { env, cwd: project })
+    assert.equal(continuity.status, 0, continuity.stderr)
+    const continuityPayload = JSON.parse(continuity.stdout)
+    assert.equal(continuityPayload.data.status.pendingContinuityCount, 1)
+    assert.equal(continuityPayload.data.pendingContinuity[0].kind, "correction")
+  })
+
   it("review groups pending memories by project source kind and provenance", () => {
     const project = tempDir()
     fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-review-project" }))

@@ -508,6 +508,108 @@ test("stop skips duplicate checkpoint candidates", () => {
   assert.equal(engine.list({ status: "pending" }).length, 0)
 })
 
+test("stop captures explicit PR workflow correction as pending project correction", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handleStop(engine, {
+    cwd: project,
+    sessionId: "session-1",
+    turnId: "turn-1",
+    lastUserMessage: "You forgot our PR-protected workflow. Do not merge directly to main; open a PR and wait for me to merge before cleanup.",
+  }, { adapter: "test" })
+
+  assert.equal(result.saved.length, 1)
+  assert.equal(result.saved[0]?.status, "saved")
+  if (result.saved[0]?.status !== "saved") throw new Error("expected saved correction")
+  assert.equal(result.saved[0].memory.status, "pending")
+  assert.equal(result.saved[0].memory.kind, "correction")
+  assert.equal(result.saved[0].memory.category, "project")
+  assert.equal(result.saved[0].memory.scope.type, "project")
+  assert.equal(result.saved[0].memory.source, "agent-suggested")
+  assert.match(result.saved[0].memory.text, /^Workflow correction:/u)
+  assert.match(result.saved[0].memory.text, /PR-protected workflow/u)
+  assert.doesNotMatch(result.saved[0].memory.text, /You forgot/u)
+  assert.equal(result.saved[0].memory.provenance?.adapter, "test")
+  assert.equal(result.saved[0].memory.provenance?.lifecycleEvent, "turn_stop")
+  assert.equal(result.saved[0].memory.provenance?.sessionId, "session-1")
+  assert.equal(result.saved[0].memory.provenance?.turnId, "turn-1")
+})
+
+test("stop captures review-gate correction as pending project correction", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: "You skipped the review gate; do not start implementation before I approve the spec.",
+  })
+
+  assert.equal(result.saved.length, 1)
+  assert.equal(result.saved[0]?.status, "saved")
+  if (result.saved[0]?.status !== "saved") throw new Error("expected saved correction")
+  assert.equal(result.saved[0].memory.kind, "correction")
+  assert.match(result.saved[0].memory.text, /review gate/u)
+})
+
+test("stop ignores generic factual correction and explicit preference requests", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const factual = handleStop(engine, { cwd: project, lastUserMessage: "You got the package name wrong." })
+  assert.equal(factual.saved.length, 0)
+
+  const preference = handleStop(engine, { cwd: project, lastUserMessage: "Remember that I prefer concise answers." })
+  assert.equal(preference.saved.length, 1)
+  assert.equal(preference.saved[0]?.status, "saved")
+  if (preference.saved[0]?.status !== "saved") throw new Error("expected explicit preference")
+  assert.notEqual(preference.saved[0].memory.kind, "correction")
+})
+
+test("stop ignores correction capture for meta wrappers and likely secrets", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const meta = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: `Task: ## Acceptance Finalization
+You skipped the review gate; do not start implementation before approval.`,
+  })
+  assert.equal(meta.saved.length, 0)
+
+  const secret = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: "You forgot the review gate and the token api_key = sk-1234567890abcdef1234567890abcdef should not be saved.",
+  })
+  assert.equal(secret.saved.length, 0)
+})
+
+test("stop skips duplicate workflow correction candidates", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+  engine.save({ text: "Workflow correction: When working in this project, follow the PR-protected workflow: open a PR and wait for the user to merge before syncing main, deleting branches or worktrees, or starting the next item.", status: "pending", category: "project", scopeType: "project", kind: "correction" })
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: "You violated the PR workflow; wait for me to merge before cleanup.",
+  })
+
+  assert.equal(result.saved.length, 0)
+})
+
+test("stop skips workflow correction candidate when approved workflow rule already covers it", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+  engine.save({ text: "PR process: open a pull request and wait for merge before deleting branches or worktrees.", status: "approved", category: "project", scopeType: "project", kind: "workflow_rule" })
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: "You forgot our PR-protected workflow; don't delete the worktree before I merge the PR.",
+  })
+
+  assert.equal(result.saved.length, 0)
+})
+
 test("post-tool-use captures successful release command as pending checkpoint", () => {
   const project = tempDir()
   const engine = engineInTemp(project)

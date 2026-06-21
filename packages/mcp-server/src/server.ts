@@ -39,6 +39,8 @@ const kindSchema = z.enum([
   "project_checkpoint",
   "workflow_rule",
   "decision",
+  "correction",
+  "procedure",
   "session_summary",
   "misc",
 ])

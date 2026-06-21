@@ -439,6 +439,12 @@ Memory Lane can also suggest pending checkpoint candidates from strong lifecycle
 
 No new command, MCP tool, config flag, or explicit memory API is required for checkpoint capture. Review with `memory-lane review` or MCP `memory_review`, approve/reject through the existing review flow, and inspect continuity with `memory-lane continuity` or MCP `memory_continuity`. Checkpoint capture does not automatically approve memories, dump transcripts, change recall ranking, or perform exact thread/workstream lookup.
 
+### Workflow correction candidates
+
+Memory Lane can also suggest pending `correction` candidates when a user explicitly points out that an agent violated, forgot, skipped, or ignored an expected workflow or operating agreement, such as “you forgot our PR-protected workflow” or “you skipped the review gate.” This first learning slice runs only from bounded Stop context, saves compact normalized project-scoped text, and remains pending by default.
+
+Correction capture is review-first learning, not automatic rule rewriting. It does not add commands or MCP tools, does not run an LLM classifier, does not capture raw transcripts or tool output, and does not auto-approve or change recall ranking. Inspect candidates with `memory-lane review`, MCP `memory_review`, `memory-lane continuity`, or MCP `memory_continuity`; approve only corrections that should become durable project workflow guidance.
+
 ### Memory revision commands
 
 Use explicit revision commands when an approved memory needs correction or replacement. These commands are append-only: they write newer rows instead of silently deleting history.

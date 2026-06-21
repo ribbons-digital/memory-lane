@@ -743,6 +743,21 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(d.totalMemories, 2)
   })
 
+  it("accepts correction and procedure memory kinds", () => {
+    const e = engine()
+    const correction = e.save({ text: "Workflow correction: wait for PR merge before cleanup.", status: "pending", category: "project", kind: "correction" })
+    const procedure = e.save({ text: "Procedure: open a PR, wait for merge, then cleanup.", status: "approved", category: "project", kind: "procedure" })
+
+    assert.equal(correction.status, "saved")
+    assert.equal(procedure.status, "saved")
+    if (correction.status !== "saved" || procedure.status !== "saved") return
+
+    assert.equal(correction.memory.kind, "correction")
+    assert.equal(procedure.memory.kind, "procedure")
+    assert.equal(e.reviewPending()[0].kind, "correction")
+    assert.equal(e.list({ status: "approved" }).find((memory) => memory.id === procedure.memory.id)?.kind, "procedure")
+  })
+
   it("continuityHints reports text-free project scoped hints", () => {
     const e = engine()
     const old = e.save({ text: "PRIVATE OLD WORKFLOW TEXT", status: "approved", category: "project", kind: "workflow_rule" })
@@ -1606,6 +1621,30 @@ describe("operating agreement selection", () => {
     assert.ok(result.primary.every((item) => item.recommendedKind === "workflow_rule"))
     assert.ok(!result.primary.some((item) => item.memory.id === "plain-pref"))
     assert.ok(!result.relatedCandidates.some((item) => item.memory.id === "plain-pref"))
+  })
+
+  it("selects workflow-like correction and procedure candidates heuristically", () => {
+    const result = selectOperatingAgreements([
+      record({ id: "correction-pr", text: "Workflow correction: follow the PR-protected workflow before cleanup.", kind: "correction" }),
+      record({ id: "procedure-review", text: "Procedure: use the review gate and get approval before implementation.", kind: "procedure" }),
+      record({ id: "generic-correction", text: "Correction: the package name was wrong.", kind: "correction" }),
+    ], { projectScopeKey: "project-a" })
+
+    assert.deepEqual(result.primary.map((item) => item.memory.id).sort(), ["correction-pr", "procedure-review"])
+    assert.ok(result.primary.every((item) => item.matchReason === "heuristic"))
+    assert.ok(result.primary.every((item) => item.recommendedKind === "workflow_rule"))
+    assert.ok(!result.primary.some((item) => item.memory.id === "generic-correction"))
+  })
+
+  it("keeps explicit workflow_rule preferred over correction candidates", () => {
+    const result = selectOperatingAgreements([
+      record({ id: "correction-pr", text: "Workflow correction: follow the PR-protected workflow before cleanup.", kind: "correction", updatedAt: "2026-06-18T12:00:00.000Z" }),
+      record({ id: "explicit-pr", text: "PR process: open a pull request and wait for merge before cleanup.", kind: "workflow_rule", updatedAt: "2026-06-18T10:00:00.000Z" }),
+    ], { projectScopeKey: "project-a" })
+
+    assert.equal(result.primary[0].memory.id, "explicit-pr")
+    assert.equal(result.primary[0].matchReason, "explicit-kind")
+    assert.deepEqual(result.relatedCandidates.map((item) => item.memory.id), ["correction-pr"])
   })
 
   it("prefers explicit kind, then project scope, then recency for each area", () => {
