@@ -445,6 +445,12 @@ Memory Lane can also suggest pending `correction` candidates when a user explici
 
 Correction capture is review-first learning, not automatic rule rewriting. It does not add commands or MCP tools, does not run an LLM classifier, does not capture raw transcripts or tool output, and does not auto-approve or change recall ranking. Inspect candidates with `memory-lane review`, MCP `memory_review`, `memory-lane continuity`, or MCP `memory_continuity`; approve only corrections that should become durable project workflow guidance.
 
+### Recovery-backed procedure candidates
+
+Memory Lane can suggest pending `procedure` candidates from bounded tool evidence when a failed shell action is followed by a safe successful recovery, such as `npm test` failing before `pnpm test` succeeds, or `npm install` failing before pnpm evidence succeeds. These candidates use compact templates such as `Procedure: ... When: ... Steps: ... Pitfall: ... Verify: ...` and never include raw stdout, stderr, transcripts, or secrets.
+
+Procedure learning is conservative and review-first. It requires optional bounded recent tool context from a harness, stores candidates as normal project-scoped Memory Lane records with `kind: "procedure"`, deduplicates against existing procedure/workflow/correction memories, and does not export native harness skills or rules. Review and approve through the existing CLI/MCP review flow before relying on a procedure for durable continuity.
+
 ### Memory revision commands
 
 Use explicit revision commands when an approved memory needs correction or replacement. These commands are append-only: they write newer rows instead of silently deleting history.
@@ -779,7 +785,7 @@ Run `memory-lane init` to auto-detect and configure supported harnesses, or see 
 
 Lifecycle autosave intentionally filters transient reviewer, subagent, and task prompts such as commit review requests, “do not modify files” review tasks, and delegated status-report instructions. Those operational prompts are not durable memory. Explicit memory requests remain supported and authoritative: use `memory-lane save ...` or phrases like “Remember that ...” for durable workflow rules, preferences, or project facts.
 
-Shared lifecycle handlers can also queue compact `project_checkpoint` candidates from strong Stop/PostToolUse evidence such as completed release statements, successful release commands, or merged PR commands. These inferred captures are pending by default, deduplicated before saving, and never change approved continuity until the existing review flow approves them; no new CLI or MCP command is required.
+Shared lifecycle handlers can also queue compact `project_checkpoint` candidates from strong Stop/PostToolUse evidence such as completed release statements, successful release commands, or merged PR commands. These inferred captures are pending by default, deduplicated before saving, and never change approved continuity until the existing review flow approves them; no new CLI or MCP command is required. PostToolUse handlers may also queue pending `procedure` candidates when bounded recent tool evidence shows a failed action followed by a successful safe recovery; the saved text is template-derived and omits raw tool output.
 
 ### pi adapter
 

@@ -95,6 +95,10 @@ _Avoid_: Approved correction, automatic rule update, transcript summary, tool fa
 A durable memory describing a repeatable workflow or process, typically with when-to-use conditions, steps, pitfalls, and verification. Memory Lane stores procedure memories as normal JSONL records first; native skill/rule export is a later optional integration layer.
 _Avoid_: Harness-native skill, automatic checklist enforcement, background rule rewrite
 
+**Recovery-backed procedure candidate**:
+A pending project-scoped procedure memory suggested from bounded tool evidence only when a failed shell action is followed by a safe successful recovery, such as a failed npm command followed by a successful pnpm command. The saved text uses compact templates and omits raw stdout, stderr, transcripts, and secrets.
+_Avoid_: Raw tool-output memory, automatic approval, failure log, background learning
+
 **Scope hygiene candidate**:
 An approved visible memory whose scope metadata may be broader than its content warrants, such as a global memory that appears to describe a specific project, repository, session, checkpoint, release, or implementation detail. It is an inspection signal only; Memory Lane does not automatically rescope, delete, reject, or supersede it.
 _Avoid_: Scope error, automatic cleanup, rejected memory, rescope recommendation

@@ -673,3 +673,119 @@ test("post-tool-use ignores failed release command", () => {
 
   assert.equal(result.saved.length, 0)
 })
+
+test("post-tool-use persists recovery-backed procedure candidate as pending", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handlePostToolUse(engine, {
+    cwd: project,
+    toolName: "Bash",
+    toolInput: { command: "pnpm test" },
+    toolResponse: { stdout: "Tests passed", exit_code: 0 },
+    recentToolUses: [{
+      toolName: "Bash",
+      toolInput: { command: "npm test" },
+      toolResponse: { stderr: "missing script: test", exit_code: 1 },
+    }],
+  }, { adapter: "test" })
+
+  const savedProcedures = result.saved
+    .filter((entry) => entry.status === "saved")
+    .map((entry) => entry.memory)
+    .filter((memory) => memory.kind === "procedure")
+
+  assert.equal(savedProcedures.length, 1)
+  assert.equal(savedProcedures[0].status, "pending")
+  assert.equal(savedProcedures[0].category, "project")
+  assert.equal(savedProcedures[0].scope.type, "project")
+  assert.equal(savedProcedures[0].source, "agent-suggested")
+  assert.equal(savedProcedures[0].provenance?.adapter, "test")
+  assert.equal(savedProcedures[0].provenance?.lifecycleEvent, "post_tool_use")
+  assert.equal(savedProcedures[0].provenance?.toolName, "Bash")
+  assert.match(savedProcedures[0].text, /^Procedure:/u)
+  assert.match(savedProcedures[0].text, /`pnpm test` succeeded/u)
+})
+
+test("post-tool-use skips duplicate recovery-backed procedure candidates", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+  engine.save({
+    text: "Procedure: Use pnpm for tests in this repo. When: verifying changes. Steps: run `pnpm test`. Pitfall: `npm test` failed or was unavailable. Verify: `pnpm test` succeeded.",
+    status: "pending",
+    category: "project",
+    scopeType: "project",
+    kind: "procedure",
+  })
+
+  const result = handlePostToolUse(engine, {
+    cwd: project,
+    toolName: "Bash",
+    toolInput: { command: "pnpm test" },
+    toolResponse: { stdout: "Tests passed", exit_code: 0 },
+    recentToolUses: [{
+      toolName: "Bash",
+      toolInput: { command: "npm test" },
+      toolResponse: { stderr: "missing script: test", exit_code: 1 },
+    }],
+  })
+
+  const savedProcedures = result.saved
+    .filter((entry) => entry.status === "saved")
+    .map((entry) => entry.memory)
+    .filter((memory) => memory.kind === "procedure")
+
+  assert.equal(savedProcedures.length, 0)
+})
+
+test("post-tool-use skips recovery-backed procedure when approved workflow rule already covers it", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+  engine.save({
+    text: "`pnpm test` is the test command for this repo.",
+    status: "approved",
+    category: "project",
+    scopeType: "project",
+    kind: "workflow_rule",
+  })
+
+  const result = handlePostToolUse(engine, {
+    cwd: project,
+    toolName: "Bash",
+    toolInput: { command: "pnpm test" },
+    toolResponse: { stdout: "Tests passed", exit_code: 0 },
+    recentToolUses: [{
+      toolName: "Bash",
+      toolInput: { command: "npm test" },
+      toolResponse: { stderr: "missing script: test", exit_code: 1 },
+    }],
+  })
+
+  assert.equal(result.saved.filter((entry) => entry.status === "saved" && entry.memory.kind === "procedure").length, 0)
+})
+
+test("post-tool-use skips recovery-backed procedure when pending correction already covers package manager convention", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+  engine.save({
+    text: "Workflow correction: The user corrected the agent because this repo uses pnpm for package manager convention and `npm install` should not be used.",
+    status: "pending",
+    category: "project",
+    scopeType: "project",
+    kind: "correction",
+  })
+
+  const result = handlePostToolUse(engine, {
+    cwd: project,
+    toolName: "Bash",
+    toolInput: { command: "pnpm install" },
+    toolResponse: { stdout: "Already up to date", exit_code: 0 },
+    recentToolUses: [{
+      toolName: "Bash",
+      toolInput: { command: "npm install left-pad" },
+      toolResponse: { stderr: "dependency conflict", exit_code: 1 },
+    }],
+  })
+
+  assert.equal(result.saved.filter((entry) => entry.status === "saved" && entry.memory.kind === "procedure").length, 0)
+})

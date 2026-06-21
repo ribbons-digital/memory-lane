@@ -3,7 +3,7 @@ import { detectContinuityIntent, isMemoryManagementListIntent, limitsFromContext
 import { extractStopCandidates } from "./candidates.js"
 import { checkpointKeyFromText, extractCheckpointCandidatesFromPostToolUse, extractCheckpointCandidatesFromStop, filterDuplicateCheckpointCandidates } from "./checkpoint-capture.js"
 import { extractCorrectionCandidatesFromStop, filterDuplicateCorrectionCandidates, filterSameTurnCorrectionCandidates } from "./correction-capture.js"
-import { summarizeToolOutcome } from "./tool-outcomes.js"
+import { filterDuplicateProcedureCandidates, summarizeToolOutcome } from "./tool-outcomes.js"
 import type { LifecycleResult, MemoryCandidate, MemoryContextDecision, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
 
 function createResult(additionalContext?: string, contextDecision?: MemoryContextDecision): LifecycleResult {
@@ -267,7 +267,7 @@ export function handleStop(engine: MemoryEngine, input: StopInput, options?: Lif
 export function handlePostToolUse(engine: MemoryEngine, input: PostToolUseInput, options?: LifecycleHandlerOptions): LifecycleResult {
   engine.refreshScope(input.cwd)
   const candidates = [
-    ...summarizeToolOutcome(input),
+    ...filterDuplicateProcedureCandidates(engine, summarizeToolOutcome(input)),
     ...filterDuplicateCheckpointCandidates(engine, extractCheckpointCandidatesFromPostToolUse(input)),
   ]
   return persistCandidates(engine, candidates, input, "post_tool_use", options)
