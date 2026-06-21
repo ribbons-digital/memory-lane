@@ -575,10 +575,12 @@ Deferred Phase 18 follow-ups:
 
 Memory Lane should keep JSONL as the source of truth and keep harness-native artifacts optional exports. Pi, Hermes, Cursor, Codex, Claude Code, and future adapters should feed bounded lifecycle evidence into shared lifecycle handlers rather than owning learning behavior themselves. The first learning slices should help the system notice likely durable failures, corrections, procedures, or preferences and prompt/suggest reviewable memories, not silently auto-approve broad background learning.
 
+**Status:** Slice 1 implemented locally on `feature/phase-19-workflow-corrections`: Memory Lane adds `correction` and `procedure` kinds, detects explicit user workflow/process corrections from bounded Stop context, saves compact pending project-scoped `correction` candidates, deduplicates against existing correction/procedure/workflow-rule memories, and surfaces candidates through existing review and continuity paths. Approved workflow-like corrections/procedures can participate in operating-agreement discovery while explicit `workflow_rule` memories remain preferred. No new CLI commands, MCP tools, LLM classifier, automatic approvals, prompt-time writes, transcript capture, raw tool-output capture, recall-ranking changes, or native skill/rule exports were added.
+
 First-slice decisions:
 
 - Do not expand `MemoryCategory` for learning taxonomy in the first slice; keep existing `preference`, `personal`, and `project` categories stable.
-- Add learning semantics primarily through additional `MemoryKind` values such as `failure`, `correction`, `insight`, `tool_quirk`, `convention`, and `procedure` only after review/dashboard and freshness foundations are in place.
+- Add learning semantics primarily through additional `MemoryKind` values. Slice 1 adds only `correction` and `procedure`; broader kinds such as `failure`, `insight`, `tool_quirk`, and `convention` remain deferred.
 - Default new automatic learning outputs to `pending` unless the user explicitly asks Memory Lane to remember something.
 - Workflow-violation corrections are first-class learning candidates: when a user points out that an agent violated an established project workflow or operating agreement, Memory Lane should suggest a pending correction/procedure memory so future continuity surfaces can reinforce the guardrail.
 - Store procedural memory as Memory Lane records first; exporting approved procedures into Pi/Claude/Codex/Cursor/Hermes-native skill/rule formats is a later optional integration layer.
@@ -586,9 +588,9 @@ First-slice decisions:
 
 Todos:
 
-1. Add non-breaking `MemoryKind` values for learning taxonomy and update validation, formatting, docs, Obsidian mirror/import handling, MCP schemas, and tests.
-2. Add shared correction detection in `@memory-lane/lifecycle` using high-confidence heuristics plus negative patterns; adapters provide recent bounded turn context, and detected corrections save as pending candidates by default.
-3. Add review-first workflow-violation capture for moments like “you forgot our PR-protected workflow”: detect the correction, suggest a pending `correction` or `procedure` memory, and surface it through continuity/operating-agreement inspection before future high-risk actions such as merge, release, cleanup, or branch deletion.
+1. Added non-breaking `MemoryKind` values `correction` and `procedure` and updated validation, formatting, Obsidian import handling, MCP schemas, and tests.
+2. Added shared correction detection in `@memory-lane/lifecycle` using high-confidence heuristics plus negative patterns; adapters provide recent bounded Stop context, and detected corrections save as pending candidates by default.
+3. Added review-first workflow-violation capture for moments like “you forgot our PR-protected workflow”: detected corrections suggest pending `correction` memories and surface through continuity/operating-agreement inspection before future high-risk actions such as merge, release, cleanup, or branch deletion.
 4. Expand post-tool-use learning beyond current package-manager/test-command heuristics to capture conservative failure/tool-quirk candidates when a failed action and safe recovery evidence are both available.
 5. Add structured procedure-memory support (`kind: "procedure"`) with fields or conventions for when-to-use, steps, pitfalls, and verification, while keeping native skill export out of the first slice.
 6. Add opt-in background learning config and lifecycle review plumbing only after token-aware policy and dashboard/review controls are in place; reviews must be bounded, best-effort, privacy-safe, and harness-neutral.

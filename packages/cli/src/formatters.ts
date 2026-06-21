@@ -252,6 +252,14 @@ function checkpointCandidateLines(memory: MemoryRecord): string[] {
   ]
 }
 
+function correctionCandidateLines(memory: MemoryRecord): string[] {
+  if (memory.status !== "pending" || (memory.kind !== "correction" && memory.kind !== "procedure")) return []
+  return [
+    `    Workflow ${memory.kind} candidate — review-first learning`,
+    "    Review: approve only if this should become durable project workflow guidance.",
+  ]
+}
+
 function reviewStatusLine(memory: MemoryRecord): string {
   return `[${memory.id}] ${memory.status} · ${provenanceLabel(memory)} · ${memory.scope.type}/${memory.category}/${memory.kind ?? "misc"}${revisionSuffix(memory)}`
 }
@@ -328,6 +336,7 @@ export function formatReviewMemories(memories: MemoryRecord[], json: boolean, ex
         `  ${figures.bullet} ${reviewStatusLine(memory)}`,
         `    ${reviewPreview(memory)}  (saved ${formatDate(memory.createdAt)})`,
         ...checkpointCandidateLines(memory),
+        ...correctionCandidateLines(memory),
         `    Suggested: ${reviewAction(memory)}`,
       )
     }

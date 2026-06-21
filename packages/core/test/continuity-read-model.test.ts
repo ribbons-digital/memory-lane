@@ -72,6 +72,19 @@ test("continuity read model includes pending checkpoint and session-summary cand
 })
 
 
+test("continuity read model includes pending correction candidates", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "approved", text: "Approved checkpoint", kind: "project_checkpoint", updatedAt: "2026-06-18T08:00:00.000Z" }),
+    memory({ id: "pending-correction", text: "Workflow correction: follow the PR-protected workflow before cleanup.", status: "pending", kind: "correction", updatedAt: "2026-06-18T11:00:00.000Z" }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.deepEqual(result.pendingContinuity.map((item) => item.id), ["pending-correction"])
+  assert.equal(result.pendingContinuity[0].kind, "correction")
+  assert.equal(result.status.pendingContinuityCount, 1)
+  assert.equal(result.suggestedActions[0], "memory-lane review --json")
+})
+
+
 test("continuity read model includes authoritative inspection actions and MCP guidance", () => {
   const result = buildContinuityReadModel([
     memory({ id: "approved", text: "Approved checkpoint", kind: "project_checkpoint" }),

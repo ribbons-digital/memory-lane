@@ -10,6 +10,8 @@ export type ImportMemoryKind =
   | "project_checkpoint"
   | "workflow_rule"
   | "decision"
+  | "correction"
+  | "procedure"
   | "session_summary"
   | "misc"
 

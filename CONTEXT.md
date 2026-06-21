@@ -87,6 +87,14 @@ _Avoid_: Approved checkpoint, session summary, automatic handoff, lifecycle noti
 A lifecycle-driven suggestion of a compact checkpoint candidate from high-confidence project progress evidence such as a release, merged PR, verification milestone, docs sync, major fix, or roadmap decision. It writes only pending Memory Lane records, deduplicates near-duplicate events, and relies on automatic review reminders before affecting future continuity.
 _Avoid_: Approved checkpoint, automatic approval, transcript capture, explicit memory API
 
+**Correction candidate**:
+A pending project-scoped memory suggested from an explicit user correction that says an agent violated, forgot, skipped, or ignored an expected workflow, operating agreement, procedure, review gate, or project rule. It is review-first and uses compact normalized wording instead of raw conversation text.
+_Avoid_: Approved correction, automatic rule update, transcript summary, tool failure
+
+**Procedure memory**:
+A durable memory describing a repeatable workflow or process, typically with when-to-use conditions, steps, pitfalls, and verification. Memory Lane stores procedure memories as normal JSONL records first; native skill/rule export is a later optional integration layer.
+_Avoid_: Harness-native skill, automatic checklist enforcement, background rule rewrite
+
 **Scope hygiene candidate**:
 An approved visible memory whose scope metadata may be broader than its content warrants, such as a global memory that appears to describe a specific project, repository, session, checkpoint, release, or implementation detail. It is an inspection signal only; Memory Lane does not automatically rescope, delete, reject, or supersede it.
 _Avoid_: Scope error, automatic cleanup, rejected memory, rescope recommendation
