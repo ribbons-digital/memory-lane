@@ -439,10 +439,10 @@ test("stop session-summary intent saves provider summary without raw transcript"
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-codex-session-summary-"))
     const transcriptPath = path.join(dir, "transcript.jsonl")
     fs.writeFileSync(transcriptPath, [
-      JSON.stringify({ role: "user", content: "We decided Codex summaries require explicit intent." }),
-      JSON.stringify({ role: "assistant", content: "RAW_TRANSCRIPT_MARKER_SHOULD_NOT_BE_SAVED" }),
-      JSON.stringify({ role: "user", content: "summarize this session to memory" }),
-      JSON.stringify({ role: "assistant", content: "I'll create a concise summary." }),
+      JSON.stringify({ role: "user", content: "We decided Codex summaries require explicit intent.", timestamp: "2026-06-20T10:00:00.000Z" }),
+      JSON.stringify({ role: "assistant", content: "RAW_TRANSCRIPT_MARKER_SHOULD_NOT_BE_SAVED", timestamp: "2026-06-20T10:02:00.000Z" }),
+      JSON.stringify({ role: "user", content: "summarize this session to memory", timestamp: "2026-06-20T10:05:00.000Z" }),
+      JSON.stringify({ role: "assistant", content: "I'll create a concise summary.", timestamp: "2026-06-20T10:06:00.000Z" }),
     ].join("\n"), "utf8")
 
     const output = await runCodexHookCommand("stop", {
@@ -466,6 +466,7 @@ test("stop session-summary intent saves provider summary without raw transcript"
     assert.equal(saved[0].provenance?.adapter, "codex")
     assert.equal(saved[0].provenance?.lifecycleEvent, "session_end")
     assert.match(saved[0].text, /Codex summaries explicit/)
+    assert.deepEqual(saved[0].freshness, { capturedAt: "2026-06-20T10:06:00.000Z" })
     assert.doesNotMatch(saved[0].text, /RAW_TRANSCRIPT_MARKER_SHOULD_NOT_BE_SAVED/)
     assert.doesNotMatch(fs.readFileSync(memoryPath, "utf8"), /RAW_TRANSCRIPT_MARKER_SHOULD_NOT_BE_SAVED/)
   })

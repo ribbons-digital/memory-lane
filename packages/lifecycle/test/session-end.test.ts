@@ -59,8 +59,56 @@ test("returns a pending session-summary candidate", async () => {
   assert.strictEqual(candidate.source, "session-summary")
   assert.strictEqual(candidate.kind, "session_summary")
   assert.strictEqual(candidate.status, "pending")
+  assert.equal(candidate.freshness, undefined)
   assert.strictEqual(candidate.provenance.lifecycleEvent, "session_end")
   assert.strictEqual(candidate.provenance.sessionId, "s1")
+})
+
+test("sets capturedAt from the latest valid message timestamp", async () => {
+  const engine = makeEngine()
+  const provider: LLMProvider = { complete: async () => "- Captured temporal context." }
+  const result = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    messages: [
+      { role: "user", content: "Start", timestamp: "2026-06-20T10:00:00.000Z" },
+      { role: "assistant", content: "Middle", timestamp: "not-a-date" },
+      { role: "user", content: "End", timestamp: "2026-06-20T11:30:00.000Z" },
+    ],
+  }, { requireConfirmation: false, provider })
+  assert.strictEqual(result.length, 1)
+  assert.deepStrictEqual(result[0].freshness, { capturedAt: "2026-06-20T11:30:00.000Z" })
+})
+
+test("omits capturedAt when messages have no valid ISO timestamps", async () => {
+  const engine = makeEngine()
+  const provider: LLMProvider = { complete: async () => "- No trustworthy source timestamp." }
+  const result = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    messages: [
+      { role: "user", content: "Start", timestamp: "2026-06-20" },
+      { role: "assistant", content: "Done", timestamp: "not-a-date" },
+    ],
+  }, { requireConfirmation: false, provider })
+  assert.strictEqual(result.length, 1)
+  assert.equal(result[0].freshness, undefined)
+})
+
+test("duplicate session summary detection still works when candidate has freshness", async () => {
+  const engine = makeEngine()
+  engine.save({
+    text: "## Session Summary (2026-06-20)\n\n- Decisions made: keep summaries explicit.",
+    category: "project",
+    scopeType: "global",
+    status: "pending",
+    source: "session-summary",
+    kind: "session_summary",
+  })
+  const provider: LLMProvider = { complete: async () => "- Decisions made: keep summaries explicit." }
+  const result = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    messages: [{ role: "user", content: "summarize", timestamp: "2026-06-20T11:30:00.000Z" }],
+  }, { requireConfirmation: false, provider })
+  assert.deepStrictEqual(result, [])
 })
 
 test("skips duplicate session summary for same adapter and session id", async () => {

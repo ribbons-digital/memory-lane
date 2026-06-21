@@ -103,6 +103,10 @@ _Avoid_: Raw tool-output memory, automatic approval, failure log, background lea
 Optional time-awareness metadata on a memory record describing when its content expires, when it should be reconsidered as stale, or what event/session time it represents. It is advisory until explicit refresh, consolidation, recall, or injection behavior uses it; it is not a new memory status.
 _Avoid_: Expired status, automatic deletion, freshness notice, lifecycle continuity signal
 
+**Continuity record temporal context**:
+Advisory time metadata on generated continuity records, especially session summaries and checkpoint candidates, that describes the best known time represented by the record. It uses `freshness.capturedAt` when a trustworthy timestamp already exists; it is not the same as write time and does not by itself change recall, injection, cleanup, or review behavior.
+_Avoid_: Current-time fallback, expiration behavior, automatic recency ranking, timestamp migration
+
 **Pending continuity candidate debounce**:
 Deterministic suppression of a newly generated pending session summary or checkpoint candidate when an equivalent pending or approved candidate is already visible for the same project or session. It prevents duplicate review-queue entries before writing; it does not delete, reject, approve, merge, supersede, or consolidate existing memories.
 _Avoid_: Consolidation, cleanup, automatic rejection, fuzzy duplicate classifier

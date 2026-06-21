@@ -245,6 +245,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         source: candidate.source,
         kind: candidate.kind,
         provenance: { ...candidate.provenance, adapter: "pi" },
+        freshness: candidate.freshness,
       }))
       .filter((result): result is Extract<SaveResult, { status: "saved" }> => result.status === "saved")
 
