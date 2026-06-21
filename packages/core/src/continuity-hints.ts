@@ -179,15 +179,24 @@ export function buildContinuityHints(memories: MemoryRecord[], options: Continui
     })
   }
 
-  const freshness = options.since
-    ? buildFreshnessStatus(memories, {
-      projectScopeKey: options.projectScopeKey,
-      since: options.since,
-      maxNewerMetadata: maxIds,
+  const freshness = buildFreshnessStatus(memories, {
+    projectScopeKey: options.projectScopeKey,
+    since: options.since,
+    maxNewerMetadata: maxIds,
+  })
+  const advisoryCount = freshness.advisory.expiredCount + freshness.advisory.staleCount
+  if (advisoryCount) {
+    hints.push({
+      code: "freshness-advisory",
+      severity: "review",
+      message: `${advisoryCount} approved ${advisoryCount === 1 ? "memory has" : "memories have"} expired or stale freshness metadata; inspect before relying on time-sensitive guidance.`,
+      count: advisoryCount,
+      memoryIds: [...freshness.advisory.expired, ...freshness.advisory.stale].map((memory) => memory.id).slice(0, maxIds),
+      suggestedActions: ["memory-lane status --json"],
     })
-    : undefined
+  }
   const freshnessReferenceTime = freshness?.referenceTime
-  const newerApproved = freshness && freshness.newerApprovedCount > 0 && freshnessReferenceTime
+  const newerApproved = freshness.newerApprovedCount > 0 && freshnessReferenceTime
     ? {
       referenceTime: freshnessReferenceTime,
       count: freshness.newerApprovedCount,

@@ -1449,7 +1449,7 @@ describe("CLI integration", () => {
     assert.doesNotMatch(result.stdout, /PENDING PRIVATE CLI FRESHNESS TEXT/u)
   })
 
-  it("doctor --json --since returns the same freshness object as status", () => {
+  it("doctor --json --since returns the same freshness object shape as status", () => {
     const project = tempDir()
     fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-freshness-project" }))
     const env = {
@@ -1464,6 +1464,10 @@ describe("CLI integration", () => {
 
     assert.equal(doctorResult.status, 0, doctorResult.stderr)
     const doctorPayload = JSON.parse(doctorResult.stdout)
+    assert.equal(new Date(statusPayload.data.freshness.advisory.referenceNow).toISOString(), statusPayload.data.freshness.advisory.referenceNow)
+    assert.equal(new Date(doctorPayload.data.freshness.advisory.referenceNow).toISOString(), doctorPayload.data.freshness.advisory.referenceNow)
+    statusPayload.data.freshness.advisory.referenceNow = "<reference-now>"
+    doctorPayload.data.freshness.advisory.referenceNow = "<reference-now>"
     assert.deepEqual(doctorPayload.data.freshness, statusPayload.data.freshness)
     assert.doesNotMatch(doctorResult.stdout, /APPROVED PRIVATE CLI FRESHNESS TEXT/u)
     assert.doesNotMatch(doctorResult.stdout, /PENDING PRIVATE CLI FRESHNESS TEXT/u)

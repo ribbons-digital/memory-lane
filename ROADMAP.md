@@ -601,17 +601,18 @@ Todos:
 
 Time-sensitive statements like “I'm traveling next week” or “the build is broken” become wrong as time passes. Separately, automatic summaries, checkpoint candidates, and learning candidates can create overlap. This phase handles both through reviewable revisions and consolidation proposals rather than silent destructive rewrites.
 
-**Status:** Slice 1 released in `v0.2.15`: optional `freshness` metadata adds `expiresAt`, `staleAfterDays`, and `capturedAt` to memory records/save surfaces with validation and compact rendering. No refresh, consolidation, recall/injection filtering, or cleanup behavior was added in Slice 1. Slice 2 released in `v0.2.16`: repeated session-summary/checkpoint continuity candidates are debounced before writing, and generated session summaries drop obvious Memory Lane review-management chatter without adding destructive consolidation. Slice 3 is implemented locally on `feature/phase-20-temporal-context`: generated session summaries carry advisory `freshness.capturedAt` from existing canonical message timestamps when available; checkpoint timestamps remain deferred because Stop/PostToolUse inputs expose no timestamp.
+**Status:** Slice 1 released in `v0.2.15`: optional `freshness` metadata adds `expiresAt`, `staleAfterDays`, and `capturedAt` to memory records/save surfaces with validation and compact rendering. No refresh, consolidation, recall/injection filtering, or cleanup behavior was added in Slice 1. Slice 2 released in `v0.2.16`: repeated session-summary/checkpoint continuity candidates are debounced before writing, and generated session summaries drop obvious Memory Lane review-management chatter without adding destructive consolidation. Slice 3 released in `v0.2.17`: generated session summaries carry advisory `freshness.capturedAt` from existing canonical message timestamps when available; checkpoint timestamps remain deferred because Stop/PostToolUse inputs expose no timestamp. Slice 4 is implemented locally on `feature/phase-20-freshness-advisories`: existing freshness metadata is classified into read-only advisory status/continuity signals for expired/stale approved visible memories without recall/injection, refresh, consolidation, cleanup, or mutation behavior changes.
 
 Todos:
 
 1. Added optional memory freshness metadata with `expiresAt`, `staleAfterDays`, and `capturedAt` fields to memory records and save/suggest APIs.
 2. Added duplicate/debounce handling for pending session summaries and checkpoint candidates, especially back-to-back summaries generated from the same session/review flow.
 3. Improved session-summary prompt/filtering so summaries avoid self-referential review chatter like “approve memory IDs” unless the user explicitly asks to preserve review decisions.
-4. Add time metadata to session summaries and checkpoint memories so later refreshes can reason about temporal context.
-5. Add a `memory-lane refresh` command that scans approved memories, uses an LLM or heuristics to identify stale entries, and presents them as pending revisions or deletions.
-6. Update recall/injection to deprioritize or skip memories that are past their expiration.
-7. Add `memory-lane consolidate --dry-run` and `memory-lane consolidate --apply` to propose duplicate/overlap merges and replacement memories, preserving append-only auditability.
+4. Added time metadata to generated session summaries using trustworthy existing message timestamps; checkpoint timestamps remain deferred until Stop/PostToolUse exposes reliable timestamps.
+5. Added read-only freshness advisories that classify explicit freshness metadata as current/stale/expired in status/doctor/MCP status and continuity warnings without behavior changes.
+6. Future: add a deliberately scoped `memory-lane refresh` workflow that presents stale entries as pending revisions or deletions only after read-only advisory signals are proven useful.
+7. Future: update recall/injection to deprioritize or skip memories that are past their expiration only after explicit user approval.
+8. Future: add `memory-lane consolidate --dry-run` and `memory-lane consolidate --apply` to propose duplicate/overlap merges and replacement memories, preserving append-only auditability.
 
 ## Phase 21 — Handoff-Free Sessions
 

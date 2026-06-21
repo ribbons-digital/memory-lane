@@ -100,8 +100,12 @@ A pending project-scoped procedure memory suggested from bounded tool evidence o
 _Avoid_: Raw tool-output memory, automatic approval, failure log, background learning
 
 **Memory freshness metadata**:
-Optional time-awareness metadata on a memory record describing when its content expires, when it should be reconsidered as stale, or what event/session time it represents. It is advisory until explicit refresh, consolidation, recall, or injection behavior uses it; it is not a new memory status.
-_Avoid_: Expired status, automatic deletion, freshness notice, lifecycle continuity signal
+Optional time-awareness metadata on a memory record describing when its content expires, when it should be reconsidered as stale, or what event/session time it represents. It is advisory and can be surfaced in read-only status/continuity signals; it is not a new memory status and does not by itself change recall, injection, cleanup, or visibility.
+_Avoid_: Expired status, automatic deletion, recall filtering, lifecycle injection behavior
+
+**Freshness advisory**:
+A deterministic read-only classification of approved visible memories with explicit freshness metadata as `current`, `stale`, or `expired`, plus counts/ids for inspection. It is shown through status/doctor/MCP status and continuity warnings without memory text. It does not mutate records, hide memories, down-rank recall, or trigger refresh/consolidation.
+_Avoid_: Stale classifier, refresh command, cleanup recommendation, memory text preview
 
 **Continuity record temporal context**:
 Advisory time metadata on generated continuity records, especially session summaries and checkpoint candidates, that describes the best known time represented by the record. It uses `freshness.capturedAt` when a trustworthy timestamp already exists; it is not the same as write time and does not by itself change recall, injection, cleanup, or review behavior.

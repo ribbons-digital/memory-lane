@@ -19,6 +19,7 @@ function memory(overrides: Partial<MemoryRecord> & { id: string; text?: string }
     provenance: overrides.provenance,
     revision: overrides.revision,
     project: overrides.project,
+    freshness: overrides.freshness,
   }
 }
 
@@ -126,6 +127,17 @@ test("continuity read model warns when pending continuity is newer than approved
   const warning = result.warnings.find((item) => item.code === "pending-continuity-newer-than-approved")
   assert.equal(warning?.severity, "review")
   assert.deepEqual(warning?.memoryIds, ["pending"])
+})
+
+test("continuity read model warns when freshness advisory hints exist", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "expired", text: "SECRET expired text", freshness: { expiresAt: "2026-06-18T00:00:00.000Z" } }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.ok(result.continuityHints.hints.some((item) => item.code === "freshness-advisory"))
+  assert.ok(result.warnings.some((item) => item.code === "freshness-advisory" && item.severity === "review"))
+  assert.doesNotMatch(JSON.stringify(result.freshness), /SECRET expired text/u)
+  assert.doesNotMatch(JSON.stringify(result.continuityHints), /SECRET expired text/u)
 })
 
 test("continuity read model warns when no project scope is active", () => {

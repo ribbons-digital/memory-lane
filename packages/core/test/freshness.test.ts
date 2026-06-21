@@ -16,6 +16,7 @@ function memory(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
     project: overrides.project,
     kind: overrides.kind ?? "project_fact",
     provenance: overrides.provenance,
+    freshness: overrides.freshness,
   }
 }
 
@@ -120,10 +121,62 @@ describe("buildFreshnessStatus", () => {
     assert.equal(status.notice, undefined)
   })
 
-  it("rejects invalid since timestamps", () => {
+  it("classifies expired stale current and none advisories without memory text", () => {
+    const status = buildFreshnessStatus([
+      memory({ id: "expired", text: "SECRET expired", freshness: { expiresAt: "2026-06-18T00:00:00.000Z" } }),
+      memory({ id: "stale", text: "SECRET stale", updatedAt: "2026-06-10T00:00:00.000Z", freshness: { staleAfterDays: 3 } }),
+      memory({ id: "current", text: "SECRET current", freshness: { staleAfterDays: 10, capturedAt: "2026-06-17T00:00:00.000Z" } }),
+      memory({ id: "none", text: "SECRET none" }),
+    ], { projectScopeKey: "project-a", referenceNow: "2026-06-19T00:00:00.000Z" })
+
+    assert.equal(status.advisory.referenceNow, "2026-06-19T00:00:00.000Z")
+    assert.equal(status.advisory.withFreshnessCount, 3)
+    assert.equal(status.advisory.expiredCount, 1)
+    assert.equal(status.advisory.staleCount, 1)
+    assert.equal(status.advisory.currentCount, 1)
+    assert.equal(status.advisory.expired[0]?.id, "expired")
+    assert.equal(status.advisory.expired[0]?.freshness?.classification, "expired")
+    assert.equal(status.advisory.stale[0]?.id, "stale")
+    assert.equal(status.advisory.stale[0]?.freshness?.classification, "stale")
+    assert.equal(status.advisory.stale[0]?.freshness?.staleAnchor, "2026-06-10T00:00:00.000Z")
+    assert.doesNotMatch(JSON.stringify(status), /SECRET/u)
+  })
+
+  it("uses capturedAt before updatedAt for stale windows", () => {
+    const status = buildFreshnessStatus([
+      memory({
+        id: "captured-current",
+        updatedAt: "2026-06-01T00:00:00.000Z",
+        freshness: { staleAfterDays: 10, capturedAt: "2026-06-18T00:00:00.000Z" },
+      }),
+    ], { projectScopeKey: "project-a", referenceNow: "2026-06-19T00:00:00.000Z" })
+
+    assert.equal(status.advisory.staleCount, 0)
+    assert.equal(status.advisory.currentCount, 1)
+    assert.equal(status.advisory.withFreshnessCount, 1)
+  })
+
+  it("caps stale and expired advisory metadata", () => {
+    const memories = Array.from({ length: 4 }, (_, index) => memory({
+      id: `expired-${index}`,
+      updatedAt: `2026-06-18T0${index}:00:00.000Z`,
+      freshness: { expiresAt: "2026-06-18T00:00:00.000Z" },
+    }))
+
+    const status = buildFreshnessStatus(memories, { projectScopeKey: "project-a", referenceNow: "2026-06-19T00:00:00.000Z", maxNewerMetadata: 2 })
+
+    assert.equal(status.advisory.expiredCount, 4)
+    assert.deepEqual(status.advisory.expired.map((item) => item.id), ["expired-3", "expired-2"])
+  })
+
+  it("rejects invalid since and referenceNow timestamps", () => {
     assert.throws(
       () => buildFreshnessStatus([], { projectScopeKey: "project-a", since: "not-a-date" }),
       /Invalid since timestamp/u,
+    )
+    assert.throws(
+      () => buildFreshnessStatus([], { projectScopeKey: "project-a", referenceNow: "not-a-date" }),
+      /Invalid referenceNow timestamp/u,
     )
   })
 })
