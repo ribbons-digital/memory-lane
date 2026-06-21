@@ -136,10 +136,17 @@ describe("buildFreshnessStatus", () => {
     assert.equal(status.advisory.currentCount, 1)
     assert.equal(status.advisory.expired[0]?.id, "expired")
     assert.equal(status.advisory.expired[0]?.freshness?.classification, "expired")
+    assert.deepEqual(status.advisory.expired[0]?.freshness?.suggestedActions, [
+      "memory-lane update expired --text <updated-memory-text> --dry-run",
+      "memory-lane replace expired --text <new-memory-text> --dry-run",
+      "memory-lane supersede <new-id> expired --dry-run",
+    ])
     assert.equal(status.advisory.stale[0]?.id, "stale")
     assert.equal(status.advisory.stale[0]?.freshness?.classification, "stale")
     assert.equal(status.advisory.stale[0]?.freshness?.staleAnchor, "2026-06-10T00:00:00.000Z")
+    assert.deepEqual(status.advisory.stale[0]?.freshness?.suggestedActions, ["memory-lane update stale --text <updated-memory-text> --dry-run"])
     assert.doesNotMatch(JSON.stringify(status), /SECRET/u)
+    assert.doesNotMatch(JSON.stringify(status), /memory-lane reject|memory-lane delete/u)
   })
 
   it("uses capturedAt before updatedAt for stale windows", () => {
@@ -154,6 +161,8 @@ describe("buildFreshnessStatus", () => {
     assert.equal(status.advisory.staleCount, 0)
     assert.equal(status.advisory.currentCount, 1)
     assert.equal(status.advisory.withFreshnessCount, 1)
+    assert.deepEqual(status.advisory.stale, [])
+    assert.deepEqual(status.advisory.expired, [])
   })
 
   it("caps stale and expired advisory metadata", () => {

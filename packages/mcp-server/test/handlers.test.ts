@@ -313,6 +313,7 @@ test("memory_continuity applies projectPath before reading continuity", async ()
   const engine = engineInTemp(projectB)
   engine.save({ text: "Approved project B checkpoint", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint" })
   engine.refreshScope(projectA)
+  const stale = engine.save({ text: "SECRET stale MCP continuity body", status: "approved", category: "project", scopeType: "project", kind: "project_fact", freshness: { staleAfterDays: 1, capturedAt: "2000-01-01T00:00:00.000Z" } })
   engine.save({ text: "Approved project A checkpoint", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint" })
   engine.save({ text: "Merged PR #18 adding project A continuity hints.", status: "pending", category: "project", scopeType: "project", kind: "project_fact" })
   engine.refreshScope(projectB)
@@ -326,6 +327,9 @@ test("memory_continuity applies projectPath before reading continuity", async ()
   assert.equal(result.data.continuity.pendingContinuity.length, 1)
   assert.match(result.data.continuity.pendingContinuity[0].preview, /project A continuity/u)
   assert.ok(result.data.continuity.warnings.some((warning: any) => warning.code === "mcp-explicit-tools-only"))
+  assert.ok(result.data.continuity.warnings.some((warning: any) => warning.code === "freshness-advisory"))
+  assert.match(result.data.continuity.suggestedActions.join("\n"), new RegExp(`memory-lane update ${stale.memory.id} --text <updated-memory-text> --dry-run`, "u"))
+  assert.doesNotMatch(JSON.stringify(result.data.continuity), /SECRET stale MCP continuity body/u)
   assert.ok(result.data.notes.some((note: string) => /explicit tools only/u.test(note)))
 })
 
@@ -538,7 +542,15 @@ test("memory_status applies projectPath before computing operating agreements", 
 
 test("memory_status passes since and returns freshness metadata without memory text", async () => {
   const engine = engineInTemp(tempDir())
-  engine.save({ text: "Approved private MCP freshness text", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint", source: "session-summary" })
+  engine.save({
+    text: "Approved private MCP freshness text",
+    status: "approved",
+    category: "project",
+    scopeType: "project",
+    kind: "project_checkpoint",
+    source: "session-summary",
+    freshness: { staleAfterDays: 1, capturedAt: "2000-01-01T00:00:00.000Z" },
+  })
   engine.save({ text: "Approved global MCP preference text", status: "approved", category: "preference", scopeType: "global", kind: "preference" })
   engine.suggest("Pending private MCP freshness text")
 
@@ -557,6 +569,8 @@ test("memory_status passes since and returns freshness metadata without memory t
   assert.equal(freshness.newerByKind.preference, 1)
   assert.equal(freshness.newerBySource["session-summary"], 1)
   assert.equal(freshness.newerBySource.manual, 1)
+  assert.equal(freshness.advisory.staleCount, 1)
+  assert.deepEqual(freshness.advisory.stale[0].freshness.suggestedActions, ["memory-lane update " + freshness.advisory.stale[0].id + " --text <updated-memory-text> --dry-run"])
   assert.equal(freshness.newestNewerApproved.length, 2)
   assert.ok(freshness.newestNewerApproved.every((memory: any) => memory.status === "approved"))
   assert.ok(freshness.newestNewerApproved.every((memory: any) => !("text" in memory)))

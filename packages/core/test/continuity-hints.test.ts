@@ -176,7 +176,25 @@ test("continuity hints report expired and stale freshness advisories without tex
   assert.equal(hint?.count, 2)
   assert.deepEqual(hint?.memoryIds.sort(), ["expired", "stale"])
   assert.match(result.suggestedActions.join("\n"), /memory-lane status --json/u)
+  assert.match(result.suggestedActions.join("\n"), /memory-lane update expired --text <updated-memory-text> --dry-run/u)
+  assert.match(result.suggestedActions.join("\n"), /memory-lane replace expired --text <new-memory-text> --dry-run/u)
+  assert.match(result.suggestedActions.join("\n"), /memory-lane supersede <new-id> expired --dry-run/u)
+  assert.match(result.suggestedActions.join("\n"), /memory-lane update stale --text <updated-memory-text> --dry-run/u)
+  assert.doesNotMatch(result.suggestedActions.join("\n"), /memory-lane reject|memory-lane delete/u)
   assert.doesNotMatch(json(result), /SECRET/u)
+})
+
+test("continuity freshness advisory actions are bounded to reported memory ids", () => {
+  const result = buildContinuityHints([
+    memory({ id: "expired-1", freshness: { expiresAt: "2026-06-18T00:00:00.000Z" } }),
+    memory({ id: "expired-2", freshness: { expiresAt: "2026-06-18T00:00:00.000Z" } }),
+    memory({ id: "stale-1", updatedAt: "2026-06-01T00:00:00.000Z", freshness: { staleAfterDays: 1 } }),
+  ], { projectScopeKey: "project-a", maxIds: 1 })
+
+  const hint = result.hints.find((item) => item.code === "freshness-advisory")
+  assert.deepEqual(hint?.memoryIds, ["expired-1"])
+  assert.match(hint?.suggestedActions.join("\n") ?? "", /memory-lane update expired-1 --text <updated-memory-text> --dry-run/u)
+  assert.doesNotMatch(hint?.suggestedActions.join("\n") ?? "", /expired-2|stale-1/u)
 })
 
 test("continuity hints omit freshness advisory when all freshness is current", () => {
