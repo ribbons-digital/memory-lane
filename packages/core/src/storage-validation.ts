@@ -1,6 +1,6 @@
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType, MemorySource,
-  MemoryLifecycleEvent, MemoryKind, MemoryRevisionActor, SaveInput,
+  MemoryLifecycleEvent, MemoryKind, MemoryRevisionActor, MemoryFreshness, SaveInput,
 } from "./types.js"
 
 export const VALID_STATUSES = new Set<MemoryStatus>(["pending", "approved", "rejected", "deleted"])
@@ -102,6 +102,23 @@ function hasValidRevision(value: Record<string, unknown>): boolean {
     && isEnumValue(revision.revisedBy, VALID_REVISION_ACTORS)
 }
 
+function hasAnyFreshnessField(freshness: MemoryFreshness): boolean {
+  return freshness.expiresAt !== undefined
+    || freshness.staleAfterDays !== undefined
+    || freshness.capturedAt !== undefined
+}
+
+function hasValidFreshness(value: Record<string, unknown>): boolean {
+  const freshness = value.freshness
+  if (freshness === undefined) return true
+  if (!isPlainObject(freshness)) return false
+  const candidate = freshness as MemoryFreshness
+  return hasAnyFreshnessField(candidate)
+    && (candidate.expiresAt === undefined || isValidIsoTimestamp(candidate.expiresAt))
+    && (candidate.capturedAt === undefined || isValidIsoTimestamp(candidate.capturedAt))
+    && (candidate.staleAfterDays === undefined || (Number.isInteger(candidate.staleAfterDays) && candidate.staleAfterDays >= 1))
+}
+
 function allowedValues<T extends string>(allowed: Set<T>): string {
   return [...allowed].join(", ")
 }
@@ -129,6 +146,22 @@ export function validateSaveInput(input: SaveInput): void {
   if (input.revision !== undefined && !hasValidRevision({ revision: input.revision })) {
     throw new Error("Invalid revision. Expected optional supersedes/supersededBy/reason, ISO revisedAt, and revisedBy manual|cli|mcp")
   }
+  if (input.freshness !== undefined && !hasValidFreshness({ freshness: input.freshness })) {
+    if (!isPlainObject(input.freshness)) {
+      throw new Error("Invalid freshness. Expected at least one freshness field")
+    }
+    const freshness = input.freshness as Record<string, unknown>
+    if (freshness.expiresAt !== undefined && !isValidIsoTimestamp(freshness.expiresAt)) {
+      throw new Error("Invalid freshness.expiresAt. Expected an ISO timestamp")
+    }
+    if (freshness.capturedAt !== undefined && !isValidIsoTimestamp(freshness.capturedAt)) {
+      throw new Error("Invalid freshness.capturedAt. Expected an ISO timestamp")
+    }
+    if (freshness.staleAfterDays !== undefined && (!Number.isInteger(freshness.staleAfterDays) || (freshness.staleAfterDays as number) < 1)) {
+      throw new Error("Invalid freshness.staleAfterDays. Expected a positive integer")
+    }
+    throw new Error("Invalid freshness. Expected at least one freshness field")
+  }
 }
 
 function normalizeScope(value: Record<string, unknown>): MemoryRecord["scope"] | undefined {
@@ -151,7 +184,7 @@ export function normalizeMemoryRecord(value: unknown): MemoryRecord | undefined 
   const source = normalizeSource(value)
   const scope = normalizeScope(value)
   if (source === undefined || scope === undefined) return undefined
-  if (!hasValidProject(value) || !hasValidKind(value) || !hasValidProvenance(value) || !hasValidRevision(value)) return undefined
+  if (!hasValidProject(value) || !hasValidKind(value) || !hasValidProvenance(value) || !hasValidRevision(value) || !hasValidFreshness(value)) return undefined
   return { ...value, source, scope } as MemoryRecord
 }
 

@@ -68,6 +68,7 @@ export function createNewMemory(input: SaveInput, ctx: SaveContext, scope: Proje
     project: projectSnapshot(scope),
     kind: ctx.kind,
     provenance: input.provenance,
+    ...(input.freshness ? { freshness: input.freshness } : {}),
   }
 }
 

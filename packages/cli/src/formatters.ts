@@ -205,13 +205,21 @@ function revisionSuffix(memory: MemoryRecord): string {
   return label ? ` ${label}` : ""
 }
 
+function freshnessSuffix(memory: MemoryRecord): string {
+  const parts: string[] = []
+  if (memory.freshness?.expiresAt) parts.push(`expires ${memory.freshness.expiresAt.slice(0, 10)}`)
+  if (memory.freshness?.staleAfterDays) parts.push(`stale after ${memory.freshness.staleAfterDays}d`)
+  if (memory.freshness?.capturedAt) parts.push(`captured ${memory.freshness.capturedAt.slice(0, 10)}`)
+  return parts.length ? ` [${parts.join("; ")}]` : ""
+}
+
 export function formatMemories(memories: MemoryRecord[], json: boolean, extraMeta?: Record<string, unknown>): string {
   if (json) {
     return JSON.stringify({ ok: true, data: { memories }, meta: meta({ count: memories.length, ...extraMeta }) }, null, 2)
   }
   if (!memories.length) return "No memories found."
   return memories.map((m) =>
-    `[${m.id}] (${m.scope.type}/${m.category}/${m.kind ?? "?"})${revisionSuffix(m)} ${m.status !== "approved" ? `[${m.status}] ` : ""}${m.text}  (saved ${formatDate(m.createdAt)})`,
+    `[${m.id}] (${m.scope.type}/${m.category}/${m.kind ?? "?"})${revisionSuffix(m)}${freshnessSuffix(m)} ${m.status !== "approved" ? `[${m.status}] ` : ""}${m.text}  (saved ${formatDate(m.createdAt)})`,
   ).join("\n")
 }
 
@@ -261,7 +269,7 @@ function correctionCandidateLines(memory: MemoryRecord): string[] {
 }
 
 function reviewStatusLine(memory: MemoryRecord): string {
-  return `[${memory.id}] ${memory.status} · ${provenanceLabel(memory)} · ${memory.scope.type}/${memory.category}/${memory.kind ?? "misc"}${revisionSuffix(memory)}`
+  return `[${memory.id}] ${memory.status} · ${provenanceLabel(memory)} · ${memory.scope.type}/${memory.category}/${memory.kind ?? "misc"}${revisionSuffix(memory)}${freshnessSuffix(memory)}`
 }
 
 function filterSummary(extraMeta?: Record<string, unknown>): string | undefined {
@@ -296,7 +304,7 @@ export function formatReviewMemories(memories: MemoryRecord[], json: boolean, ex
     for (const memory of memories) {
       lines.push(
         "",
-        `${figures.bullet} [${memory.id}] [${memory.status}] (${memory.scope.type}/${memory.category}/${memory.kind ?? "?"})`,
+        `${figures.bullet} [${memory.id}] [${memory.status}] (${memory.scope.type}/${memory.category}/${memory.kind ?? "?"})${freshnessSuffix(memory)}`,
         `  Preview: ${compactPreview(memory.text)}`,
         `  Suggested: ${suspectMetaAction(memory)}`,
       )
