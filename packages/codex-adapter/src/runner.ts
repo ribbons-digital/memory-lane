@@ -113,6 +113,7 @@ function saveSessionEndCandidates(engine: MemoryEngine, candidates: Awaited<Retu
       source: candidate.source,
       kind: candidate.kind,
       provenance: { ...candidate.provenance, adapter: "codex" },
+      freshness: candidate.freshness,
     })),
     discarded: [],
   }

@@ -1,4 +1,4 @@
-import { containsLikelySecret, normalizeMemoryText, type MemoryEngine, type MemoryRecord } from "@memory-lane/core"
+import { containsLikelySecret, normalizeMemoryText, type MemoryEngine, type MemoryFreshness, type MemoryRecord } from "@memory-lane/core"
 import { createOpenAICompatibleProvider } from "./llm-provider.js"
 import type { LLMProvider, SessionEndInput, SessionEndOptions } from "./types.js"
 
@@ -125,6 +125,28 @@ function resolveProvider(options: SessionEndOptions, env: NodeJS.ProcessEnv): LL
   return undefined
 }
 
+function validIsoTimestamp(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp)) return undefined
+  return new Date(timestamp).toISOString() === value ? value : undefined
+}
+
+function latestMessageTimestamp(messages: SessionEndInput["messages"]): string | undefined {
+  let latest: string | undefined
+  let latestMs = Number.NEGATIVE_INFINITY
+  for (const message of messages) {
+    const timestamp = validIsoTimestamp(message.timestamp)
+    if (!timestamp) continue
+    const ms = Date.parse(timestamp)
+    if (ms > latestMs) {
+      latest = timestamp
+      latestMs = ms
+    }
+  }
+  return latest
+}
+
 export interface SessionEndCandidate {
   text: string
   category: "project"
@@ -137,6 +159,7 @@ export interface SessionEndCandidate {
     lifecycleEvent: "session_end"
     sessionId?: string
   }
+  freshness?: MemoryFreshness
 }
 
 export async function handleSessionEnd(
@@ -170,6 +193,7 @@ export async function handleSessionEnd(
 
   const heading = `## Session Summary (${new Date().toISOString().slice(0, 10)})`
   const text = [heading, "", cleaned].join("\n")
+  const capturedAt = latestMessageTimestamp(input.messages)
 
   return filterDuplicateSessionSummaries(engine, [{
     text,
@@ -183,5 +207,6 @@ export async function handleSessionEnd(
       lifecycleEvent: "session_end",
       sessionId: input.sessionId,
     },
+    ...(capturedAt ? { freshness: { capturedAt } } : {}),
   }])
 }

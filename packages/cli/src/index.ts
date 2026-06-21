@@ -542,6 +542,7 @@ async function handleSessionEndCommand(ctx: CliContext): Promise<void> {
     source: candidate.source,
     kind: candidate.kind,
     provenance: candidate.provenance,
+    freshness: candidate.freshness,
   })
 
   console.log(formatSaveResult(saved, ctx.json))
