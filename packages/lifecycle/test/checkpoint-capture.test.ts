@@ -203,10 +203,12 @@ test("filters duplicate pending and approved checkpoint candidates in current pr
   const engine = engineInTemp(cwd)
   engine.save({ text: "Released v0.2.12.", status: "pending", category: "project", scopeType: "project", kind: "project_checkpoint" })
   engine.save({ text: "Merged PR #19.", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint" })
+  engine.save({ text: "Verification passed: pnpm build and pnpm test.", status: "pending", category: "project", scopeType: "project", kind: "project_checkpoint" })
 
   const candidates = [
     ...extractCheckpointCandidatesFromStop({ cwd, lastUserMessage: "Released v0.2.12." }),
     ...extractCheckpointCandidatesFromStop({ cwd, lastUserMessage: "PR #19 merged." }),
+    ...extractCheckpointCandidatesFromStop({ cwd, lastUserMessage: "Verification passed: pnpm build and pnpm test." }),
     ...extractCheckpointCandidatesFromStop({ cwd, lastUserMessage: "Released v0.2.13." }),
   ]
 

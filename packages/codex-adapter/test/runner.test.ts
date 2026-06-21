@@ -471,6 +471,35 @@ test("stop session-summary intent saves provider summary without raw transcript"
   })
 })
 
+test("stop session-summary duplicate remains quiet without saving another memory", async () => {
+  await withMockSummaryServer("- Decisions made: keep Codex summaries explicit.", async (baseUrl, requests) => {
+    const { engine, configPath } = engineFixture()
+    enableSessionEndSummary(configPath, baseUrl, false)
+    engine.save({
+      text: "## Session Summary (2026-06-20)\n\n- Decisions made: keep Codex summaries explicit.",
+      category: "project",
+      scopeType: "project",
+      status: "pending",
+      source: "session-summary",
+      kind: "session_summary",
+      provenance: { adapter: "codex", lifecycleEvent: "session_end", sessionId: "s" },
+    })
+
+    const output = await runCodexHookCommand("stop", {
+      engine,
+      configPath,
+      env: {} as NodeJS.ProcessEnv,
+      payloadText: stopPayload({ last_user_message: "summarize this session to memory" }),
+    })
+
+    assert.equal(output, "{}")
+    assert.equal(requests.length, 1)
+    const saved = engine.list({ all: true })
+    assert.equal(saved.length, 1)
+    assert.equal(saved[0].provenance?.sessionId, "s")
+  })
+})
+
 test("stop session-summary no-durable provider result remains quiet without debug", async () => {
   await withMockSummaryServer("NO_DURABLE_MEMORY", async (baseUrl) => {
     const { engine, configPath } = engineFixture()
