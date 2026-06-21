@@ -31,6 +31,12 @@ export interface MemoryRevision {
   revisedBy: MemoryRevisionActor
 }
 
+export interface MemoryFreshness {
+  expiresAt?: string
+  staleAfterDays?: number
+  capturedAt?: string
+}
+
 export type MemoryKind =
   | "preference"
   | "personal_context"
@@ -67,6 +73,7 @@ export interface MemoryRecord {
   kind?: MemoryKind
   provenance?: MemoryProvenance
   revision?: MemoryRevision
+  freshness?: MemoryFreshness
 }
 
 export interface FreshnessMemoryMetadata {
@@ -325,6 +332,7 @@ export interface SaveInput {
   kind?: MemoryKind
   provenance?: MemoryProvenance
   revision?: MemoryRevision
+  freshness?: MemoryFreshness
 }
 
 export interface UpdateInput {

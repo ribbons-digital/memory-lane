@@ -88,6 +88,37 @@ function optionalNonNegativeInteger(argv: string[], name: string): number | unde
   return parsed
 }
 
+function optionalPositiveInteger(argv: string[], name: string): number | undefined {
+  const value = flag(argv, name)
+  if (!value) return undefined
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`Invalid --${name}: ${value}. Expected a positive integer.`)
+  }
+  return parsed
+}
+
+function optionalStringFlag(argv: string[], name: string): string | undefined {
+  const value = flag(argv, name)
+  if (!value) return undefined
+  if (value === "true") {
+    throw new Error(`Invalid --${name}: missing value. Expected an ISO timestamp.`)
+  }
+  return value
+}
+
+function optionalFreshness(argv: string[]) {
+  const expiresAt = optionalStringFlag(argv, "expires-at")
+  const capturedAt = optionalStringFlag(argv, "captured-at")
+  const staleAfterDays = optionalPositiveInteger(argv, "stale-after-days")
+  const freshness = {
+    ...(expiresAt !== undefined ? { expiresAt } : {}),
+    ...(capturedAt !== undefined ? { capturedAt } : {}),
+    ...(staleAfterDays !== undefined ? { staleAfterDays } : {}),
+  }
+  return Object.keys(freshness).length ? freshness : undefined
+}
+
 // Strip flags (--foo and --foo value) from argv, return positional args
 function positionals(argv: string[]): string[] {
   const result: string[] = []
@@ -205,6 +236,7 @@ function handleSave(ctx: CliContext): void {
     scopeType: flag(ctx.argv, "scope") as any,
     category: flag(ctx.argv, "category") as any,
     status: (flag(ctx.argv, "status") as any) ?? "approved",
+    freshness: optionalFreshness(ctx.argv),
   })
   console.log(formatSaveResult(result, ctx.json))
 }
@@ -217,6 +249,7 @@ function handleSuggest(ctx: CliContext): void {
     flag(ctx.argv, "scope") as any,
     undefined,
     flag(ctx.argv, "status") as any,
+    optionalFreshness(ctx.argv),
   )
   console.log(formatSaveResult(result, ctx.json))
 }

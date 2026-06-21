@@ -32,7 +32,7 @@ import {
 } from "./engine-helpers.js"
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
-  MemoryKind, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, UpdatePreview, ProjectScope,
+  MemoryKind, MemoryFreshness, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, UpdatePreview, ProjectScope,
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig,
   FreshnessStatus, ContinuityHintSummary, ContinuityReadModel, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
   SupersedeResult, ReplaceResult, MemoryRevisionActor,
@@ -187,6 +187,7 @@ export class MemoryEngine {
       kind: ctx.kind,
       project: dup.project,
       provenance: dup.provenance ?? input.provenance,
+      freshness: input.freshness ?? dup.freshness,
     })
     this.store.append(upgraded)
     this.invalidateEmbedding(dup.id, "updated")
@@ -225,10 +226,11 @@ export class MemoryEngine {
   }
 
   /** Queue a memory suggestion. Defaults to pending, but can auto-approve for explicit user requests. */
-  suggest(text: string, category?: MemoryCategory, scopeType?: MemoryScopeType, kind?: MemoryKind, status?: MemoryStatus): SaveResult {
+  suggest(text: string, category?: MemoryCategory, scopeType?: MemoryScopeType, kind?: MemoryKind, status?: MemoryStatus, freshness?: MemoryFreshness): SaveResult {
     const nextStatus = status ?? "pending"
+    validateSaveInput({ text, category, scopeType, source: "user-suggested", status: nextStatus, kind, freshness })
     if (nextStatus === "pending" && isMetaTaskPromptText(text)) return { status: "skipped", reason: "meta task prompt" }
-    return this.save({ text, category, scopeType, source: "user-suggested", status: nextStatus, kind })
+    return this.save({ text, category, scopeType, source: "user-suggested", status: nextStatus, kind, freshness })
   }
 
   /** Approve a pending memory by id. Returns the updated memory plus mirror warnings, or undefined. */

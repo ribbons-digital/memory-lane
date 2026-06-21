@@ -74,6 +74,57 @@ test("memory_save reports skipped secret without throwing", async () => {
   assert.deepEqual(result.data, { status: "skipped", reason: "secret" })
 })
 
+test("memory_save accepts freshness metadata", async () => {
+  const engine = engineInTemp()
+  const result = parseToolResult(await handleMemorySave(engine, {
+    text: "Temporary MCP fact",
+    expiresAt: "2026-07-01T00:00:00.000Z",
+    staleAfterDays: 30,
+    capturedAt: "2026-06-21T00:00:00.000Z",
+  }))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.status, "saved")
+  assert.equal(result.data.memory.freshness.expiresAt, "2026-07-01T00:00:00.000Z")
+  assert.equal(result.data.memory.freshness.staleAfterDays, 30)
+  assert.equal(result.data.memory.freshness.capturedAt, "2026-06-21T00:00:00.000Z")
+})
+
+test("memory_suggest accepts freshness metadata", async () => {
+  const engine = engineInTemp()
+  const result = parseToolResult(await handleMemorySuggest(engine, {
+    text: "Temporary MCP suggestion",
+    staleAfterDays: 14,
+  }))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.status, "saved")
+  assert.equal(result.data.memory.status, "pending")
+  assert.deepEqual(result.data.memory.freshness, { staleAfterDays: 14 })
+})
+
+test("memory_suggest rejects invalid freshness metadata", async () => {
+  const engine = engineInTemp()
+  const result = parseToolResult(await handleMemorySuggest(engine, {
+    text: "Bad MCP freshness",
+    staleAfterDays: 0,
+  }))
+
+  assert.equal(result.ok, false)
+  assert.match(result.error, /Invalid freshness\.staleAfterDays/u)
+})
+
+test("memory_save rejects empty freshness timestamps", async () => {
+  const engine = engineInTemp()
+  const result = parseToolResult(await handleMemorySave(engine, {
+    text: "Bad MCP expiration",
+    expiresAt: "",
+  }))
+
+  assert.equal(result.ok, false)
+  assert.match(result.error, /Invalid freshness\.expiresAt/u)
+})
+
 test("memory_suggest defaults to pending and can approve explicitly", async () => {
   const engine = engineInTemp()
   const pending = parseToolResult(await handleMemorySuggest(engine, { text: "Review docs before implementation" }))

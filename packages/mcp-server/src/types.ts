@@ -19,6 +19,9 @@ export interface SaveToolInput extends ProjectPathInput {
   category?: MemoryCategory
   scope?: MemoryScopeType
   kind?: MemoryKind
+  expiresAt?: string
+  staleAfterDays?: number
+  capturedAt?: string
 }
 
 export interface SuggestToolInput extends SaveToolInput {

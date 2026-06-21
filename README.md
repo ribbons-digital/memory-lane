@@ -431,6 +431,18 @@ memory-lane obsidian ...          Manage optional Obsidian mirror/import workflo
 
 All commands support `--json` for machine-readable output and `--project <path>` to set the project scope.
 
+### Freshness metadata
+
+`memory-lane save` and `memory-lane suggest` accept optional time-awareness metadata:
+
+```bash
+memory-lane save "Temporary project status" --expires-at 2026-07-01T00:00:00.000Z
+memory-lane suggest "Recheck this after launch" --stale-after-days 30
+memory-lane save "Release note" --captured-at 2026-06-21T00:00:00.000Z
+```
+
+Freshness metadata is advisory in Phase 20 Slice 1. Memory Lane stores, validates, and displays it, but does not automatically delete, hide, refresh, consolidate, or deprioritize memories yet.
+
 ### Checkpoint candidates and review-first capture
 
 `memory-lane review`, `memory-lane review --json`, and MCP `memory_review` label pending memories that look like high-value project progress, such as merged PRs, releases, verification milestones, docs syncs, major fixes, or roadmap decisions. These labels are review-first: approve a checkpoint candidate only if it should become durable project continuity.

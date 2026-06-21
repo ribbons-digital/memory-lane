@@ -207,6 +207,93 @@ describe("CLI integration", () => {
     assert.ok(list.includes("use pnpm"))
   })
 
+  it("save accepts freshness flags", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const output = run([
+      "save",
+      "Temporary status",
+      "--expires-at", "2026-07-01T00:00:00.000Z",
+      "--stale-after-days", "30",
+      "--captured-at", "2026-06-21T00:00:00.000Z",
+      "--json",
+    ], env)
+
+    const payload = JSON.parse(output)
+    assert.equal(payload.data.saved.freshness.expiresAt, "2026-07-01T00:00:00.000Z")
+    assert.equal(payload.data.saved.freshness.staleAfterDays, 30)
+    assert.equal(payload.data.saved.freshness.capturedAt, "2026-06-21T00:00:00.000Z")
+  })
+
+  it("suggest accepts freshness flags", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const output = run([
+      "suggest",
+      "Review this temporary fact later",
+      "--stale-after-days", "14",
+      "--json",
+    ], env)
+
+    const payload = JSON.parse(output)
+    assert.equal(payload.data.saved.status, "pending")
+    assert.equal(payload.data.saved.freshness.staleAfterDays, 14)
+  })
+
+  it("save rejects invalid stale-after-days", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const result = runProcess(["save", "Bad stale days", "--stale-after-days", "0", "--json"], { env })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout, /Invalid --stale-after-days/u)
+  })
+
+  it("save rejects freshness timestamp flags without values", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const result = runProcess(["save", "Missing expiration", "--expires-at", "--json"], { env })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout, /Invalid --expires-at: missing value/u)
+  })
+
+  it("human list and review output show compact freshness labels", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+    run([
+      "save", "Temporary status",
+      "--expires-at", "2026-07-01T00:00:00.000Z",
+      "--stale-after-days", "30",
+      "--captured-at", "2026-06-21T00:00:00.000Z",
+    ], env)
+    run(["suggest", "Review this temporary fact later", "--stale-after-days", "14"], env)
+
+    const list = run(["list"], env)
+    assert.match(list, /expires 2026-07-01/u)
+    assert.match(list, /stale after 30d/u)
+    assert.match(list, /captured 2026-06-21/u)
+
+    const review = run(["review"], env)
+    assert.match(review, /stale after 14d/u)
+  })
+
   it("lists project-scoped memories in non-git directories", () => {
     const project = tempDir()
     const env = {

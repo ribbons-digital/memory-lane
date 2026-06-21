@@ -601,9 +601,11 @@ Todos:
 
 Time-sensitive statements like “I'm traveling next week” or “the build is broken” become wrong as time passes. Separately, automatic summaries, checkpoint candidates, and learning candidates can create overlap. This phase handles both through reviewable revisions and consolidation proposals rather than silent destructive rewrites.
 
+**Status:** Slice 1 implemented locally on `feature/phase-20-expiration-metadata`: optional `freshness` metadata adds `expiresAt`, `staleAfterDays`, and `capturedAt` to memory records/save surfaces with validation and compact rendering. No refresh, consolidation, recall/injection filtering, or cleanup behavior is added in this slice.
+
 Todos:
 
-1. Add optional `expiresAt` and `staleAfterDays` fields to memory records and the save/suggest APIs.
+1. Added optional memory freshness metadata with `expiresAt`, `staleAfterDays`, and `capturedAt` fields to memory records and save/suggest APIs.
 2. Add a `memory-lane refresh` command that scans approved memories, uses an LLM or heuristics to identify stale entries, and presents them as pending revisions or deletions.
 3. Update recall/injection to deprioritize or skip memories that are past their expiration.
 4. Add time metadata to session summaries and checkpoint memories so later refreshes can reason about temporal context.

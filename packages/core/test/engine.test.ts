@@ -3,6 +3,7 @@ import * as path from "node:path"
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { MemoryEngine } from "../src/engine.js"
+import { normalizeMemoryRecord } from "../src/storage-validation.js"
 import { contentHash } from "../src/engine-helpers.js"
 import {
   selectOperatingAgreements,
@@ -79,6 +80,136 @@ describe("MemoryEngine", () => {
     if (r.status === "saved") assert.equal(r.memory.status, "approved")
   })
 
+  it("save persists optional freshness metadata", () => {
+    const e = engine()
+    const result = e.save({
+      text: "Temporary project status expires soon",
+      status: "approved",
+      category: "project",
+      scopeType: "project",
+      kind: "project_fact",
+      freshness: {
+        expiresAt: "2026-07-01T00:00:00.000Z",
+        staleAfterDays: 30,
+        capturedAt: "2026-06-21T00:00:00.000Z",
+      },
+    })
+
+    assert.equal(result.status, "saved")
+    if (result.status !== "saved") throw new Error("expected saved")
+    assert.deepEqual(result.memory.freshness, {
+      expiresAt: "2026-07-01T00:00:00.000Z",
+      staleAfterDays: 30,
+      capturedAt: "2026-06-21T00:00:00.000Z",
+    })
+    assert.deepEqual(e.list()[0].freshness, result.memory.freshness)
+  })
+
+  it("suggest persists optional freshness metadata", () => {
+    const e = engine()
+    const result = e.suggest(
+      "Review this temporary fact later",
+      "project",
+      "project",
+      "project_fact",
+      "pending",
+      { staleAfterDays: 14 },
+    )
+
+    assert.equal(result.status, "saved")
+    if (result.status !== "saved") throw new Error("expected saved")
+    assert.equal(result.memory.status, "pending")
+    assert.deepEqual(result.memory.freshness, { staleAfterDays: 14 })
+  })
+
+  it("approved duplicate upgrade can add freshness metadata", () => {
+    const e = engine()
+    const pending = e.save({ text: "Duplicate temporary fact", status: "pending" })
+    assert.equal(pending.status, "saved")
+
+    const approved = e.save({
+      text: "Duplicate temporary fact",
+      status: "approved",
+      freshness: { expiresAt: "2026-07-01T00:00:00.000Z" },
+    })
+
+    assert.equal(approved.status, "saved")
+    if (approved.status !== "saved") throw new Error("expected saved")
+    assert.equal(approved.memory.status, "approved")
+    assert.deepEqual(approved.memory.freshness, { expiresAt: "2026-07-01T00:00:00.000Z" })
+  })
+
+  it("save rejects invalid freshness metadata", () => {
+    const e = engine()
+
+    assert.throws(() => e.save({
+      text: "Bad expires timestamp",
+      status: "approved",
+      freshness: { expiresAt: "tomorrow" },
+    }), /Invalid freshness\.expiresAt/u)
+
+    assert.throws(() => e.save({
+      text: "Bad captured timestamp",
+      status: "approved",
+      freshness: { capturedAt: "2026-06-21" },
+    }), /Invalid freshness\.capturedAt/u)
+
+    assert.throws(() => e.save({
+      text: "Bad stale days",
+      status: "approved",
+      freshness: { staleAfterDays: 0 },
+    }), /Invalid freshness\.staleAfterDays/u)
+
+    assert.throws(() => e.save({
+      text: "Empty freshness",
+      status: "approved",
+      freshness: {},
+    }), /Invalid freshness/u)
+
+    assert.throws(() => e.save({
+      text: "Null freshness",
+      status: "approved",
+      freshness: null as any,
+    }), /Invalid freshness/u)
+  })
+
+  it("suggest validates freshness before meta-task filtering", () => {
+    const e = engine()
+
+    assert.throws(() => e.suggest(
+      "Task: Review this code quality change",
+      "project",
+      "project",
+      "project_fact",
+      "pending",
+      { expiresAt: "tomorrow" },
+    ), /Invalid freshness\.expiresAt/u)
+  })
+
+  it("historical records without freshness remain valid", () => {
+    const e = engine()
+    const result = e.save({ text: "Historical shape remains valid", status: "approved" })
+    assert.equal(result.status, "saved")
+    const memory = e.list()[0]
+    assert.equal(memory.freshness, undefined)
+  })
+
+  it("normalization rejects malformed freshness metadata", () => {
+    const base = {
+      id: "freshness-invalid",
+      status: "approved",
+      text: "Bad stored freshness",
+      category: "project",
+      scope: { type: "project" },
+      source: "manual",
+      createdAt: "2026-06-21T00:00:00.000Z",
+      updatedAt: "2026-06-21T00:00:00.000Z",
+    }
+
+    assert.equal(normalizeMemoryRecord({ ...base, freshness: { expiresAt: "tomorrow" } }), undefined)
+    assert.equal(normalizeMemoryRecord({ ...base, freshness: { staleAfterDays: 0 } }), undefined)
+    assert.equal(normalizeMemoryRecord(base)?.freshness, undefined)
+  })
 
   it("save stores optional memory provenance", () => {
     const e = engine()

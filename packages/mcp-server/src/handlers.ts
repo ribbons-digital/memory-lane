@@ -35,6 +35,15 @@ export function applyProjectPath(engine: MemoryEngine, projectPath?: string): vo
   if (projectPath) engine.refreshScope(projectPath)
 }
 
+function inputFreshness(input: { expiresAt?: string; staleAfterDays?: number; capturedAt?: string }) {
+  const freshness = {
+    ...(input.expiresAt !== undefined ? { expiresAt: input.expiresAt } : {}),
+    ...(input.staleAfterDays !== undefined ? { staleAfterDays: input.staleAfterDays } : {}),
+    ...(input.capturedAt !== undefined ? { capturedAt: input.capturedAt } : {}),
+  }
+  return Object.keys(freshness).length ? freshness : undefined
+}
+
 function saveData(result: SaveResult): { status: "saved"; memory: MemoryRecord; warnings?: string[] } | { status: "skipped"; reason: string; warnings?: string[] } {
   const warnings = result.warnings ? { warnings: result.warnings } : {}
   if (result.status === "saved") return { status: "saved", memory: result.memory, ...warnings }
@@ -72,6 +81,7 @@ export async function handleMemorySave(engine: MemoryEngine, input: SaveToolInpu
       kind: input.kind,
       status: "approved",
       source: "manual",
+      freshness: inputFreshness(input),
     })
     return jsonContent(envelope(engine, saveData(result)))
   } catch (error) {
@@ -82,7 +92,7 @@ export async function handleMemorySave(engine: MemoryEngine, input: SaveToolInpu
 export async function handleMemorySuggest(engine: MemoryEngine, input: SuggestToolInput) {
   try {
     applyProjectPath(engine, input.projectPath)
-    const result = engine.suggest(input.text, input.category, input.scope, input.kind, input.status)
+    const result = engine.suggest(input.text, input.category, input.scope, input.kind, input.status, inputFreshness(input))
     return jsonContent(envelope(engine, saveData(result)))
   } catch (error) {
     return jsonContent(errorEnvelope(error))

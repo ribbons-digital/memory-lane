@@ -50,6 +50,9 @@ const provenanceSchema = z.string().min(1).describe("Optional adapter/event filt
 const projectPath = z.string().optional().describe("Optional directory to use for project-scoped Memory Lane operations")
 const since = z.string().optional().describe("Optional ISO timestamp used to report approved visible-memory freshness since that time")
 const memoryId = z.string().min(1).describe("Memory Lane memory id")
+const expiresAt = z.string().optional().describe("Optional ISO timestamp after which the memory content should be considered expired by future refresh behavior")
+const staleAfterDays = z.number().int().positive().optional().describe("Optional positive day count after which the memory should be reconsidered as stale by future refresh behavior")
+const capturedAt = z.string().optional().describe("Optional ISO timestamp for the event/session time represented by the memory")
 
 export interface CreateMemoryLaneMcpServerOptions {
   engine: MemoryEngine
@@ -70,6 +73,9 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         category: categorySchema.optional(),
         scope: scopeSchema.optional(),
         kind: kindSchema.optional(),
+        expiresAt,
+        staleAfterDays,
+        capturedAt,
         projectPath,
       },
     },
@@ -87,6 +93,9 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         scope: scopeSchema.optional(),
         kind: kindSchema.optional(),
         status: suggestStatusSchema.optional(),
+        expiresAt,
+        staleAfterDays,
+        capturedAt,
         projectPath,
       },
     },

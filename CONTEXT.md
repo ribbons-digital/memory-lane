@@ -99,6 +99,10 @@ _Avoid_: Harness-native skill, automatic checklist enforcement, background rule 
 A pending project-scoped procedure memory suggested from bounded tool evidence only when a failed shell action is followed by a safe successful recovery, such as a failed npm command followed by a successful pnpm command. The saved text uses compact templates and omits raw stdout, stderr, transcripts, and secrets.
 _Avoid_: Raw tool-output memory, automatic approval, failure log, background learning
 
+**Memory freshness metadata**:
+Optional time-awareness metadata on a memory record describing when its content expires, when it should be reconsidered as stale, or what event/session time it represents. It is advisory until explicit refresh, consolidation, recall, or injection behavior uses it; it is not a new memory status.
+_Avoid_: Expired status, automatic deletion, freshness notice, lifecycle continuity signal
+
 **Scope hygiene candidate**:
 An approved visible memory whose scope metadata may be broader than its content warrants, such as a global memory that appears to describe a specific project, repository, session, checkpoint, release, or implementation detail. It is an inspection signal only; Memory Lane does not automatically rescope, delete, reject, or supersede it.
 _Avoid_: Scope error, automatic cleanup, rejected memory, rescope recommendation
