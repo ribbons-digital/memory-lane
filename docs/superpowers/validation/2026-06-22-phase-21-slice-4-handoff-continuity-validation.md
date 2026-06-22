@@ -37,6 +37,11 @@ Focused follow-up for proposal-preview absence from diagnostics surfaces:
 node --import tsx - <<'NODE'
 // package-level synthetic temp-store check for doctor()/MCP memory_status
 NODE
+
+node --import tsx - <<'NODE'
+// package-level synthetic temp-store check for the exact CLI status --json formatter path:
+// formatDoctor(engine.doctor(), true)
+NODE
 ```
 
 Required verification, in the spec-required order:
@@ -97,7 +102,7 @@ Source: real CLI entrypoint against isolated storage and MCP package handlers.
 | `memory-lane status --json` | Included `continuityBaseline` with state file/readable/source metadata; no memory text in baseline diagnostics. |
 | `memory-lane doctor --json` | Included `continuityBaseline` with state file/readable/source metadata; no memory text in baseline diagnostics. |
 | MCP `memory_status` | Package handler returned `continuityBaseline` diagnostics; no memory text in baseline diagnostics. |
-| Proposal previews absent from status/doctor/MCP status | Focused synthetic package-level check used a pending review-mode proposal containing `Synthetic proposal preview sentinel for status safety`. The continuity read model contained `handoffProposal` and the synthetic preview. `doctor()` and MCP `memory_status` contained neither `handoffProposal` nor the synthetic preview, while both retained `continuityBaseline` diagnostics. |
+| Proposal previews absent from status/doctor/MCP status | Focused synthetic package-level checks used pending review-mode proposals containing sentinel preview text. The continuity read models contained `handoffProposal` and the synthetic preview. `doctor()`, the exact CLI `status --json` formatter path (`formatDoctor(engine.doctor(), true)`), and MCP `memory_status` contained neither `handoffProposal` nor the synthetic preview, while retaining `continuityBaseline` diagnostics where applicable. |
 | Handoff mode matrix | `manual`: active true, inspection-first note. `review`: active true, read-only proposal note. `automatic`: active false, declared/inactive note. |
 | MCP continuity | Package-level MCP continuity path was exercised; live desktop MCP client was not available. |
 
