@@ -471,6 +471,11 @@ test("memory_status returns doctor counts without memory text", async () => {
   assert.equal(result.data.status.handoffModeNote, "Current inspection-first behavior is active.")
   assert.equal(result.data.status.handoffProposal, undefined)
   const expectedScope = engine.getProjectScope()?.key ?? "none"
+  assert.equal(result.data.status.continuityBaseline.projectScope, expectedScope)
+  assert.equal(result.data.status.continuityBaseline.source, "none")
+  assert.equal(result.data.status.continuityBaseline.readable, true)
+  assert.match(result.data.status.continuityBaseline.stateFile, /continuity-baselines\.json$/u)
+  assert.doesNotMatch(JSON.stringify(result.data.status.continuityBaseline), /Do not leak this exact memory text|Do not leak this pending text/u)
   assert.equal(result.data.status.projectScope, expectedScope)
   assert.equal(result.meta.projectScope, expectedScope)
   assert.ok(Array.isArray(result.data.notes))

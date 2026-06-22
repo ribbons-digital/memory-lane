@@ -508,6 +508,8 @@ For MCP clients, call `memory_continuity({ projectPath })` first for the same co
 
 The continuity read model is read-only. It may include bounded previews of selected memory records, including pending checkpoint candidates that were captured from lifecycle evidence, but it does not inject additional memory bodies into lifecycle prompts, approve pending memories, mutate records, clean up scopes, or replace the review queue. Pending checkpoint captures become approved continuity only after review approval.
 
+SessionStart cross-session freshness uses an advisory per-project baseline marker at `~/.memory-lane/continuity-baselines.json` by default, or `continuity-baselines.json` next to the configured memory JSONL file. The marker stores only project scope keys and timestamps so a new session can notice approved Memory Lane state newer than the prior baseline. It is not a memory source of truth, is safe to delete, and is ignored when lifecycle context policy is `off`. Marker handling does not write memory records, inject handoff bodies, approve/reject/cleanup memories, capture transcripts/tool output, or activate automatic handoff mode. `memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` expose text-free `continuityBaseline` diagnostics.
+
 ### Continuity hints
 
 `memory-lane dashboard`, `memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` include read-only continuity hints. Hints are metadata-only: they may include memory ids, scope, category, kind, source, provenance, timestamps, and revision relationships, but they do not include memory text in status/MCP surfaces. Slice 4 only exposes deterministic metadata hints; natural-language workstream discovery such as "resume this thread" or "find the right thread" remains a future direction. The human dashboard shows compact hint counts and inspection actions without adding memory text from the hints.
@@ -682,7 +684,7 @@ Values:
 
 - `manual` — current inspection-first behavior. Use explicit CLI/MCP surfaces such as `memory-lane continuity`, `memory-lane status --json`, `memory-lane review`, `memory_list`, `memory_review`, `memory_status`, and `memory_continuity({ projectPath })`.
 - `review` — review-first handoff proposal behavior. Existing pending project-scoped continuity candidates, such as pending session summaries or checkpoint/progress candidates, are assembled into a read-only `handoffProposal` on `memory-lane continuity`, `memory-lane continuity --json`, and MCP `memory_continuity`. Review mode does not generate new summaries, approve pending records, or inject handoff bodies into lifecycle context; approve with existing `memory-lane review` / `memory-lane approve <id>` flows before relying on proposals as handoff state.
-- `automatic` — declared for Phase 21 but inactive in this slice. It is accepted and reported by diagnostics, but runtime currently behaves like `manual`. Future automatic behavior must remain explicit opt-in and budgeted.
+- `automatic` — declared for Phase 21 but inactive. It is accepted and reported by diagnostics, but runtime currently behaves like `manual`. Future automatic behavior must remain explicit opt-in and budgeted.
 
 `memory-lane doctor`, `memory-lane doctor --json`, `memory-lane status --json`, and MCP `memory_status` report `handoffMode`, `handoffModeBehaviorActive`, and `handoffModeNote` without memory bodies or proposal previews. Human `memory-lane status` stays compact; use `status --json` for the full handoff-mode diagnostic fields.
 

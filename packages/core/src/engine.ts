@@ -21,8 +21,14 @@ import {
   hasRealUpdateChange, revisionForSuccessor, revisionForSuperseded, revisionWarnings, sameIdRevision,
 } from "./revisions.js"
 import { isMetaTaskPromptText } from "./meta-task-filter.js"
-import { buildFreshnessStatus } from "./freshness.js"
+import { buildFreshnessStatus, isStrictIsoTimestamp } from "./freshness.js"
 import { buildContinuityHints } from "./continuity-hints.js"
+import {
+  continuityBaselineDiagnostic,
+  defaultContinuityBaselinePath,
+  readContinuityBaseline,
+  writeContinuityBaseline,
+} from "./continuity-baseline.js"
 import { buildContinuityReadModel } from "./continuity-read-model.js"
 import { selectOperatingAgreements, summarizeOperatingAgreements } from "./operating-agreements.js"
 import { buildPreferenceDiagnostics } from "./preference-diagnostics.js"
@@ -35,7 +41,7 @@ import type {
   MemoryKind, MemoryFreshness, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, UpdatePreview, ProjectScope,
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig, HandoffMode,
   FreshnessStatus, ContinuityHintSummary, ContinuityReadModel, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
-  SupersedeResult, ReplaceResult, MemoryRevisionActor,
+  SupersedeResult, ReplaceResult, MemoryRevisionActor, ResolvedContinuityBaseline, ContinuityBaselineDiagnostic,
 } from "./types.js"
 
 function displayValue(value: unknown): string {
@@ -86,6 +92,7 @@ export class MemoryEngine {
   private readonly memPath: string
   private readonly configPath?: string
   private readonly hookDebugLogPath: string
+  private readonly continuityBaselinePath: string
   private readonly integrationPaths?: Partial<IntegrationDiagnosticPaths>
   private readonly env: NodeJS.ProcessEnv | Record<string, string | undefined>
 
@@ -97,6 +104,7 @@ export class MemoryEngine {
     this.config = loadConfig(this.configPath)
     this.embProvider = opts?.embeddingProvider
     this.hookDebugLogPath = opts?.hookDebugLogPath ?? defaultHookDebugLogPath()
+    this.continuityBaselinePath = defaultContinuityBaselinePath(this.memPath)
     this.integrationPaths = opts?.integrationPaths
     this.env = opts?.env ?? process.env
     this.refreshScope()
@@ -152,6 +160,29 @@ export class MemoryEngine {
   getHandoffMode(): HandoffMode {
     const mode = this.config.memory?.handoffMode ?? "manual"
     return mode === "review" || mode === "automatic" ? mode : "manual"
+  }
+
+  /** Resolve the baseline timestamp for cross-session continuity freshness. */
+  resolveContinuityBaseline(inputSince?: string): ResolvedContinuityBaseline {
+    const projectScope = this.scope?.key
+    if (projectScope) {
+      const read = readContinuityBaseline(this.continuityBaselinePath, projectScope)
+      if (read.marker?.lastSeenAt) return { source: "marker", since: read.marker.lastSeenAt }
+    }
+    if (isStrictIsoTimestamp(inputSince)) return { source: "payload", since: inputSince }
+    return { source: "none" }
+  }
+
+  /** Record that Memory Lane evaluated SessionStart continuity for the current project. */
+  recordContinuityBaseline(observedAt?: string): void {
+    const projectScope = this.scope?.key
+    if (!projectScope) return
+    const lastSeenAt = isStrictIsoTimestamp(observedAt) ? observedAt : new Date().toISOString()
+    writeContinuityBaseline(this.continuityBaselinePath, projectScope, lastSeenAt)
+  }
+
+  continuityBaselineDoctor(): ContinuityBaselineDiagnostic {
+    return continuityBaselineDiagnostic(this.continuityBaselinePath, this.scope?.key)
   }
 
   private syncMirrorAndCollectWarnings(): string[] {
@@ -781,6 +812,7 @@ export class MemoryEngine {
       integrations: diagnoseIntegrations({ cwd: this.scope?.cwd ?? null, paths: this.integrationPaths }),
       freshness: this.freshnessStatus({ since: opts?.freshnessSince }),
       continuityHints: this.continuityHints({ since: opts?.freshnessSince }),
+      continuityBaseline: this.continuityBaselineDoctor(),
       operatingAgreements: operatingAgreementSummary,
       preferenceDiagnostics: buildPreferenceDiagnostics(mems, {
         projectScopeKey: this.scope?.key,

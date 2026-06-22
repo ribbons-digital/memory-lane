@@ -1338,6 +1338,47 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(before, after)
   })
 
+  it("resolves and records continuity baseline markers without memory text", () => {
+    const project = tempDir()
+    const memPath = path.join(dir, "baseline-memory.jsonl")
+    const e = new MemoryEngine({ memoryPath: memPath, embeddingsPath: path.join(dir, "baseline-emb.jsonl"), configPath: path.join(dir, "baseline-cfg.json") })
+
+    e.refreshScope(project)
+    const projectKey = fs.realpathSync(project)
+    assert.deepEqual(e.resolveContinuityBaseline("not-a-date"), { source: "none" })
+    assert.deepEqual(e.resolveContinuityBaseline("2026-06-22T00:00:00.000Z"), { source: "payload", since: "2026-06-22T00:00:00.000Z" })
+
+    e.recordContinuityBaseline("2026-06-22T01:00:00.000Z")
+    const markerPath = path.join(path.dirname(memPath), "continuity-baselines.json")
+    const marker = JSON.parse(fs.readFileSync(markerPath, "utf8"))
+    assert.deepEqual(Object.keys(marker.projects), [projectKey])
+    assert.deepEqual(Object.keys(marker.projects[projectKey]).sort(), ["lastSeenAt", "projectScope", "updatedAt"])
+    assert.equal(marker.projects[projectKey].projectScope, projectKey)
+    assert.equal(marker.projects[projectKey].lastSeenAt, "2026-06-22T01:00:00.000Z")
+    assert.doesNotMatch(JSON.stringify(marker), /memory text|prompt|transcript|tool output|branch|model/u)
+
+    assert.deepEqual(e.resolveContinuityBaseline("2026-06-22T02:00:00.000Z"), { source: "marker", since: "2026-06-22T01:00:00.000Z" })
+  })
+
+  it("continuity baseline diagnostics handle corrupt markers without leaking memory text", () => {
+    const project = tempDir()
+    const memPath = path.join(dir, "baseline-corrupt-memory.jsonl")
+    const e = new MemoryEngine({ memoryPath: memPath, embeddingsPath: path.join(dir, "baseline-corrupt-emb.jsonl"), configPath: path.join(dir, "baseline-corrupt-cfg.json") })
+    e.refreshScope(project)
+    const projectKey = fs.realpathSync(project)
+    e.save({ text: "PRIVATE BASELINE MEMORY TEXT", status: "approved", category: "project", scopeType: "project" })
+    fs.writeFileSync(path.join(path.dirname(memPath), "continuity-baselines.json"), "{not-json", "utf8")
+
+    assert.deepEqual(e.resolveContinuityBaseline("also-invalid"), { source: "none" })
+    const report = e.doctor()
+    const baseline = report.continuityBaseline as any
+    assert.equal(baseline.projectScope, projectKey)
+    assert.equal(baseline.source, "none")
+    assert.equal(baseline.readable, false)
+    assert.match(baseline.warning, /unreadable/u)
+    assert.doesNotMatch(JSON.stringify(baseline), /PRIVATE BASELINE MEMORY TEXT/u)
+  })
+
   it("doctor reports context policy config without memory text", () => {
     fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({
       memory: {

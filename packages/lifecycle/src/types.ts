@@ -1,4 +1,4 @@
-import type { ContinuityHintCode, MemoryRecord, MemorySource, SaveResult } from "@memory-lane/core"
+import type { ContinuityHintCode, MemoryRecord, MemorySource, ResolvedContinuityBaseline, SaveResult } from "@memory-lane/core"
 
 export interface LifecycleContext {
   cwd: string
@@ -43,6 +43,7 @@ export interface ContinuityContextDecision {
   newerApprovedCount?: number
   operatingAgreementPrimaryCount?: number
   suggestedActions: string[]
+  continuityBaseline?: ResolvedContinuityBaseline
 }
 
 export interface PromptContinuityIntentDecision {
