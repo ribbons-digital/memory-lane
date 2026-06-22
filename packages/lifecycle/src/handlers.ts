@@ -1,10 +1,10 @@
 import type { MemoryEngine, MemoryProvenance, MemorySource, SaveResult } from "@memory-lane/core"
-import { detectContinuityIntent, isMemoryManagementListIntent, limitsFromContextPolicy, renderContinuityIntentGuidance, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, resolveContextPolicy, selectBaselineMemories, selectMemoriesForInjection, type MemoryInjectionLimits } from "./injection.js"
+import { analyzeAutomaticHandoff, detectContinuityIntent, isMemoryManagementListIntent, isUnsafeAutomaticHandoffPointer, limitsFromContextPolicy, renderContinuityIntentGuidance, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, resolveContextPolicy, selectBaselineMemories, selectMemoriesForInjection, type AutomaticHandoffAnalysis, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
 import { checkpointKeyFromText, extractCheckpointCandidatesFromPostToolUse, extractCheckpointCandidatesFromStop, filterDuplicateCheckpointCandidates } from "./checkpoint-capture.js"
 import { extractCorrectionCandidatesFromStop, filterDuplicateCorrectionCandidates, filterSameTurnCorrectionCandidates } from "./correction-capture.js"
 import { filterDuplicateProcedureCandidates, summarizeToolOutcome } from "./tool-outcomes.js"
-import type { LifecycleResult, MemoryCandidate, MemoryContextDecision, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
+import type { AutomaticHandoffContextDecision, LifecycleResult, MemoryCandidate, MemoryContextDecision, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
 
 function createResult(additionalContext?: string, contextDecision?: MemoryContextDecision): LifecycleResult {
   return { additionalContext, saved: [], discarded: [], contextDecision }
@@ -40,6 +40,29 @@ function composeSessionStartContext(input: {
     : rawInner
   const body = [noticeText, inner].filter((part) => part.trim().length > 0).join("\n\n")
   return [header, body, footer].join("\n")
+}
+
+function automaticHandoffNotice(analysis: AutomaticHandoffAnalysis): string {
+  return analysis.eligibleCount > 0
+    ? "Continuity notice:\n- An approved handoff pointer is available for this project. Inspect Memory Lane continuity before relying on older session context."
+    : ""
+}
+
+function automaticHandoffDecision(input: {
+  active: boolean
+  analysis: AutomaticHandoffAnalysis
+  selectedCount: number
+  budgetOmitted?: boolean
+}): AutomaticHandoffContextDecision {
+  const omittedReasons = [...input.analysis.omittedReasons]
+  if (input.budgetOmitted) omittedReasons.push("budget-or-filter")
+  return {
+    active: input.active,
+    eligibleCount: input.analysis.eligibleCount,
+    selectedCount: input.selectedCount,
+    omittedCount: Math.max(0, input.analysis.eligibleCount - input.selectedCount),
+    omittedReasons: [...new Set(omittedReasons)],
+  }
 }
 
 function continuityDecision(notice: ReturnType<typeof renderContinuityNotice>): MemoryContextDecision["continuity"] {
@@ -210,10 +233,18 @@ export function handleSessionStart(
   const operatingAgreements = engine.operatingAgreementSummary()
   const notice = renderContinuityNotice({ hints, operatingAgreements, since: continuityBaseline.since, maxChars: budget.maxChars })
   notice.continuityBaseline = continuityBaseline
+  const projectScope = engine.getProjectScope()?.key
+  const automaticActive = engine.getHandoffMode() === "automatic"
+  const approvedForAutomatic = automaticActive ? engine.list({ status: "approved" }) : []
+  const automaticAnalysis = automaticActive
+    ? analyzeAutomaticHandoff(approvedForAutomatic, { projectScope })
+    : { eligible: [], eligibleCount: 0, omittedReasons: [] }
+  const noticeText = notice.text
 
   if (policy.mode === "policy-only") {
+    const policyOnlyNoticeText = [notice.text, automaticActive ? automaticHandoffNotice(automaticAnalysis) : ""].filter((text) => text.trim().length > 0).join("\n")
     const guidance = renderMemoryContext({ event: "sessionStart", memories: [], policy })
-    const rendered = composeSessionStartContext({ noticeText: notice.text, memoryContext: guidance, policy })
+    const rendered = composeSessionStartContext({ noticeText: policyOnlyNoticeText, memoryContext: guidance, policy })
     const result = createResult(rendered || undefined, contextDecision({
       event: "sessionStart",
       mode: policy.mode,
@@ -222,28 +253,30 @@ export function handleSessionStart(
       omitted: 0,
       omittedReasons: ["policy-only", ...notice.omittedReasons],
       continuity: continuityDecision(notice),
+      ...(automaticActive ? { automaticHandoff: automaticHandoffDecision({ active: true, analysis: automaticAnalysis, selectedCount: 0 }) } : {}),
     }))
     engine.recordContinuityBaseline(input.since)
     return result
   }
 
-  const remainingChars = Math.max(0, budget.maxChars - (notice.injected ? notice.text.length + 2 : 0))
-  const approved = engine.list({ status: "approved" })
+  const remainingChars = Math.max(0, budget.maxChars - (noticeText ? noticeText.length + 2 : 0))
+  const approved = automaticActive ? approvedForAutomatic : engine.list({ status: "approved" })
   const operatingAgreementIds = new Set([
     ...operatingAgreements.primary.map((agreement) => agreement.id),
     ...operatingAgreements.relatedCandidates.map((agreement) => agreement.id),
   ])
-  const baselineCandidates = approved.filter((memory) => !operatingAgreementIds.has(memory.id))
-  const projectScope = engine.getProjectScope()?.key
+  const baselineCandidates = approved.filter((memory) => !operatingAgreementIds.has(memory.id) && !(automaticActive && isUnsafeAutomaticHandoffPointer(memory, projectScope)))
   const selectionLimits = limitsFromContextPolicy("sessionStart", policy, {
     ...options,
     hardMaxChars: remainingChars,
     targetChars: remainingChars,
     absoluteMaxChars: remainingChars,
   })
-  const selected = selectBaselineMemories(baselineCandidates, { ...selectionLimits, projectScope })
-  const memoryContext = renderMemoryContext({ event: "sessionStart", memories: selected, policy, projectScope })
-  const rendered = composeSessionStartContext({ noticeText: notice.text, memoryContext, policy })
+  const selected = selectBaselineMemories(baselineCandidates, { ...selectionLimits, projectScope, priorityMemories: automaticAnalysis.eligible })
+  const selectedAutomaticCount = automaticAnalysis.eligible.filter((memory) => selected.some((selectedMemory) => selectedMemory.id === memory.id)).length
+  const latestHandoffIds = new Set(automaticAnalysis.eligible.map((memory) => memory.id).filter((id) => selected.some((selectedMemory) => selectedMemory.id === id)))
+  const memoryContext = renderMemoryContext({ event: "sessionStart", memories: selected, policy, projectScope, latestHandoffIds })
+  const rendered = composeSessionStartContext({ noticeText, memoryContext, policy })
   const result = createResult(rendered || undefined, contextDecision({
     event: "sessionStart",
     mode: policy.mode,
@@ -251,6 +284,14 @@ export function handleSessionStart(
     selected: selected.length,
     omitted: Math.max(0, baselineCandidates.length - selected.length),
     continuity: continuityDecision(notice),
+    ...(automaticActive ? {
+      automaticHandoff: automaticHandoffDecision({
+        active: true,
+        analysis: automaticAnalysis,
+        selectedCount: selectedAutomaticCount,
+        budgetOmitted: automaticAnalysis.eligibleCount > 0 && selectedAutomaticCount === 0,
+      }),
+    } : {}),
   }))
   engine.recordContinuityBaseline(input.since)
   return result

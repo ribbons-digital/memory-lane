@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import type { ContinuityHintSummary, MemoryRecord, OperatingAgreementSummary, RecallResult } from "@memory-lane/core"
 import {
+  analyzeAutomaticHandoff,
   shouldSkipAutomaticInjection,
   selectMemoriesForInjection,
   selectBaselineMemories,
@@ -668,4 +669,59 @@ test("selectBaselineMemories skips secrets and deduplicates", () => {
   })
 
   assert.deepEqual(selected.map((m) => m.id), ["2"])
+})
+
+test("analyzeAutomaticHandoff selects latest approved project handoff and omits expired", () => {
+  const memories = [
+    { ...projectMemoryWithUpdatedAt("old", "repo", "Older checkpoint", "2026-06-10T00:00:00.000Z"), kind: "project_checkpoint" as const },
+    { ...projectMemoryWithUpdatedAt("latest", "repo", "Latest session summary", "2026-06-12T00:00:00.000Z"), kind: "session_summary" as const },
+    { ...projectMemoryWithUpdatedAt("expired", "repo", "Expired checkpoint", "2026-06-13T00:00:00.000Z"), kind: "project_checkpoint" as const, freshness: { expiresAt: "2026-06-14T00:00:00.000Z" } },
+    { ...projectMemoryWithUpdatedAt("pending", "repo", "Pending checkpoint", "2026-06-15T00:00:00.000Z"), kind: "project_checkpoint" as const, status: "pending" as const },
+    { ...projectMemoryWithUpdatedAt("other", "other", "Other project checkpoint", "2026-06-16T00:00:00.000Z"), kind: "project_checkpoint" as const },
+  ]
+
+  const analysis = analyzeAutomaticHandoff(memories, { projectScope: "repo", referenceNow: "2026-06-15T00:00:00.000Z" })
+
+  assert.equal(analysis.eligibleCount, 2)
+  assert.deepEqual(analysis.eligible.map((memory) => memory.id), ["latest"])
+  assert.deepEqual(analysis.omittedReasons, ["expired"])
+})
+
+test("analyzeAutomaticHandoff reports no project scope", () => {
+  const analysis = analyzeAutomaticHandoff([
+    { ...projectMemoryWithUpdatedAt("handoff", "repo", "Latest session summary", "2026-06-12T00:00:00.000Z"), kind: "session_summary" as const },
+  ])
+
+  assert.equal(analysis.eligibleCount, 0)
+  assert.deepEqual(analysis.eligible, [])
+  assert.deepEqual(analysis.omittedReasons, ["no-project-scope"])
+})
+
+test("selectBaselineMemories prioritizes automatic handoff pointer within existing budget", () => {
+  const handoff = { ...projectMemoryWithUpdatedAt("handoff", "repo", "Latest approved handoff pointer", "2026-06-10T00:00:00.000Z"), kind: "session_summary" as const }
+  const memories = [
+    projectMemoryWithUpdatedAt("new-1", "repo", "Newer project fact one", "2026-06-20T00:00:00.000Z"),
+    projectMemoryWithUpdatedAt("new-2", "repo", "Newer project fact two", "2026-06-19T00:00:00.000Z"),
+    handoff,
+  ]
+
+  const selected = selectBaselineMemories(memories, {
+    projectScope: "repo",
+    maxItems: 1,
+    targetChars: 1000,
+    hardMaxChars: 1000,
+    absoluteMaxChars: 1000,
+    priorityMemories: [handoff],
+  })
+
+  assert.deepEqual(selected.map((memory) => memory.id), ["handoff"])
+})
+
+test("renderMemoryBlock labels latest approved handoff separately", () => {
+  const handoff = { ...projectMemoryWithUpdatedAt("handoff", "repo", "Latest approved handoff pointer", "2026-06-10T00:00:00.000Z"), kind: "session_summary" as const }
+  const rendered = renderMemoryBlock([handoff], { projectScope: "repo", latestHandoffIds: new Set(["handoff"]) })
+
+  assert.match(rendered, /### Latest approved handoff/u)
+  assert.doesNotMatch(rendered, /### Current project/u)
+  assert.match(rendered, /Latest approved handoff pointer/u)
 })

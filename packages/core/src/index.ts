@@ -1,6 +1,6 @@
 export * from "./types.js"
 export { classifyCheckpointCandidate, type CheckpointCandidateKind, type CheckpointCandidateMetadata } from "./checkpoint-candidates.js"
-export { buildFreshnessStatus } from "./freshness.js"
+export { buildFreshnessStatus, classifyFreshness } from "./freshness.js"
 export { buildContinuityHints } from "./continuity-hints.js"
 export { buildContinuityReadModel } from "./continuity-read-model.js"
 export { buildPreferenceDiagnostics, isPreferenceLikeMemory } from "./preference-diagnostics.js"

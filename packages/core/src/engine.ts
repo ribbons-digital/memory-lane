@@ -21,7 +21,7 @@ import {
   hasRealUpdateChange, revisionForSuccessor, revisionForSuperseded, revisionWarnings, sameIdRevision,
 } from "./revisions.js"
 import { isMetaTaskPromptText } from "./meta-task-filter.js"
-import { buildFreshnessStatus, isStrictIsoTimestamp } from "./freshness.js"
+import { buildFreshnessStatus, classifyFreshness, isStrictIsoTimestamp } from "./freshness.js"
 import { buildContinuityHints } from "./continuity-hints.js"
 import {
   continuityBaselineDiagnostic,
@@ -629,15 +629,54 @@ export class MemoryEngine {
 
   private handoffModeDoctor(): Record<string, unknown> {
     const mode = this.getHandoffMode()
+    const policyMode = this.config.memory?.contextPolicy?.mode ?? "selective"
+    const automaticActive = mode === "automatic" && policyMode !== "off"
     const note = mode === "manual"
       ? "Current inspection-first behavior is active."
       : mode === "review"
         ? "Review mode is active for read-only handoff proposals; approve pending memories before relying on them as handoff state."
-        : "Declared for Phase 21; currently behaves like manual mode."
+        : automaticActive
+          ? "Automatic mode is active for approved, budgeted SessionStart handoff selection; context policy still controls injection."
+          : "Automatic mode is configured but inactive because lifecycle context policy is off."
     return {
       handoffMode: mode,
-      handoffModeBehaviorActive: mode === "manual" || mode === "review",
+      handoffModeBehaviorActive: mode === "manual" || mode === "review" || automaticActive,
       handoffModeNote: note,
+    }
+  }
+
+  private automaticHandoffDoctor(mems: MemoryRecord[]): Record<string, unknown> {
+    const mode = this.getHandoffMode()
+    const policyMode = this.config.memory?.contextPolicy?.mode ?? "selective"
+    const active = mode === "automatic" && policyMode !== "off"
+    const notes: string[] = []
+    let eligibleCount = 0
+
+    if (mode !== "automatic") {
+      notes.push("Automatic handoff selection is inactive because handoff mode is not automatic.")
+    } else if (!this.scope?.key) {
+      notes.push("Automatic handoff selection needs an active project scope.")
+    } else {
+      const referenceNow = new Date().toISOString()
+      eligibleCount = mems.filter((memory) => {
+        if (memory.status !== "approved") return false
+        if (memory.scope.type !== "project" || memory.scope.key !== this.scope?.key) return false
+        if (memory.kind !== "session_summary" && memory.kind !== "project_checkpoint") return false
+        if (containsLikelySecret(memory.text)) return false
+        if (memory.revision?.supersededBy) return false
+        return classifyFreshness(memory, referenceNow) !== "expired"
+      }).length
+      if (policyMode === "off") notes.push("Context policy is off; automatic handoff selection will not inject lifecycle context.")
+      else notes.push("Static eligibility only; SessionStart contextDecision reports selected/omitted counts.")
+    }
+
+    return {
+      automaticHandoffDiagnostics: {
+        mode: active ? "active" : "inactive",
+        policyMode,
+        eligibleCount,
+        notes,
+      },
     }
   }
 
@@ -821,6 +860,7 @@ export class MemoryEngine {
       }),
       ...this.semanticDoctor(mems),
       ...this.handoffModeDoctor(),
+      ...this.automaticHandoffDoctor(mems),
       ...this.contextPolicyDoctor(),
       ...this.memoryFileDoctor(),
       ...this.hookDebugDoctor(),
