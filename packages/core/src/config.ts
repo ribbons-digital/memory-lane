@@ -20,6 +20,7 @@ export const DEFAULT_CONFIG: SemanticMemoryConfig = {
   },
   obsidian: { enabled: false },
   memory: {
+    handoffMode: "manual",
     sessionEndSummary: {
       enabled: false,
       requireConfirmation: true,
@@ -133,10 +134,19 @@ export function validateConfig(config: unknown): SemanticMemoryConfig {
   bool(r.fallbackToAllVisibleOnMiss, "semantic.retrieval.fallbackToAllVisibleOnMiss")
   bool(obj(s.privacy, "semantic.privacy").allowRemoteEmbeddings, "semantic.privacy.allowRemoteEmbeddings")
   validateObsidianConfig(root.obsidian)
-  validateContextPolicyConfig((root.memory as Record<string, unknown> | undefined)?.contextPolicy)
-  validateSessionEndSummaryConfig((root.memory as Record<string, unknown> | undefined)?.sessionEndSummary)
+  const memory = root.memory as Record<string, unknown> | undefined
+  validateHandoffMode(memory?.handoffMode)
+  validateContextPolicyConfig(memory?.contextPolicy)
+  validateSessionEndSummaryConfig(memory?.sessionEndSummary)
   validatePluginsConfig(root.plugins, root.pluginConfig)
   return config as SemanticMemoryConfig
+}
+
+function validateHandoffMode(v: unknown): void {
+  if (v === undefined) return
+  if (v !== "manual" && v !== "review" && v !== "automatic") {
+    throw new ConfigError("memory.handoffMode must be manual, review, or automatic")
+  }
 }
 
 function validateContextPolicyConfig(v: unknown): void {

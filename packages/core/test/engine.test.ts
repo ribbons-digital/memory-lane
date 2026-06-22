@@ -1233,6 +1233,87 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(diagnostics.sessionStart.omittedPreferenceCount, 1)
   })
 
+  it("defaults handoff mode to manual in doctor diagnostics", () => {
+    const e = engine()
+    const report = e.doctor()
+
+    assert.equal(e.getHandoffMode(), "manual")
+    assert.equal(report.handoffMode, "manual")
+    assert.equal(report.handoffModeBehaviorActive, true)
+    assert.equal(report.handoffModeNote, "Current inspection-first behavior is active.")
+  })
+
+  it("accepts configured handoff modes and reports canonical notes", () => {
+    const cases = [
+      { mode: "manual", active: true, note: "Current inspection-first behavior is active." },
+      { mode: "review", active: false, note: "Declared for Phase 21; currently behaves like manual mode." },
+      { mode: "automatic", active: false, note: "Declared for Phase 21; currently behaves like manual mode." },
+    ] as const
+
+    for (const { mode, active, note } of cases) {
+      const configPath = path.join(dir, `cfg-handoff-${mode}.json`)
+      fs.writeFileSync(configPath, JSON.stringify({ memory: { handoffMode: mode } }), "utf8")
+      const e = new MemoryEngine({
+        memoryPath: path.join(dir, `mem-handoff-${mode}.jsonl`),
+        embeddingsPath: path.join(dir, `emb-handoff-${mode}.jsonl`),
+        configPath,
+      })
+      const report = e.doctor()
+
+      assert.equal(e.getHandoffMode(), mode)
+      assert.equal(report.handoffMode, mode)
+      assert.equal(report.handoffModeBehaviorActive, active)
+      assert.equal(report.handoffModeNote, note)
+    }
+  })
+
+  it("rejects invalid handoff mode config", () => {
+    const configPath = path.join(dir, "cfg-invalid-handoff.json")
+    fs.writeFileSync(configPath, JSON.stringify({ memory: { handoffMode: "enabled" } }), "utf8")
+
+    assert.throws(
+      () => new MemoryEngine({
+        memoryPath: path.join(dir, "mem-invalid-handoff.jsonl"),
+        embeddingsPath: path.join(dir, "emb-invalid-handoff.jsonl"),
+        configPath,
+      }),
+      /memory\.handoffMode must be manual, review, or automatic/u,
+    )
+  })
+
+  it("changing handoff mode only changes handoff diagnostics", () => {
+    const configPath = path.join(dir, "cfg-handoff-diff.json")
+    const memoryPath = path.join(dir, "mem-handoff-diff.jsonl")
+    const embeddingsPath = path.join(dir, "emb-handoff-diff.jsonl")
+
+    function reportFor(mode: "manual" | "review" | "automatic") {
+      fs.writeFileSync(configPath, JSON.stringify({ memory: { handoffMode: mode } }), "utf8")
+      const e = new MemoryEngine({ memoryPath, embeddingsPath, configPath })
+      if (!fs.existsSync(memoryPath) || fs.readFileSync(memoryPath, "utf8").trim() === "") {
+        e.save({ text: "Do not leak handoff diff memory text", status: "approved", category: "project", scopeType: "global" })
+      }
+      const report = e.doctor() as Record<string, unknown>
+      const normalized = structuredClone(report) as Record<string, unknown>
+      delete normalized.handoffMode
+      delete normalized.handoffModeBehaviorActive
+      delete normalized.handoffModeNote
+      const freshness = normalized.freshness as { advisory?: { referenceNow?: string } } | undefined
+      if (freshness?.advisory) freshness.advisory.referenceNow = "<reference-now>"
+      return { report, normalized }
+    }
+
+    const manual = reportFor("manual")
+    const review = reportFor("review")
+    const automatic = reportFor("automatic")
+
+    assert.equal(review.report.handoffModeBehaviorActive, false)
+    assert.equal(automatic.report.handoffModeBehaviorActive, false)
+    assert.deepEqual(review.normalized, manual.normalized)
+    assert.deepEqual(automatic.normalized, manual.normalized)
+    assert.doesNotMatch(JSON.stringify(review.report), /Do not leak handoff diff memory text/u)
+    assert.doesNotMatch(JSON.stringify(automatic.report), /Do not leak handoff diff memory text/u)
+  })
+
   it("doctor reports context policy config without memory text", () => {
     fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({
       memory: {
