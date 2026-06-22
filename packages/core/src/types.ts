@@ -442,6 +442,22 @@ export interface PreferenceDiagnostics {
   notes: string[]
 }
 
+export type ContinuityBaselineSource = "marker" | "payload" | "none"
+
+export interface ResolvedContinuityBaseline {
+  source: ContinuityBaselineSource
+  since?: string
+}
+
+export interface ContinuityBaselineDiagnostic {
+  projectScope: string | "none"
+  source: "marker" | "none"
+  stateFile: string
+  readable: boolean
+  since?: string
+  warning?: string
+}
+
 export interface EmbeddingRecord {
   memoryId: string
   memoryUpdatedAt: string

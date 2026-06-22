@@ -1,12 +1,13 @@
 import type { FreshnessClassification, FreshnessMemoryMetadata, FreshnessStatus, FreshnessStatusOptions, MemoryRecord } from "./types.js"
 
-function isValidIsoTimestamp(value: string): boolean {
+export function isStrictIsoTimestamp(value: string | undefined): value is string {
+  if (!value) return false
   const ms = Date.parse(value)
   return Number.isFinite(ms) && new Date(ms).toISOString() === value
 }
 
 function assertValidIsoOption(name: string, value?: string): void {
-  if (value !== undefined && !isValidIsoTimestamp(value)) {
+  if (value !== undefined && !isStrictIsoTimestamp(value)) {
     throw new Error(`Invalid ${name} timestamp: ${value}. Expected an ISO timestamp such as 2026-06-18T00:00:00.000Z`)
   }
 }

@@ -205,14 +205,16 @@ export function handleSessionStart(
   const budget = contextBudget("sessionStart", policy)
   if (policy.mode === "off") return createResult(undefined, contextDecision({ event: "sessionStart", mode: policy.mode, ...budget, selected: 0, omitted: 0, omittedReasons: ["off"] }))
 
-  const hints = engine.continuityHints({ since: input.since })
+  const continuityBaseline = engine.resolveContinuityBaseline(input.since)
+  const hints = engine.continuityHints({ since: continuityBaseline.since })
   const operatingAgreements = engine.operatingAgreementSummary()
-  const notice = renderContinuityNotice({ hints, operatingAgreements, since: input.since, maxChars: budget.maxChars })
+  const notice = renderContinuityNotice({ hints, operatingAgreements, since: continuityBaseline.since, maxChars: budget.maxChars })
+  notice.continuityBaseline = continuityBaseline
 
   if (policy.mode === "policy-only") {
     const guidance = renderMemoryContext({ event: "sessionStart", memories: [], policy })
     const rendered = composeSessionStartContext({ noticeText: notice.text, memoryContext: guidance, policy })
-    return createResult(rendered || undefined, contextDecision({
+    const result = createResult(rendered || undefined, contextDecision({
       event: "sessionStart",
       mode: policy.mode,
       ...budget,
@@ -221,6 +223,8 @@ export function handleSessionStart(
       omittedReasons: ["policy-only", ...notice.omittedReasons],
       continuity: continuityDecision(notice),
     }))
+    engine.recordContinuityBaseline(input.since)
+    return result
   }
 
   const remainingChars = Math.max(0, budget.maxChars - (notice.injected ? notice.text.length + 2 : 0))
@@ -240,7 +244,7 @@ export function handleSessionStart(
   const selected = selectBaselineMemories(baselineCandidates, { ...selectionLimits, projectScope })
   const memoryContext = renderMemoryContext({ event: "sessionStart", memories: selected, policy, projectScope })
   const rendered = composeSessionStartContext({ noticeText: notice.text, memoryContext, policy })
-  return createResult(rendered || undefined, contextDecision({
+  const result = createResult(rendered || undefined, contextDecision({
     event: "sessionStart",
     mode: policy.mode,
     ...budget,
@@ -248,6 +252,8 @@ export function handleSessionStart(
     omitted: Math.max(0, baselineCandidates.length - selected.length),
     continuity: continuityDecision(notice),
   }))
+  engine.recordContinuityBaseline(input.since)
+  return result
 }
 
 export function handleStop(engine: MemoryEngine, input: StopInput, options?: LifecycleHandlerOptions): LifecycleResult {

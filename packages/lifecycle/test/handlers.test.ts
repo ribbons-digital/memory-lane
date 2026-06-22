@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import * as fs from "node:fs"
 import * as path from "node:path"
 import { MemoryEngine, writeConfig } from "@memory-lane/core"
 import { tempDir } from "../../core/test/helpers.js"
@@ -241,10 +242,12 @@ test("session-start off policy injects no baseline context or continuity notice"
   engine.save({ text: "This repo uses pnpm", status: "approved", category: "project", scopeType: "project" })
   saveWorkflowAgreement(engine)
 
+  const baselineFile = engine.continuityBaselineDoctor().stateFile
   const result = handleSessionStart(engine, { cwd: project })
 
   assert.equal(result.additionalContext, undefined)
   assert.equal(result.contextDecision?.continuity, undefined)
+  assert.equal(fs.existsSync(baselineFile), false)
   assert.deepEqual(result.contextDecision, {
     event: "sessionStart",
     mode: "off",
@@ -363,8 +366,60 @@ test("session-start continuity notice reports newer approved state from since", 
   assert.match(result.additionalContext ?? "", /memory-lane status --json --since 2000-01-01T00:00:00.000Z/u)
   assert.doesNotMatch(result.additionalContext ?? "", /PRIVATE NEW CHECKPOINT TEXT/u)
   assert.equal(result.contextDecision?.continuity?.newerApprovedCount, 1)
+  assert.equal(result.contextDecision?.continuity?.continuityBaseline?.source, "payload")
+  assert.equal(result.contextDecision?.continuity?.continuityBaseline?.since, "2000-01-01T00:00:00.000Z")
   assert.deepEqual(result.contextDecision?.continuity?.hintCodes.includes("newer-approved"), true)
   assert.equal("text" in (result.contextDecision?.continuity ?? {}), false)
+})
+
+test("session-start uses prior continuity baseline marker before updating it", () => {
+  const project = tempDir()
+  const projectKey = fs.realpathSync(project)
+  const engine = engineInTemp(project, { contextPolicy: { mode: "policy-only" } })
+
+  const first = handleSessionStart(engine, { cwd: project, since: "2000-01-01T00:00:00.000Z" })
+  assert.doesNotMatch(first.additionalContext ?? "", /There is newer approved Memory Lane state/u)
+  assert.equal(first.contextDecision?.continuity?.continuityBaseline?.source, "payload")
+
+  engine.save({ text: "PRIVATE APPROVED BETWEEN SESSIONS", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint" })
+  const second = handleSessionStart(engine, { cwd: project, since: "2000-01-02T00:00:00.000Z" })
+
+  assert.match(second.additionalContext ?? "", /There is newer approved Memory Lane state since 2000-01-01T00:00:00.000Z/u)
+  assert.doesNotMatch(second.additionalContext ?? "", /PRIVATE APPROVED BETWEEN SESSIONS/u)
+  assert.equal(second.contextDecision?.continuity?.continuityBaseline?.source, "marker")
+  assert.equal(second.contextDecision?.continuity?.continuityBaseline?.since, "2000-01-01T00:00:00.000Z")
+  assert.equal(second.contextDecision?.continuity?.newerApprovedCount, 1)
+
+  const marker = JSON.parse(fs.readFileSync(engine.continuityBaselineDoctor().stateFile, "utf8"))
+  assert.equal(marker.projects[projectKey].lastSeenAt, "2000-01-02T00:00:00.000Z")
+  assert.equal(engine.list({ all: true }).length, 1)
+})
+
+test("session-start continuity baseline is project scoped", () => {
+  const projectA = tempDir()
+  const projectB = tempDir()
+  const engine = engineInTemp(projectA, { contextPolicy: { mode: "policy-only" } })
+
+  handleSessionStart(engine, { cwd: projectB, since: "2000-01-01T00:00:00.000Z" })
+  engine.refreshScope(projectB)
+  engine.save({ text: "PRIVATE PROJECT B CHECKPOINT", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint" })
+
+  const result = handleSessionStart(engine, { cwd: projectA, since: "2000-01-02T00:00:00.000Z" })
+
+  assert.doesNotMatch(result.additionalContext ?? "", /There is newer approved Memory Lane state/u)
+  assert.doesNotMatch(result.additionalContext ?? "", /PRIVATE PROJECT B CHECKPOINT/u)
+  assert.equal(result.contextDecision?.continuity?.continuityBaseline?.source, "payload")
+})
+
+test("session-start ignores invalid since without throwing", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "policy-only" } })
+
+  let result: ReturnType<typeof handleSessionStart> | undefined
+  assert.doesNotThrow(() => { result = handleSessionStart(engine, { cwd: project, since: "2026-06-22T00:00:00Z" }) })
+
+  assert.equal(result?.contextDecision?.continuity?.continuityBaseline?.source, "none")
+  assert.doesNotMatch(result?.additionalContext ?? "", /Invalid since timestamp/u)
 })
 
 test("session-start tight budget records continuity budget omission", () => {
@@ -407,6 +462,7 @@ test("session-start selective policy uses configured item budget", () => {
       newerApprovedCount: undefined,
       operatingAgreementPrimaryCount: 0,
       suggestedActions: [],
+      continuityBaseline: { source: "none" },
     },
     omittedReasons: ["budget-or-filter"],
   })
