@@ -8,7 +8,8 @@ This roadmap now centers on a continuity-first sequence:
 4. Make global personal preferences consistently available through a bounded preference layer.
 5. Add harness-neutral learning features only after review, freshness, checkpoint, and preference foundations are in place.
 6. Add deeper time-aware staleness/consolidation so continuity does not become misleading.
-7. Graduate to handoff-free sessions only after those safeguards are proven.
+7. Validate the completed read-only/review-first stack through real multi-harness dogfooding before adding heavier automation.
+8. Graduate to handoff-free sessions only after those safeguards are proven.
 
 Earlier Obsidian, pi, MCP, installer, and plugin phases remain part of the roadmap history below, but new implementation should prioritize this continuity order unless the user explicitly chooses a different maintenance slice.
 
@@ -28,8 +29,15 @@ Design implications:
 - New learning features should be review-first by default. They may suggest memories, flag stale continuity, or ask whether to save release/progress/failure/correction/procedure events, but should not silently rewrite the user's memory base.
 - Good defaults and minimal setup matter for first-time users; optional configuration should exist for teams and advanced workflows without making the default path heavy.
 - Token-aware context policy and review hygiene are prerequisites for broader continuity features because seamlessness must not become context pollution.
+- Useful product work should be evidence-led: prefer dogfooding, retrieval metrics, explicit token accounting, and reviewable proposals over adding large invisible automation surfaces.
 
 Each phase lists a focused implementation slice of no more than five todos. If a phase needs more work, add the next slice only after the current slice is complete, keeping the todo order aligned with implementation dependencies.
+
+## Product Learning — agentmemory Comparison
+
+A deep review of `rohitg00/agentmemory` showed useful ideas to adapt without copying its larger surface area. agentmemory's strongest practical lessons are: real retrieval quality work (BM25/vector/graph fusion with metrics), explicit token-budget reporting, robust ingest hygiene at a single boundary, backup/verify integration config writers, and a visible local viewer for debugging memory state. Its risks are also instructive: a very large MCP/tool surface, heavy daemon/runtime dependencies, silent capture tendencies, and many advanced features that are off by default because unrestricted injection and compression can burn context or tokens.
+
+Memory Lane's roadmap should therefore keep its differentiators: JSONL as source of truth, small explicit MCP surface, review-first candidate memories, harness-neutral lifecycle policy, and text-free status/continuity diagnostics. New capabilities inspired by agentmemory should enter as bounded, measurable, reviewable slices: token accounting before token retuning, retrieval evals before retrieval rewrites, consolidation proposals before consolidation apply, and optional viewer/dashboard UX after CLI/MCP surfaces prove useful. Silent auto-consolidation and broad raw transcript/tool-output capture remain out of scope for the default product path.
 
 ## Production Installer
 
@@ -428,8 +436,9 @@ Completed Slice 3 scope:
 Remaining follow-up scope:
 
 1. Add kind preference/deprioritization once real usage shows which memory kinds should be favored or suppressed per lifecycle event.
-2. Consider token-estimation rather than character budgets only if character budgets prove insufficient across target harnesses.
-3. Update MCP/future-adapter guidance as new harnesses consume the shared context policy.
+2. Add read-only token-estimation/reporting for recall, continuity, and lifecycle context decisions once dogfooding shows where character budgets lack visibility. Report estimated tokens used, token budget, truncation, and omission reasons without changing injection behavior.
+3. Consider token-based budget enforcement or retuning only after token reporting plus dogfooding evidence shows character budgets are insufficient across target harnesses.
+4. Update MCP/future-adapter guidance as new harnesses consume the shared context policy.
 
 ## Phase 15 — Auto-Memory Review and Memory Dashboard
 
@@ -601,7 +610,7 @@ Todos:
 
 Time-sensitive statements like “I'm traveling next week” or “the build is broken” become wrong as time passes. Separately, automatic summaries, checkpoint candidates, and learning candidates can create overlap. This phase handles both through reviewable revisions and consolidation proposals rather than silent destructive rewrites.
 
-**Status:** Slice 1 released in `v0.2.15`: optional `freshness` metadata adds `expiresAt`, `staleAfterDays`, and `capturedAt` to memory records/save surfaces with validation and compact rendering. No refresh, consolidation, recall/injection filtering, or cleanup behavior was added in Slice 1. Slice 2 released in `v0.2.16`: repeated session-summary/checkpoint continuity candidates are debounced before writing, and generated session summaries drop obvious Memory Lane review-management chatter without adding destructive consolidation. Slice 3 released in `v0.2.17`: generated session summaries carry advisory `freshness.capturedAt` from existing canonical message timestamps when available; checkpoint timestamps remain deferred because Stop/PostToolUse inputs expose no timestamp. Slice 4 released in `v0.2.18`: existing freshness metadata is classified into read-only advisory status/continuity signals for expired/stale approved visible memories without recall/injection, refresh, consolidation, cleanup, or mutation behavior changes. Slice 5 released in `v0.2.19`: stale/expired freshness advisories include bounded text-free dry-run revision command suggestions through existing status/doctor/MCP status and continuity surfaces, without adding a refresh command or mutation behavior. Slice 6 is implemented locally on `feature/phase-20-human-output-polish`: human status/doctor/continuity output now renders bounded manual dry-run freshness advisory actions without JSON contract changes or behavior changes.
+**Status:** Slice 1 released in `v0.2.15`: optional `freshness` metadata adds `expiresAt`, `staleAfterDays`, and `capturedAt` to memory records/save surfaces with validation and compact rendering. No refresh, consolidation, recall/injection filtering, or cleanup behavior was added in Slice 1. Slice 2 released in `v0.2.16`: repeated session-summary/checkpoint continuity candidates are debounced before writing, and generated session summaries drop obvious Memory Lane review-management chatter without adding destructive consolidation. Slice 3 released in `v0.2.17`: generated session summaries carry advisory `freshness.capturedAt` from existing canonical message timestamps when available; checkpoint timestamps remain deferred because Stop/PostToolUse inputs expose no timestamp. Slice 4 released in `v0.2.18`: existing freshness metadata is classified into read-only advisory status/continuity signals for expired/stale approved visible memories without recall/injection, refresh, consolidation, cleanup, or mutation behavior changes. Slice 5 released in `v0.2.19`: stale/expired freshness advisories include bounded text-free dry-run revision command suggestions through existing status/doctor/MCP status and continuity surfaces, without adding a refresh command or mutation behavior. Slice 6 released in `v0.2.20`: human status/doctor/continuity output renders bounded manual dry-run freshness advisory actions without JSON contract changes or behavior changes.
 
 Todos:
 
@@ -613,8 +622,28 @@ Todos:
 6. Added bounded per-id dry-run revision command suggestions for stale/expired freshness advisories using existing `update`, `replace`, and `supersede` commands; no reject/delete suggestions and no mutation behavior changes.
 7. Added bounded human-output polish for freshness advisory actions in `status --since`, `doctor --since`, and `continuity`, keeping output manual/dry-run, text-free, and read-only.
 8. Future: add a deliberately scoped `memory-lane refresh` workflow that presents stale entries as pending revisions or deletions only after read-only advisory signals are proven useful.
-9. Future: update recall/injection to deprioritize or skip memories that are past their expiration only after explicit user approval.
-10. Future: add `memory-lane consolidate --dry-run` and `memory-lane consolidate --apply` to propose duplicate/overlap merges and replacement memories, preserving append-only auditability.
+9. Future: update recall/injection to deprioritize or skip memories that are past their expiration only after explicit user approval and token/reporting evidence shows this reduces context noise.
+10. Future: add `memory-lane consolidate --dry-run` and, only later, a confirmation-gated apply path to propose duplicate/overlap merges and replacement memories, preserving append-only auditability. Silent auto-consolidation is out of scope.
+
+## Phase 20.5 — Dogfooding and Exit Validation
+
+**Goal:** Validate that the completed Phase 13-20 stack is useful, low-noise, and safe across real Memory Lane usage before adding refresh workflows, recall/injection filtering, retrieval rewrites, consolidation apply paths, or Phase 21 handoff-free automation.
+
+This phase is a product validation gate, not a feature-expansion phase. It converts the principle "prove safeguards before automation" into explicit evidence: review queue health, continuity usefulness, freshness-advisory usefulness, and context-policy behavior across Claude Code, Codex, pi, and MCP clients where practical.
+
+First validation slice scope:
+
+1. Dogfood existing surfaces only: `memory-lane review`, `memory-lane dashboard`, `memory-lane continuity`, `memory-lane status --since`, `memory-lane doctor --since`, MCP `memory_review`, MCP `memory_status`, MCP `memory_continuity`, and existing session-summary/correction/procedure/checkpoint capture paths.
+2. Record evidence without adding new schema or behavior: candidate counts by kind/source/provenance, false positives, duplicate/noisy candidates, freshness-advisory usefulness, continuity answer quality, and context-policy selected/omitted counts.
+3. Decide whether Phase 20 exits, or whether exactly one evidence-backed follow-up is needed before Phase 21.
+4. Use findings to prioritize later code slices: token-accounting reporting, retrieval-eval foundation, refresh dry-run, consolidation proposals, onboarding hardening, or viewer/dashboard improvements.
+5. Keep validation text-free where it reports memory content: record ids, counts, categories, commands run, and qualitative findings without dumping private memory bodies.
+
+Out of scope for Phase 20.5:
+
+- New commands, MCP tools, config flags, schema fields, or lifecycle behavior.
+- `memory-lane refresh`, recall/injection filtering, token-budget retuning, retrieval rewrites, embeddings/RRF changes, consolidation apply paths, or Phase 21 automatic mode.
+- Raw transcript/tool-output capture or any silent approval/cleanup.
 
 ## Phase 21 — Handoff-Free Sessions
 
@@ -636,6 +665,10 @@ Todos:
 8. Add confidence and noise thresholds: low-confidence summaries or ambiguous progress events stay pending even in automatic mode.
 9. Add safeguards so users can disable handoff-free mode per project or globally.
 10. Update docs to explain the three modes, risks of automatic mode, token-budget behavior, cross-harness continuity behavior, workstream discovery behavior, and how to switch back to manual.
+
+## Future Track — Retrieval Quality and Evaluation
+
+Before adding retrieval features inspired by larger memory systems, Memory Lane should establish an eval-first track. The first slice should define a small reproducible corpus from real dogfooded Memory Lane records and labeled continuity/recall queries, then report recall@k, precision@k, and failure cases for current lexical/semantic search. Only after that should Memory Lane consider RRF-style fusion, session diversification, reranking, graph expansion, or new embedding defaults. JSONL remains the source of truth; any embeddings or retrieval indexes remain rebuildable optional indexes.
 
 ## Deferred improvements
 
