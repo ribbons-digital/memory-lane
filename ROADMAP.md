@@ -629,6 +629,8 @@ Todos:
 
 **Goal:** Validate that the completed Phase 13-20 stack is useful, low-noise, and safe across real Memory Lane usage before adding refresh workflows, recall/injection filtering, retrieval rewrites, consolidation apply paths, or Phase 21 handoff-free automation.
 
+**Status:** Validation completed in `docs/superpowers/validation/2026-06-22-phase-20-5-dogfooding-exit-validation.md`. Verdict: **Exit Phase 20**. Existing CLI review/status/dashboard/continuity surfaces were useful and bounded enough to proceed to Phase 21 design. Current evidence does not justify `memory-lane refresh`, recall/injection filtering, consolidation, retrieval rewrites, token retuning, or viewer work as the immediate next slice. Recommended next slice: **Phase 21 Slice 1 — Handoff Mode Contract and Review-Mode Design**.
+
 This phase is a product validation gate, not a feature-expansion phase. It converts the principle "prove safeguards before automation" into explicit evidence: review queue health, continuity usefulness, freshness-advisory usefulness, and context-policy behavior across Claude Code, Codex, pi, and MCP clients where practical.
 
 First validation slice scope:
