@@ -219,6 +219,48 @@ test("review handoff proposal is bounded and reports omitted pending continuity"
   assert.equal(result.suggestedActions.includes("memory-lane approve pending-1"), false)
 })
 
+test("continuity read model omits workstream discovery without query", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "PR #39 merged workstream discovery design.", kind: "project_checkpoint" }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.workstreamDiscovery, undefined)
+})
+
+test("continuity read model includes workstream discovery for query", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "PR #39 merged workstream discovery design; next action: implement Slice 6a.", kind: "project_checkpoint" }),
+  ], { projectScopeKey: "project-a", query: "resume workstream discovery" })
+
+  assert.equal(result.workstreamDiscovery?.query, "resume workstream discovery")
+  assert.equal(result.workstreamDiscovery?.intent, "resume")
+  assert.deepEqual(result.workstreamDiscovery?.candidates.map((candidate) => candidate.id), ["checkpoint"])
+})
+
+test("memory engine continuity query is read-only", () => {
+  const dir = tempDir()
+  const project = path.join(dir, "project")
+  fs.mkdirSync(project)
+  fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "engine-project" }))
+  const memoryPath = path.join(dir, "memory.jsonl")
+  const row = JSON.stringify(memory({ id: "checkpoint", text: "PR #39 merged workstream discovery design.", scope: { type: "project", key: "engine-project" }, kind: "project_checkpoint" }))
+  fs.writeFileSync(memoryPath, `${row}\n`)
+
+  const engine = new MemoryEngine({
+    memoryPath,
+    embeddingsPath: path.join(dir, "embeddings.jsonl"),
+    configPath: path.join(dir, "config.json"),
+  })
+  engine.refreshScope(project)
+
+  const before = fs.readFileSync(memoryPath, "utf8")
+  const result = engine.continuity({ caller: "core", query: "where was workstream discovery implemented" })
+  const after = fs.readFileSync(memoryPath, "utf8")
+
+  assert.equal(result.workstreamDiscovery?.candidates[0]?.id, "checkpoint")
+  assert.equal(after, before)
+})
+
 test("review handoff proposal is omitted without project scope or pending continuity", () => {
   const noScope = buildContinuityReadModel([
     memory({ id: "global-pending", text: "## Session Summary\nGlobal", status: "pending", category: "preference", scope: { type: "global" }, kind: "session_summary", source: "session-summary" }),

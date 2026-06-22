@@ -1215,7 +1215,50 @@ describe("CLI integration", () => {
     assert.ok(parsed.data.warnings.some((item: any) => item.code === "pending-continuity-newer-than-approved"))
     assert.ok(parsed.data.warnings.some((item: any) => item.code === "freshness-advisory"))
     assert.match(parsed.data.suggestedActions.join("\n"), /memory-lane update stale-continuity --text <updated-memory-text> --dry-run/u)
+    assert.equal(parsed.data.workstreamDiscovery, undefined)
     assert.doesNotMatch(output.stdout, /SECRET stale continuity body/u)
+  })
+
+  it("continuity --query --json returns workstream discovery candidates", () => {
+    const dir = tempDir()
+    const project = path.join(dir, "project")
+    fs.mkdirSync(project)
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-discovery-json" }))
+    const mem = path.join(dir, "memory.jsonl")
+    const env = { MEMORY_LANE_FILE: mem, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json") }
+    writeMemoryRecords(mem, [
+      { id: "checkpoint", text: "Merged PR #39 from branch docs/phase-21-workstream-discovery at commit 84692b9 for workstream discovery implementation.", category: "project", scope: { type: "project", key: "cli-discovery-json" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" },
+      { id: "global", text: "Global workstream discovery note", category: "project", scope: { type: "global" }, status: "approved", source: "manual", kind: "project_fact", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" },
+    ] as MemoryRecord[])
+
+    const output = runProcess(["continuity", "--query", "where was workstream discovery implemented", "--json"], { env, cwd: project })
+    assert.equal(output.status, 0, output.stderr)
+    const parsed = JSON.parse(output.stdout)
+    assert.equal(parsed.data.workstreamDiscovery.query, "where was workstream discovery implemented")
+    assert.deepEqual(parsed.data.workstreamDiscovery.candidates.map((candidate: any) => candidate.id), ["checkpoint"])
+    assert.deepEqual(parsed.data.workstreamDiscovery.candidates[0].references.pullRequests, ["#39"])
+    assert.equal(parsed.data.workstreamDiscovery.candidates[0].references.branches[0], "docs/phase-21-workstream-discovery")
+  })
+
+  it("continuity --query human output includes compact workstream discovery", () => {
+    const dir = tempDir()
+    const project = path.join(dir, "project")
+    fs.mkdirSync(project)
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-discovery-human" }))
+    const mem = path.join(dir, "memory.jsonl")
+    const env = { MEMORY_LANE_FILE: mem, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json"), NO_COLOR: "1" }
+    writeMemoryRecords(mem, [
+      { id: "checkpoint", text: "Merged PR #39 from branch docs/phase-21-workstream-discovery at commit 84692b9 for workstream discovery implementation. Long private body should stay bounded in preview only.", category: "project", scope: { type: "project", key: "cli-discovery-human" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" },
+    ] as MemoryRecord[])
+
+    const output = runProcess(["continuity", "--query", "where was workstream discovery implemented"], { env, cwd: project })
+    assert.equal(output.status, 0, output.stderr)
+    assert.match(output.stdout, /Workstream discovery/u)
+    assert.match(output.stdout, /\[checkpoint\]/u)
+    assert.match(output.stdout, /topic:workstream/u)
+    assert.match(output.stdout, /PR #39/u)
+    assert.match(output.stdout, /branch docs\/phase-21-workstream-discovery/u)
+    assert.match(output.stdout, /commit 84692b9/u)
   })
 
   it("continuity human output is compact and labels pending continuity", () => {

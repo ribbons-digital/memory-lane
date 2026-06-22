@@ -416,7 +416,8 @@ memory-lane review --provenance pi/session_end Filter pending review by adapter/
 memory-lane review --suspect-meta Show likely old pending operational prompt pollution only
 memory-lane review --suspect-meta --include-approved Show pending+approved suspect pollution
 memory-lane dashboard [--all]     Compact continuity/review overview without long memory bodies
-memory-lane continuity [--json]   Canonical continuity read model for resumption/status questions
+memory-lane continuity [--json] [--query <text>]
+                                  Canonical continuity read model, with optional workstream discovery
 memory-lane agreements            Show approved operating agreements for the current project/global scope
 memory-lane update <id>           Revise an active memory with the same id
 memory-lane supersede <new-id> <old-id...> Link approved old memories to an approved successor
@@ -504,15 +505,17 @@ memory-lane agreements --all
 
 Use `memory-lane continuity --json` as the canonical CLI surface for continuity questions such as “what were we last working on?”, “what changed?”, “what did we accomplish?”, “what should we do next?”, and project status/resumption checks. The read model combines latest approved project/global continuity, pending continuity review candidates, freshness, operating-agreement metadata, continuity hints, warnings, suggested actions, and harness guidance in one bounded response.
 
-For MCP clients, call `memory_continuity({ projectPath })` first for the same continuity questions; pass `projectPath` when the desktop/client process is not already scoped to the project. Do not answer continuity questions from `memory_recall` alone. Use recall only as a topic-specific follow-up after continuity inspection, for example when the continuity read model points to an area that needs more detail.
+For topic-specific workstream questions such as “resume building X” or “where was X implemented?”, pass a query: `memory-lane continuity --query "resume building X" --json`. This adds a bounded `workstreamDiscovery` block derived from approved current-project continuity memories, with compact previews, match reasons, provenance/revision metadata, and derived PR/branch/commit/release references when present. Human output includes the same section compactly.
 
-The continuity read model is read-only. It may include bounded previews of selected memory records, including pending checkpoint candidates that were captured from lifecycle evidence, but it does not inject additional memory bodies into lifecycle prompts, approve pending memories, mutate records, clean up scopes, or replace the review queue. Pending checkpoint captures become approved continuity only after review approval.
+For MCP clients, call `memory_continuity({ projectPath })` first for general continuity questions, or `memory_continuity({ projectPath, query: "resume building X" })` for the workstream discovery variant. Pass `projectPath` when the desktop/client process is not already scoped to the project. Do not answer continuity questions from `memory_recall` alone. Use recall only as a topic-specific follow-up after continuity inspection, for example when the continuity read model points to an area that needs more detail.
+
+The continuity read model is read-only. It may include bounded previews of selected memory records, including pending checkpoint candidates and approved workstream discovery pointers, but it does not inject additional memory bodies into lifecycle prompts, approve pending memories, mutate records, clean up scopes, rewrite retrieval, index raw transcripts, create workstream ids, or replace the review queue. Pending checkpoint captures become approved continuity only after review approval.
 
 SessionStart cross-session freshness uses an advisory per-project baseline marker at `~/.memory-lane/continuity-baselines.json` by default, or `continuity-baselines.json` next to the configured memory JSONL file. The marker stores only project scope keys and timestamps so a new session can notice approved Memory Lane state newer than the prior baseline. It is not a memory source of truth, is safe to delete, and is ignored when lifecycle context policy is `off`. Marker handling does not write memory records, inject handoff bodies, approve/reject/cleanup memories, capture transcripts/tool output, or activate automatic handoff mode. `memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` expose text-free `continuityBaseline` diagnostics.
 
 ### Continuity hints
 
-`memory-lane dashboard`, `memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` include read-only continuity hints. Hints are metadata-only: they may include memory ids, scope, category, kind, source, provenance, timestamps, and revision relationships, but they do not include memory text in status/MCP surfaces. Slice 4 only exposes deterministic metadata hints; natural-language workstream discovery such as "resume this thread" or "find the right thread" remains a future direction. The human dashboard shows compact hint counts and inspection actions without adding memory text from the hints.
+`memory-lane dashboard`, `memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` include read-only continuity hints. Hints are metadata-only: they may include memory ids, scope, category, kind, source, provenance, timestamps, and revision relationships, but they do not include memory text in status/MCP surfaces. Query-specific natural-language workstream discovery is available on existing continuity surfaces via `memory-lane continuity --query` and MCP `memory_continuity({ query })`; broader transcript/thread search remains out of scope. The human dashboard shows compact hint counts and inspection actions without adding memory text from the hints.
 
 Current hints report:
 
@@ -772,7 +775,7 @@ The MCP server exposes explicit tools only:
 - `memory_save` — save an approved memory
 - `memory_suggest` — queue a pending suggestion, or save approved when `status: "approved"`
 - `memory_recall` — recall relevant memories for a query
-- `memory_continuity` — canonical continuity read model for project resumption, last-worked-on, accomplished, next-action, and project-status questions
+- `memory_continuity` — canonical continuity read model for project resumption, last-worked-on, accomplished, next-action, and project-status questions; accepts optional `query` for read-only workstream discovery
 - `memory_status` — read Memory Lane counts, config paths, project scope, and integration diagnostics
 - `memory_list` — list memories visible to the current project scope by default
 - `memory_review` — list pending memories for review; supports `kind`, `source`, and `provenance` filters such as `kind: "session_summary"`, `source: "session-summary"`, and `provenance: "pi/session_end"`
@@ -780,7 +783,7 @@ The MCP server exposes explicit tools only:
 - `memory_reject` — reject a memory by id
 - `memory_delete` — soft-delete a memory by id
 
-Use `memory_continuity({ projectPath })` from MCP clients before answering continuity questions such as project resumption, last-worked-on, accomplished, next-action, or project-status prompts. Prefer it over `memory_recall` for continuity; `memory_recall` is a topic-specific follow-up after continuity inspection, not an authority by itself.
+Use `memory_continuity({ projectPath })` from MCP clients before answering continuity questions such as project resumption, last-worked-on, accomplished, next-action, or project-status prompts. Use `memory_continuity({ projectPath, query: "resume building X" })` when the user asks for a specific workstream. Prefer it over `memory_recall` for continuity; `memory_recall` is a topic-specific follow-up after continuity inspection, not an authority by itself.
 
 Use `memory_status` from MCP clients when you want the same kind of read-only setup/status overview that `memory-lane doctor` provides in a terminal. It reports counts and diagnostics only; it does not return raw memory text or run lifecycle hooks. Use filtered `memory_review` calls when you want an MCP client to inspect only pending session summaries or continuity candidates from a specific adapter/event before approving or rejecting them.
 

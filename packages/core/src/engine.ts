@@ -812,11 +812,12 @@ export class MemoryEngine {
     })
   }
 
-  continuity(opts?: { caller?: "cli" | "mcp" | "lifecycle" | "core" }): ContinuityReadModel {
+  continuity(opts?: { caller?: "cli" | "mcp" | "lifecycle" | "core"; query?: string }): ContinuityReadModel {
     return buildContinuityReadModel(this.store.list(), {
       projectScopeKey: this.scope?.key,
       caller: opts?.caller,
       handoffMode: this.getHandoffMode(),
+      query: opts?.query,
     })
   }
 

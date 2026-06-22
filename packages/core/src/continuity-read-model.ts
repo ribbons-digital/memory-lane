@@ -2,6 +2,7 @@ import { classifyCheckpointCandidate } from "./checkpoint-candidates.js"
 import { containsLikelySecret } from "./secret-detection.js"
 import { buildContinuityHints } from "./continuity-hints.js"
 import { buildFreshnessStatus } from "./freshness.js"
+import { discoverWorkstreams } from "./workstream-discovery.js"
 import { selectOperatingAgreements, summarizeOperatingAgreements } from "./operating-agreements.js"
 import type {
   ContinuityMemoryPreview,
@@ -212,6 +213,10 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
   const latestGlobal = approvedGlobal.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
   const hintCodes = new Set(continuityHints.hints.map((hint) => hint.code))
   const warnings = buildWarnings({ projectScope, latestProject, pendingContinuityCandidates, hintCodes, caller: options.caller })
+  const discoveryQuery = options.query?.trim()
+  const workstreamDiscovery = discoveryQuery
+    ? discoverWorkstreams(memories, { projectScopeKey: projectScope, query: discoveryQuery, previewMaxChars })
+    : undefined
 
   const suggestedActions = unique([
     ...requiredContinuityActions(Boolean(pendingContinuityCandidates.length)),
@@ -233,6 +238,7 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
     },
     pendingContinuity,
     ...(handoffProposal ? { handoffProposal } : {}),
+    ...(workstreamDiscovery ? { workstreamDiscovery } : {}),
     freshness,
     continuityHints,
     operatingAgreements,

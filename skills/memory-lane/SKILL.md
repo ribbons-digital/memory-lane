@@ -70,7 +70,7 @@ The command returns approved operating agreement text for the current project pl
 
 ### Continuity hints
 
-Use `memory-lane dashboard` for a compact human overview of continuity hints. Use `memory-lane status --json`, `memory-lane doctor --json`, or MCP `memory_status` when an agent needs text-free metadata about possible stale or overlapping continuity state. Slice 4 only exposes deterministic metadata hints; natural-language workstream discovery such as "resume this thread" or "find the right thread" remains a future direction. Hints are read-only and inspection-first; do not assume they cleaned up, hid, or deprioritized any memory.
+Use `memory-lane dashboard` for a compact human overview of continuity hints. Use `memory-lane status --json`, `memory-lane doctor --json`, or MCP `memory_status` when an agent needs text-free metadata about possible stale or overlapping continuity state. For natural-language workstream discovery such as "resume this thread" or "find where X was implemented", use existing continuity surfaces with a query: `memory-lane continuity --query "..." --json` or MCP `memory_continuity({ projectPath, query: "..." })`. Discovery is read-only and pointer-based; do not assume it cleaned up, hid, deprioritized, or mutated any memory.
 
 ### List (respects project scope by default)
 
@@ -210,7 +210,7 @@ memory-lane codex post-tool-use
 
 Automatic context injection is controlled by `memory.contextPolicy`: `selective` injects bounded selected approved memories inside a guarded `<memory-context>` block, `policy-only` injects guidance to use Memory Lane tools without memory bodies, and `off` disables automatic context injection while preserving explicit CLI/MCP tools and save hooks.
 
-Prompt-time continuity guidance: if the user asks natural questions like “resume building X,” “where was X implemented,” “where are we,” “what were we last working on,” or “what should we work on next,” Memory Lane may inject inspection-first guidance. Treat it as a cue to inspect status/dashboard/recall/roadmap before answering from chat context alone. It is not a memory body and does not mean Memory Lane performed cleanup or saved new progress.
+Prompt-time continuity guidance: if the user asks natural questions like “resume building X,” “where was X implemented,” “where are we,” “what were we last working on,” or “what should we work on next,” Memory Lane may inject inspection-first guidance. Treat it as a cue to inspect `memory-lane continuity --query "..." --json` (or MCP `memory_continuity({ projectPath, query })`), status/dashboard/recall/roadmap before answering from chat context alone. It is not a memory body and does not mean Memory Lane performed cleanup or saved new progress.
 
 ### Lifecycle continuity notices
 
