@@ -346,6 +346,39 @@ test("memory_continuity applies projectPath before reading continuity", async ()
   assert.ok(result.data.notes.some((note: string) => /explicit tools only/u.test(note)))
 })
 
+test("memory_continuity query includes workstream discovery", async () => {
+  const project = tempDir()
+  fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "mcp-workstream-discovery" }))
+  const engine = engineInTemp(project)
+  const saved = engine.save({
+    text: "Merged PR #39 from branch docs/phase-21-workstream-discovery at commit 84692b9 for workstream discovery implementation.",
+    status: "approved",
+    category: "project",
+    scopeType: "project",
+    kind: "project_checkpoint",
+  })
+  assert.equal(saved.status, "saved")
+
+  const result = parseToolResult(await handleMemoryContinuity(engine, { projectPath: project, query: "where was workstream discovery implemented" }))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.continuity.workstreamDiscovery.query, "where was workstream discovery implemented")
+  assert.deepEqual(result.data.continuity.workstreamDiscovery.candidates.map((candidate: any) => candidate.id), [saved.memory.id])
+  assert.deepEqual(result.data.continuity.workstreamDiscovery.candidates[0].references.pullRequests, ["#39"])
+})
+
+test("memory_continuity without query omits workstream discovery", async () => {
+  const project = tempDir()
+  fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "mcp-no-discovery" }))
+  const engine = engineInTemp(project)
+  engine.save({ text: "Merged PR #39 for workstream discovery.", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint" })
+
+  const result = parseToolResult(await handleMemoryContinuity(engine, { projectPath: project }))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.continuity.workstreamDiscovery, undefined)
+})
+
 test("memory_continuity includes pending captured checkpoint candidates", async () => {
   const project = tempDir()
   fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "mcp-captured-checkpoint" }))

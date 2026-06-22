@@ -53,6 +53,7 @@ const memoryId = z.string().min(1).describe("Memory Lane memory id")
 const expiresAt = z.string().optional().describe("Optional ISO timestamp after which the memory content should be considered expired by future refresh behavior")
 const staleAfterDays = z.number().int().positive().optional().describe("Optional positive day count after which the memory should be reconsidered as stale by future refresh behavior")
 const capturedAt = z.string().optional().describe("Optional ISO timestamp for the event/session time represented by the memory")
+const continuityQuery = z.string().optional().describe("Optional query for read-only workstream discovery over approved current-project continuity memories")
 
 export interface CreateMemoryLaneMcpServerOptions {
   engine: MemoryEngine
@@ -161,8 +162,8 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
     "memory_continuity",
     {
       title: "Memory Lane Continuity",
-      description: "Canonical continuity read model for project resumption, last-worked-on, accomplished, next-action, and project-status questions. Prefer this over memory_recall for continuity questions. Pass projectPath for project-scoped results in desktop MCP clients.",
-      inputSchema: { projectPath },
+      description: "Canonical continuity read model for project resumption, last-worked-on, accomplished, next-action, and project-status questions. Prefer this over memory_recall for continuity questions. Pass projectPath for project-scoped results in desktop MCP clients. Pass query for read-only workstream discovery pointers.",
+      inputSchema: { projectPath, query: continuityQuery },
     },
     async (input) => handleMemoryContinuity(engine, input),
   )

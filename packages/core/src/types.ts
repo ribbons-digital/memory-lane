@@ -260,6 +260,50 @@ export interface HandoffProposal {
   notes: string[]
 }
 
+export type WorkstreamDiscoveryIntent = "resume" | "lookup" | "status" | "unknown"
+
+export interface WorkstreamReferences {
+  pullRequests: string[]
+  branches: string[]
+  commits: string[]
+  releases: string[]
+}
+
+export interface WorkstreamCandidate {
+  id: string
+  status: Extract<MemoryStatus, "approved">
+  category: MemoryCategory
+  scope: MemoryScope
+  source: MemorySource
+  createdAt: string
+  updatedAt: string
+  kind?: MemoryKind
+  provenance?: MemoryProvenance
+  revision?: MemoryRevision
+  preview: string
+  score: number
+  matchReasons: string[]
+  references: WorkstreamReferences
+}
+
+export interface WorkstreamDiscoveryWarning {
+  code: "no-project-scope" | "no-topic" | "no-matches"
+  severity: "info" | "warning"
+  message: string
+}
+
+export interface WorkstreamDiscoveryResult {
+  projectScope: string | "none"
+  query: string
+  intent: WorkstreamDiscoveryIntent
+  topicTerms: string[]
+  candidates: WorkstreamCandidate[]
+  omittedCount: number
+  warnings: WorkstreamDiscoveryWarning[]
+  suggestedActions: string[]
+  notes: string[]
+}
+
 export interface ContinuityReadModel {
   projectScope: string | "none"
   generatedAt: string
@@ -274,6 +318,7 @@ export interface ContinuityReadModel {
   }
   pendingContinuity: ContinuityMemoryPreview[]
   handoffProposal?: HandoffProposal
+  workstreamDiscovery?: WorkstreamDiscoveryResult
   freshness: FreshnessStatus
   continuityHints: ContinuityHintSummary
   operatingAgreements: OperatingAgreementSummary
@@ -291,6 +336,7 @@ export interface ContinuityReadModelOptions {
   generatedAt?: string
   caller?: "cli" | "mcp" | "lifecycle" | "core"
   handoffMode?: HandoffMode
+  query?: string
 }
 
 export type WorkflowArea =

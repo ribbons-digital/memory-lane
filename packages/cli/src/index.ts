@@ -428,7 +428,9 @@ function handleAgreements(ctx: CliContext): void {
 }
 
 function handleContinuity(ctx: CliContext): void {
-  console.log(formatContinuityReadModel(ctx.engine.continuity({ caller: "cli" }), ctx.json, { projectScope: ctx.engine.getProjectScope()?.key ?? "none" }))
+  const query = flag(ctx.argv, "query")
+  if (query === "true") throw new Error("Missing value for --query")
+  console.log(formatContinuityReadModel(ctx.engine.continuity({ caller: "cli", query }), ctx.json, { projectScope: ctx.engine.getProjectScope()?.key ?? "none" }))
 }
 
 function handleCompact(ctx: CliContext): void {

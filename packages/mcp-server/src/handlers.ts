@@ -122,7 +122,7 @@ export async function handleMemoryContinuity(engine: MemoryEngine, input: Contin
   try {
     applyProjectPath(engine, input.projectPath)
     return jsonContent(envelope(engine, {
-      continuity: engine.continuity({ caller: "mcp" }),
+      continuity: engine.continuity({ caller: "mcp", query: input.query }),
       notes: [
         "Use memory_continuity for last-worked-on, accomplished, next-action, resume, and project-status questions.",
         "MCP provides explicit tools only; it does not run lifecycle hooks or automatic context injection.",

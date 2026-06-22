@@ -610,6 +610,17 @@ function formatContinuityHintSummary(value: unknown): string | undefined {
   return `Continuity hints: ${value.hintCount} (${codes}). Use memory-lane dashboard for inspection actions.`
 }
 
+function compactReferences(references: ContinuityReadModel["workstreamDiscovery"] extends infer D ? D extends { candidates: Array<infer C> } ? C extends { references: infer R } ? R : never : never : never): string {
+  const refs = references as { pullRequests?: string[]; branches?: string[]; commits?: string[]; releases?: string[] }
+  const parts = [
+    ...(refs.pullRequests ?? []).map((value) => `PR ${value}`),
+    ...(refs.branches ?? []).map((value) => `branch ${value}`),
+    ...(refs.commits ?? []).map((value) => `commit ${value}`),
+    ...(refs.releases ?? []).map((value) => `release ${value}`),
+  ]
+  return parts.join(", ")
+}
+
 export function formatContinuityReadModel(model: ContinuityReadModel, json: boolean, extraMeta?: Record<string, unknown>): string {
   if (json) {
     return JSON.stringify({ ok: true, data: model, meta: meta(extraMeta) }, null, 2)
@@ -638,6 +649,23 @@ export function formatContinuityReadModel(model: ContinuityReadModel, json: bool
     for (const item of model.handoffProposal.items) lines.push(`  [${item.id}] ${item.preview}`)
     lines.push("  Actions:")
     for (const action of model.handoffProposal.suggestedActions) lines.push(`    ${figures.pointerSmall} ${action}`)
+  }
+  if (model.workstreamDiscovery) {
+    lines.push("", colorize("Workstream discovery", "bold"))
+    lines.push(`  Query: ${model.workstreamDiscovery.query}`)
+    if (model.workstreamDiscovery.topicTerms.length) lines.push(`  Topic: ${model.workstreamDiscovery.topicTerms.join(", ")}`)
+    if (model.workstreamDiscovery.candidates.length) {
+      for (const candidate of model.workstreamDiscovery.candidates) {
+        const refs = compactReferences(candidate.references)
+        const meta = [`score ${candidate.score}`, candidate.kind ?? "misc", ...candidate.matchReasons].join(" · ")
+        lines.push(`  [${candidate.id}] ${meta}`)
+        if (refs) lines.push(`    ${refs}`)
+        lines.push(`    ${candidate.preview}`)
+      }
+    } else {
+      lines.push("  No approved current-project candidates matched.")
+    }
+    for (const warning of model.workstreamDiscovery.warnings) lines.push(`  ${figures.warning} ${warning.code}: ${warning.message}`)
   }
   if (model.warnings.length) {
     lines.push("", colorize("Warnings", "yellow"))
