@@ -179,6 +179,70 @@ test("continuity accounts for secret-filtered pending continuity candidates with
   assert.doesNotMatch(JSON.stringify(result), /Next token/u)
 })
 
+test("review handoff proposal is gated to review mode with active project pending continuity", () => {
+  const memories = [
+    memory({ id: "approved", text: "Approved checkpoint", kind: "project_checkpoint", updatedAt: "2026-06-18T08:00:00.000Z" }),
+    memory({ id: "pending", text: "## Session Summary\nNext action: verify review proposal.", status: "pending", kind: "session_summary", source: "session-summary", updatedAt: "2026-06-18T11:00:00.000Z" }),
+  ]
+
+  const manual = buildContinuityReadModel(memories, { projectScopeKey: "project-a", handoffMode: "manual" })
+  const automatic = buildContinuityReadModel(memories, { projectScopeKey: "project-a", handoffMode: "automatic" })
+  const review = buildContinuityReadModel(memories, { projectScopeKey: "project-a", handoffMode: "review" })
+
+  assert.equal(manual.handoffProposal, undefined)
+  assert.equal(automatic.handoffProposal, undefined)
+  assert.equal(review.handoffProposal?.mode, "review")
+  assert.equal(review.handoffProposal?.status, "pending-review")
+  assert.equal(review.handoffProposal?.projectScope, "project-a")
+  assert.equal(review.handoffProposal?.pendingCount, 1)
+  assert.deepEqual(review.handoffProposal?.items.map((item) => item.id), ["pending"])
+  assert.equal(review.handoffProposal?.omittedCount, 0)
+  assert.deepEqual(review.handoffProposal?.suggestedActions, ["memory-lane review --json", "memory-lane approve pending"])
+  assert.ok(review.suggestedActions.includes("memory-lane approve pending"))
+})
+
+test("review handoff proposal is bounded and reports omitted pending continuity", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "pending-1", text: "## Session Summary\nFirst", status: "pending", kind: "session_summary", source: "session-summary", updatedAt: "2026-06-18T09:00:00.000Z" }),
+    memory({ id: "pending-2", text: "## Session Summary\nSecond", status: "pending", kind: "session_summary", source: "session-summary", updatedAt: "2026-06-18T10:00:00.000Z" }),
+    memory({ id: "pending-3", text: "## Session Summary\nThird", status: "pending", kind: "session_summary", source: "session-summary", updatedAt: "2026-06-18T11:00:00.000Z" }),
+  ], { projectScopeKey: "project-a", handoffMode: "review", maxPendingContinuity: 2 })
+
+  assert.equal(result.handoffProposal?.pendingCount, 3)
+  assert.deepEqual(result.handoffProposal?.items.map((item) => item.id), ["pending-3", "pending-2"])
+  assert.equal(result.handoffProposal?.omittedCount, 1)
+  assert.deepEqual(result.handoffProposal?.suggestedActions, [
+    "memory-lane review --json",
+    "memory-lane approve pending-3",
+    "memory-lane approve pending-2",
+  ])
+  assert.equal(result.suggestedActions.includes("memory-lane approve pending-1"), false)
+})
+
+test("review handoff proposal is omitted without project scope or pending continuity", () => {
+  const noScope = buildContinuityReadModel([
+    memory({ id: "global-pending", text: "## Session Summary\nGlobal", status: "pending", category: "preference", scope: { type: "global" }, kind: "session_summary", source: "session-summary" }),
+  ], { handoffMode: "review" })
+  const noPending = buildContinuityReadModel([
+    memory({ id: "approved", text: "Approved checkpoint", kind: "project_checkpoint" }),
+  ], { projectScopeKey: "project-a", handoffMode: "review" })
+
+  assert.equal(noScope.handoffProposal, undefined)
+  assert.equal(noPending.handoffProposal, undefined)
+})
+
+test("review handoff proposal omits secret-filtered candidates", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "secret-pending", text: "## Session Summary\napi_key = sk-1234567890abcdef1234567890abcdef", status: "pending", kind: "session_summary", source: "session-summary", updatedAt: "2026-06-18T11:00:00.000Z" }),
+  ], { projectScopeKey: "project-a", handoffMode: "review" })
+
+  assert.equal(result.status.pendingContinuityCount, 1)
+  assert.equal(result.pendingContinuity.length, 0)
+  assert.equal(result.handoffProposal, undefined)
+  assert.equal(result.suggestedActions.includes("memory-lane approve secret-pending"), false)
+  assert.doesNotMatch(JSON.stringify(result), /sk-1234567890|api_key/u)
+})
+
 test("memory engine continuity returns canonical read model for current scope", () => {
   const dir = tempDir()
   const project = path.join(dir, "project")
