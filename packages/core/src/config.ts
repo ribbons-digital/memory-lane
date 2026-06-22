@@ -209,6 +209,13 @@ function validatePluginsConfig(plugins: unknown, pluginConfig: unknown): void {
   }
 }
 
+function validateConfigOverrides(config: unknown): void {
+  if (!plain(config)) return
+  if (plain(config.memory) && Object.prototype.hasOwnProperty.call(config.memory, "handoffMode")) {
+    validateHandoffMode(config.memory.handoffMode)
+  }
+}
+
 export function loadConfig(configPath?: string): SemanticMemoryConfig {
   const file = configPath ?? getDefaultConfigPath()
   if (!fs.existsSync(file)) {
@@ -219,6 +226,7 @@ export function loadConfig(configPath?: string): SemanticMemoryConfig {
     }
   }
   const raw = JSON.parse(fs.readFileSync(file, "utf8"))
+  validateConfigOverrides(raw)
   return validateConfig(deepMerge(DEFAULT_CONFIG, raw))
 }
 

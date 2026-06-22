@@ -1268,17 +1268,21 @@ You are continuing the same subagent session. Before this run can be accepted, c
   })
 
   it("rejects invalid handoff mode config", () => {
-    const configPath = path.join(dir, "cfg-invalid-handoff.json")
-    fs.writeFileSync(configPath, JSON.stringify({ memory: { handoffMode: "enabled" } }), "utf8")
+    const cases = ["enabled", null]
 
-    assert.throws(
-      () => new MemoryEngine({
-        memoryPath: path.join(dir, "mem-invalid-handoff.jsonl"),
-        embeddingsPath: path.join(dir, "emb-invalid-handoff.jsonl"),
-        configPath,
-      }),
-      /memory\.handoffMode must be manual, review, or automatic/u,
-    )
+    for (const value of cases) {
+      const configPath = path.join(dir, `cfg-invalid-handoff-${String(value)}.json`)
+      fs.writeFileSync(configPath, JSON.stringify({ memory: { handoffMode: value } }), "utf8")
+
+      assert.throws(
+        () => new MemoryEngine({
+          memoryPath: path.join(dir, `mem-invalid-handoff-${String(value)}.jsonl`),
+          embeddingsPath: path.join(dir, `emb-invalid-handoff-${String(value)}.jsonl`),
+          configPath,
+        }),
+        /memory\.handoffMode must be manual, review, or automatic/u,
+      )
+    }
   })
 
   it("changing handoff mode only changes handoff diagnostics", () => {
