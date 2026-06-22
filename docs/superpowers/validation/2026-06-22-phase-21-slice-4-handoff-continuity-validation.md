@@ -31,6 +31,14 @@ pnpm build
 node /tmp/phase21-slice4-validation-runner.mjs
 ```
 
+Focused follow-up for proposal-preview absence from diagnostics surfaces:
+
+```bash
+node --import tsx - <<'NODE'
+// package-level synthetic temp-store check for doctor()/MCP memory_status
+NODE
+```
+
 Required verification, in the spec-required order:
 
 ```bash
@@ -78,7 +86,7 @@ Source: isolated temp storage with synthetic pending continuity candidates.
 | Bounded previews | Max observed synthetic preview length was 41 chars. |
 | Secret-filtering | A synthetic secret-like pending record was omitted from proposal items and did not appear in serialized proposal output. |
 | No mutation | Store snapshot before and after continuity/proposal viewing was identical. |
-| No proposal previews in diagnostics | `doctor()` had no `handoffProposal` field and did not include proposal preview text. |
+| No proposal previews in diagnostics | Focused synthetic check confirmed continuity itself had `handoffProposal` and the synthetic preview text, while `doctor()` had no `handoffProposal` field and did not include the synthetic preview text. |
 
 ### C. Diagnostics surfaces
 
@@ -89,6 +97,7 @@ Source: real CLI entrypoint against isolated storage and MCP package handlers.
 | `memory-lane status --json` | Included `continuityBaseline` with state file/readable/source metadata; no memory text in baseline diagnostics. |
 | `memory-lane doctor --json` | Included `continuityBaseline` with state file/readable/source metadata; no memory text in baseline diagnostics. |
 | MCP `memory_status` | Package handler returned `continuityBaseline` diagnostics; no memory text in baseline diagnostics. |
+| Proposal previews absent from status/doctor/MCP status | Focused synthetic package-level check used a pending review-mode proposal containing `Synthetic proposal preview sentinel for status safety`. The continuity read model contained `handoffProposal` and the synthetic preview. `doctor()` and MCP `memory_status` contained neither `handoffProposal` nor the synthetic preview, while both retained `continuityBaseline` diagnostics. |
 | Handoff mode matrix | `manual`: active true, inspection-first note. `review`: active true, read-only proposal note. `automatic`: active false, declared/inactive note. |
 | MCP continuity | Package-level MCP continuity path was exercised; live desktop MCP client was not available. |
 
