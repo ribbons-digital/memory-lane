@@ -403,14 +403,16 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Start Phase 18: global preference layering/context policy so durable personal preferences are consistently available across projects and harnesses without overpowering project-specific state.
-2. Keep completed Phase 17 behavior review-governed: inferred checkpoint captures remain pending until approval and should continue using existing review/continuity surfaces rather than new commands or automatic approval.
-3. Only after Phase 18 preference foundations should Phase 19 learning enhancements begin.
-4. Keep future learning enhancements harness-neutral. Core/lifecycle should own selection, token budgeting, correction/failure/procedure candidate extraction, and consolidation proposals; adapters for pi, Codex, Claude Code, Cursor, Hermes, etc. should only supply bounded lifecycle evidence and render shared outputs.
-5. Do not add automatic pi `agent_end`, `session_shutdown`, or compaction summarization without a separate supported-event design and explicit approval.
-6. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
-7. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
-8. Only schedule hardening backlog items or deferred improvements from `ROADMAP.md` after explicit user approval or clear real-world user value.
+1. Review and approve the Phase 21 Slice 6 workstream discovery design in `docs/superpowers/specs/2026-06-22-phase-21-workstream-discovery-design.md`.
+2. After the design PR lands, sync main, clean up the design branch/worktree, and create a compact merge checkpoint.
+3. If approved, start Phase 21 Slice 6a implementation: read-only workstream discovery on existing continuity surfaces (`memory-lane continuity --query`, MCP `memory_continuity({ query })`).
+4. Keep the first implementation slice bounded: no persisted workstream ids/schema, no raw transcript indexing, no retrieval rewrite, no lifecycle injection, no new MCP tool family, and no auto-approval/mutation behavior.
+5. Preserve review gates: draft an implementation plan after spec approval, implement a small vertical slice, verify with focused core/CLI/MCP tests plus build/diff-check, request review, and open a PR.
+6. Keep future learning enhancements harness-neutral. Core/lifecycle should own shared continuity semantics, while adapters for pi, Codex, Claude Code, Cursor, Hermes, etc. should only supply bounded lifecycle evidence and render shared outputs.
+7. Do not add automatic pi `agent_end`, `session_shutdown`, or compaction summarization without a separate supported-event design and explicit approval.
+8. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
+9. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
+10. Only schedule hardening backlog items or deferred improvements from `ROADMAP.md` after explicit user approval or clear real-world user value.
 
 ## Suggested skills for future agents
 
