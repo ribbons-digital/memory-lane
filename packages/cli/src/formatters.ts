@@ -518,6 +518,43 @@ function isFreshnessStatus(value: unknown): value is FreshnessStatus {
     && typeof (value as FreshnessStatus).newerGlobalPreferenceCount === "number"
 }
 
+interface FreshnessAdvisoryActionOutput {
+  actions: string[]
+  lines: string[]
+}
+
+function formatFreshnessAdvisoryActionOutput(value: FreshnessStatus, options: { maxActions?: number } = {}): FreshnessAdvisoryActionOutput {
+  const maxActions = options.maxActions ?? 6
+  const totalAdvisoryRecords = value.advisory.expiredCount + value.advisory.staleCount
+  if (totalAdvisoryRecords <= 0 || maxActions <= 0) return { actions: [], lines: [] }
+
+  const actions: string[] = []
+  const seenActions = new Set<string>()
+  let representedRecords = 0
+  const records = [...value.advisory.expired, ...value.advisory.stale]
+  for (const record of records) {
+    const recordActions = (record.freshness?.suggestedActions ?? []).filter((action) => !seenActions.has(action))
+    if (!recordActions.length) continue
+    if (actions.length + recordActions.length > maxActions) break
+    for (const action of recordActions) {
+      actions.push(action)
+      seenActions.add(action)
+    }
+    representedRecords += 1
+  }
+
+  if (!actions.length) return { actions: [], lines: [] }
+  const omittedRecords = Math.max(0, totalAdvisoryRecords - representedRecords)
+  const lines = [
+    "Freshness advisory actions (manual dry-run):",
+    ...actions.map((action) => `  ${colorize(figures.pointerSmall, "cyan")} ${action}`),
+  ]
+  if (omittedRecords > 0) {
+    lines.push(`  ${figures.ellipsis} ${omittedRecords} more stale/expired advisory ${omittedRecords === 1 ? "record" : "records"} omitted; use memory-lane status --json for full ids.`)
+  }
+  return { actions, lines }
+}
+
 export function formatFreshnessSummary(value: unknown): string | undefined {
   if (!isFreshnessStatus(value)) return undefined
   const newerLabel = value.newerApprovedCount === 1 ? "memory" : "memories"
@@ -526,7 +563,9 @@ export function formatFreshnessSummary(value: unknown): string | undefined {
   const advisoryText = advisory
     ? `; advisory: ${advisory.expiredCount} expired, ${advisory.staleCount} stale, ${advisory.currentCount} current with freshness`
     : ""
-  return `Freshness: ${value.newerApprovedCount} newer approved ${newerLabel}${since} (visible approved: ${value.visibleApprovedCount}; project: ${value.newerProjectApprovedCount}; global: ${value.newerGlobalApprovedCount}; global preferences: ${value.newerGlobalPreferenceCount}${advisoryText})`
+  const lines = [`Freshness: ${value.newerApprovedCount} newer approved ${newerLabel}${since} (visible approved: ${value.visibleApprovedCount}; project: ${value.newerProjectApprovedCount}; global: ${value.newerGlobalApprovedCount}; global preferences: ${value.newerGlobalPreferenceCount}${advisoryText})`]
+  lines.push(...formatFreshnessAdvisoryActionOutput(value).lines)
+  return lines.join("\n")
 }
 
 function isOperatingAgreementSummary(value: unknown): value is OperatingAgreementSummary {
@@ -581,7 +620,11 @@ export function formatContinuityReadModel(model: ContinuityReadModel, json: bool
     lines.push("", colorize("Warnings", "yellow"))
     for (const warning of model.warnings) lines.push(`  ${figures.warning} ${warning.code}: ${warning.message}`)
   }
-  lines.push("", colorize("Suggested actions", "bold"), ...model.suggestedActions.map((action) => `  ${figures.pointerSmall} ${action}`))
+  const freshnessActionOutput = formatFreshnessAdvisoryActionOutput(model.freshness)
+  if (freshnessActionOutput.lines.length) lines.push("", ...freshnessActionOutput.lines)
+  const allFreshnessActions = new Set(formatFreshnessAdvisoryActionOutput(model.freshness, { maxActions: Number.POSITIVE_INFINITY }).actions)
+  const suggestedActions = model.suggestedActions.filter((action) => !allFreshnessActions.has(action))
+  lines.push("", colorize("Suggested actions", "bold"), ...suggestedActions.map((action) => `  ${figures.pointerSmall} ${action}`))
   return lines.join("\n")
 }
 
