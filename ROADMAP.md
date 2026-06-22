@@ -649,7 +649,7 @@ Out of scope for Phase 20.5:
 
 ## Phase 21 — Handoff-Free Sessions
 
-**Status:** Slice 1 implements the non-breaking `memory.handoffMode` contract and diagnostics. Slice 2 implements read-only review-mode handoff proposals on existing continuity surfaces. `manual` is the default inspection-first mode. `review` is behavior-active only for bounded proposals assembled from existing pending continuity candidates; it does not generate new records or inject lifecycle context. `automatic` is accepted and reported as a declared Phase 21 mode, but remains inactive.
+**Status:** Slice 1 implements the non-breaking `memory.handoffMode` contract and diagnostics. Slice 2 implements read-only review-mode handoff proposals on existing continuity surfaces. Slice 3 implements a per-project advisory continuity baseline marker so existing SessionStart newer-approved notices can work across sessions. `manual` is the default inspection-first mode. `review` is behavior-active only for bounded proposals assembled from existing pending continuity candidates; it does not generate new records or inject lifecycle context. `automatic` is accepted and reported as a declared Phase 21 mode, but remains inactive.
 
 **Goal:** Enable seamless cross-session and cross-harness continuity for users who have validated their memory pipeline.
 
@@ -663,7 +663,7 @@ Todos:
 2. In `manual` mode, keep current behavior but allow explicit status/review/list tools to reveal newer approved progress from other sessions.
 3. In `review` mode, assemble existing pending session-summary/checkpoint/progress continuity candidates into read-only handoff proposals for explicit review and approval before future sessions rely on them. **Slice 2 complete: continuity proposal surface only; no new generation or lifecycle injection.**
 4. In `automatic` mode, approved session summaries, checkpoint memories, and relevant global preferences are eligible for budgeted injection at the next `SessionStart` alongside baseline memories.
-5. Add cross-session freshness checks: if another harness/session has newer approved project progress, surface a bounded notice or ask whether to recall/review it.
+5. Add cross-session freshness checks: if another harness/session has newer approved project progress, surface a bounded notice or ask whether to recall/review it. **Slice 3 complete: SessionStart uses an advisory per-project baseline marker to make the existing newer-approved notice work across sessions without memory writes or handoff body injection.**
 6. Add natural-language workstream discovery for queries like “resume building X” or “find where we implemented X,” using approved session summaries, checkpoint memories, provenance, PR/branch references when available, and revision relationships as pointers rather than raw transcript search.
 7. Distinguish orchestrator/session-level summaries from subagent task chatter so parallel-agent workflows produce one durable workstream trail instead of many noisy operational memories.
 8. Add confidence and noise thresholds: low-confidence summaries or ambiguous progress events stay pending even in automatic mode.

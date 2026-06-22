@@ -2,6 +2,8 @@
 
 ## Recent changes (since this handoff was last updated)
 
+- Phase 21 Slice 3 cross-session freshness baseline marker is implemented on `feature/phase-21-cross-session-freshness`: SessionStart now reads a text-free per-project advisory marker at `continuity-baselines.json` next to the memory JSONL file before generating existing newer-approved continuity notices, then best-effort writes the current baseline after result construction for `policy-only`/`selective` modes. The marker stores only project scope keys and timestamps, is safe to delete, and is exposed through text-free `continuityBaseline` diagnostics in doctor/status/MCP status. `contextPolicy.mode: "off"` injects nothing and does not write the marker. No memory JSONL writes, approvals/rejections/deletions, cleanup/consolidation/refresh, new CLI/MCP tools, config flags, adapter payloads, transcript/tool-output capture, recall/retrieval/token changes, handoff body injection, or automatic-mode activation were added.
+
 - Phase 21 Slice 2 review-mode handoff proposals are implemented on `feature/phase-21-review-mode-proposals`: `memory.handoffMode: "review"` is behavior-active only for read-only bounded `handoffProposal` blocks on existing continuity surfaces (`memory-lane continuity`, `memory-lane continuity --json`, and MCP `memory_continuity`). Proposals are assembled from existing pending project-scoped continuity candidates, reuse bounded preview/secret filtering, suggest only existing review/approve commands, and do not write, approve, reject, delete, clean up, generate new summaries, alter lifecycle injection, add CLI/MCP surfaces, capture raw transcripts/tool output, retune retrieval/tokens, or activate `automatic` mode.
 
 - Phase 21 Slice 1 handoff-mode contract is implemented on `feature/phase-21-handoff-mode-contract`: `memory.handoffMode` is typed/defaulted/validated with `manual`, `review`, and `automatic`; `manual` remains the inspection-first mode; `review` has since gained read-only proposal behavior in Slice 2; `automatic` remains declared but inactive. `MemoryEngine.doctor()`, CLI doctor/status JSON, human doctor output, and MCP `memory_status` expose text-free handoff-mode diagnostics. No lifecycle behavior, CLI commands, MCP tools, adapter payloads, raw transcript capture, silent writes, refresh/consolidation, recall filtering, or token retuning were added.
@@ -62,7 +64,7 @@
 
 ## Current state
 
-Current branch for this handoff update is `feature/phase-21-review-mode-proposals` in worktree `~/.config/superpowers/worktrees/memory-lane/phase-21-review-mode-proposals`. It is based on `main` after PR #33 and contains the approved Phase 21 Slice 2 spec/plan plus the read-only review-mode handoff proposal implementation. `review` is behavior-active only on explicit continuity surfaces; `automatic` remains inactive.
+Current branch for this handoff update is `feature/phase-21-cross-session-freshness` in worktree `~/.config/superpowers/worktrees/memory-lane/phase-21-cross-session-freshness`. It is based on `main` after PR #34 and contains the approved Phase 21 Slice 3 spec/plan plus the cross-session continuity baseline marker implementation. The marker is advisory sidecar state only; `automatic` remains inactive.
 
 Historical JSONL hardening is complete and committed:
 - `d0c7620 fix(core): normalize historical memory records`

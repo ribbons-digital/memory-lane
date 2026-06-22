@@ -71,6 +71,14 @@ _Avoid_: Thread id, branch id, transcript, subagent task log
 A compact, plain-language lifecycle signal that Memory Lane has newer approved state, current operating agreements, or continuity hints worth inspecting. It is guidance inside lifecycle context, not a memory body, transcript summary, or cleanup recommendation.
 _Avoid_: Relevant memory, session summary, automatic handoff, cleanup recommendation
 
+**Continuity baseline marker**:
+An advisory per-project timestamp recording when Memory Lane last evaluated SessionStart continuity for that project. It lets a future session ask whether approved Memory Lane state is newer than the prior baseline. It is not a memory, session summary, approval, checkpoint, or source of truth.
+_Avoid_: Memory record, session summary, checkpoint, approval, transcript marker
+
+**Resolved continuity baseline**:
+The timestamp actually used for a freshness or continuity check. For SessionStart, Memory Lane prefers the prior project baseline marker when present; otherwise it can fall back to the adapter-provided session timestamp. The marker is read before it is updated for the current session.
+_Avoid_: Current session start only, handoff body, memory text, automatic approval
+
 **Handoff mode**:
 The configured continuity posture for how proactive Memory Lane should be across sessions. It is separate from context policy: handoff mode describes the continuity posture, while context policy controls whether and how much memory body content can be injected.
 _Avoid_: Context policy mode, automatic handoff injection, thread memory
