@@ -24,6 +24,7 @@ Memory Lane is not meant to be another isolated chat-history search box. Its goa
   - [Obsidian mirror](#obsidian-mirror)
   - [Import from Obsidian](#import-from-obsidian)
 - [Configuration](#configuration)
+  - [Handoff mode](#handoff-mode)
   - [Semantic search config](#semantic-search-config)
 - [Environment Variables](#environment-variables)
 - [Programmatic Use](#programmatic-use)
@@ -665,6 +666,26 @@ Override via env variable: `MEMORY_LANE_CONFIG=/path/to/config.json`
 
 No config file needed. Lexical search works out of the box.
 
+### Handoff mode
+
+`memory.handoffMode` declares how proactive Memory Lane should be about cross-session handoff continuity. It defaults to `manual` and is separate from `memory.contextPolicy`: handoff mode describes continuity posture, while context policy controls lifecycle context selection and injection budgets.
+
+```json
+{
+  "memory": {
+    "handoffMode": "manual"
+  }
+}
+```
+
+Values:
+
+- `manual` — current inspection-first behavior. Use explicit CLI/MCP surfaces such as `memory-lane continuity`, `memory-lane status --json`, `memory-lane review`, `memory_list`, `memory_review`, `memory_status`, and `memory_continuity({ projectPath })`.
+- `review` — declared for Phase 21 but inactive in this slice. It is accepted and reported by diagnostics, but runtime currently behaves like `manual`. Future review-mode handoff generation must remain pending until approved.
+- `automatic` — declared for Phase 21 but inactive in this slice. It is accepted and reported by diagnostics, but runtime currently behaves like `manual`. Future automatic behavior must remain explicit opt-in and budgeted.
+
+`memory-lane doctor`, `memory-lane doctor --json`, `memory-lane status --json`, and MCP `memory_status` report `handoffMode`, `handoffModeBehaviorActive`, and `handoffModeNote` without memory bodies. Human `memory-lane status` stays compact; use `status --json` for the full handoff-mode diagnostic fields.
+
 ### Semantic search config
 
 ```json
@@ -816,7 +837,7 @@ For session summaries, use `/memory session-summary` in pi. The command reads th
 
 ### Context policy
 
-Lifecycle hooks use `memory.contextPolicy` to decide how much context to inject. Defaults preserve existing behavior with bounded selected memory blocks:
+Lifecycle hooks use `memory.contextPolicy` to decide how much context to inject. This is orthogonal to `memory.handoffMode`: handoff mode declares continuity posture, while context policy controls body selection and budgets. Defaults preserve existing behavior with bounded selected memory blocks:
 
 ```json
 {
