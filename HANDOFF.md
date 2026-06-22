@@ -2,6 +2,8 @@
 
 ## Recent changes (since this handoff was last updated)
 
+- Phase 21 Slice 6 workstream discovery design is drafted on `docs/phase-21-workstream-discovery-design`: `docs/superpowers/specs/2026-06-22-phase-21-workstream-discovery-design.md` proposes a read-only, query-specific `workstreamDiscovery` section on existing continuity surfaces (`memory-lane continuity --query`, MCP `memory_continuity({ query })`). The first implementation slice should use approved project-visible session summaries/checkpoints/project facts/decisions as bounded pointers with provenance, revision pointers, and derived PR/branch/commit/release references. It deliberately defers first-class workstream ids/schema, raw transcript indexing, retrieval rewrites, LLM classifiers, lifecycle injection, new command/tool families, auto-approval/mutation, and broader automation. User approval is still required before implementation begins.
+
 - Phase 21 Slice 5b automatic-mode validation is complete on `docs/phase-21-automatic-mode-validation`: `docs/superpowers/validation/2026-06-22-phase-21-slice-5b-automatic-mode-validation.md` validates Slice 5a automatic SessionStart handoff behavior with isolated temp storage, shared lifecycle handlers, real CLI status/doctor and Codex/Claude `SessionStart` entrypoints, and MCP package `memory_status`. Verdict: **Proceed to workstream discovery design/spec**. Automatic mode stayed approved-only, project-scoped, SessionStart-only, budget-neutral, text-free on diagnostics/policy-only surfaces, and non-mutating. No behavior code changed. Live desktop MCP/Claude/Codex/pi clients were not exercised, so future live-client dogfooding remains useful but not blocking.
 
 - Before Slice 5b validation, Memory Lane-scoped pending continuity was curated: 16 Memory Lane Phase 18–20 merge/release project facts/checkpoints were approved, while 4 Sitewright-scoped pending items were left untouched. `v0.2.21` was released from main commit `b6d323e` after PR #37; release workflow `27954672321` succeeded and published https://github.com/ribbons-digital/memory-lane/releases/tag/v0.2.21. Local pre-release verification passed with `pnpm build`, `pnpm test`, `git diff --check`, and clean `git status --short --branch`.
@@ -72,7 +74,7 @@
 
 ## Current state
 
-Current branch for this handoff update is `docs/phase-21-automatic-mode-validation` in worktree `~/.config/superpowers/worktrees/memory-lane/phase-21-automatic-mode-validation`. It is based on `main` at `b6d323e` after PR #37 and contains the Phase 21 Slice 5b automatic-mode validation report plus roadmap/handoff updates. The validation verdict is **Proceed to workstream discovery design/spec**; if later live-client dogfooding exposes an automatic-mode issue, do one bounded safeguard/fix slice before workstream discovery implementation.
+Current branch for this handoff update is `docs/phase-21-workstream-discovery-design` in worktree `~/.config/superpowers/worktrees/memory-lane/phase-21-workstream-discovery`. It is based on `main` after PR #38 (`bf3d5d8`) and contains the draft Phase 21 Slice 6 workstream discovery design plus glossary/roadmap/handoff updates. The design awaits user review/approval before implementation begins.
 
 Historical JSONL hardening is complete and committed:
 - `d0c7620 fix(core): normalize historical memory records`
@@ -84,7 +86,7 @@ Phase 14 Slice 3 is implemented, verified, and committed as `24baa90 Expose cont
 
 Phase 15 noise-reduction follow-up is complete: suspect-review output is compact/actionable, pi `input` autosave is explicit-memory-request only, historical JSONL rows are more robust, and `doctor` now surfaces skipped-row diagnostics. Phase 15 dashboard slice is merged via PR #2, CLI review filters/prettier review output merged via PR #5, and MCP review-filter parity merged via PR #6.
 
-Future roadmap/design center: cross-agent continuity without silent autonomy. The logical implementation order is now documented in `ROADMAP.md`: review/dashboard controls first, then freshness/canonical continuity/revision, review-first progress/checkpoint capture, global preference layering, harness-neutral learning, time-aware memory/freshness advisories, Phase 20.5 validation, and then Phase 21 handoff-free sessions. Phase 20 Slices 1-6 are merged and released through `v0.2.20`; Phase 21 work through Slice 5a is released in `v0.2.21`. Phase 21 Slice 1 established the handoff-mode contract, Slice 2 gives review mode a read-only proposal surface assembled from existing pending continuity candidates, Slice 3 adds the cross-session continuity baseline marker, Slice 4 validates those behaviors, Slice 5 designs and implements automatic SessionStart handoff selection, and Slice 5b validates automatic mode. The next recommended slice is **Phase 21 workstream discovery design/spec**.
+Future roadmap/design center: cross-agent continuity without silent autonomy. The logical implementation order is now documented in `ROADMAP.md`: review/dashboard controls first, then freshness/canonical continuity/revision, review-first progress/checkpoint capture, global preference layering, harness-neutral learning, time-aware memory/freshness advisories, Phase 20.5 validation, and then Phase 21 handoff-free sessions. Phase 20 Slices 1-6 are merged and released through `v0.2.20`; Phase 21 work through Slice 5a is released in `v0.2.21`. Phase 21 Slice 1 established the handoff-mode contract, Slice 2 gives review mode a read-only proposal surface assembled from existing pending continuity candidates, Slice 3 adds the cross-session continuity baseline marker, Slice 4 validates those behaviors, Slice 5 designs and implements automatic SessionStart handoff selection, Slice 5b validates automatic mode, and Slice 6 is now in design review for read-only workstream discovery. If approved, the next implementation slice is **Phase 21 Slice 6a — read-only workstream discovery on existing continuity surfaces**.
 
 Phase 13 Session-End Summarization manual flow is merged to `main`. The former feature worktree `~/.config/superpowers/worktrees/memory-lane/session-end-summarization` has been removed after merge.
 
@@ -401,14 +403,16 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Start Phase 18: global preference layering/context policy so durable personal preferences are consistently available across projects and harnesses without overpowering project-specific state.
-2. Keep completed Phase 17 behavior review-governed: inferred checkpoint captures remain pending until approval and should continue using existing review/continuity surfaces rather than new commands or automatic approval.
-3. Only after Phase 18 preference foundations should Phase 19 learning enhancements begin.
-4. Keep future learning enhancements harness-neutral. Core/lifecycle should own selection, token budgeting, correction/failure/procedure candidate extraction, and consolidation proposals; adapters for pi, Codex, Claude Code, Cursor, Hermes, etc. should only supply bounded lifecycle evidence and render shared outputs.
-5. Do not add automatic pi `agent_end`, `session_shutdown`, or compaction summarization without a separate supported-event design and explicit approval.
-6. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
-7. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
-8. Only schedule hardening backlog items or deferred improvements from `ROADMAP.md` after explicit user approval or clear real-world user value.
+1. Review and approve the Phase 21 Slice 6 workstream discovery design in `docs/superpowers/specs/2026-06-22-phase-21-workstream-discovery-design.md`.
+2. After the design PR lands, sync main, clean up the design branch/worktree, and create a compact merge checkpoint.
+3. If approved, start Phase 21 Slice 6a implementation: read-only workstream discovery on existing continuity surfaces (`memory-lane continuity --query`, MCP `memory_continuity({ query })`).
+4. Keep the first implementation slice bounded: no persisted workstream ids/schema, no raw transcript indexing, no retrieval rewrite, no lifecycle injection, no new MCP tool family, and no auto-approval/mutation behavior.
+5. Preserve review gates: draft an implementation plan after spec approval, implement a small vertical slice, verify with focused core/CLI/MCP tests plus build/diff-check, request review, and open a PR.
+6. Keep future learning enhancements harness-neutral. Core/lifecycle should own shared continuity semantics, while adapters for pi, Codex, Claude Code, Cursor, Hermes, etc. should only supply bounded lifecycle evidence and render shared outputs.
+7. Do not add automatic pi `agent_end`, `session_shutdown`, or compaction summarization without a separate supported-event design and explicit approval.
+8. For Codex Desktop MCP setup, continue using absolute paths only. In the custom MCP form, avoid `~`; use `/Users/shiang/Documents/New project` or the exact project repo path. The MCP server command should be `/Users/shiang/.nvm/versions/node/v22.22.3/bin/node` with argument `/Users/shiang/projects/ribbons-digital/memory-lane/packages/mcp-server/dist/index.js`.
+9. Use `docs/manual-testing/obsidian-mirror-import.md` for manual end-to-end testing of completed Obsidian mirror/import behavior when needed.
+10. Only schedule hardening backlog items or deferred improvements from `ROADMAP.md` after explicit user approval or clear real-world user value.
 
 ## Suggested skills for future agents
 

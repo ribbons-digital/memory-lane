@@ -64,8 +64,16 @@ Explicit revision metadata showing that one approved memory is now replaced by a
 _Avoid_: Automatic cleanup, rejected memory, deleted memory, new status
 
 **Workstream**:
-The user-meaningful unit of ongoing work across one or more manual threads, harness sessions, orchestrator threads, subagent runs, branches, PRs, and session summaries. In Phase 16 Slice 4 this is a domain/spec concept only; Memory Lane should infer continuity hints from existing memory metadata rather than adding a first-class workstream id or thread metadata.
+The user-meaningful unit of ongoing work across one or more manual threads, harness sessions, orchestrator threads, subagent runs, branches, PRs, and session summaries. Memory Lane should infer workstream pointers from existing approved memory metadata before adding first-class workstream ids or thread metadata.
 _Avoid_: Thread id, branch id, transcript, subagent task log
+
+**Workstream discovery**:
+A read-only continuity operation that takes a natural-language query and returns bounded candidate pointers to approved project-visible continuity records that may represent the user-meaningful workstream. It is not recall, raw transcript search, lifecycle injection, or a persisted workstream index.
+_Avoid_: Semantic recall, transcript search, thread browser, automatic handoff injection
+
+**Workstream candidate**:
+A bounded pointer to an approved memory record selected by workstream discovery. It includes memory metadata, a safe preview, match reasons, and derived references such as PR numbers, branch-like names, or commit SHAs when those appear in the approved memory text. It is not an approved answer by itself.
+_Avoid_: Authoritative current state, raw memory dump, pending review item, live GitHub result
 
 **Continuity notice**:
 A compact, plain-language lifecycle signal that Memory Lane has newer approved state, current operating agreements, or continuity hints worth inspecting. It is guidance inside lifecycle context, not a memory body, transcript summary, or cleanup recommendation.
