@@ -404,6 +404,9 @@ test("memory_status returns doctor counts without memory text", async () => {
   assert.equal(result.data.status.semanticEnabled, false)
   assert.equal(result.data.status.contextPolicyMode, "selective")
   assert.equal(result.data.status.contextPolicyPromptMaxItems, 6)
+  assert.equal(result.data.status.handoffMode, "manual")
+  assert.equal(result.data.status.handoffModeBehaviorActive, true)
+  assert.equal(result.data.status.handoffModeNote, "Current inspection-first behavior is active.")
   const expectedScope = engine.getProjectScope()?.key ?? "none"
   assert.equal(result.data.status.projectScope, expectedScope)
   assert.equal(result.meta.projectScope, expectedScope)

@@ -1448,8 +1448,38 @@ describe("CLI integration", () => {
     assert.equal(parsed.data.contextPolicyMode, "selective")
     assert.equal(parsed.data.contextPolicyPromptMaxItems, 6)
     assert.equal(parsed.data.contextPolicySessionStartMaxItems, 4)
+    assert.equal(parsed.data.handoffMode, "manual")
+    assert.equal(parsed.data.handoffModeBehaviorActive, true)
+    assert.equal(parsed.data.handoffModeNote, "Current inspection-first behavior is active.")
     assert.equal(typeof parsed.data.integrations, "object")
     assert.equal(parsed.data.integrations.summary.mcpExplicitToolsOnly, true)
+
+    const status = JSON.parse(run(["status", "--json"], env))
+    assert.equal(status.data.handoffMode, "manual")
+    assert.equal(status.data.handoffModeBehaviorActive, true)
+    assert.equal(status.data.handoffModeNote, "Current inspection-first behavior is active.")
+  })
+
+  it("doctor human output renders configured inactive handoff mode", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+    fs.writeFileSync(cfgFile, JSON.stringify({ memory: { handoffMode: "review" } }), "utf8")
+
+    const humanDoctor = run(["doctor"], env)
+    const doctorJson = JSON.parse(run(["doctor", "--json"], env))
+    const statusJson = JSON.parse(run(["status", "--json"], env))
+
+    assert.match(humanDoctor, /Handoff mode\n  mode: review\n  behavior active: no\n  note: Declared for Phase 21; currently behaves like manual mode\./u)
+    assert.doesNotMatch(humanDoctor, /handoffModeBehaviorActive:/u)
+    for (const payload of [doctorJson, statusJson]) {
+      assert.equal(payload.data.handoffMode, "review")
+      assert.equal(payload.data.handoffModeBehaviorActive, false)
+      assert.equal(payload.data.handoffModeNote, "Declared for Phase 21; currently behaves like manual mode.")
+    }
   })
 
   it("status and doctor json include text-free preference diagnostics", () => {
@@ -1779,6 +1809,10 @@ describe("CLI integration", () => {
       MEMORY_LANE_CONFIG: cfgFile,
     }
     const output = run(["doctor"], env)
+    assert.match(output, /Handoff mode/u)
+    assert.match(output, /mode: manual/u)
+    assert.match(output, /behavior active: yes/u)
+    assert.match(output, /note: Current inspection-first behavior is active\./u)
     assert.match(output, /Context policy:/u)
     assert.match(output, /mode: selective/u)
     assert.match(output, /prompt budget: 6 items \/ 3000 chars/u)
