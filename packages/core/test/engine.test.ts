@@ -1247,7 +1247,7 @@ You are continuing the same subagent session. Before this run can be accepted, c
     const cases = [
       { mode: "manual", active: true, note: "Current inspection-first behavior is active." },
       { mode: "review", active: true, note: "Review mode is active for read-only handoff proposals; approve pending memories before relying on them as handoff state." },
-      { mode: "automatic", active: false, note: "Declared for Phase 21; currently behaves like manual mode." },
+      { mode: "automatic", active: true, note: "Automatic mode is active for approved, budgeted SessionStart handoff selection; context policy still controls injection." },
     ] as const
 
     for (const { mode, active, note } of cases) {
@@ -1301,6 +1301,7 @@ You are continuing the same subagent session. Before this run can be accepted, c
       delete normalized.handoffMode
       delete normalized.handoffModeBehaviorActive
       delete normalized.handoffModeNote
+      delete normalized.automaticHandoffDiagnostics
       const freshness = normalized.freshness as { advisory?: { referenceNow?: string } } | undefined
       if (freshness?.advisory) freshness.advisory.referenceNow = "<reference-now>"
       return { report, normalized }
@@ -1311,13 +1312,38 @@ You are continuing the same subagent session. Before this run can be accepted, c
     const automatic = reportFor("automatic")
 
     assert.equal(review.report.handoffModeBehaviorActive, true)
-    assert.equal(automatic.report.handoffModeBehaviorActive, false)
+    assert.equal(automatic.report.handoffModeBehaviorActive, true)
     assert.deepEqual(review.normalized, manual.normalized)
     assert.deepEqual(automatic.normalized, manual.normalized)
     assert.doesNotMatch(JSON.stringify(review.report), /handoffProposal/u)
     assert.doesNotMatch(JSON.stringify(automatic.report), /handoffProposal/u)
     assert.doesNotMatch(JSON.stringify(review.report), /Do not leak handoff diff memory text/u)
     assert.doesNotMatch(JSON.stringify(automatic.report), /Do not leak handoff diff memory text/u)
+  })
+
+  it("doctor reports automatic handoff diagnostics as static text-free eligibility", () => {
+    const project = path.join(dir, "automatic-doctor-project")
+    fs.mkdirSync(project)
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "automatic-doctor-project" }), "utf8")
+    const configPath = path.join(dir, "cfg-automatic-doctor.json")
+    fs.writeFileSync(configPath, JSON.stringify({ memory: { handoffMode: "automatic", contextPolicy: { mode: "selective" } } }), "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-automatic-doctor.jsonl"),
+      embeddingsPath: path.join(dir, "emb-automatic-doctor.jsonl"),
+      configPath,
+    })
+    e.refreshScope(project)
+    e.save({ text: "PRIVATE DOCTOR HANDOFF BODY", status: "approved", category: "project", scopeType: "project", source: "session-summary", kind: "session_summary" })
+
+    const report = e.doctor() as any
+
+    assert.equal(report.handoffModeBehaviorActive, true)
+    assert.deepEqual(report.automaticHandoffDiagnostics.mode, "active")
+    assert.equal(report.automaticHandoffDiagnostics.policyMode, "selective")
+    assert.equal(report.automaticHandoffDiagnostics.eligibleCount, 1)
+    assert.equal("selectedCount" in report.automaticHandoffDiagnostics, false)
+    assert.equal("omittedCount" in report.automaticHandoffDiagnostics, false)
+    assert.doesNotMatch(JSON.stringify(report.automaticHandoffDiagnostics), /PRIVATE DOCTOR HANDOFF BODY/u)
   })
 
   it("review handoff proposal is read-only when reading continuity", () => {

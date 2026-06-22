@@ -18,7 +18,7 @@ function visibleApproved(memory: MemoryRecord, projectScopeKey?: string): boolea
   return Boolean(projectScopeKey) && memory.scope.key === projectScopeKey
 }
 
-function classifyFreshness(memory: MemoryRecord, referenceNow: string): FreshnessClassification {
+export function classifyFreshness(memory: MemoryRecord, referenceNow: string): FreshnessClassification {
   if (!memory.freshness || (!memory.freshness.expiresAt && !memory.freshness.staleAfterDays && !memory.freshness.capturedAt)) {
     return "none"
   }

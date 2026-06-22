@@ -100,8 +100,16 @@ A bounded preview and metadata pointer to an existing pending continuity candida
 _Avoid_: Raw memory body, transcript excerpt, approved fact, auto-injected context
 
 **Automatic handoff mode**:
-A declared future handoff mode where approved handoff-relevant records may become eligible for stronger budgeted SessionStart continuity. In Phase 21 Slice 2 it remains inactive and behaves like manual mode outside diagnostics.
-_Avoid_: Silent transcript memory, unbounded injection, cleanup automation
+An explicit opt-in handoff mode where SessionStart may reserve part of the existing context budget for the latest approved current-project handoff pointer. It is subordinate to context policy: `off` disables lifecycle context, `policy-only` can emit text-free handoff guidance, and `selective` can inject the bounded pointer body. It does not generate summaries, approve pending records, mutate storage, increase budgets, or add new CLI/MCP surfaces.
+_Avoid_: Silent transcript memory, unbounded injection, cleanup automation, pending-memory bypass
+
+**Automatic handoff layer**:
+The SessionStart selection layer used only in automatic handoff mode to prioritize at most one approved `session_summary` or `project_checkpoint` for the active project before generic baseline selection. It is a budgeted selection layer, not a memory status, recall ranker, summary generator, or approval mechanism.
+_Avoid_: Retrieval rewrite, token-budget expansion, pending proposal, workstream discovery
+
+**Handoff pointer**:
+An approved project-visible `session_summary` or `project_checkpoint` that identifies where project work left off. Automatic mode treats it as historical context to inspect, not authoritative current truth. Expired or superseded handoff pointers are not eligible for the automatic handoff layer.
+_Avoid_: Raw transcript, tool output, pending review item, current repository state
 
 **Continuity intent**:
 A natural-language user prompt that asks an agent to resume prior work, locate where or when prior work happened, understand current project progress, or decide the next work item. It triggers bounded Memory Lane inspection guidance and, when topic-specific, targeted recall/search. It is not a lifecycle continuity notice, session summary, or automatic handoff.

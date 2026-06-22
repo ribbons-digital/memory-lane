@@ -1,10 +1,12 @@
 import {
+  classifyFreshness,
   containsLikelySecret,
   isPreferenceLikeMemory,
   lexicalScore,
   normalizeMemoryText,
   type ContinuityHintCode,
   type ContinuityHintSummary,
+  type FreshnessClassification,
   type MemoryContextPolicyConfig,
   type MemoryRecord,
   type OperatingAgreementSummary,
@@ -25,7 +27,20 @@ export interface MemorySelectionOptions extends Partial<MemoryInjectionLimits> {
   projectScope?: string
 }
 
-export interface BaselineSelectionOptions extends MemorySelectionOptions {}
+export interface BaselineSelectionOptions extends MemorySelectionOptions {
+  priorityMemories?: MemoryRecord[]
+}
+
+export interface AutomaticHandoffAnalysis {
+  eligible: MemoryRecord[]
+  eligibleCount: number
+  omittedReasons: string[]
+}
+
+export interface AutomaticHandoffAnalysisOptions {
+  projectScope?: string
+  referenceNow?: string
+}
 
 export const CODEX_MEMORY_INJECTION_LIMITS: MemoryInjectionLimits = {
   maxItems: 6,
@@ -45,9 +60,11 @@ export type MemoryContextEvent = "prompt" | "sessionStart"
 
 export interface MemoryBlockRenderOptions {
   projectScope?: string
+  latestHandoffIds?: Set<string>
 }
 
 type MemoryContextGroupKey =
+  | "latest-handoff"
   | "current-project"
   | "project-specific"
   | "global-preferences"
@@ -237,6 +254,7 @@ function requiresLexicalOverlap(result: RecallResult): boolean {
 interface LayeredSelectionState {
   selected: MemoryRecord[]
   seen: Set<string>
+  seenIds: Set<string>
   chars: number
   preferenceChars: number
   preferenceCount: number
@@ -254,7 +272,7 @@ function appendLayeredMemory(memory: MemoryRecord, limits: MemoryInjectionLimits
   if (containsLikelySecret(memory.text)) return
 
   const key = normalizedMemoryKey(memory.text)
-  if (!key || state.seen.has(key)) return
+  if (!key || state.seen.has(key) || state.seenIds.has(memory.id)) return
 
   const isPreference = isPreferenceLikeMemory(memory)
   const preferences = preferenceBudget(limits)
@@ -268,6 +286,7 @@ function appendLayeredMemory(memory: MemoryRecord, limits: MemoryInjectionLimits
 
   state.selected.push(fitted)
   state.seen.add(key)
+  state.seenIds.add(memory.id)
   state.chars += fitted.text.length
   if (isPreference) {
     state.preferenceCount += 1
@@ -283,7 +302,67 @@ function appendLayer(state: LayeredSelectionState, limits: MemoryInjectionLimits
 }
 
 function sortByUpdatedAtDesc(memories: MemoryRecord[]): MemoryRecord[] {
-  return [...memories].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  return [...memories].sort((a, b) => {
+    const updated = b.updatedAt.localeCompare(a.updatedAt)
+    if (updated !== 0) return updated
+    const created = b.createdAt.localeCompare(a.createdAt)
+    if (created !== 0) return created
+    return b.id.localeCompare(a.id)
+  })
+}
+
+function isHandoffPointer(memory: MemoryRecord): boolean {
+  return memory.kind === "session_summary" || memory.kind === "project_checkpoint"
+}
+
+export function isUnsafeAutomaticHandoffPointer(memory: MemoryRecord, projectScope: string | undefined, referenceNow = new Date().toISOString()): boolean {
+  if (!projectScope) return false
+  if (memory.scope.type !== "project" || memory.scope.key !== projectScope) return false
+  if (!isHandoffPointer(memory)) return false
+  if (memory.revision?.supersededBy) return true
+  return classifyFreshness(memory, referenceNow) === "expired"
+}
+
+function handoffFreshnessReason(classification: FreshnessClassification): string | undefined {
+  if (classification === "expired") return "expired"
+  if (classification === "stale") return "stale-handoff"
+  return undefined
+}
+
+export function analyzeAutomaticHandoff(memories: MemoryRecord[], options: AutomaticHandoffAnalysisOptions = {}): AutomaticHandoffAnalysis {
+  if (!options.projectScope) return { eligible: [], eligibleCount: 0, omittedReasons: ["no-project-scope"] }
+
+  const referenceNow = options.referenceNow ?? new Date().toISOString()
+  const omittedReasons = new Set<string>()
+  const eligible: MemoryRecord[] = []
+
+  for (const memory of memories) {
+    if (memory.status !== "approved") continue
+    if (memory.scope.type !== "project" || memory.scope.key !== options.projectScope) continue
+    if (!isHandoffPointer(memory)) continue
+    if (containsLikelySecret(memory.text)) {
+      omittedReasons.add("secret")
+      continue
+    }
+    if (memory.revision?.supersededBy) {
+      omittedReasons.add("superseded")
+      continue
+    }
+    const freshness = classifyFreshness(memory, referenceNow)
+    const freshnessReason = handoffFreshnessReason(freshness)
+    if (freshnessReason === "expired") {
+      omittedReasons.add(freshnessReason)
+      continue
+    }
+    if (freshnessReason) omittedReasons.add(freshnessReason)
+    eligible.push(memory)
+  }
+
+  return {
+    eligible: sortByUpdatedAtDesc(eligible).slice(0, 1),
+    eligibleCount: eligible.length,
+    omittedReasons: [...omittedReasons],
+  }
 }
 
 function layeredMemoryGroups(memories: MemoryRecord[], projectScope?: string): MemoryRecord[][] {
@@ -325,6 +404,7 @@ export function selectMemoriesForInjection(
   const state: LayeredSelectionState = {
     selected: [],
     seen: new Set<string>(),
+    seenIds: new Set<string>(),
     chars: 0,
     preferenceChars: 0,
     preferenceCount: 0,
@@ -446,6 +526,7 @@ export function renderContinuityIntentGuidance(intent: ContinuityIntent): string
 }
 
 const MEMORY_CONTEXT_GROUPS: Array<{ key: MemoryContextGroupKey; title: string }> = [
+  { key: "latest-handoff", title: "Latest approved handoff" },
   { key: "current-project", title: "Current project" },
   { key: "project-specific", title: "Project-specific memory" },
   { key: "global-preferences", title: "Global preferences and workflow rules" },
@@ -484,6 +565,7 @@ function isGlobalPreferenceLike(memory: MemoryRecord): boolean {
 }
 
 function groupKeyForMemory(memory: MemoryRecord, options?: MemoryBlockRenderOptions): MemoryContextGroupKey {
+  if (options?.latestHandoffIds?.has(memory.id)) return "latest-handoff"
   if (memory.scope.type === "project") {
     if (!options?.projectScope) return "project-specific"
     return memory.scope.key === options.projectScope ? "current-project" : "other-project"
@@ -664,7 +746,7 @@ export function renderContinuityNotice(input: ContinuityNoticeInput): Continuity
   }
 }
 
-export function renderMemoryContext(input: { event: MemoryContextEvent; memories: MemoryRecord[]; policy?: MemoryContextPolicyConfig; projectScope?: string }): string {
+export function renderMemoryContext(input: { event: MemoryContextEvent; memories: MemoryRecord[]; policy?: MemoryContextPolicyConfig; projectScope?: string; latestHandoffIds?: Set<string> }): string {
   const policy = resolveContextPolicy(input.policy)
   if (policy.mode === "off") return ""
 
@@ -684,7 +766,7 @@ export function renderMemoryContext(input: { event: MemoryContextEvent; memories
   if (!input.memories.length) return ""
   return [
     header,
-    renderMemoryBlock(input.memories, { projectScope: input.projectScope }),
+    renderMemoryBlock(input.memories, { projectScope: input.projectScope, latestHandoffIds: input.latestHandoffIds }),
     footer,
   ].join("\n")
 }
@@ -698,10 +780,13 @@ export function selectBaselineMemories(
   const state: LayeredSelectionState = {
     selected: [],
     seen: new Set<string>(),
+    seenIds: new Set<string>(),
     chars: 0,
     preferenceChars: 0,
     preferenceCount: 0,
   }
+
+  appendLayer(state, limits, options?.priorityMemories ?? [])
 
   for (const layer of layeredMemoryGroups(candidates, options?.projectScope).map(sortByUpdatedAtDesc)) {
     appendLayer(state, limits, layer)

@@ -277,17 +277,86 @@ test("session-start policy-only injects continuity notice without memory bodies"
   assert.equal("text" in (result.contextDecision?.continuity ?? {}), false)
 })
 
-test("session-start output is unchanged across handoff modes", () => {
+test("session-start output is unchanged across manual and review handoff modes", () => {
   const project = tempDir()
-  const modes = ["manual", "review", "automatic"] as const
+  const modes = ["manual", "review"] as const
   const outputs = modes.map((handoffMode) => {
     const engine = engineInTemp(project, { contextPolicy: { mode: "policy-only" }, handoffMode })
     return handleSessionStart(engine, { cwd: project })
   })
 
   assert.deepEqual(outputs[1], outputs[0])
-  assert.deepEqual(outputs[2], outputs[0])
   assert.doesNotMatch(JSON.stringify(outputs), /handoffProposal/u)
+})
+
+test("session-start automatic policy-only emits text-free handoff guidance without memory body", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "policy-only" }, handoffMode: "automatic" })
+  engine.save({ text: "PRIVATE APPROVED HANDOFF BODY", status: "approved", category: "project", scopeType: "project", source: "session-summary", kind: "session_summary" })
+
+  const result = handleSessionStart(engine, { cwd: project })
+
+  assert.match(result.additionalContext ?? "", /approved handoff pointer is available/u)
+  assert.doesNotMatch(result.additionalContext ?? "", /PRIVATE APPROVED HANDOFF BODY/u)
+  assert.deepEqual(result.contextDecision?.automaticHandoff, {
+    active: true,
+    eligibleCount: 1,
+    selectedCount: 0,
+    omittedCount: 1,
+    omittedReasons: [],
+  })
+})
+
+test("session-start automatic selective prioritizes latest approved handoff inside budget", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "selective", maxItems: { sessionStart: 1, prompt: 6 } }, handoffMode: "automatic" })
+  engine.save({ text: "Latest approved handoff body", status: "approved", category: "project", scopeType: "project", source: "session-summary", kind: "session_summary" })
+  waitForNextMillisecond()
+  engine.save({ text: "Newer project fact that would otherwise crowd out handoff", status: "approved", category: "project", scopeType: "project", kind: "project_fact" })
+
+  const result = handleSessionStart(engine, { cwd: project })
+  const context = result.additionalContext ?? ""
+
+  assert.match(context, /### Latest approved handoff/u)
+  assert.match(context, /Latest approved handoff body/u)
+  assert.doesNotMatch(context, /Newer project fact that would otherwise crowd out handoff/u)
+  assert.equal(result.contextDecision?.selected, 1)
+  assert.deepEqual(result.contextDecision?.automaticHandoff, {
+    active: true,
+    eligibleCount: 1,
+    selectedCount: 1,
+    omittedCount: 0,
+    omittedReasons: [],
+  })
+})
+
+test("session-start automatic omits pending secret and expired handoff pointers", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "selective" }, handoffMode: "automatic" })
+  engine.save({ text: "Pending handoff body", status: "pending", category: "project", scopeType: "project", source: "session-summary", kind: "session_summary" })
+  engine.save({ text: "Expired handoff body", status: "approved", category: "project", scopeType: "project", kind: "project_checkpoint", freshness: { expiresAt: "2000-01-01T00:00:00.000Z" } })
+  engine.save({ text: "API key is sk-1234567890abcdef1234567890abcdef", status: "approved", category: "project", scopeType: "project", kind: "session_summary" })
+
+  const result = handleSessionStart(engine, { cwd: project })
+  const context = result.additionalContext ?? ""
+
+  assert.doesNotMatch(context, /Pending handoff body/u)
+  assert.doesNotMatch(context, /Expired handoff body/u)
+  assert.doesNotMatch(context, /sk-1234567890/u)
+  assert.equal(result.contextDecision?.automaticHandoff?.eligibleCount, 0)
+  assert.deepEqual(result.contextDecision?.automaticHandoff?.omittedReasons, ["expired"])
+})
+
+test("session-start context policy off does not report automatic handoff metadata", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "off" }, handoffMode: "automatic" })
+  engine.save({ text: "Approved handoff body", status: "approved", category: "project", scopeType: "project", source: "session-summary", kind: "session_summary" })
+
+  const result = handleSessionStart(engine, { cwd: project })
+
+  assert.equal(result.additionalContext, undefined)
+  assert.equal(result.contextDecision?.automaticHandoff, undefined)
+  assert.equal(engine.list({ all: true }).length, 1)
 })
 
 test("session-start selective injects continuity notice before relevant memory", () => {

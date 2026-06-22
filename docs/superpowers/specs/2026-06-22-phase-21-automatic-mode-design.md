@@ -2,9 +2,9 @@
 
 ## Status
 
-Draft for review.
+Approved by Opus 4.8 high-effort review and explicitly approved by the user. Slice 5a implementation is complete in this branch.
 
-This is a design/spec slice only. It must not implement automatic mode behavior until the spec is reviewed by Opus 4.8 with high thinking effort and explicitly approved by the user.
+This began as a design/spec slice only; implementation proceeded only after Opus approval and explicit user approval.
 
 ## Context
 

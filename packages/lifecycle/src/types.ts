@@ -53,6 +53,14 @@ export interface PromptContinuityIntentDecision {
   guidanceInjected: boolean
 }
 
+export interface AutomaticHandoffContextDecision {
+  active: boolean
+  eligibleCount: number
+  selectedCount: number
+  omittedCount: number
+  omittedReasons: string[]
+}
+
 export interface MemoryContextDecision {
   event: "prompt" | "sessionStart"
   mode: "off" | "policy-only" | "selective"
@@ -63,6 +71,7 @@ export interface MemoryContextDecision {
   omittedReasons: string[]
   continuity?: ContinuityContextDecision
   continuityIntent?: PromptContinuityIntentDecision
+  automaticHandoff?: AutomaticHandoffContextDecision
 }
 
 export interface LifecycleResult {
