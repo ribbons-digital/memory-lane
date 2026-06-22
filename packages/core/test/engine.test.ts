@@ -1246,7 +1246,7 @@ You are continuing the same subagent session. Before this run can be accepted, c
   it("accepts configured handoff modes and reports canonical notes", () => {
     const cases = [
       { mode: "manual", active: true, note: "Current inspection-first behavior is active." },
-      { mode: "review", active: false, note: "Declared for Phase 21; currently behaves like manual mode." },
+      { mode: "review", active: true, note: "Review mode is active for read-only handoff proposals; approve pending memories before relying on them as handoff state." },
       { mode: "automatic", active: false, note: "Declared for Phase 21; currently behaves like manual mode." },
     ] as const
 
@@ -1310,12 +1310,32 @@ You are continuing the same subagent session. Before this run can be accepted, c
     const review = reportFor("review")
     const automatic = reportFor("automatic")
 
-    assert.equal(review.report.handoffModeBehaviorActive, false)
+    assert.equal(review.report.handoffModeBehaviorActive, true)
     assert.equal(automatic.report.handoffModeBehaviorActive, false)
     assert.deepEqual(review.normalized, manual.normalized)
     assert.deepEqual(automatic.normalized, manual.normalized)
+    assert.doesNotMatch(JSON.stringify(review.report), /handoffProposal/u)
+    assert.doesNotMatch(JSON.stringify(automatic.report), /handoffProposal/u)
     assert.doesNotMatch(JSON.stringify(review.report), /Do not leak handoff diff memory text/u)
     assert.doesNotMatch(JSON.stringify(automatic.report), /Do not leak handoff diff memory text/u)
+  })
+
+  it("review handoff proposal is read-only when reading continuity", () => {
+    const project = path.join(dir, "review-project")
+    fs.mkdirSync(project)
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "engine-review-proposal" }), "utf8")
+    fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({ memory: { handoffMode: "review" } }), "utf8")
+    const e = engine()
+    e.refreshScope(project)
+    e.save({ text: "## Session Summary\nNext action: inspect review proposal.", status: "pending", category: "project", scopeType: "project", source: "session-summary", kind: "session_summary" })
+
+    const before = JSON.stringify(e.list({ all: true }).map((memory) => ({ id: memory.id, status: memory.status, text: memory.text })))
+    const continuity = e.continuity({ caller: "core" })
+    const after = JSON.stringify(e.list({ all: true }).map((memory) => ({ id: memory.id, status: memory.status, text: memory.text })))
+
+    assert.equal(continuity.handoffProposal?.pendingCount, 1)
+    assert.equal(continuity.handoffProposal?.items.length, 1)
+    assert.equal(before, after)
   })
 
   it("doctor reports context policy config without memory text", () => {

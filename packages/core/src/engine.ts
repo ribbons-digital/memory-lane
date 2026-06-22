@@ -598,12 +598,15 @@ export class MemoryEngine {
 
   private handoffModeDoctor(): Record<string, unknown> {
     const mode = this.getHandoffMode()
+    const note = mode === "manual"
+      ? "Current inspection-first behavior is active."
+      : mode === "review"
+        ? "Review mode is active for read-only handoff proposals; approve pending memories before relying on them as handoff state."
+        : "Declared for Phase 21; currently behaves like manual mode."
     return {
       handoffMode: mode,
-      handoffModeBehaviorActive: mode === "manual",
-      handoffModeNote: mode === "manual"
-        ? "Current inspection-first behavior is active."
-        : "Declared for Phase 21; currently behaves like manual mode.",
+      handoffModeBehaviorActive: mode === "manual" || mode === "review",
+      handoffModeNote: note,
     }
   }
 
@@ -743,6 +746,7 @@ export class MemoryEngine {
     return buildContinuityReadModel(this.store.list(), {
       projectScopeKey: this.scope?.key,
       caller: opts?.caller,
+      handoffMode: this.getHandoffMode(),
     })
   }
 

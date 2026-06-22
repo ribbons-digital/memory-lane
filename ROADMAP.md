@@ -649,7 +649,7 @@ Out of scope for Phase 20.5:
 
 ## Phase 21 — Handoff-Free Sessions
 
-**Status:** Slice 1 implements the non-breaking `memory.handoffMode` contract and diagnostics only. `manual` is the default and behavior-active mode. `review` and `automatic` are accepted and reported as declared Phase 21 modes, but they currently behave like `manual`; no lifecycle handoff generation or automatic injection is active in Slice 1.
+**Status:** Slice 1 implements the non-breaking `memory.handoffMode` contract and diagnostics. Slice 2 implements read-only review-mode handoff proposals on existing continuity surfaces. `manual` is the default inspection-first mode. `review` is behavior-active only for bounded proposals assembled from existing pending continuity candidates; it does not generate new records or inject lifecycle context. `automatic` is accepted and reported as a declared Phase 21 mode, but remains inactive.
 
 **Goal:** Enable seamless cross-session and cross-harness continuity for users who have validated their memory pipeline.
 
@@ -661,7 +661,7 @@ Todos:
 
 1. Add a `memory.handoffMode` config flag with values `manual`, `review`, and `automatic`. Default to `manual` so users opt in explicitly. **Slice 1 complete: contract, validation, and diagnostics only.**
 2. In `manual` mode, keep current behavior but allow explicit status/review/list tools to reveal newer approved progress from other sessions.
-3. In `review` mode, session/release/progress summaries are generated as pending suggestions; users approve them before future sessions use them.
+3. In `review` mode, assemble existing pending session-summary/checkpoint/progress continuity candidates into read-only handoff proposals for explicit review and approval before future sessions rely on them. **Slice 2 complete: continuity proposal surface only; no new generation or lifecycle injection.**
 4. In `automatic` mode, approved session summaries, checkpoint memories, and relevant global preferences are eligible for budgeted injection at the next `SessionStart` alongside baseline memories.
 5. Add cross-session freshness checks: if another harness/session has newer approved project progress, surface a bounded notice or ask whether to recall/review it.
 6. Add natural-language workstream discovery for queries like “resume building X” or “find where we implemented X,” using approved session summaries, checkpoint memories, provenance, PR/branch references when available, and revision relationships as pointers rather than raw transcript search.

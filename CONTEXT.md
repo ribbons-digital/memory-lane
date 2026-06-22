@@ -80,11 +80,19 @@ The default handoff mode. Existing inspection-first behavior remains active: use
 _Avoid_: Disabled memory, no continuity, automatic handoff
 
 **Review handoff mode**:
-A declared future handoff mode where generated handoff/progress continuity remains pending until review approval before future sessions rely on it. In Phase 21 Slice 1 it behaves like manual mode and only appears in diagnostics.
-_Avoid_: Automatic approval, automatic injection, active review workflow
+A handoff mode where Memory Lane assembles existing pending project-scoped continuity candidates into read-only handoff proposals on explicit continuity surfaces. It is review-first: users inspect and approve pending records before relying on them as handoff state. It does not generate new summaries, inject handoff bodies into lifecycle context, or approve anything automatically.
+_Avoid_: Automatic approval, automatic injection, generated handoff state, cleanup workflow
+
+**Review-mode handoff proposal**:
+A read-only aggregation of pending project-scoped continuity candidates assembled when `memory.handoffMode` is `review`. It helps a user inspect what Memory Lane would use as the next handoff trail if approved. It is not an approved fact, lifecycle injection, automatic summary, or cleanup recommendation.
+_Avoid_: Approved checkpoint, automatic handoff, generated summary, mutation plan
+
+**Handoff proposal item**:
+A bounded preview and metadata pointer to an existing pending continuity candidate inside a review-mode handoff proposal. Items reuse the continuity read model's pending-continuity selection, preview cap, and secret filtering.
+_Avoid_: Raw memory body, transcript excerpt, approved fact, auto-injected context
 
 **Automatic handoff mode**:
-A declared future handoff mode where approved handoff-relevant records may become eligible for stronger budgeted SessionStart continuity. In Phase 21 Slice 1 it behaves like manual mode and only appears in diagnostics.
+A declared future handoff mode where approved handoff-relevant records may become eligible for stronger budgeted SessionStart continuity. In Phase 21 Slice 2 it remains inactive and behaves like manual mode outside diagnostics.
 _Avoid_: Silent transcript memory, unbounded injection, cleanup automation
 
 **Continuity intent**:

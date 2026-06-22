@@ -8,6 +8,8 @@ import type {
   ContinuityReadModel,
   ContinuityReadModelOptions,
   ContinuityWarning,
+  HandoffMode,
+  HandoffProposal,
   MemoryKind,
   MemoryRecord,
 } from "./types.js"
@@ -24,6 +26,10 @@ const REQUIRED_CONTINUITY_ACTIONS = [
   "memory-lane status --json",
 ]
 const REQUIRED_MCP_TOOLS = ["memory_continuity", "memory_review", "memory_list", "memory_status"]
+const HANDOFF_PROPOSAL_NOTES = [
+  "Review-mode handoff proposals are read-only; inspect and approve pending memories before relying on them as handoff state.",
+  "No lifecycle context injection or automatic approval is performed.",
+]
 const PROJECT_KIND_PRIORITY = new Map<MemoryKind, number>([
   ["project_checkpoint", 0],
   ["session_summary", 1],
@@ -104,6 +110,31 @@ function unique(values: string[]): string[] {
   return [...new Set(values)]
 }
 
+function buildHandoffProposal(input: {
+  handoffMode?: HandoffMode
+  projectScope?: string
+  pendingCount: number
+  items: ContinuityMemoryPreview[]
+}): HandoffProposal | undefined {
+  if (input.handoffMode !== "review") return undefined
+  if (!input.projectScope) return undefined
+  if (input.pendingCount <= 0 || !input.items.length) return undefined
+
+  return {
+    mode: "review",
+    status: "pending-review",
+    projectScope: input.projectScope,
+    pendingCount: input.pendingCount,
+    items: input.items,
+    omittedCount: Math.max(0, input.pendingCount - input.items.length),
+    suggestedActions: [
+      "memory-lane review --json",
+      ...input.items.map((item) => `memory-lane approve ${item.id}`),
+    ],
+    notes: HANDOFF_PROPOSAL_NOTES,
+  }
+}
+
 function buildWarnings(input: {
   projectScope?: string
   latestProject?: ContinuityMemoryPreview
@@ -167,6 +198,12 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
     .slice(0, maxPendingContinuity)
     .map((memory) => preview(memory, previewMaxChars))
     .filter((item): item is ContinuityMemoryPreview => Boolean(item))
+  const handoffProposal = buildHandoffProposal({
+    handoffMode: options.handoffMode,
+    projectScope,
+    pendingCount: pendingContinuityCandidates.length,
+    items: pendingContinuity,
+  })
 
   const freshness = buildFreshnessStatus(memories, { projectScopeKey: projectScope })
   const continuityHints = buildContinuityHints(memories, { projectScopeKey: projectScope })
@@ -178,6 +215,7 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
 
   const suggestedActions = unique([
     ...requiredContinuityActions(Boolean(pendingContinuityCandidates.length)),
+    ...(handoffProposal?.suggestedActions ?? []),
     ...continuityHints.suggestedActions,
   ])
 
@@ -194,6 +232,7 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
       ...(latestGlobal ? { global: latestGlobal } : {}),
     },
     pendingContinuity,
+    ...(handoffProposal ? { handoffProposal } : {}),
     freshness,
     continuityHints,
     operatingAgreements,

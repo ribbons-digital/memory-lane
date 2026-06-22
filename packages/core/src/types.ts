@@ -247,6 +247,19 @@ export interface ContinuityHarnessGuidance {
   mcp: string[]
 }
 
+export interface HandoffProposalItem extends ContinuityMemoryPreview {}
+
+export interface HandoffProposal {
+  mode: "review"
+  status: "pending-review"
+  projectScope: string | "none"
+  pendingCount: number
+  items: HandoffProposalItem[]
+  omittedCount: number
+  suggestedActions: string[]
+  notes: string[]
+}
+
 export interface ContinuityReadModel {
   projectScope: string | "none"
   generatedAt: string
@@ -260,6 +273,7 @@ export interface ContinuityReadModel {
     global?: ContinuityMemoryPreview
   }
   pendingContinuity: ContinuityMemoryPreview[]
+  handoffProposal?: HandoffProposal
   freshness: FreshnessStatus
   continuityHints: ContinuityHintSummary
   operatingAgreements: OperatingAgreementSummary
@@ -276,6 +290,7 @@ export interface ContinuityReadModelOptions {
   maxPendingContinuity?: number
   generatedAt?: string
   caller?: "cli" | "mcp" | "lifecycle" | "core"
+  handoffMode?: HandoffMode
 }
 
 export type WorkflowArea =
