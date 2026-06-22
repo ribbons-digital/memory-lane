@@ -681,10 +681,10 @@ No config file needed. Lexical search works out of the box.
 Values:
 
 - `manual` — current inspection-first behavior. Use explicit CLI/MCP surfaces such as `memory-lane continuity`, `memory-lane status --json`, `memory-lane review`, `memory_list`, `memory_review`, `memory_status`, and `memory_continuity({ projectPath })`.
-- `review` — declared for Phase 21 but inactive in this slice. It is accepted and reported by diagnostics, but runtime currently behaves like `manual`. Future review-mode handoff generation must remain pending until approved.
+- `review` — review-first handoff proposal behavior. Existing pending project-scoped continuity candidates, such as pending session summaries or checkpoint/progress candidates, are assembled into a read-only `handoffProposal` on `memory-lane continuity`, `memory-lane continuity --json`, and MCP `memory_continuity`. Review mode does not generate new summaries, approve pending records, or inject handoff bodies into lifecycle context; approve with existing `memory-lane review` / `memory-lane approve <id>` flows before relying on proposals as handoff state.
 - `automatic` — declared for Phase 21 but inactive in this slice. It is accepted and reported by diagnostics, but runtime currently behaves like `manual`. Future automatic behavior must remain explicit opt-in and budgeted.
 
-`memory-lane doctor`, `memory-lane doctor --json`, `memory-lane status --json`, and MCP `memory_status` report `handoffMode`, `handoffModeBehaviorActive`, and `handoffModeNote` without memory bodies. Human `memory-lane status` stays compact; use `status --json` for the full handoff-mode diagnostic fields.
+`memory-lane doctor`, `memory-lane doctor --json`, `memory-lane status --json`, and MCP `memory_status` report `handoffMode`, `handoffModeBehaviorActive`, and `handoffModeNote` without memory bodies or proposal previews. Human `memory-lane status` stays compact; use `status --json` for the full handoff-mode diagnostic fields.
 
 ### Semantic search config
 
