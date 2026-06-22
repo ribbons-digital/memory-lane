@@ -471,6 +471,22 @@ const contextPolicyDoctorKeys = new Set([
   "contextPolicyFallbackToSearch",
 ])
 
+const handoffModeDoctorKeys = new Set([
+  "handoffMode",
+  "handoffModeBehaviorActive",
+  "handoffModeNote",
+])
+
+function formatHandoffModeDoctor(report: Record<string, unknown>): string[] {
+  if (!("handoffMode" in report)) return []
+  return [
+    "Handoff mode",
+    `  mode: ${report.handoffMode}`,
+    `  behavior active: ${report.handoffModeBehaviorActive ? "yes" : "no"}`,
+    `  note: ${report.handoffModeNote}`,
+  ]
+}
+
 function formatContextPolicyDoctor(report: Record<string, unknown>): string[] {
   if (!("contextPolicyMode" in report)) return []
   return [
@@ -674,10 +690,11 @@ export function formatDoctor(report: Record<string, unknown>, json: boolean): st
   if (json) {
     return JSON.stringify({ ok: true, data: report, meta: meta() }, null, 2)
   }
+  const handoffModeLines = formatHandoffModeDoctor(report)
   const contextLines = formatContextPolicyDoctor(report)
   const preferenceLines = formatPreferenceDiagnosticsSummary(report.preferenceDiagnostics, report)
   const detailLines = Object.entries(report)
-    .filter(([k]) => !contextPolicyDoctorKeys.has(k) && k !== "preferenceDiagnostics")
+    .filter(([k]) => !handoffModeDoctorKeys.has(k) && !contextPolicyDoctorKeys.has(k) && k !== "preferenceDiagnostics")
     .map(([k, v]) => {
       if (k === "freshness") return formatFreshnessSummary(v) ?? "freshness: unavailable"
       if (k === "continuityHints") return formatContinuityHintSummary(v) ?? "continuityHints: unavailable"
@@ -685,7 +702,7 @@ export function formatDoctor(report: Record<string, unknown>, json: boolean): st
       if (v && typeof v === "object") return `${k}: ${JSON.stringify(v, null, 2)}`
       return `${k}: ${v}`
     })
-  return [...contextLines, ...preferenceLines, ...detailLines].join("\n")
+  return [...handoffModeLines, ...contextLines, ...preferenceLines, ...detailLines].join("\n")
 }
 
 export function formatImportPlan(result: ObsidianImportPlan | ObsidianImportApplyResult, json: boolean, dryRun: boolean): string {

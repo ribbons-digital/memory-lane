@@ -71,6 +71,22 @@ _Avoid_: Thread id, branch id, transcript, subagent task log
 A compact, plain-language lifecycle signal that Memory Lane has newer approved state, current operating agreements, or continuity hints worth inspecting. It is guidance inside lifecycle context, not a memory body, transcript summary, or cleanup recommendation.
 _Avoid_: Relevant memory, session summary, automatic handoff, cleanup recommendation
 
+**Handoff mode**:
+The configured continuity posture for how proactive Memory Lane should be across sessions. It is separate from context policy: handoff mode describes the continuity posture, while context policy controls whether and how much memory body content can be injected.
+_Avoid_: Context policy mode, automatic handoff injection, thread memory
+
+**Manual handoff mode**:
+The default handoff mode. Existing inspection-first behavior remains active: users and agents rely on explicit review/status/list/continuity surfaces and current bounded lifecycle notices.
+_Avoid_: Disabled memory, no continuity, automatic handoff
+
+**Review handoff mode**:
+A declared future handoff mode where generated handoff/progress continuity remains pending until review approval before future sessions rely on it. In Phase 21 Slice 1 it behaves like manual mode and only appears in diagnostics.
+_Avoid_: Automatic approval, automatic injection, active review workflow
+
+**Automatic handoff mode**:
+A declared future handoff mode where approved handoff-relevant records may become eligible for stronger budgeted SessionStart continuity. In Phase 21 Slice 1 it behaves like manual mode and only appears in diagnostics.
+_Avoid_: Silent transcript memory, unbounded injection, cleanup automation
+
 **Continuity intent**:
 A natural-language user prompt that asks an agent to resume prior work, locate where or when prior work happened, understand current project progress, or decide the next work item. It triggers bounded Memory Lane inspection guidance and, when topic-specific, targeted recall/search. It is not a lifecycle continuity notice, session summary, or automatic handoff.
 _Avoid_: Continuity notice, session summary, automatic handoff, lifecycle event

@@ -465,6 +465,8 @@ export interface ObsidianMirrorConfig {
   mode?: "mirror"
 }
 
+export type HandoffMode = "manual" | "review" | "automatic"
+
 export type MemoryContextPolicyMode = "off" | "policy-only" | "selective"
 
 export interface MemoryContextPolicyConfig {
@@ -520,6 +522,7 @@ export interface SemanticMemoryConfig {
   plugins?: string[]
   pluginConfig?: Record<string, unknown>
   memory?: {
+    handoffMode?: HandoffMode
     sessionEndSummary?: SessionEndSummaryConfig
     contextPolicy?: MemoryContextPolicyConfig
   }

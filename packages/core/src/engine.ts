@@ -33,7 +33,7 @@ import {
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
   MemoryKind, MemoryFreshness, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, UpdatePreview, ProjectScope,
-  RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig,
+  RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig, HandoffMode,
   FreshnessStatus, ContinuityHintSummary, ContinuityReadModel, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
   SupersedeResult, ReplaceResult, MemoryRevisionActor,
 } from "./types.js"
@@ -146,6 +146,12 @@ export class MemoryEngine {
   /** Shared context-injection policy loaded from config. */
   getContextPolicy(): MemoryContextPolicyConfig | undefined {
     return this.config.memory?.contextPolicy
+  }
+
+  /** Configured cross-session handoff posture. */
+  getHandoffMode(): HandoffMode {
+    const mode = this.config.memory?.handoffMode ?? "manual"
+    return mode === "review" || mode === "automatic" ? mode : "manual"
   }
 
   private syncMirrorAndCollectWarnings(): string[] {
@@ -590,6 +596,17 @@ export class MemoryEngine {
     }
   }
 
+  private handoffModeDoctor(): Record<string, unknown> {
+    const mode = this.getHandoffMode()
+    return {
+      handoffMode: mode,
+      handoffModeBehaviorActive: mode === "manual",
+      handoffModeNote: mode === "manual"
+        ? "Current inspection-first behavior is active."
+        : "Declared for Phase 21; currently behaves like manual mode.",
+    }
+  }
+
   private contextPolicyDoctor(): Record<string, unknown> {
     const policy = this.config.memory?.contextPolicy
     return {
@@ -767,6 +784,7 @@ export class MemoryEngine {
         operatingAgreementIds,
       }),
       ...this.semanticDoctor(mems),
+      ...this.handoffModeDoctor(),
       ...this.contextPolicyDoctor(),
       ...this.memoryFileDoctor(),
       ...this.hookDebugDoctor(),

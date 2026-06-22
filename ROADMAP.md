@@ -649,6 +649,8 @@ Out of scope for Phase 20.5:
 
 ## Phase 21 — Handoff-Free Sessions
 
+**Status:** Slice 1 implements the non-breaking `memory.handoffMode` contract and diagnostics only. `manual` is the default and behavior-active mode. `review` and `automatic` are accepted and reported as declared Phase 21 modes, but they currently behave like `manual`; no lifecycle handoff generation or automatic injection is active in Slice 1.
+
 **Goal:** Enable seamless cross-session and cross-harness continuity for users who have validated their memory pipeline.
 
 This phase turns Phase 13–20 into a cohesive experience: the agent starts a new session already aware of where things left off, can surface newer progress recorded by another session/harness, can help the user find or resume the relevant prior workstream by natural language, and can consistently apply global personal preferences without a manual `HANDOFF.md`, while still respecting token-aware context budgets and review controls.
@@ -657,7 +659,7 @@ For this roadmap, a workstream is the user-meaningful unit of ongoing work acros
 
 Todos:
 
-1. Add a `memory.handoffMode` config flag with values `manual`, `review`, and `automatic`. Default to `manual` so users opt in explicitly.
+1. Add a `memory.handoffMode` config flag with values `manual`, `review`, and `automatic`. Default to `manual` so users opt in explicitly. **Slice 1 complete: contract, validation, and diagnostics only.**
 2. In `manual` mode, keep current behavior but allow explicit status/review/list tools to reveal newer approved progress from other sessions.
 3. In `review` mode, session/release/progress summaries are generated as pending suggestions; users approve them before future sessions use them.
 4. In `automatic` mode, approved session summaries, checkpoint memories, and relevant global preferences are eligible for budgeted injection at the next `SessionStart` alongside baseline memories.
