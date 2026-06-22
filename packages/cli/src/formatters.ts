@@ -632,6 +632,13 @@ export function formatContinuityReadModel(model: ContinuityReadModel, json: bool
     lines.push("", colorize("Pending continuity", "bold"))
     for (const item of model.pendingContinuity) lines.push(`  [${item.id}] ${item.preview}`)
   }
+  if (model.handoffProposal) {
+    lines.push("", colorize("Review-mode handoff proposal", "bold"))
+    lines.push(`  Pending candidates: ${model.handoffProposal.pendingCount}${model.handoffProposal.omittedCount ? ` (${model.handoffProposal.omittedCount} omitted)` : ""}`)
+    for (const item of model.handoffProposal.items) lines.push(`  [${item.id}] ${item.preview}`)
+    lines.push("  Actions:")
+    for (const action of model.handoffProposal.suggestedActions) lines.push(`    ${figures.pointerSmall} ${action}`)
+  }
   if (model.warnings.length) {
     lines.push("", colorize("Warnings", "yellow"))
     for (const warning of model.warnings) lines.push(`  ${figures.warning} ${warning.code}: ${warning.message}`)

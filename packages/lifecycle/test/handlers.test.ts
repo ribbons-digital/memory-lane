@@ -274,6 +274,19 @@ test("session-start policy-only injects continuity notice without memory bodies"
   assert.equal("text" in (result.contextDecision?.continuity ?? {}), false)
 })
 
+test("session-start output is unchanged across handoff modes", () => {
+  const project = tempDir()
+  const modes = ["manual", "review", "automatic"] as const
+  const outputs = modes.map((handoffMode) => {
+    const engine = engineInTemp(project, { contextPolicy: { mode: "policy-only" }, handoffMode })
+    return handleSessionStart(engine, { cwd: project })
+  })
+
+  assert.deepEqual(outputs[1], outputs[0])
+  assert.deepEqual(outputs[2], outputs[0])
+  assert.doesNotMatch(JSON.stringify(outputs), /handoffProposal/u)
+})
+
 test("session-start selective injects continuity notice before relevant memory", () => {
   const project = tempDir()
   const engine = engineInTemp(project, { contextPolicy: { mode: "selective", maxItems: { sessionStart: 1 } } })

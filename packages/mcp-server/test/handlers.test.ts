@@ -49,6 +49,19 @@ function engineInTemp(cwd?: string): MemoryEngine {
   return engine
 }
 
+function engineInTempWithConfig(config: unknown, cwd?: string): MemoryEngine {
+  const dir = tempDir()
+  const configPath = path.join(dir, "config.json")
+  fs.writeFileSync(configPath, JSON.stringify(config), "utf8")
+  const engine = new MemoryEngine({
+    memoryPath: path.join(dir, "memory.jsonl"),
+    embeddingsPath: path.join(dir, "embeddings.jsonl"),
+    configPath,
+  })
+  if (cwd) engine.refreshScope(cwd)
+  return engine
+}
+
 function parseToolResult(result: { content: Array<{ type: string; text?: string }> }): any {
   const text = result.content.find((item) => item.type === "text")?.text
   assert.equal(typeof text, "string")
@@ -368,6 +381,55 @@ test("memory_continuity includes pending captured checkpoint candidates", async 
     kind: "project",
     reason: "kind is project_checkpoint",
   })
+  assert.equal(result.data.continuity.handoffProposal, undefined)
+})
+
+test("memory_continuity includes review-mode handoff proposal", async () => {
+  const project = tempDir()
+  fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "mcp-review-proposal" }))
+  const engine = engineInTempWithConfig({ memory: { handoffMode: "review" } }, project)
+  const saved = engine.save({
+    text: "## Session Summary\nNext action: inspect MCP review-mode handoff proposal.",
+    status: "pending",
+    category: "project",
+    scopeType: "project",
+    kind: "session_summary",
+    source: "session-summary",
+  })
+  assert.equal(saved.status, "saved")
+
+  const result = parseToolResult(await handleMemoryContinuity(engine, { projectPath: project }))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.continuity.handoffProposal.mode, "review")
+  assert.equal(result.data.continuity.handoffProposal.pendingCount, 1)
+  assert.equal(result.data.continuity.handoffProposal.items[0].id, saved.memory.id)
+  assert.ok(result.data.continuity.handoffProposal.suggestedActions.includes(`memory-lane approve ${saved.memory.id}`))
+  assert.ok(result.data.continuity.suggestedActions.includes(`memory-lane approve ${saved.memory.id}`))
+
+  const status = parseToolResult(await handleMemoryStatus(engine, { projectPath: project }))
+  assert.equal(status.data.status.handoffMode, "review")
+  assert.equal(status.data.status.handoffModeBehaviorActive, true)
+  assert.equal(status.data.status.handoffProposal, undefined)
+})
+
+test("memory_continuity omits handoff proposal outside review mode", async () => {
+  const project = tempDir()
+  fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "mcp-manual-proposal" }))
+  const engine = engineInTemp(project)
+  engine.save({
+    text: "## Session Summary\nNext action: remain manual.",
+    status: "pending",
+    category: "project",
+    scopeType: "project",
+    kind: "session_summary",
+    source: "session-summary",
+  })
+
+  const result = parseToolResult(await handleMemoryContinuity(engine, { projectPath: project }))
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.continuity.handoffProposal, undefined)
 })
 
 test("memory_continuity explains missing projectPath when no project scope is active", async () => {
@@ -407,6 +469,7 @@ test("memory_status returns doctor counts without memory text", async () => {
   assert.equal(result.data.status.handoffMode, "manual")
   assert.equal(result.data.status.handoffModeBehaviorActive, true)
   assert.equal(result.data.status.handoffModeNote, "Current inspection-first behavior is active.")
+  assert.equal(result.data.status.handoffProposal, undefined)
   const expectedScope = engine.getProjectScope()?.key ?? "none"
   assert.equal(result.data.status.projectScope, expectedScope)
   assert.equal(result.meta.projectScope, expectedScope)

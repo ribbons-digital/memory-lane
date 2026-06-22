@@ -1237,12 +1237,52 @@ describe("CLI integration", () => {
     assert.match(output.stdout, /Project: cli-continuity-human/u)
     assert.match(output.stdout, /Latest approved/u)
     assert.match(output.stdout, /Pending continuity/u)
+    assert.doesNotMatch(output.stdout, /Review-mode handoff proposal/u)
     assert.match(output.stdout, /freshness-advisory/u)
     assert.match(output.stdout, /Freshness advisory actions \(manual dry-run\):/u)
     assert.match(output.stdout, /memory-lane update stale-human --text <updated-memory-text> --dry-run/u)
     assert.equal((output.stdout.match(/memory-lane update stale-human/gu) ?? []).length, 1)
     assert.match(output.stdout, /memory-lane review --json/u)
     assert.doesNotMatch(output.stdout, /SECRET stale human continuity body/u)
+  })
+
+  it("continuity surfaces review-mode handoff proposal without changing manual or automatic", () => {
+    const dir = tempDir()
+    const project = path.join(dir, "project")
+    fs.mkdirSync(project)
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-review-proposal" }))
+    const mem = path.join(dir, "memory.jsonl")
+    const config = path.join(dir, "config.json")
+    const env = { MEMORY_LANE_FILE: mem, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: config, NO_COLOR: "1" }
+    writeMemoryRecords(mem, [
+      { id: "approved", text: "Approved project checkpoint", category: "project", scope: { type: "project", key: "cli-review-proposal" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" },
+      { id: "pending-review", text: "## Session Summary\nNext action: inspect review-mode handoff proposal.", category: "project", scope: { type: "project", key: "cli-review-proposal" }, status: "pending", source: "session-summary", kind: "session_summary", createdAt: "2026-06-18T09:00:00.000Z", updatedAt: "2026-06-18T09:00:00.000Z" },
+    ] as MemoryRecord[])
+
+    const manualJson = JSON.parse(runProcess(["continuity", "--json"], { env, cwd: project }).stdout)
+    assert.equal(manualJson.data.handoffProposal, undefined)
+
+    fs.writeFileSync(config, JSON.stringify({ memory: { handoffMode: "review" } }), "utf8")
+    const human = runProcess(["continuity"], { env, cwd: project })
+    assert.equal(human.status, 0, human.stderr)
+    assert.match(human.stdout, /Review-mode handoff proposal/u)
+    assert.match(human.stdout, /Pending candidates: 1/u)
+    assert.match(human.stdout, /\[pending-review\] ## Session Summary Next action: inspect review-mode handoff proposal\./u)
+    assert.match(human.stdout, /memory-lane review --json/u)
+    assert.match(human.stdout, /memory-lane approve pending-review/u)
+
+    const reviewJson = JSON.parse(runProcess(["continuity", "--json"], { env, cwd: project }).stdout)
+    assert.equal(reviewJson.data.handoffProposal.mode, "review")
+    assert.equal(reviewJson.data.handoffProposal.pendingCount, 1)
+    assert.equal(reviewJson.data.handoffProposal.items[0].id, "pending-review")
+    assert.ok(reviewJson.data.suggestedActions.includes("memory-lane approve pending-review"))
+
+    const doctorJson = JSON.parse(runProcess(["doctor", "--json"], { env, cwd: project }).stdout)
+    assert.equal(doctorJson.data.handoffProposal, undefined)
+
+    fs.writeFileSync(config, JSON.stringify({ memory: { handoffMode: "automatic" } }), "utf8")
+    const automaticJson = JSON.parse(runProcess(["continuity", "--json"], { env, cwd: project }).stdout)
+    assert.equal(automaticJson.data.handoffProposal, undefined)
   })
 
   it("continuity human freshness advisory actions are bounded and omitted actions stay out of generic suggestions", () => {
@@ -1460,7 +1500,7 @@ describe("CLI integration", () => {
     assert.equal(status.data.handoffModeNote, "Current inspection-first behavior is active.")
   })
 
-  it("doctor human output renders configured inactive handoff mode", () => {
+  it("doctor human output renders configured review handoff mode", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,
       MEMORY_LANE_EMBEDDINGS_FILE: embFile,
@@ -1473,12 +1513,13 @@ describe("CLI integration", () => {
     const doctorJson = JSON.parse(run(["doctor", "--json"], env))
     const statusJson = JSON.parse(run(["status", "--json"], env))
 
-    assert.match(humanDoctor, /Handoff mode\n  mode: review\n  behavior active: no\n  note: Declared for Phase 21; currently behaves like manual mode\./u)
+    assert.match(humanDoctor, /Handoff mode\n  mode: review\n  behavior active: yes\n  note: Review mode is active for read-only handoff proposals; approve pending memories before relying on them as handoff state\./u)
     assert.doesNotMatch(humanDoctor, /handoffModeBehaviorActive:/u)
     for (const payload of [doctorJson, statusJson]) {
       assert.equal(payload.data.handoffMode, "review")
-      assert.equal(payload.data.handoffModeBehaviorActive, false)
-      assert.equal(payload.data.handoffModeNote, "Declared for Phase 21; currently behaves like manual mode.")
+      assert.equal(payload.data.handoffModeBehaviorActive, true)
+      assert.equal(payload.data.handoffModeNote, "Review mode is active for read-only handoff proposals; approve pending memories before relying on them as handoff state.")
+      assert.equal(payload.data.handoffProposal, undefined)
     }
   })
 
