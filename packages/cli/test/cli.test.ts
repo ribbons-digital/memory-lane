@@ -6,7 +6,8 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
-import { MemoryEngine, type MemoryRecord } from "@memory-lane/core"
+import { MemoryEngine, type ContinuityReadModel, type MemoryRecord } from "@memory-lane/core"
+import { formatContinuityReadModel } from "../src/formatters.ts"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -1226,6 +1227,7 @@ describe("CLI integration", () => {
     const env = { MEMORY_LANE_FILE: mem, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json"), NO_COLOR: "1" }
     writeMemoryRecords(mem, [
       { id: "approved", text: "Approved project checkpoint", category: "project", scope: { type: "project", key: "cli-continuity-human" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" },
+      { id: "stale-human", text: "SECRET stale human continuity body", category: "project", scope: { type: "project", key: "cli-continuity-human" }, status: "approved", source: "manual", kind: "project_fact", createdAt: "2026-06-17T08:00:00.000Z", updatedAt: "2026-06-17T08:00:00.000Z", freshness: { staleAfterDays: 1, capturedAt: "2026-06-17T08:00:00.000Z" } },
       { id: "pending", text: "## Session Summary\nNext action: inspect review queue.", category: "project", scope: { type: "project", key: "cli-continuity-human" }, status: "pending", source: "session-summary", kind: "session_summary", createdAt: "2026-06-18T09:00:00.000Z", updatedAt: "2026-06-18T09:00:00.000Z" },
     ] as MemoryRecord[])
 
@@ -1235,7 +1237,76 @@ describe("CLI integration", () => {
     assert.match(output.stdout, /Project: cli-continuity-human/u)
     assert.match(output.stdout, /Latest approved/u)
     assert.match(output.stdout, /Pending continuity/u)
+    assert.match(output.stdout, /freshness-advisory/u)
+    assert.match(output.stdout, /Freshness advisory actions \(manual dry-run\):/u)
+    assert.match(output.stdout, /memory-lane update stale-human --text <updated-memory-text> --dry-run/u)
+    assert.equal((output.stdout.match(/memory-lane update stale-human/gu) ?? []).length, 1)
     assert.match(output.stdout, /memory-lane review --json/u)
+    assert.doesNotMatch(output.stdout, /SECRET stale human continuity body/u)
+  })
+
+  it("continuity human freshness advisory actions are bounded and omitted actions stay out of generic suggestions", () => {
+    const dir = tempDir()
+    const project = path.join(dir, "project")
+    fs.mkdirSync(project)
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-continuity-bounds" }))
+    const mem = path.join(dir, "memory.jsonl")
+    const env = { MEMORY_LANE_FILE: mem, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json"), NO_COLOR: "1" }
+    writeMemoryRecords(mem, Array.from({ length: 4 }, (_, index) => ({
+      id: `expired-continuity-${index}`,
+      text: `Expired continuity body ${index}`,
+      category: "project" as const,
+      scope: { type: "project" as const, key: "cli-continuity-bounds" },
+      status: "approved" as const,
+      source: "manual" as const,
+      kind: "project_fact" as const,
+      createdAt: `2026-06-17T0${index}:00:00.000Z`,
+      updatedAt: `2026-06-17T0${index}:00:00.000Z`,
+      freshness: { expiresAt: "2026-06-18T00:00:00.000Z" },
+    })))
+
+    const output = runProcess(["continuity"], { env, cwd: project })
+
+    assert.equal(output.status, 0, output.stderr)
+    assert.match(output.stdout, /Freshness advisory actions \(manual dry-run\):/u)
+    assert.match(output.stdout, /memory-lane update expired-continuity-3 --text <updated-memory-text> --dry-run/u)
+    assert.match(output.stdout, /memory-lane supersede <new-id> expired-continuity-2 --dry-run/u)
+    assert.match(output.stdout, /2 more stale\/expired advisory records omitted; use memory-lane status --json for full ids\./u)
+    assert.doesNotMatch(output.stdout, /expired-continuity-1|expired-continuity-0/u)
+  })
+
+  it("continuity human output does not label non-freshness dry-run actions as freshness advisories", () => {
+    const model: ContinuityReadModel = {
+      projectScope: "manual-model",
+      generatedAt: "2026-06-22T00:00:00.000Z",
+      status: { visibleApprovedCount: 0, pendingReviewCount: 0, pendingContinuityCount: 0 },
+      latestApproved: {},
+      pendingContinuity: [],
+      freshness: {
+        projectScope: "manual-model",
+        advisory: { referenceNow: "2026-06-22T00:00:00.000Z", withFreshnessCount: 0, currentCount: 0, staleCount: 0, expiredCount: 0, stale: [], expired: [] },
+        visibleApprovedCount: 0,
+        newerApprovedCount: 0,
+        newerProjectApprovedCount: 0,
+        newerGlobalApprovedCount: 0,
+        newerGlobalPreferenceCount: 0,
+        newerByKind: {},
+        newerBySource: {},
+        newerByProvenance: {},
+        newestNewerApproved: [],
+      },
+      operatingAgreements: { projectScope: "manual-model", primaryCount: 0, relatedCandidateCount: 0, omittedPrimaryCount: 0, omittedRelatedCandidateCount: 0, workflowAreas: [], primary: [], relatedCandidates: [], notes: [] },
+      continuityHints: { projectScope: "manual-model", hintCount: 0, hints: [], supersededVisible: [], operatingAgreementOverlaps: [], projectGlobalPreferenceOverlaps: [], scopeHygieneCandidates: [], suggestedActions: [], notes: [] },
+      warnings: [],
+      suggestedActions: ["memory-lane update unrelated --text <updated-memory-text> --dry-run"],
+      answerGuidance: [],
+      harnessGuidance: { summary: [], cli: [], mcp: [] },
+      notes: [],
+    }
+
+    const output = formatContinuityReadModel(model, false)
+    assert.doesNotMatch(output, /Freshness advisory actions/u)
+    assert.match(output, /memory-lane update unrelated --text <updated-memory-text> --dry-run/u)
   })
 
   it("dashboard --json includes text-free continuity hints", () => {
@@ -1501,10 +1572,48 @@ describe("CLI integration", () => {
     for (const output of [doctorResult.stdout, statusResult.stdout]) {
       assert.match(output, /Freshness: 2 newer approved memories since 2026-06-18T08:00:00.000Z/u)
       assert.match(output, /visible approved: 3/u)
+      assert.match(output, /advisory: 0 expired, 1 stale/u)
+      assert.match(output, /Freshness advisory actions \(manual dry-run\):/u)
+      assert.match(output, /memory-lane update old-project-approved --text <updated-memory-text> --dry-run/u)
+      assert.doesNotMatch(output, /memory-lane reject|memory-lane delete/u)
       assert.doesNotMatch(output, /\[object Object\]/u)
       assert.doesNotMatch(output, /APPROVED PRIVATE CLI FRESHNESS TEXT/u)
       assert.doesNotMatch(output, /PENDING PRIVATE CLI FRESHNESS TEXT/u)
     }
+  })
+
+  it("status human freshness advisory actions are bounded with text-free omitted record note", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-freshness-bounds" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+    const records = Array.from({ length: 4 }, (_, index) => ({
+      id: `expired-${index}`,
+      text: `SECRET expired freshness ${index}`,
+      category: "project" as const,
+      scope: { type: "project" as const, key: "cli-freshness-bounds" },
+      status: "approved" as const,
+      source: "manual" as const,
+      kind: "project_fact" as const,
+      createdAt: `2026-06-17T0${index}:00:00.000Z`,
+      updatedAt: `2026-06-17T0${index}:00:00.000Z`,
+      freshness: { expiresAt: "2026-06-18T00:00:00.000Z" },
+    }))
+    writeMemoryRecords(memFile, records)
+
+    const result = runProcess(["status", "--since", "2026-06-18T08:00:00.000Z"], { env, cwd: project })
+
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /Freshness advisory actions \(manual dry-run\):/u)
+    assert.match(result.stdout, /memory-lane update expired-3 --text <updated-memory-text> --dry-run/u)
+    assert.match(result.stdout, /memory-lane supersede <new-id> expired-2 --dry-run/u)
+    assert.doesNotMatch(result.stdout, /expired-1|expired-0/u)
+    assert.match(result.stdout, /2 more stale\/expired advisory records omitted; use memory-lane status --json for full ids\./u)
+    assert.doesNotMatch(result.stdout, /SECRET expired freshness/u)
   })
 
   it("status and doctor --since reject invalid ISO timestamps through core validation", () => {
