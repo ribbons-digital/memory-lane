@@ -3,7 +3,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { readFile } from "node:fs/promises"
-import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, isMetaTaskPromptText, resolveWritableMemoryPaths, isWorkflowArea, type MemoryPaths, type WorkflowArea } from "@memory-lane/core"
+import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, isMetaTaskPromptText, resolveMemoryPaths, resolveWritableMemoryPaths, isWorkflowArea, type MemoryPaths, type WorkflowArea } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import { handleSessionEnd, createOpenAICompatibleProvider } from "@memory-lane/lifecycle"
@@ -888,6 +888,9 @@ async function handleClaude(ctx: CliContext): Promise<void> {
 
 type CommandHandler = (ctx: CliContext) => void | Promise<void>
 
+// These inspection commands must work in read-only desktop/client sandboxes without home-storage write probes.
+const readOnlyStorageCommands = new Set(["status", "continuity", "dashboard"])
+
 const commandHandlers: Record<string, CommandHandler> = {
   save: handleSave,
   suggest: handleSuggest,
@@ -981,7 +984,10 @@ async function main(): Promise<void> {
   }
 
   const projPath = flag(argv, "project")
-  const paths = resolveWritableMemoryPaths({ cwd: projPath ?? process.cwd(), env: process.env, autoInitProjectLocalOnHomeFailure: true })
+  const pathOptions = { cwd: projPath ?? process.cwd(), env: process.env }
+  const paths = readOnlyStorageCommands.has(command)
+    ? resolveMemoryPaths(pathOptions)
+    : resolveWritableMemoryPaths({ ...pathOptions, autoInitProjectLocalOnHomeFailure: true })
   const configPath = paths.configPath || resolveConfigPath()
   let engine: MemoryEngine
   try {

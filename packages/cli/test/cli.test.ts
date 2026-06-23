@@ -22,11 +22,15 @@ function run(args: string[], env?: NodeJS.ProcessEnv) {
 
 function runProcess(args: string[], options?: { env?: NodeJS.ProcessEnv; stdin?: string; cwd?: string }) {
   const cli = path.resolve(__dirname, "../dist/index.js")
+  const env = { ...process.env, ...options?.env }
+  for (const key of Object.keys(env)) {
+    if (env[key] === undefined) delete env[key]
+  }
   return spawnSync("node", [cli, ...args], {
     input: options?.stdin,
     encoding: "utf8",
     cwd: options?.cwd,
-    env: { ...process.env, ...options?.env },
+    env,
   })
 }
 
@@ -1428,6 +1432,43 @@ describe("CLI integration", () => {
     assert.doesNotMatch(output, /Continuity inspection/u)
     assert.equal(output.match(/memory-lane list --json/gu)?.length, 1)
     assert.doesNotMatch(output, /PRIVATE OLD LOOP TEXT|PRIVATE CURRENT LOOP TEXT|PRIVATE GLOBAL LOOP TEXT|PRIVATE GLOBAL PROJECT-LIKE TEXT/u)
+  })
+
+  it("read-only continuity commands do not require writable home storage", () => {
+    const dir = tempDir()
+    const home = path.join(dir, "home")
+    const storage = path.join(home, ".memory-lane")
+    const project = path.join(dir, "project")
+    fs.mkdirSync(storage, { recursive: true })
+    fs.mkdirSync(project)
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "readonly-home-project" }))
+    writeMemoryRecords(path.join(storage, "memory.jsonl"), [
+      { id: "approved", text: "Readonly home continuity checkpoint", category: "project", scope: { type: "project", key: "readonly-home-project" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" },
+    ] as MemoryRecord[])
+    fs.writeFileSync(path.join(storage, "embeddings.jsonl"), "")
+    fs.writeFileSync(path.join(storage, "config.json"), JSON.stringify({}), "utf8")
+    fs.chmodSync(storage, 0o555)
+
+    const env = { HOME: home, MEMORY_LANE_FILE: undefined, MEMORY_LANE_EMBEDDINGS_FILE: undefined, MEMORY_LANE_CONFIG: undefined }
+
+    try {
+      const status = runProcess(["status", "--json"], { env, cwd: project })
+      assert.equal(status.status, 0, `status stderr=${status.stderr} stdout=${status.stdout}`)
+      assert.doesNotMatch(status.stderr + status.stdout, /write-test|EPERM/u)
+      assert.equal(JSON.parse(status.stdout).data.approvedMemories, 1)
+
+      const continuity = runProcess(["continuity", "--json"], { env, cwd: project })
+      assert.equal(continuity.status, 0, `continuity stderr=${continuity.stderr} stdout=${continuity.stdout}`)
+      assert.doesNotMatch(continuity.stderr + continuity.stdout, /write-test|EPERM/u)
+      assert.equal(JSON.parse(continuity.stdout).data.latestApproved.project.id, "approved")
+
+      const dashboard = runProcess(["dashboard", "--json"], { env, cwd: project })
+      assert.equal(dashboard.status, 0, `dashboard stderr=${dashboard.stderr} stdout=${dashboard.stdout}`)
+      assert.doesNotMatch(dashboard.stderr + dashboard.stdout, /write-test|EPERM/u)
+      assert.equal(JSON.parse(dashboard.stdout).data.counts.approved, 1)
+    } finally {
+      fs.chmodSync(storage, 0o755)
+    }
   })
 
   it("status and doctor json include text-free continuity hints", () => {

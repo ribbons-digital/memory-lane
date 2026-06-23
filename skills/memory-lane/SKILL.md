@@ -11,8 +11,8 @@ Local-first persistent memory system with semantic retrieval for coding agents.
 
 - **User explicitly asks you to remember something** → use `memory_save` tool
 - **You proactively identify something worth remembering** → use `memory_suggest` tool (user reviews later)
-- **You need to recall past context** → use `memory_recall` tool
-- **User asks "what were we working on?"** → use `memory_recall` with that query
+- **You need a targeted approved fact, preference, or project memory** → use `memory_recall` tool
+- **User asks broad continuity questions like "what were we working on?", "where are we?", or "what should we do next?"** → use `memory_continuity` (MCP) or `memory-lane continuity --query "..." --json` (CLI) before falling back to recall/roadmap inspection
 
 ## CLI Commands
 
@@ -52,10 +52,22 @@ memory-lane supersede <new-id> <old-id> --reason "newer version"
 
 ### Recall (semantic + lexical search of approved memories)
 
+Use recall for targeted approved facts, preferences, and project memories, not as the canonical first stop for broad handoff/continuity questions.
+
 ```bash
 memory-lane recall "package manager"
-memory-lane recall "what were we working on"
+memory-lane recall "preferred release workflow"
 ```
+
+### Continuity (canonical broad workstream state)
+
+Use continuity first for broad handoff-style questions such as "what were we last working on?", "where are we?", "resume this thread", or "what should we work on next?".
+
+```bash
+memory-lane continuity --query "what were we last working on?" --json
+```
+
+MCP-capable harnesses should call `memory_continuity({ projectPath, query })`. CLI-only harnesses may use the command above; correct continuity behavior does not require direct MCP usage.
 
 ### Operating agreements
 
