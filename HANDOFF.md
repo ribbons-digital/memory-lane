@@ -2,7 +2,7 @@
 
 ## Recent changes (since this handoff was last updated)
 
-- Phase 21 memory hygiene UX hardening design is in progress on `docs/phase-21-hygiene-ux-design`: `docs/superpowers/specs/2026-06-23-phase-21-memory-hygiene-ux-hardening-design.md` designs the follow-up from Claude Desktop dogfood after `v0.2.24`. The dogfood confirmed broad continuity routing worked through the CLI, then exposed gaps: exact-id inspection required JSON scripting, `recall --id` was confusing, and project-specific global memories need same-id scope correction instead of delete-and-resave. The bounded design covers CLI `show/get`, MCP `memory_get`, a hard error for `recall --id`, and CLI same-id `rescope/move` with dry-run/`--yes`; it explicitly excludes MCP mutation, delete-confirmation changes, automatic cleanup, lifecycle changes, and retrieval rewrites.
+- Phase 21 memory hygiene UX hardening is implemented on `feat/phase-21-hygiene-ux`: CLI `show/get` inspect one exact id with scoped defaults and `--all`, `recall --id` now hard-errors with guidance to use `show`, MCP adds read-only `memory_get`, and CLI `rescope/move` performs same-id scope correction for active memories with `--dry-run`/`--yes` gates. Scope correction rewrites normalized scope/project metadata, preserves memory text/status/id/revision metadata, clears stale project metadata when moving to global, and invalidates embeddings with the existing updated reason. The implementation follows `docs/superpowers/specs/2026-06-23-phase-21-memory-hygiene-ux-hardening-design.md` and keeps non-goals: no MCP mutation, delete-confirmation changes, automatic cleanup, lifecycle changes, or retrieval rewrites.
 
 - Phase 21 Slice 6e installer/skill destination hardening landed via PR #45 and released as `v0.2.24`: generated Claude/Codex skill writes now resolve destinations through symlinks and skip writes that would land inside the Memory Lane source checkout, while preserving other hook/config writes and printing visible partial-success warnings during `init`/`upgrade`. Tests cover symlinked Codex and Claude skill destinations, normal non-Memory-Lane dotfiles-style git directories, and upgrade manifest reapply. The design spec remains at `docs/superpowers/specs/2026-06-23-phase-21-slice-6e-installer-skill-destination-hardening-design.md`.
 
@@ -76,7 +76,7 @@
 
 ## Current state
 
-Current branch for this handoff update is `docs/phase-21-hygiene-ux-design` in worktree `~/.config/superpowers/worktrees/memory-lane/phase-21-hygiene-ux-design`. It is based on `origin/main` after PR #45 (`76933ac`) and contains the Phase 21 memory hygiene UX hardening design spec, CONTEXT glossary updates for exact-id lookup and scope correction, and roadmap/handoff updates. Spec self-review, `git diff --check`, Opus review, PR, and merge cleanup are still needed.
+Current branch for this handoff update is `feat/phase-21-hygiene-ux` in worktree `~/.config/superpowers/worktrees/memory-lane/phase-21-hygiene-ux-impl`. It is based on `origin/main` after PR #46 (`cab401a`) and implements the approved hygiene UX hardening slice. Focused RED/GREEN tests now cover core exact-id lookup/rescope, CLI show/get/recall-id/rescope, and MCP memory_get. Full verification, Opus review, PR, and merge cleanup are still needed.
 
 Historical JSONL hardening is complete and committed:
 - `d0c7620 fix(core): normalize historical memory records`

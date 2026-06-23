@@ -6,6 +6,7 @@ import {
   handleMemoryApprove,
   handleMemoryContinuity,
   handleMemoryDelete,
+  handleMemoryGet,
   handleMemoryList,
   handleMemoryRecall,
   handleMemoryReject,
@@ -21,6 +22,7 @@ export const MEMORY_LANE_TOOL_NAMES = [
   "memory_recall",
   "memory_status",
   "memory_list",
+  "memory_get",
   "memory_review",
   "memory_continuity",
   "memory_approve",
@@ -141,6 +143,20 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
       },
     },
     async (input) => handleMemoryList(engine, input),
+  )
+
+  server.registerTool(
+    "memory_get",
+    {
+      title: "Get Memory",
+      description: "Show one Memory Lane memory by exact id. By default respects current project visibility and active statuses; use all=true for cross-project or deleted/rejected lookup.",
+      inputSchema: {
+        id: memoryId,
+        all: z.boolean().optional(),
+        projectPath,
+      },
+    },
+    async (input) => handleMemoryGet(engine, input),
   )
 
   server.registerTool(

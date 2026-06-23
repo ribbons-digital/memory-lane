@@ -50,3 +50,7 @@ export interface ContinuityToolInput extends ProjectPathInput {
 export interface MemoryIdToolInput extends ProjectPathInput {
   id: string
 }
+
+export interface MemoryGetToolInput extends MemoryIdToolInput {
+  all?: boolean
+}
