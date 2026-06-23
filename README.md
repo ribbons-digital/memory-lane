@@ -70,7 +70,7 @@ irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/inst
 
 The installer downloads a prebuilt binary and places it on your PATH. After installation, run `memory-lane init` to configure Claude Code, Codex, Claude Desktop, Codex Desktop, and pi. Use `memory-lane init --yes` to auto-configure all detected harnesses without prompting.
 
-If you are an end user, this installer + `memory-lane init` path is the recommended setup. If you are developing Memory Lane and also using it on the same machine, prefer the [development setup](#development-setup-local-checkout--manual-harness-config) below instead of `memory-lane init --yes`; release-style init can replace local dev shims and hand-edited harness config.
+If you are an end user, this installer + `memory-lane init` path is the recommended setup. If you are developing Memory Lane and also using it on the same machine, prefer the [development setup](#development-setup-local-checkout--manual-harness-config) below instead of `memory-lane init --yes`; release-style init can replace local dev shims and hand-edited harness config. Memory Lane guards generated skill writes so symlinked installed skill paths are not allowed to overwrite Memory Lane source skill files.
 
 If you prefer to review the script first, save it and run locally:
 
@@ -131,7 +131,7 @@ memory-lane doctor
 
 ### Development setup: local checkout + manual harness config
 
-If you are developing Memory Lane and using it on the same machine, avoid `memory-lane init --yes` unless you intentionally want release-style harness config. The init wizard is safe for end users, but on a development machine it can overwrite local shims or hand-edited settings that point at your checkout. Prefer manual config so each harness loads the code you just built.
+If you are developing Memory Lane and using it on the same machine, avoid `memory-lane init --yes` unless you intentionally want release-style harness config. The init wizard is safe for end users, but on a development machine it can overwrite local shims or hand-edited settings that point at your checkout. `init` and `upgrade` now skip generated Claude/Codex skill writes when the destination resolves through a symlink into the Memory Lane source checkout, printing a warning while preserving other hook/config writes. Prefer manual config so each harness loads the code you just built.
 
 Recommended development loop:
 

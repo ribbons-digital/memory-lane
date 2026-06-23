@@ -2,7 +2,7 @@
 
 ## Recent changes (since this handoff was last updated)
 
-- Phase 21 Slice 6e installer/skill destination hardening design is in progress on `docs/phase-21-installer-skill-destination-design`: `docs/superpowers/specs/2026-06-23-phase-21-slice-6e-installer-skill-destination-hardening-design.md` captures the bounded design. Root cause was verified: `~/.agents/skills/memory-lane` is a symlink to `/Users/shiang/projects/ribbons-digital/memory-lane/skills/memory-lane`, so `installCodexCli` followed the symlink and overwrote the repo source `skills/memory-lane/SKILL.md` during `memory-lane upgrade --yes`. The spec recommends a narrow source-tree realpath guard for generated skill writes in init/upgrade, applied to both Codex and Claude skill destinations, while keeping hooks/config reapplication and end-user normal installs unchanged.
+- Phase 21 Slice 6e installer/skill destination hardening is implemented on `fix/phase-21-installer-skill-destination`: generated Claude/Codex skill writes now resolve destinations through symlinks and skip writes that would land inside the Memory Lane source checkout, while preserving other hook/config writes and printing visible partial-success warnings during `init`/`upgrade`. Tests cover symlinked Codex and Claude skill destinations, normal non-Memory-Lane dotfiles-style git directories, and upgrade manifest reapply. The design spec remains at `docs/superpowers/specs/2026-06-23-phase-21-slice-6e-installer-skill-destination-hardening-design.md`.
 
 - Phase 21 Slice 5b automatic-mode validation is complete on `docs/phase-21-automatic-mode-validation`: `docs/superpowers/validation/2026-06-22-phase-21-slice-5b-automatic-mode-validation.md` validates Slice 5a automatic SessionStart handoff behavior with isolated temp storage, shared lifecycle handlers, real CLI status/doctor and Codex/Claude `SessionStart` entrypoints, and MCP package `memory_status`. Verdict: **Proceed to workstream discovery design/spec**. Automatic mode stayed approved-only, project-scoped, SessionStart-only, budget-neutral, text-free on diagnostics/policy-only surfaces, and non-mutating. No behavior code changed. Live desktop MCP/Claude/Codex/pi clients were not exercised, so future live-client dogfooding remains useful but not blocking.
 
@@ -74,7 +74,7 @@
 
 ## Current state
 
-Current branch for this handoff update is `docs/phase-21-installer-skill-destination-design` in worktree `~/.config/superpowers/worktrees/memory-lane/phase-21-installer-skill-destination-design`. It is based on `origin/main` after PR #43 (`4a0c771`) and contains the Phase 21 Slice 6e design spec, CONTEXT terminology updates for source vs installed skill files, and roadmap/handoff updates. Final `git diff --check`, review, PR, and merge cleanup are still needed.
+Current branch for this handoff update is `fix/phase-21-installer-skill-destination` in worktree `~/.config/superpowers/worktrees/memory-lane/phase-21-installer-skill-destination-impl`. It is based on `origin/main` after PR #44 (`6fcf7c6`) and implements the Phase 21 Slice 6e installer/skill destination guard. Focused verification has passed with `pnpm build`, init symlink/dotfiles tests, and the upgrade symlink reapply test. Full test verification, `git diff --check`, Opus review, PR, and merge cleanup are still needed.
 
 Historical JSONL hardening is complete and committed:
 - `d0c7620 fix(core): normalize historical memory records`

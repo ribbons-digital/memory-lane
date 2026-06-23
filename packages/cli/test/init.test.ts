@@ -19,6 +19,17 @@ function createFakeBinDir(): string {
   return dir
 }
 
+function createFakeMemoryLaneSourceRoot(): { root: string; skillDir: string; skillPath: string; sentinel: string } {
+  const root = tempDir()
+  const skillDir = path.join(root, "skills", "memory-lane")
+  const skillPath = path.join(skillDir, "SKILL.md")
+  const sentinel = "SOURCE SKILL SENTINEL\n"
+  fs.mkdirSync(skillDir, { recursive: true })
+  fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "memory-lane" }), "utf8")
+  fs.writeFileSync(skillPath, sentinel, "utf8")
+  return { root, skillDir, skillPath, sentinel }
+}
+
 describe("init wizard", () => {
   let home: string
   let binaryPath: string
@@ -219,6 +230,58 @@ describe("init wizard", () => {
     const content = fs.readFileSync(skillPath, "utf8")
     assert.ok(content.includes("name: memory-lane"))
     assert.ok(content.includes(binaryPath))
+  })
+
+  it("skips Codex skill write when destination resolves into Memory Lane source", () => {
+    const source = createFakeMemoryLaneSourceRoot()
+    const skillParent = path.join(home, ".agents", "skills")
+    fs.mkdirSync(skillParent, { recursive: true })
+    fs.rmSync(path.join(home, ".agents", "skills", "memory-lane"), { recursive: true, force: true })
+    fs.symlinkSync(source.skillDir, path.join(skillParent, "memory-lane"), "dir")
+
+    const output = run(["init", "--yes"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    assert.equal(fs.readFileSync(source.skillPath, "utf8"), source.sentinel)
+    assert.match(output, /skipped Memory Lane skill write/u)
+    assert.match(output, /source checkout/u)
+    assert.ok(fs.existsSync(path.join(home, ".codex", "hooks.json")))
+  })
+
+  it("skips Claude skill write when destination resolves into Memory Lane source", () => {
+    const source = createFakeMemoryLaneSourceRoot()
+    const skillParent = path.join(home, ".claude", "skills")
+    fs.mkdirSync(skillParent, { recursive: true })
+    fs.rmSync(path.join(home, ".claude", "skills", "memory-lane"), { recursive: true, force: true })
+    fs.symlinkSync(source.skillDir, path.join(skillParent, "memory-lane"), "dir")
+
+    const output = run(["init", "--yes"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    assert.equal(fs.readFileSync(source.skillPath, "utf8"), source.sentinel)
+    assert.match(output, /skipped Memory Lane skill write/u)
+    assert.match(output, /source checkout/u)
+    assert.ok(fs.existsSync(path.join(home, ".claude", "settings.json")))
+  })
+
+  it("allows Codex skill writes inside non-Memory-Lane dotfiles repos", () => {
+    const dotfilesRoot = path.join(home, ".agents")
+    fs.mkdirSync(path.join(dotfilesRoot, ".git"), { recursive: true })
+    fs.writeFileSync(path.join(dotfilesRoot, "package.json"), JSON.stringify({ name: "dotfiles" }), "utf8")
+
+    const output = run(["init", "--yes"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    const skillPath = path.join(home, ".agents/skills/memory-lane/SKILL.md")
+    assert.ok(fs.existsSync(skillPath))
+    assert.match(fs.readFileSync(skillPath, "utf8"), /name: memory-lane/u)
+    assert.doesNotMatch(output, /skipped Memory Lane skill write/u)
   })
 
   it("writes Codex Desktop TOML config in --yes mode", () => {
