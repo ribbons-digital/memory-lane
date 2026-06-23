@@ -2,7 +2,7 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { buildContinuityHints, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, type CheckpointCandidateMetadata, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type UpdatePreview, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
+import { buildContinuityHints, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, type CheckpointCandidateMetadata, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type UpdatePreview, type RescopeResult, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
@@ -380,6 +380,73 @@ export function formatUpdatePreview(result: UpdatePreview, json: boolean): strin
     `Proposed: [${result.proposed.id}] ${compactPreview(result.proposed.text)}`,
     ...result.warnings.map((warning) => `Warning: ${warning}`),
   ].join("\n")
+}
+
+function scopeLabel(memory: MemoryRecord): string {
+  const key = memory.scope.key ?? memory.project?.key ?? memory.project?.root
+  return key ? `${memory.scope.type}:${key}` : memory.scope.type
+}
+
+function shellArg(value: string): string {
+  if (/^[A-Za-z0-9_./:=@+-]+$/u.test(value)) return value
+  return `'${value.replace(/'/gu, `'"'"'`)}'`
+}
+
+function rescopeApplyCommand(result: RescopeResult): string {
+  const parts = ["memory-lane", "rescope", shellArg(result.proposed.id), "--scope", result.proposed.scope.type]
+  if (result.proposed.scope.type === "project") parts.push("--project", shellArg(result.proposed.project?.root ?? result.proposed.scope.key ?? ""))
+  parts.push("--yes")
+  return parts.join(" ")
+}
+
+function revisionSummary(memory: MemoryRecord): string | undefined {
+  if (!memory.revision) return undefined
+  const label = revisionLabel(memory)
+  const parts = [
+    label,
+    memory.revision.reason ? `reason: ${memory.revision.reason}` : undefined,
+    memory.revision.revisedBy ? `by: ${memory.revision.revisedBy}` : undefined,
+    memory.revision.revisedAt ? `at: ${memory.revision.revisedAt}` : undefined,
+  ].filter(Boolean)
+  return parts.length ? parts.join("; ") : "present"
+}
+
+export function formatMemoryGet(id: string, memory: MemoryRecord | undefined, json: boolean, all: boolean): string {
+  if (!memory) {
+    const data = { status: "not_found", id, hint: all ? undefined : "Use --all to search across projects and deleted/rejected memories." }
+    if (json) return JSON.stringify({ ok: false, error: `Memory not found: ${id}`, data, meta: meta() }, null, 2)
+    return [`Memory not found: ${id}`, ...(all ? [] : ["Use --all to search across projects and deleted/rejected memories."])].join("\n")
+  }
+  if (json) return JSON.stringify({ ok: true, data: { memory }, meta: meta() }, null, 2)
+  const lines = [
+    `Memory: [${memory.id}]`,
+    `Status: ${memory.status}`,
+    `Scope: ${scopeLabel(memory)}`,
+    `Category: ${memory.category}`,
+    `Kind: ${memory.kind ?? "misc"}`,
+    `Source: ${memory.source}`,
+  ]
+  if (memory.provenance) lines.push(`Provenance: ${memory.provenance.adapter}/${memory.provenance.lifecycleEvent}`)
+  const revision = revisionSummary(memory)
+  if (revision) lines.push(`Revision: ${revision}`)
+  lines.push(`Created: ${memory.createdAt}`, `Updated: ${memory.updatedAt}`, "", memory.text)
+  return lines.join("\n")
+}
+
+export function formatRescopeResult(result: RescopeResult, json: boolean): string {
+  if (json) return JSON.stringify({ ok: true, data: result, meta: meta() }, null, 2)
+  const lines = [
+    result.dryRun ? "Rescope dry run:" : "Rescoped memory:",
+    `Memory: [${result.proposed.id}] same id preserved`,
+    `Current scope: ${scopeLabel(result.current)}`,
+    `Proposed scope: ${scopeLabel(result.proposed)}`,
+  ]
+  if (result.dryRun) lines.push(`Apply with: ${rescopeApplyCommand(result)}`)
+  lines.push(
+    ...result.warnings.map((warning) => `Warning: ${warning}`),
+    ...(result.mirrorWarnings ?? []).map((warning) => `Warning: ${warning}`),
+  )
+  return lines.join("\n")
 }
 
 function formatRevisionWarnings(warnings: Array<{ message: string }>): string[] {
@@ -784,6 +851,8 @@ Commands:
   save <text> [--scope global|project] [--category preference|personal|project] [--status approved|pending]
   suggest <text> [--scope global|project] [--category preference|personal|project]
   recall [query] [--top-k 8]
+  show|get <id> [--all]
+                  Show one memory by exact id
   list [--status approved|pending|rejected|deleted] [--all]
   search <query>
   delete <id>
@@ -791,6 +860,8 @@ Commands:
   reject <id>
   update <id> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run]
                   Revise an active memory with the same id
+  rescope|move <id> --scope global|project [--dry-run|--yes]
+                  Correct memory scope with the same id
   supersede <new-id> <old-id...> [--reason <reason>] [--dry-run] [--yes]
                   Mark approved old memories as superseded by an approved successor
   replace <old-id...> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run] [--yes]

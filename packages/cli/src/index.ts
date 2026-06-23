@@ -19,7 +19,7 @@ import type { SemanticMemoryConfig } from "@memory-lane/core"
 import { resolveBundledPlugin } from "./plugins.js"
 import {
   formatMemories, formatReviewMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
-  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatPreferenceDiagnosticsSummary, formatImportPlan, formatOperatingAgreements, formatContinuityReadModel, formatError, formatUpdatePreview, formatSupersedeResult, formatReplaceResult, usage,
+  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatPreferenceDiagnosticsSummary, formatImportPlan, formatOperatingAgreements, formatContinuityReadModel, formatError, formatMemoryGet, formatUpdatePreview, formatRescopeResult, formatSupersedeResult, formatReplaceResult, usage,
   type ObsidianImportApplyResult,
 } from "./formatters.js"
 
@@ -255,8 +255,20 @@ function handleSuggest(ctx: CliContext): void {
 }
 
 async function handleRecall(ctx: CliContext): Promise<void> {
+  if (hasFlag(ctx.argv, "id")) {
+    console.log(formatError("Unsupported recall flag: --id. Recall is query search; use `memory-lane show <id>` for exact-id lookup.", ctx.json))
+    process.exit(1)
+  }
   const result = await ctx.engine.recall(ctx.rest.join(" "))
   console.log(formatRecall(result, ctx.json))
+}
+
+function handleShow(ctx: CliContext): void {
+  const id = requireId(ctx, "show")
+  const all = hasFlag(ctx.argv, "all")
+  const memory = ctx.engine.getById(id, { all })
+  console.log(formatMemoryGet(id, memory, ctx.json, all))
+  if (!memory) process.exit(1)
 }
 
 function handleList(ctx: CliContext): void {
@@ -299,6 +311,27 @@ function handleReject(ctx: CliContext): void {
     process.exit(1)
   }
   console.log(formatMutationResult("Rejected", mem, ctx.json))
+}
+
+function handleRescope(ctx: CliContext): void {
+  const id = requireId(ctx, "rescope")
+  const scopeType = flag(ctx.argv, "scope")
+  if (scopeType !== "global" && scopeType !== "project") {
+    console.log(formatError("Usage: memory-lane rescope <id> --scope global|project [--project <path>] [--dry-run|--yes]", ctx.json))
+    process.exit(1)
+  }
+  if (!hasFlag(ctx.argv, "dry-run") && !hasFlag(ctx.argv, "yes")) {
+    console.log(formatError("rescope requires --yes or --dry-run", ctx.json))
+    process.exit(1)
+  }
+  const result = hasFlag(ctx.argv, "dry-run")
+    ? ctx.engine.previewRescope(id, { scopeType: scopeType as any, projectPath: flag(ctx.argv, "project"), dryRun: true })
+    : ctx.engine.rescope(id, { scopeType: scopeType as any, projectPath: flag(ctx.argv, "project") })
+  if (!result) {
+    console.log(formatError(`Memory not found: ${id}`, ctx.json))
+    process.exit(1)
+  }
+  console.log(formatRescopeResult(result, ctx.json))
 }
 
 async function handleUpdate(ctx: CliContext): Promise<void> {
@@ -889,18 +922,22 @@ async function handleClaude(ctx: CliContext): Promise<void> {
 type CommandHandler = (ctx: CliContext) => void | Promise<void>
 
 // These inspection commands must work in read-only desktop/client sandboxes without home-storage write probes.
-const readOnlyStorageCommands = new Set(["status", "continuity", "dashboard"])
+const readOnlyStorageCommands = new Set(["status", "continuity", "dashboard", "show", "get"])
 
 const commandHandlers: Record<string, CommandHandler> = {
   save: handleSave,
   suggest: handleSuggest,
   recall: handleRecall,
+  show: handleShow,
+  get: handleShow,
   list: handleList,
   search: handleSearch,
   delete: handleDelete,
   approve: handleApprove,
   reject: handleReject,
   update: handleUpdate,
+  rescope: handleRescope,
+  move: handleRescope,
   supersede: handleSupersede,
   replace: handleReplace,
   review: handleReview,

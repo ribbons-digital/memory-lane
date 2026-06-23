@@ -8,6 +8,7 @@ import {
   handleMemoryApprove,
   handleMemoryContinuity,
   handleMemoryDelete,
+  handleMemoryGet,
   handleMemoryList,
   handleMemoryRecall,
   handleMemoryReject,
@@ -720,4 +721,32 @@ test("memory_status returns an error envelope for invalid since timestamps", asy
 
   assert.equal(result.ok, false)
   assert.match(result.error, /Invalid since timestamp/u)
+})
+
+
+test("memory_get returns visible exact ids and all bypasses scope and status", async () => {
+  const projectA = tempDir()
+  const projectB = tempDir()
+  fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "mcp-get-project-a" }))
+  fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "mcp-get-project-b" }))
+
+  const engine = engineInTemp(projectA)
+  const a = engine.save({ text: "MCP project A exact text", status: "approved", category: "project", scopeType: "project" })
+  engine.refreshScope(projectB)
+  const b = engine.save({ text: "MCP project B exact text", status: "approved", category: "project", scopeType: "project" })
+  if (a.status !== "saved" || b.status !== "saved") throw new Error("expected saved")
+  engine.delete(b.memory.id)
+
+  const visible = parseToolResult(await handleMemoryGet(engine, { id: a.memory.id, projectPath: projectA }))
+  assert.equal(visible.ok, true)
+  assert.equal(visible.data.memory.text, "MCP project A exact text")
+
+  const hidden = parseToolResult(await handleMemoryGet(engine, { id: b.memory.id, projectPath: projectA }))
+  assert.equal(hidden.ok, true)
+  assert.deepEqual(hidden.data, { status: "not_found", id: b.memory.id, hint: "Use all: true to search across projects and deleted/rejected memories." })
+
+  const all = parseToolResult(await handleMemoryGet(engine, { id: b.memory.id, projectPath: projectA, all: true }))
+  assert.equal(all.ok, true)
+  assert.equal(all.data.memory.status, "deleted")
+  assert.equal(all.data.memory.text, "MCP project B exact text")
 })

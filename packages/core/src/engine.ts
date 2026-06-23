@@ -38,7 +38,7 @@ import {
 } from "./engine-helpers.js"
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType,
-  MemoryKind, MemoryFreshness, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, UpdatePreview, ProjectScope,
+  MemoryKind, MemoryFreshness, SaveInput, SaveResult, UpdateInput, MemoryMutationResult, UpdatePreview, RescopeInput, RescopeResult, ProjectScope,
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig, HandoffMode,
   FreshnessStatus, ContinuityHintSummary, ContinuityReadModel, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
   SupersedeResult, ReplaceResult, MemoryRevisionActor, ResolvedContinuityBaseline, ContinuityBaselineDiagnostic,
@@ -211,6 +211,59 @@ export class MemoryEngine {
   private mutationResultWithMirrorWarnings(memory: MemoryRecord): MemoryMutationResult {
     const warnings = this.syncMirrorAndCollectWarnings()
     return warnings.length ? { ...memory, warnings } : memory
+  }
+
+  private activeVisibleByDefault(memory: MemoryRecord): boolean {
+    return (memory.status === "approved" || memory.status === "pending") && (!this.scope || visibleInScope(memory, this.scope.key))
+  }
+
+  getById(id: string, opts?: { all?: boolean }): MemoryRecord | undefined {
+    return this.store.list().find((memory) => {
+      if (memory.id !== id) return false
+      if (opts?.all) return true
+      return this.activeVisibleByDefault(memory)
+    })
+  }
+
+  private requireActiveMemory(id: string): MemoryRecord {
+    const memory = this.store.list().find((m) => m.id === id)
+    if (!memory || memory.status === "deleted" || memory.status === "rejected") {
+      throw new Error(`Cannot rescope memory: active memory not found: ${id}`)
+    }
+    return memory
+  }
+
+  private buildRescopePreview(id: string, input: RescopeInput): RescopeResult {
+    if (input.scopeType !== "global" && input.scopeType !== "project") {
+      throw new Error(`Invalid scopeType: ${displayValue(input.scopeType)}. Expected one of: global, project`)
+    }
+    const current = this.requireActiveMemory(id)
+    const targetScope = input.scopeType === "global" ? undefined : resolveProjectScope(input.projectPath)
+    if (input.scopeType === "project" && !targetScope) {
+      throw new Error("Cannot rescope to project: no project scope is available")
+    }
+    const proposed: MemoryRecord = {
+      ...current,
+      scope: input.scopeType === "global" ? { type: "global" } : { type: "project", key: targetScope!.key },
+      project: input.scopeType === "global" ? undefined : { ...targetScope! },
+      updatedAt: timestamp(),
+    }
+    const normalizedCurrent = JSON.stringify({ scope: current.scope, project: current.project })
+    const normalizedProposed = JSON.stringify({ scope: proposed.scope, project: proposed.project })
+    if (normalizedCurrent === normalizedProposed) throw new Error(`Cannot rescope memory: no-op scope change: ${id}`)
+    return { dryRun: input.dryRun ?? false, current, proposed, warnings: [] }
+  }
+
+  previewRescope(id: string, input: RescopeInput): RescopeResult | undefined {
+    return this.buildRescopePreview(id, { ...input, dryRun: true })
+  }
+
+  rescope(id: string, input: RescopeInput): RescopeResult | undefined {
+    const result = this.buildRescopePreview(id, { ...input, dryRun: false })
+    this.store.append(result.proposed)
+    this.invalidateEmbedding(id, "updated")
+    const mirrorWarnings = this.syncMirrorAndCollectWarnings()
+    return mirrorWarnings.length ? { ...result, mirrorWarnings } : result
   }
 
   private upgradePendingDuplicate(dup: MemoryRecord, input: SaveInput, ctx: SaveContext): SaveResult {

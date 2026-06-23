@@ -2048,4 +2048,93 @@ describe("operating agreement selection", () => {
     assert.equal(result.primary[0].workflowArea, "project-loop")
     assert.ok(!serialized.includes("PRIVATE AGREEMENT TEXT"))
   })
+
+  it("gets memories by exact id with scoped defaults and all-status escape hatch", () => {
+    const projectA = tempDir()
+    const projectB = tempDir()
+    fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "get-project-a" }))
+    fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "get-project-b" }))
+
+    const e = new MemoryEngine({
+      memoryPath: path.join(tempDir(), "mem.jsonl"),
+      embeddingsPath: path.join(tempDir(), "emb.jsonl"),
+      configPath: path.join(tempDir(), "cfg.json"),
+    })
+    e.refreshScope(projectA)
+    const global = e.save({ text: "Global exact lookup", status: "approved", scopeType: "global" })
+    const project = e.save({ text: "Project A exact lookup", status: "pending", scopeType: "project", category: "project" })
+    e.refreshScope(projectB)
+    const crossProject = e.save({ text: "Project B hidden exact lookup", status: "approved", scopeType: "project", category: "project" })
+    e.delete(global.status === "saved" ? global.memory.id : "missing")
+
+    if (global.status !== "saved" || project.status !== "saved" || crossProject.status !== "saved") throw new Error("expected saved")
+    e.refreshScope(projectA)
+
+    assert.equal(e.getById(project.memory.id)?.text, "Project A exact lookup")
+    assert.equal(e.getById(crossProject.memory.id), undefined)
+    assert.equal(e.getById(global.memory.id), undefined)
+    assert.equal(e.getById(global.memory.id, { all: true })?.status, "deleted")
+    assert.equal(e.getById(crossProject.memory.id, { all: true })?.text, "Project B hidden exact lookup")
+  })
+
+  it("rescopes active memories with same id and normalized project metadata", () => {
+    const projectA = tempDir()
+    const projectB = tempDir()
+    fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "rescope-project-a" }))
+    fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "rescope-project-b" }))
+
+    const e = new MemoryEngine({
+      memoryPath: path.join(tempDir(), "mem.jsonl"),
+      embeddingsPath: path.join(tempDir(), "emb.jsonl"),
+      configPath: path.join(tempDir(), "cfg.json"),
+    })
+    e.refreshScope(projectA)
+    const saved = e.save({ text: "Wispergo-specific rule", status: "approved", scopeType: "global", kind: "workflow_rule", category: "preference" })
+    if (saved.status !== "saved") throw new Error("expected saved")
+
+    const preview = e.previewRescope(saved.memory.id, { scopeType: "project", projectPath: projectB, dryRun: true })
+    assert.equal(preview?.dryRun, true)
+    assert.equal(preview?.proposed.id, saved.memory.id)
+    assert.equal(preview?.proposed.scope.type, "project")
+    assert.equal(preview?.proposed.scope.key, "rescope-project-b")
+    assert.equal(preview?.proposed.project?.key, "rescope-project-b")
+    assert.equal(e.getById(saved.memory.id)?.scope.type, "global")
+
+    const applied = e.rescope(saved.memory.id, { scopeType: "project", projectPath: projectB })
+    assert.equal(applied?.dryRun, false)
+    assert.equal(applied?.proposed.id, saved.memory.id)
+    assert.equal(applied?.proposed.scope.key, "rescope-project-b")
+    assert.equal(applied?.proposed.project?.key, "rescope-project-b")
+    assert.equal(e.getById(saved.memory.id), undefined)
+    e.refreshScope(projectB)
+    assert.equal(e.getById(saved.memory.id)?.text, "Wispergo-specific rule")
+
+    const backToGlobal = e.rescope(saved.memory.id, { scopeType: "global" })
+    assert.equal(backToGlobal?.proposed.scope.type, "global")
+    assert.equal(backToGlobal?.proposed.scope.key, undefined)
+    assert.equal(backToGlobal?.proposed.project, undefined)
+    e.refreshScope(projectA)
+    assert.equal(e.getById(saved.memory.id)?.scope.type, "global")
+  })
+
+  it("rejects rescope for deleted rejected and no-op memories", () => {
+    const e = new MemoryEngine({
+      memoryPath: path.join(tempDir(), "mem.jsonl"),
+      embeddingsPath: path.join(tempDir(), "emb.jsonl"),
+      configPath: path.join(tempDir(), "cfg.json"),
+    })
+    const active = e.save({ text: "Active global", status: "approved", scopeType: "global" })
+    const rejected = e.save({ text: "Rejected global", status: "approved", scopeType: "global" })
+    const deleted = e.save({ text: "Deleted global", status: "approved", scopeType: "global" })
+    if (active.status !== "saved" || rejected.status !== "saved" || deleted.status !== "saved") throw new Error("expected saved")
+    e.reject(rejected.memory.id)
+    e.delete(deleted.memory.id)
+
+    const cleaned = e.rescope(active.memory.id, { scopeType: "global" })
+    assert.equal(cleaned?.proposed.project, undefined)
+    assert.throws(() => e.previewRescope(active.memory.id, { scopeType: "global", dryRun: true }), /no-op/i)
+    assert.throws(() => e.previewRescope(rejected.memory.id, { scopeType: "project", dryRun: true }), /active memory/i)
+    assert.throws(() => e.previewRescope(deleted.memory.id, { scopeType: "project", dryRun: true }), /active memory/i)
+  })
+
 })

@@ -2377,4 +2377,76 @@ describe("CLI integration", () => {
     assert.ok(result.stdout.includes("Download latest binary and re-apply configs"))
   })
 
+
+  it("shows exact ids with scoped defaults and --all", () => {
+    const projectA = tempDir()
+    const projectB = tempDir()
+    fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "cli-show-project-a" }))
+    fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "cli-show-project-b" }))
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+
+    run(["save", "Project A show text", "--status", "approved", "--category", "project", "--scope", "project", "--project", projectA], env)
+    run(["save", "Project B show text", "--status", "approved", "--category", "project", "--scope", "project", "--project", projectB], env)
+    const all = JSON.parse(run(["list", "--all", "--json", "--project", projectA], env))
+    const idA = all.data.memories.find((m: any) => m.text === "Project A show text").id
+    const idB = all.data.memories.find((m: any) => m.text === "Project B show text").id
+
+    const shown = JSON.parse(run(["show", idA, "--json", "--project", projectA], env))
+    assert.equal(shown.ok, true)
+    assert.equal(shown.data.memory.id, idA)
+    assert.equal(shown.data.memory.text, "Project A show text")
+
+    const hidden = runProcess(["get", idB, "--json", "--project", projectA], { env })
+    assert.equal(hidden.status, 1)
+    assert.match(hidden.stdout, /not_found/u)
+    assert.match(hidden.stdout, /--all/u)
+
+    const shownAll = JSON.parse(run(["get", idB, "--all", "--json", "--project", projectA], env))
+    assert.equal(shownAll.data.memory.text, "Project B show text")
+  })
+
+  it("rejects recall --id and suggests show", () => {
+    const result = runProcess(["recall", "--id", "abc123", "--json"])
+    assert.equal(result.status, 1)
+    assert.match(result.stdout, /Unsupported recall flag: --id/u)
+    assert.match(result.stdout, /memory-lane show <id>/u)
+  })
+
+  it("rescopes exact ids with dry-run and --yes while preserving the same id", () => {
+    const projectA = tempDir()
+    const projectB = tempDir()
+    fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "cli-rescope-project-a" }))
+    fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "cli-rescope-project-b" }))
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+
+    run(["save", "Global rule to rescope", "--status", "approved", "--kind", "workflow_rule", "--scope", "global", "--project", projectA], env)
+    const before = JSON.parse(run(["list", "--all", "--json", "--project", projectA], env))
+    const id = before.data.memories.find((m: any) => m.text === "Global rule to rescope").id
+
+    const missingConfirmation = runProcess(["rescope", id, "--scope", "project", "--project", projectB, "--json"], { env })
+    assert.equal(missingConfirmation.status, 1)
+    assert.match(missingConfirmation.stdout, /requires --yes or --dry-run/u)
+
+    const preview = JSON.parse(run(["move", id, "--scope", "project", "--project", projectB, "--dry-run", "--json"], env))
+    assert.equal(preview.data.dryRun, true)
+    assert.equal(preview.data.proposed.id, id)
+    assert.equal(preview.data.proposed.scope.key, "cli-rescope-project-b")
+    const humanPreview = run(["move", id, "--scope", "project", "--project", projectB, "--dry-run"], env)
+    assert.match(humanPreview, new RegExp(`Apply with: memory-lane rescope ${id} --scope project --project .* --yes`, "u"))
+    assert.equal(JSON.parse(run(["show", id, "--json", "--project", projectA], env)).data.memory.scope.type, "global")
+
+    const applied = JSON.parse(run(["rescope", id, "--scope", "project", "--project", projectB, "--yes", "--json"], env))
+    assert.equal(applied.data.dryRun, false)
+    assert.equal(applied.data.proposed.id, id)
+    assert.equal(applied.data.proposed.scope.key, "cli-rescope-project-b")
+
+    const hidden = runProcess(["show", id, "--json", "--project", projectA], { env })
+    assert.equal(hidden.status, 1)
+    assert.equal(JSON.parse(run(["show", id, "--json", "--project", projectB], env)).data.memory.id, id)
+
+    const global = JSON.parse(run(["rescope", id, "--scope", "global", "--yes", "--json", "--project", projectB], env))
+    assert.equal(global.data.proposed.scope.type, "global")
+    assert.equal(global.data.proposed.project, undefined)
+  })
+
 })

@@ -396,7 +396,7 @@ Scope files are never auto-created. Create one manually in a project root when y
 echo '{"id":"my-project-uuid"}' > .memory-lane-scope
 ```
 
-Existing memories saved under old worktree path keys are not migrated automatically. Use `memory-lane list --all` and existing review/delete/save commands if you want to clean up fragmented historical records.
+Existing memories saved under old worktree path keys are not migrated automatically. Use `memory-lane list --all`, `memory-lane show <id> --all`, and existing review/rescope/delete/save commands if you want to clean up fragmented historical records.
 
 ## CLI Commands
 
@@ -404,6 +404,7 @@ Existing memories saved under old worktree path keys are not migrated automatica
 memory-lane save <text>           Save an approved memory
 memory-lane suggest <text>        Queue a pending suggestion for review
 memory-lane recall [query]        Recall memories (semantic or lexical)
+memory-lane show|get <id> [--all] Show one memory by exact id
 memory-lane list [--status ...]   List memories
 memory-lane search <query>        Lexical text search
 memory-lane approve <id>          Approve a pending memory
@@ -420,6 +421,8 @@ memory-lane continuity [--json] [--query <text>]
                                   Canonical continuity read model, with optional workstream discovery
 memory-lane agreements            Show approved operating agreements for the current project/global scope
 memory-lane update <id>           Revise an active memory with the same id
+memory-lane rescope|move <id> --scope global|project [--dry-run|--yes]
+                                  Correct memory scope with the same id
 memory-lane supersede <new-id> <old-id...> Link approved old memories to an approved successor
 memory-lane replace <old-id...>   Create a successor memory for approved old memories
 memory-lane compact               Remove deleted/rejected tombstones
@@ -526,9 +529,9 @@ Current hints report:
 - freshness advisories: approved visible memories with explicit freshness metadata that are expired or stale;
 - newer approved memories when `--since <ISO timestamp>` is provided.
 
-Scope hygiene hints are text-free inspection signals only. Memory Lane does not automatically rescope or clean up those memories; use `memory-lane list --json` to inspect them before deciding whether to update, supersede, or leave them alone.
+Scope hygiene hints are text-free inspection signals only. Memory Lane does not automatically rescope or clean up those memories; use `memory-lane show <id>` or `memory-lane list --json` to inspect them before deciding whether to rescope, update, supersede, or leave them alone. Use `memory-lane rescope <id> --scope project --project <path> --dry-run` to preview a same-id scope correction, then rerun with `--yes` only after review.
 
-Hints invite inspection with commands such as `memory-lane dashboard`, `memory-lane agreements --area <area>`, `memory-lane agreements --all`, and `memory-lane list --json`. Freshness advisory hints may also include per-id dry-run revision commands already available in the CLI; human `continuity` groups those commands separately as manual dry-run freshness actions. They do not perform cleanup, hide superseded memories, change recall ranking, or suggest destructive reject/delete commands.
+Hints invite inspection with commands such as `memory-lane dashboard`, `memory-lane show <id>`, `memory-lane agreements --area <area>`, `memory-lane agreements --all`, and `memory-lane list --json`. Freshness advisory hints may also include per-id dry-run revision commands already available in the CLI; human `continuity` groups those commands separately as manual dry-run freshness actions. They do not perform cleanup, hide superseded memories, change recall ranking, or suggest destructive reject/delete commands.
 
 ### Session-end summarization
 

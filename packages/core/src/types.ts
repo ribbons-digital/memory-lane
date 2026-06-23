@@ -446,6 +446,20 @@ export interface UpdatePreview {
   warnings: string[]
 }
 
+export interface RescopeInput {
+  scopeType: MemoryScopeType
+  projectPath?: string
+  dryRun?: boolean
+}
+
+export interface RescopeResult {
+  dryRun: boolean
+  current: MemoryRecord
+  proposed: MemoryRecord
+  warnings: string[]
+  mirrorWarnings?: string[]
+}
+
 export interface SupersedeResult {
   dryRun: boolean
   successor: MemoryRecord

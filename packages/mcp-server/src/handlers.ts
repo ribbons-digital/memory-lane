@@ -1,6 +1,6 @@
 import { classifyCheckpointCandidate, groupReviewMemories, type CheckpointCandidateMetadata, type MemoryEngine, type MemoryMutationResult, type MemoryRecord, type RecallResult, type SaveResult } from "@memory-lane/core"
 import type {
-  ContinuityToolInput, ListToolInput, MemoryIdToolInput, RecallToolInput, ReviewFilters, ReviewToolInput, SaveToolInput, StatusToolInput, SuggestToolInput, ToolEnvelope,
+  ContinuityToolInput, ListToolInput, MemoryGetToolInput, MemoryIdToolInput, RecallToolInput, ReviewFilters, ReviewToolInput, SaveToolInput, StatusToolInput, SuggestToolInput, ToolEnvelope,
 } from "./types.js"
 
 type ToolResult<T> = {
@@ -139,6 +139,23 @@ export async function handleMemoryList(engine: MemoryEngine, input: ListToolInpu
     applyProjectPath(engine, input.projectPath)
     const memories = engine.list({ status: input.status, all: input.all ?? false })
     return jsonContent(envelope(engine, { memories }, memories.length))
+  } catch (error) {
+    return jsonContent(errorEnvelope(error))
+  }
+}
+
+export async function handleMemoryGet(engine: MemoryEngine, input: MemoryGetToolInput) {
+  try {
+    applyProjectPath(engine, input.projectPath)
+    const memory = engine.getById(input.id, { all: input.all ?? false })
+    if (!memory) {
+      return jsonContent(envelope(engine, {
+        status: "not_found" as const,
+        id: input.id,
+        hint: input.all ? undefined : "Use all: true to search across projects and deleted/rejected memories.",
+      }))
+    }
+    return jsonContent(envelope(engine, { memory }, 1))
   } catch (error) {
     return jsonContent(errorEnvelope(error))
   }
