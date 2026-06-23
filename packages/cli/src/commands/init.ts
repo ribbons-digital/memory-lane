@@ -180,8 +180,10 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
           continue
         }
       }
-      integrations.push(installHarness(harness, options))
+      const result = installHarness(harness, options)
+      integrations.push(result)
       console.log(`  ✓ ${harnessName(harness)} configured`)
+      if (result.message) console.log(`    ${result.message}`)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err)
       integrations.push({ harness, configured: false, message })

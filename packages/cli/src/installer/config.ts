@@ -20,6 +20,59 @@ function writeJson(filePath: string, data: unknown): void {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + "\n", "utf8")
 }
 
+function pathContains(parent: string, child: string): boolean {
+  const relative = path.relative(parent, child)
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))
+}
+
+function resolveDestinationPath(filePath: string): string {
+  if (fs.existsSync(filePath)) return fs.realpathSync.native(filePath)
+
+  const parts: string[] = []
+  let current = filePath
+  while (!fs.existsSync(current)) {
+    parts.unshift(path.basename(current))
+    const parent = path.dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+
+  const resolvedParent = fs.existsSync(current) ? fs.realpathSync.native(current) : path.resolve(current)
+  return path.join(resolvedParent, ...parts)
+}
+
+function findMemoryLaneSourceRoot(resolvedPath: string): string | undefined {
+  let current = path.dirname(resolvedPath)
+  while (true) {
+    const packagePath = path.join(current, "package.json")
+    if (fs.existsSync(packagePath)) {
+      const pkg = readJson(packagePath)
+      const sourceSkillPath = path.join(current, "skills", "memory-lane", "SKILL.md")
+      if (pkg.name === "memory-lane" && fs.existsSync(sourceSkillPath) && pathContains(path.join(current, "skills", "memory-lane"), resolvedPath)) {
+        return current
+      }
+    }
+    const parent = path.dirname(current)
+    if (parent === current) return undefined
+    current = parent
+  }
+}
+
+function writeGeneratedSkill(skillPath: string, content: string): { written: boolean; warning?: string } {
+  const resolvedPath = resolveDestinationPath(skillPath)
+  const sourceRoot = findMemoryLaneSourceRoot(resolvedPath)
+  if (sourceRoot) {
+    return {
+      written: false,
+      warning: `Warning: skipped Memory Lane skill write because ${skillPath} resolves into the Memory Lane source checkout at ${sourceRoot}. Remove or repoint the symlink if you want init/upgrade to manage the installed skill.`,
+    }
+  }
+
+  ensureDir(skillPath)
+  fs.writeFileSync(skillPath, content, "utf8")
+  return { written: true }
+}
+
 function skillContent(binaryPath: string): string {
   return `---
 name: memory-lane
@@ -129,13 +182,13 @@ export function installClaudeCodeCli(options: InitOptions): IntegrationResult {
   const merged = mergeHooks(existing, "claude", options.binaryPath)
   writeJson(configPath, merged)
 
+  let message: string | undefined
   if (!options.projectMode) {
     const skillPath = path.join(options.homeDir, ".claude/skills/memory-lane/SKILL.md")
-    ensureDir(skillPath)
-    fs.writeFileSync(skillPath, skillContent(options.binaryPath), "utf8")
+    message = writeGeneratedSkill(skillPath, skillContent(options.binaryPath)).warning
   }
 
-  return { harness: "claude-code-cli", configured: true, configPath }
+  return { harness: "claude-code-cli", configured: true, configPath, message }
 }
 
 export function installCodexCli(options: InitOptions): IntegrationResult {
@@ -146,13 +199,13 @@ export function installCodexCli(options: InitOptions): IntegrationResult {
   const merged = mergeHooks(existing, "codex", options.binaryPath)
   writeJson(configPath, merged)
 
+  let message: string | undefined
   if (!options.projectMode) {
     const skillPath = path.join(options.homeDir, ".agents/skills/memory-lane/SKILL.md")
-    ensureDir(skillPath)
-    fs.writeFileSync(skillPath, skillContent(options.binaryPath), "utf8")
+    message = writeGeneratedSkill(skillPath, skillContent(options.binaryPath)).warning
   }
 
-  return { harness: "codex-cli", configured: true, configPath }
+  return { harness: "codex-cli", configured: true, configPath, message }
 }
 
 export function installClaudeDesktop(options: InitOptions): IntegrationResult {

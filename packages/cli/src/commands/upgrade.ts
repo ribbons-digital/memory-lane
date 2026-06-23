@@ -89,8 +89,10 @@ function installPreviouslyConfigured(options: InitOptions, manifest: InstallMani
       continue
     }
     try {
-      results.push(installHarness(integration.harness, options))
+      const result = installHarness(integration.harness, options)
+      results.push(result)
       console.log(`  ✓ ${integration.harness} reconfigured`)
+      if (result.message) console.log(`    ${result.message}`)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err)
       results.push({ harness: integration.harness, configured: false, message })
