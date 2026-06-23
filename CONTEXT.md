@@ -127,6 +127,14 @@ _Avoid_: Continuity notice, session summary, automatic handoff, lifecycle event
 A read-only, project-scoped summary of Memory Lane continuity state for resumption/status questions. It combines approved project state, pending continuity candidates, freshness and hygiene signals, operating-agreement metadata, and harness guidance into one bounded structured result. It does not mutate memories, approve pending records, run cleanup, or replace repository inspection when current repo access is available.
 _Avoid_: Recall result, lifecycle injection, session summary, automatic checkpoint capture
 
+**Exact-id lookup**:
+A read operation that returns one Memory Lane record by id, subject to the caller's explicit scope/status options. It is not recall, semantic search, lexical search, or a ranked relevance result.
+_Avoid_: Recall query, search result, relevance-filtered memory context, cleanup action
+
+**Scope correction**:
+A same-id append-only metadata revision that changes where an active memory is visible, such as global to project or project to global, without changing the memory text or minting a successor id. It is the explicit command action that can resolve a scope hygiene candidate; Memory Lane never performs scope correction automatically.
+_Avoid_: Delete-and-resave, supersede relationship, automatic rescope, project inheritance
+
 **Source skill file**:
 A skill document that belongs to the Memory Lane source tree, such as `skills/memory-lane/SKILL.md`. It is project documentation/source material and must not be overwritten by installer or upgrade flows.
 _Avoid_: Installed skill file, generated harness config, user skill destination
