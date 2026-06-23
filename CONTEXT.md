@@ -127,6 +127,14 @@ _Avoid_: Continuity notice, session summary, automatic handoff, lifecycle event
 A read-only, project-scoped summary of Memory Lane continuity state for resumption/status questions. It combines approved project state, pending continuity candidates, freshness and hygiene signals, operating-agreement metadata, and harness guidance into one bounded structured result. It does not mutate memories, approve pending records, run cleanup, or replace repository inspection when current repo access is available.
 _Avoid_: Recall result, lifecycle injection, session summary, automatic checkpoint capture
 
+**Source skill file**:
+A skill document that belongs to the Memory Lane source tree, such as `skills/memory-lane/SKILL.md`. It is project documentation/source material and must not be overwritten by installer or upgrade flows.
+_Avoid_: Installed skill file, generated harness config, user skill destination
+
+**Installed skill file**:
+A skill document written by `memory-lane init` or upgrade reconfiguration into a user's harness skill directory, such as `~/.claude/skills/memory-lane/SKILL.md` or `~/.agents/skills/memory-lane/SKILL.md`. It is generated integration configuration, but its path may follow symlinks; installers must guard against resolving it to a source skill file.
+_Avoid_: Source skill file, repository documentation, package skill source
+
 **Checkpoint candidate**:
 A pending Memory Lane memory that represents high-value project progress, such as a merge, release, verification milestone, docs sync, major fix, or roadmap decision. It is review-first: Memory Lane may suggest it from strong evidence, but it does not affect future continuity until approved.
 _Avoid_: Approved checkpoint, session summary, automatic handoff, lifecycle notice
