@@ -105,6 +105,49 @@ describe("init wizard", () => {
     })
   })
 
+  it("writes pi CLI bridge before_agent_start messages with Pi's custom message shape", () => {
+    const nativeBinary = path.join(home, ".local/bin/memory-lane")
+    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
+    fs.writeFileSync(nativeBinary, `#!/bin/sh
+case "$1" in
+  status)
+    printf '%s\n' '{"data":{"contextPolicyMode":"auto","contextPolicyPromptMaxItems":2}}'
+    ;;
+  recall)
+    printf '%s\n' '{"data":{"memories":[{"id":"abc12345","text":"Use object-shaped Pi custom messages."}]}}'
+    ;;
+  *)
+    printf '%s\n' '{"data":{}}'
+    ;;
+esac
+`, "utf8")
+    fs.chmodSync(nativeBinary, 0o755)
+
+    run(["init", "--yes", "--only", "pi"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: nativeBinary,
+    })
+
+    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
+    const smoke = `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const result = await handlers.before_agent_start({ prompt: "test prompt" }, { cwd: process.cwd() });
+      if (!result?.message || typeof result.message !== "object") throw new Error("expected object-shaped custom message");
+      if (result.message.customType !== "memory-lane") throw new Error("expected memory-lane customType");
+      if (typeof result.message.content !== "string" || !result.message.content.includes("abc12345")) throw new Error("expected memory content");
+      if (result.message.display !== false) throw new Error("expected non-displayed context injection");
+      if (result.message.details?.source !== "memory-lane" || result.message.details?.lifecycleEvent !== "user_prompt_submit") throw new Error("expected memory-lane details");
+    `
+    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
+      encoding: "utf8",
+      env: { ...process.env, PI_EXTENSION_FILE: piExt },
+    })
+  })
+
   it("writes install manifest", () => {
     run(["init", "--yes"], {
       HOME: home,
