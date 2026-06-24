@@ -2,6 +2,8 @@
 
 ## Recent changes (since this handoff was last updated)
 
+- Pi extension startup fix is in progress on `fix/pi-extension-binary-import`: release-style `init`/`upgrade` had generated `~/.pi/agent/extensions/memory-lane/index.ts` to dynamically import the installed native binary (`~/.local/bin/memory-lane`) as if it were JS/TS, causing Pi startup to fail with a parser error (`Unexpected character '�'`). The fix makes local checkout CLI dist installs import `packages/pi-adapter/dist/index.js`, while native-binary installs write a self-contained CLI bridge extension instead of importing the binary. The local user extension was repaired immediately to import `/Users/shiang/projects/ribbons-digital/memory-lane/packages/pi-adapter/dist/index.js`.
+
 - Phase 21 memory hygiene UX hardening is implemented on `feat/phase-21-hygiene-ux`: CLI `show/get` inspect one exact id with scoped defaults and `--all`, `recall --id` now hard-errors with guidance to use `show`, MCP adds read-only `memory_get`, and CLI `rescope/move` performs same-id scope correction for active memories with `--dry-run`/`--yes` gates. Scope correction rewrites normalized scope/project metadata, preserves memory text/status/id/revision metadata, clears stale project metadata when moving to global, and invalidates embeddings with the existing updated reason. The implementation follows `docs/superpowers/specs/2026-06-23-phase-21-memory-hygiene-ux-hardening-design.md` and keeps non-goals: no MCP mutation, delete-confirmation changes, automatic cleanup, lifecycle changes, or retrieval rewrites.
 
 - Phase 21 Slice 6e installer/skill destination hardening landed via PR #45 and released as `v0.2.24`: generated Claude/Codex skill writes now resolve destinations through symlinks and skip writes that would land inside the Memory Lane source checkout, while preserving other hook/config writes and printing visible partial-success warnings during `init`/`upgrade`. Tests cover symlinked Codex and Claude skill destinations, normal non-Memory-Lane dotfiles-style git directories, and upgrade manifest reapply. The design spec remains at `docs/superpowers/specs/2026-06-23-phase-21-slice-6e-installer-skill-destination-hardening-design.md`.
@@ -76,7 +78,7 @@
 
 ## Current state
 
-Current branch for this handoff update is `feat/phase-21-hygiene-ux` in worktree `~/.config/superpowers/worktrees/memory-lane/phase-21-hygiene-ux-impl`. It is based on `origin/main` after PR #46 (`cab401a`) and implements the approved hygiene UX hardening slice. Focused RED/GREEN tests now cover core exact-id lookup/rescope, CLI show/get/recall-id/rescope, and MCP memory_get. Full verification, Opus review, PR, and merge cleanup are still needed.
+Current branch for this handoff update is `fix/pi-extension-binary-import` in worktree `~/.config/superpowers/worktrees/memory-lane/pi-extension-binary-import-fix`. It is based on `origin/main` after PR #47 (`67739fb`) and fixes release-style Pi extension generation so Pi no longer tries to import the native `memory-lane` binary as TypeScript. Focused RED/GREEN tests cover local checkout adapter imports and native-binary CLI bridge generation. Full verification, PR, and merge cleanup are still needed.
 
 Historical JSONL hardening is complete and committed:
 - `d0c7620 fix(core): normalize historical memory records`
