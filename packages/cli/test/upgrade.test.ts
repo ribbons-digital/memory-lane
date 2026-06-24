@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { tempDir } from "../../core/test/helpers.js"
-import { reapplyInstallManifest, type InstallManifest } from "../src/commands/upgrade.js"
+import { reapplyInstallManifest, reapplyManifestWithInstalledBinary, type InstallManifest } from "../src/commands/upgrade.js"
 
 function createFakeMemoryLaneSourceRoot(): { root: string; skillDir: string; skillPath: string; sentinel: string } {
   const root = tempDir()
@@ -17,6 +17,21 @@ function createFakeMemoryLaneSourceRoot(): { root: string; skillDir: string; ski
 }
 
 describe("upgrade", () => {
+  it("reapplies harness config by invoking the freshly installed binary", () => {
+    const home = tempDir()
+    const binaryPath = path.join(home, ".local/bin/memory-lane")
+    const calls: Array<{ command: string; args: string[]; options: unknown }> = []
+    const ok = reapplyManifestWithInstalledBinary(binaryPath, true, ((command: string, args: string[], options: unknown) => {
+      calls.push({ command, args, options })
+      return { status: 0 }
+    }) as any)
+
+    assert.equal(ok, true)
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0].command, binaryPath)
+    assert.deepEqual(calls[0].args, ["upgrade", "--reapply-install-manifest", "--yes"])
+  })
+
   it("reapplies unique manifest integrations and migrates old Claude Desktop config paths", () => {
     const home = tempDir()
     const dataDir = path.join(home, ".memory-lane")
