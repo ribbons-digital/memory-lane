@@ -72,7 +72,37 @@ describe("init wizard", () => {
     assert.ok(fs.existsSync(piExt))
     const content = fs.readFileSync(piExt, "utf8")
     assert.ok(content.includes("memoryLaneExtension"))
-    assert.ok(content.includes(binaryPath))
+    assert.ok(content.includes(path.resolve(__dirname, "../../pi-adapter/dist/index.js")))
+    assert.equal(content.includes(`import("file://${binaryPath}`), false)
+  })
+
+  it("writes a loadable pi CLI bridge instead of importing native binaries", () => {
+    const nativeBinary = path.join(home, ".local/bin/memory-lane")
+    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
+    fs.writeFileSync(nativeBinary, "\u0000Mach-O fake binary", "utf8")
+
+    run(["init", "--yes", "--only", "pi"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: nativeBinary,
+    })
+
+    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
+    const content = fs.readFileSync(piExt, "utf8")
+    assert.ok(content.includes("memoryLaneCliBridge"))
+    assert.ok(content.includes(nativeBinary))
+    assert.equal(content.includes(`import("file://${nativeBinary}`), false)
+
+    const smoke = `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const pi = { commands: [], tools: [], events: [], registerCommand(name) { this.commands.push(name) }, registerTool(tool) { this.tools.push(tool.name) }, on(name) { this.events.push(name) } };
+      fn(pi);
+      if (!pi.commands.includes("memory") || !pi.tools.includes("memory_save") || !pi.tools.includes("memory_get") || !pi.events.includes("before_agent_start")) process.exit(1);
+    `
+    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
+      encoding: "utf8",
+      env: { ...process.env, PI_EXTENSION_FILE: piExt },
+    })
   })
 
   it("writes install manifest", () => {
