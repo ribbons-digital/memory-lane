@@ -145,6 +145,18 @@ pnpm link --global
 
 After source changes, run `pnpm build` again and reload/restart the harness you are testing.
 
+#### Harness adapter/template release guardrail
+
+When changing generated harness adapters, installer templates, or release-style bridges, do not rely on registration-only smoke tests or reviewer inspection. Before release:
+
+1. Add contract-level tests, not just extension load or registration tests.
+2. Invoke every generated lifecycle hook, command, and tool branch with realistic fake harness inputs.
+3. Assert exact host API return shapes against the host docs/source.
+4. Compare generated release/native behavior with repo-local adapter behavior when both paths exist.
+5. Dogfood the actual generated installed artifact through the lifecycle event users trigger, not only startup/load.
+
+For pi specifically, `before_agent_start` must return a custom message object such as `{ message: { customType, content, display, details? } }`; returning a raw string is invalid even if the extension loads successfully.
+
 #### pi: load the local adapter
 
 Create or replace `~/.pi/agent/extensions/memory-lane/index.ts` with a shim that imports your checkout:
