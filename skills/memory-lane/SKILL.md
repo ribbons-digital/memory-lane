@@ -102,6 +102,10 @@ memory-lane search "pnpm"         # lexical search within project scope
 memory-lane review                # list pending for review
 memory-lane review --suspect-meta # list likely old pending operational prompt pollution only
 memory-lane review --suspect-meta --include-approved # include approved suspect pollution that may affect recall
+memory-lane show <id>             # inspect one exact active memory id in current scope
+memory-lane get <id>              # alias for show
+memory-lane rescope <id> --scope project --project <path> --dry-run # preview same-id scope correction
+memory-lane move <id> --scope global --yes # alias for rescope; apply with confirmation
 memory-lane approve <id>          # approve a pending memory
 memory-lane reject <id>           # reject a pending memory
 memory-lane delete <id>           # soft-delete a memory
@@ -236,7 +240,7 @@ For hook support checks, prefer `memory-lane doctor` first: use `hookDebugLogPat
 
 ### pi adapter boundary
 
-In pi, Memory Lane provides manual tools/commands and read-only lifecycle recall injection before the agent starts through pi's `before_agent_start` event. Do not assume pi currently performs Codex/Claude-style automatic stop autosave or post-tool-use tool outcomes capture. When a durable pi workflow rule, preference, or project fact should be saved, use `memory_save` for explicit user requests or `memory_suggest` for proactive suggestions.
+In pi, Memory Lane provides manual tools/commands and read-only lifecycle context before the agent starts through pi's `before_agent_start` event. Broad continuity prompts such as “what were we last working on?”, “where are we?”, or “what should we work on next?” should route to canonical continuity (`memory-lane continuity --query ... --json`) before recall; this is supported in both the repo-local Pi adapter and the generated native-binary bridge as of `v0.2.29`. Do not assume pi currently performs Codex/Claude-style automatic stop autosave or post-tool-use tool outcomes capture. When a durable pi workflow rule, preference, or project fact should be saved, use `memory_save` for explicit user requests or `memory_suggest` for proactive suggestions.
 
 ### Sandboxed storage
 
@@ -353,10 +357,11 @@ Optional Memory Lane plugins extend the CLI and MCP server. For example, `@memor
 
 ## Pi Harness Tools
 
-When used as a pi extension, three tools are available:
+When used as a pi extension, four tools are available:
 
 | Tool | Description |
 |------|-------------|
 | `memory_save` | Save an approved persistent memory (bypasses review) |
 | `memory_suggest` | Queue a memory suggestion for user review |
 | `memory_recall` | Recall approved memories via semantic + lexical search |
+| `memory_get` | Inspect one exact active memory id |
