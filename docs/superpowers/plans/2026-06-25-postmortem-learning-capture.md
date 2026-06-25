@@ -603,7 +603,7 @@ git diff --check
 
 Expected: no output.
 
-- [ ] **Step 5: Commit docs**
+- [x] **Step 5: Commit docs**
 
 ```bash
 git add skills/memory-lane/SKILL.md ROADMAP.md HANDOFF.md
@@ -617,7 +617,7 @@ git commit -m "docs: document postmortem learning capture"
 **Files:**
 - All changed files
 
-- [ ] **Step 1: Run focused lifecycle tests**
+- [x] **Step 1: Run focused lifecycle tests**
 
 Run:
 
@@ -627,7 +627,7 @@ pnpm --filter @memory-lane/lifecycle test
 
 Expected: PASS, including postmortem, correction, checkpoint, tool-outcome, injection, handler, and session-end lifecycle tests.
 
-- [ ] **Step 2: Run lifecycle build**
+- [x] **Step 2: Run lifecycle build**
 
 Run:
 
@@ -637,7 +637,7 @@ pnpm --filter @memory-lane/lifecycle build
 
 Expected: PASS with no TypeScript errors.
 
-- [ ] **Step 3: Run full build**
+- [x] **Step 3: Run full build**
 
 Run:
 
@@ -647,7 +647,7 @@ pnpm build
 
 Expected: PASS across all workspace packages.
 
-- [ ] **Step 4: Run full test suite**
+- [x] **Step 4: Run full test suite**
 
 Run:
 
@@ -657,7 +657,7 @@ pnpm test
 
 Expected: PASS across all workspace packages.
 
-- [ ] **Step 5: Run whitespace diff check**
+- [x] **Step 5: Run whitespace diff check**
 
 Run:
 
@@ -667,7 +667,7 @@ git diff --check
 
 Expected: no output.
 
-- [ ] **Step 6: Inspect final git diff and status**
+- [x] **Step 6: Inspect final git diff and status**
 
 Run:
 
@@ -678,7 +678,7 @@ git log --oneline -8
 
 Expected: branch `docs/v0-2-29-handoff-and-learning-design` has local commits for docs/spec/plan and implementation; working tree is clean after committing.
 
-- [ ] **Step 7: Update or create final checkpoint memory suggestion only after verification**
+- [x] **Step 7: Update or create final checkpoint memory suggestion only after verification**
 
 If verification passes, suggest a pending project checkpoint with concise evidence. Do not save it approved automatically. Suggested text:
 
@@ -686,7 +686,7 @@ If verification passes, suggest a pending project checkpoint with concise eviden
 Memory Lane checkpoint: Postmortem learning capture implemented and verified. Stop lifecycle now queues pending project-scoped correction/procedure candidates from high-confidence debugging postmortems and explicit user challenge/correction turns using loose natural-language detection plus strict evidence gates. Verification passed: pnpm --filter @memory-lane/lifecycle test, pnpm --filter @memory-lane/lifecycle build, pnpm build, pnpm test, git diff --check.
 ```
 
-- [ ] **Step 8: Commit final state if any files changed during verification**
+- [x] **Step 8: Commit final state if any files changed during verification**
 
 ```bash
 git status --short
@@ -701,7 +701,7 @@ git commit -m "docs: finalize postmortem learning handoff"
 
 If no files changed, do not create an empty commit.
 
-- [ ] **Step 9: Prepare PR summary**
+- [x] **Step 9: Prepare PR summary**
 
 Use this PR summary:
 
@@ -713,11 +713,11 @@ Use this PR summary:
 - document review-first behavior and update handoff/roadmap state
 
 ## Verification
-- [ ] pnpm --filter @memory-lane/lifecycle test
-- [ ] pnpm --filter @memory-lane/lifecycle build
-- [ ] pnpm build
-- [ ] pnpm test
-- [ ] git diff --check
+- [x] pnpm --filter @memory-lane/lifecycle test
+- [x] pnpm --filter @memory-lane/lifecycle build
+- [x] pnpm build
+- [x] pnpm test
+- [x] git diff --check
 ```
 
 Do not merge directly into `main`. Follow the Memory Lane PR-protected workflow: push branch, open PR, and wait for user merge.
