@@ -353,6 +353,8 @@ export function filterSameTurnPostmortemLearningCandidates(existingCandidates: M
 }
 ```
 
+> Implementation note: the final implementation refined these historical snippets in `extractPostmortemLearningCandidatesFromStop` and `postmortemLearningKeyFromText`. Evidence scoring now combines per-message evidence before final compact joining so long user text cannot hide assistant diagnostic evidence. Candidate selection also uses a Pi-specific custom-message procedure for the custom-message/return-shape branch. Key derivation removed the bare `upgrade` token and prioritizes the harness-generated-adapter key before the Pi custom-message key to avoid ambiguous generated-adapter text mapping to the wrong durable lesson.
+
 - [x] **Step 2: Run focused test**
 
 Run:

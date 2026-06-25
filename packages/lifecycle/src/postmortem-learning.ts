@@ -43,12 +43,22 @@ function shouldCapture(combined: ReturnType<typeof evidence>, assistantEvidence:
   return combined.userChallenge && assistantEvidence.cause && assistantEvidence.prevention && combined.symptom
 }
 
+function combineEvidence(...items: Array<ReturnType<typeof evidence>>): ReturnType<typeof evidence> {
+  return {
+    symptom: items.some((item) => item.symptom),
+    cause: items.some((item) => item.cause),
+    prevention: items.some((item) => item.prevention),
+    verification: items.some((item) => item.verification),
+    userChallenge: items.some((item) => item.userChallenge),
+  }
+}
+
 function generatedAdapterProcedure(): string {
   return "Procedure: Dogfood generated harness adapter changes through the installed artifact before release. When: changing generated harness adapters or templates. Steps: add contract tests for generated lifecycle branches; compare generated behavior with repo-local adapters when both exist; run installed-artifact dogfood. Pitfall: reviewer inspection or load-smoke tests can miss host API shape regressions. Verify: the installed artifact exercised the lifecycle event users trigger."
 }
 
-function adapterReturnShapeProcedure(): string {
-  return "Procedure: Verify generated harness adapter return shapes with executable contract tests and installed-artifact dogfood. When: changing generated harness adapters or templates. Steps: invoke each generated lifecycle branch with realistic fake harness inputs; assert host API return shape; compare generated behavior with repo-local adapter behavior when both exist; dogfood the installed artifact through the user-triggered lifecycle event. Pitfall: load-smoke tests and reviewer inspection can miss host API shape regressions. Verify: the installed artifact exercises the lifecycle event without crashing."
+function piCustomMessageProcedure(): string {
+  return "Procedure: Verify Pi memory context messages use Pi custom-message shape. When: changing the Pi adapter or native CLI bridge prompt-submit behavior. Steps: invoke before_agent_start with realistic fake Pi context; assert returned message is an object with customType, content, and display; dogfood prompt submit in the installed Pi extension. Pitfall: returning a raw string can crash prompt submit even when startup smoke passes. Verify: the installed Pi extension handles prompt submit without crashing."
 }
 
 function upgradeReapplyProcedure(): string {
@@ -64,8 +74,8 @@ function candidateText(combinedText: string): { text: string; kind: MemoryCandid
   if (/self-upgrade|reapply|freshly installed binary|stale in-memory/u.test(normalized)) {
     return { text: upgradeReapplyProcedure(), kind: "procedure" }
   }
-  if (/custom-message|return shape|host api|raw string|prompt submit|prompt-submit/u.test(normalized)) {
-    return { text: adapterReturnShapeProcedure(), kind: "procedure" }
+  if (/custom-message|return shape|host api|raw string|prompt submit crashed|prompt-submit crashed/u.test(normalized)) {
+    return { text: piCustomMessageProcedure(), kind: "procedure" }
   }
   if (/generated|harness|adapter|template|installed artifact|dogfood|repo-local|contract test/u.test(normalized)) {
     return { text: generatedAdapterProcedure(), kind: "procedure" }
@@ -93,11 +103,12 @@ export function extractPostmortemLearningCandidatesFromStop(input: StopInput): M
   if (!safeInput(userText) || !safeInput(assistantText)) return []
   if (isExplicitMemoryRequest(userText) || isExplicitMemoryRequest(assistantText)) return []
 
-  const combinedText = compactText(userText, assistantText)
+  const combinedText = compactText(assistantText, userText)
   if (!combinedText || containsLikelySecret(combinedText)) return []
 
-  const combinedEvidence = evidence(combinedText)
+  const userEvidence = evidence(userText)
   const assistantEvidence = evidence(assistantText)
+  const combinedEvidence = combineEvidence(userEvidence, assistantEvidence)
   if (!shouldCapture(combinedEvidence, assistantEvidence)) return []
 
   const candidate = candidateText(combinedText)
