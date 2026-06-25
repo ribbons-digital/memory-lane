@@ -309,12 +309,12 @@ export function handleStop(engine: MemoryEngine, input: StopInput, options?: Lif
     stopCandidates,
     filterDuplicateCorrectionCandidates(engine, extractCorrectionCandidatesFromStop(input)),
   )
-  const sameTurnLearningCandidates = filterSameTurnPostmortemLearningCandidates(
+  const learningCandidates = filterSameTurnPostmortemLearningCandidates(
     [...stopCandidates, ...correctionCandidates],
     filterDuplicatePostmortemLearningCandidates(engine, extractPostmortemLearningCandidatesFromStop(input)),
   )
-  const learningCandidates = correctionCandidates.length > 0 ? [] : sameTurnLearningCandidates
-  return persistCandidates(engine, [...correctionCandidates, ...learningCandidates, ...checkpointCandidates, ...stopCandidates], input, "turn_stop", options)
+  const effectiveCorrectionCandidates = learningCandidates.length > 0 ? [] : correctionCandidates
+  return persistCandidates(engine, [...effectiveCorrectionCandidates, ...learningCandidates, ...checkpointCandidates, ...stopCandidates], input, "turn_stop", options)
 }
 
 export function handlePostToolUse(engine: MemoryEngine, input: PostToolUseInput, options?: LifecycleHandlerOptions): LifecycleResult {

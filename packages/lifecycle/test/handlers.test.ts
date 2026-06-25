@@ -778,7 +778,7 @@ test("stop skips duplicate same-turn correction and postmortem learning candidat
   const result = handleStop(engine, {
     cwd: project,
     lastUserMessage: "You missed that generated harness adapter contract tests and installed artifact dogfood are required; reviewer inspection was not enough.",
-    lastAssistantMessage: "The issue happened because generated harness adapter behavior differed from repo-local adapter behavior. Future generated harness adapter changes should add contract tests and installed artifact dogfood before release. Verified by prompt-submit dogfood.",
+    lastAssistantMessage: "The issue happened because generated harness adapter behavior differed from repo-local adapter behavior. Future generated harness adapter changes should add contract tests and installed artifact dogfood before release. Verified by installed-artifact dogfood.",
   })
 
   const learningMemories = result.saved
@@ -787,6 +787,8 @@ test("stop skips duplicate same-turn correction and postmortem learning candidat
     .filter((memory) => memory.kind === "correction" || memory.kind === "procedure")
 
   assert.equal(learningMemories.length, 1)
+  assert.equal(learningMemories[0]?.kind, "procedure")
+  assert.match(learningMemories[0]?.text ?? "", /Dogfood generated harness adapter changes/u)
 })
 
 test("stop skips duplicate postmortem learning candidate when approved workflow rule covers it", () => {
