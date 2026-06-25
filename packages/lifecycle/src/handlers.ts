@@ -2,7 +2,8 @@ import type { MemoryEngine, MemoryProvenance, MemorySource, SaveResult } from "@
 import { analyzeAutomaticHandoff, detectContinuityIntent, isMemoryManagementListIntent, isUnsafeAutomaticHandoffPointer, limitsFromContextPolicy, renderContinuityIntentGuidance, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, resolveContextPolicy, selectBaselineMemories, selectMemoriesForInjection, type AutomaticHandoffAnalysis, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
 import { checkpointKeyFromText, extractCheckpointCandidatesFromPostToolUse, extractCheckpointCandidatesFromStop, filterDuplicateCheckpointCandidates } from "./checkpoint-capture.js"
-import { extractCorrectionCandidatesFromStop, filterDuplicateCorrectionCandidates, filterSameTurnCorrectionCandidates } from "./correction-capture.js"
+import { correctionKeyFromText, extractCorrectionCandidatesFromStop, filterDuplicateCorrectionCandidates, filterSameTurnCorrectionCandidates } from "./correction-capture.js"
+import { extractPostmortemLearningCandidatesFromStop, filterDuplicatePostmortemLearningCandidates, filterSameTurnPostmortemLearningCandidates, postmortemLearningKeyFromText } from "./postmortem-learning.js"
 import { filterDuplicateProcedureCandidates, summarizeToolOutcome } from "./tool-outcomes.js"
 import type { AutomaticHandoffContextDecision, LifecycleResult, MemoryCandidate, MemoryContextDecision, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
 
@@ -308,7 +309,26 @@ export function handleStop(engine: MemoryEngine, input: StopInput, options?: Lif
     stopCandidates,
     filterDuplicateCorrectionCandidates(engine, extractCorrectionCandidatesFromStop(input)),
   )
-  return persistCandidates(engine, [...correctionCandidates, ...checkpointCandidates, ...stopCandidates], input, "turn_stop", options)
+  const learningCandidates = filterSameTurnPostmortemLearningCandidates(
+    stopCandidates,
+    filterDuplicatePostmortemLearningCandidates(engine, extractPostmortemLearningCandidatesFromStop(input)),
+  )
+  const learningPostmortemKeys = new Set(
+    learningCandidates
+      .map((candidate) => postmortemLearningKeyFromText(candidate.text))
+      .filter((key): key is string => Boolean(key)),
+  )
+  // When both fire in one stop event, keep one learning item and prefer the richer
+  // postmortem procedure only over corrections that overlap with that learning key.
+  const effectiveCorrectionCandidates = correctionCandidates.filter((candidate) => {
+    const postmortemKey = postmortemLearningKeyFromText(candidate.text)
+    if (postmortemKey && learningPostmortemKeys.has(postmortemKey)) return false
+    const correctionKey = correctionKeyFromText(candidate.text)
+    if (!correctionKey) return true
+    const generatedAdapterLearning = learningPostmortemKeys.has("postmortem:harness-generated-adapter-contract-tests")
+    return !(generatedAdapterLearning && (correctionKey === "review-gate" || correctionKey === "verification-before-completion"))
+  })
+  return persistCandidates(engine, [...effectiveCorrectionCandidates, ...learningCandidates, ...checkpointCandidates, ...stopCandidates], input, "turn_stop", options)
 }
 
 export function handlePostToolUse(engine: MemoryEngine, input: PostToolUseInput, options?: LifecycleHandlerOptions): LifecycleResult {

@@ -748,6 +748,87 @@ test("stop skips workflow correction candidate when approved workflow rule alrea
   assert.equal(result.saved.length, 0)
 })
 
+test("stop persists high-confidence postmortem learning candidate as pending with provenance", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: "Why did Pi prompt submit crash after upgrade?",
+    lastAssistantMessage: "Pi prompt submit crashed after upgrade. The root cause was that the generated native bridge returned a raw string instead of Pi's custom-message object, violating the host API return shape. Future generated harness adapter changes should add executable contract tests for lifecycle return shape and dogfood the installed artifact through prompt submit before release. Verified by smoke-loading the installed Pi extension and running the prompt-submit lifecycle.",
+  }, { adapter: "test" })
+
+  assert.equal(result.saved.length, 1)
+  assert.equal(result.saved[0]?.status, "saved")
+  if (result.saved[0]?.status !== "saved") throw new Error("expected saved postmortem learning")
+  assert.equal(result.saved[0].memory.status, "pending")
+  assert.equal(result.saved[0].memory.kind, "procedure")
+  assert.equal(result.saved[0].memory.category, "project")
+  assert.equal(result.saved[0].memory.scope.type, "project")
+  assert.equal(result.saved[0].memory.source, "agent-suggested")
+  assert.equal(result.saved[0].memory.provenance?.adapter, "test")
+  assert.equal(result.saved[0].memory.provenance?.lifecycleEvent, "turn_stop")
+  assert.match(result.saved[0].memory.text, /Pi memory context messages use Pi custom-message shape/u)
+})
+
+test("stop skips duplicate same-turn correction and postmortem learning candidates", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: "You missed that generated harness adapter contract tests and installed artifact dogfood are required; reviewer inspection was not enough.",
+    lastAssistantMessage: "The issue happened because generated harness adapter behavior differed from repo-local adapter behavior. Future generated harness adapter changes should add contract tests and installed artifact dogfood before release. Verified by installed-artifact dogfood.",
+  })
+
+  const learningMemories = result.saved
+    .filter((entry) => entry.status === "saved")
+    .map((entry) => entry.memory)
+    .filter((memory) => memory.kind === "correction" || memory.kind === "procedure")
+
+  assert.equal(learningMemories.length, 1)
+  assert.equal(learningMemories[0]?.kind, "procedure")
+  assert.match(learningMemories[0]?.text ?? "", /Dogfood generated harness adapter changes/u)
+})
+
+test("stop preserves distinct same-turn correction when postmortem learning is unrelated", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: "You forgot our PR-protected workflow; don't delete the worktree before I merge the PR. Why did Pi prompt submit crash?",
+    lastAssistantMessage: "Pi prompt submit crashed. The root cause was the native CLI bridge returned a raw string instead of Pi's custom-message object. Future Pi bridge changes should assert the custom-message return shape and dogfood prompt submit before release. Verified by installed Pi prompt-submit dogfood.",
+  })
+
+  const savedMemories = result.saved
+    .filter((entry) => entry.status === "saved")
+    .map((entry) => entry.memory)
+
+  assert.equal(savedMemories.length, 2)
+  assert.ok(savedMemories.some((memory) => memory.kind === "correction" && /PR-protected workflow/u.test(memory.text)))
+  assert.ok(savedMemories.some((memory) => memory.kind === "procedure" && /Pi memory context messages use Pi custom-message shape/u.test(memory.text)))
+})
+
+test("stop skips duplicate postmortem learning candidate when approved workflow rule covers it", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+  engine.save({
+    text: "Procedure: Verify Pi memory context messages use Pi custom-message shape. When: changing the Pi adapter or native CLI bridge prompt-submit behavior. Steps: invoke before_agent_start with realistic fake Pi context; assert returned message is an object with customType, content, and display; dogfood prompt submit in the installed Pi extension. Pitfall: returning a raw string can crash prompt submit even when startup smoke passes. Verify: the installed Pi extension handles prompt submit without crashing.",
+    status: "approved",
+    category: "project",
+    scopeType: "project",
+    kind: "workflow_rule",
+  })
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastAssistantMessage: "Pi prompt submit crashed. The root cause was generated bridge return shape mismatch. Future generated harness adapter changes should add contract tests and installed artifact dogfood. Verified by prompt-submit dogfood.",
+  })
+
+  assert.equal(result.saved.length, 0)
+})
+
 test("post-tool-use captures successful release command as pending checkpoint", () => {
   const project = tempDir()
   const engine = engineInTemp(project)
