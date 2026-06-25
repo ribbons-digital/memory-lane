@@ -745,6 +745,10 @@ export function formatContinuityReadModel(model: ContinuityReadModel, json: bool
     lines.push("", colorize("Warnings", "yellow"))
     for (const warning of model.warnings) lines.push(`  ${figures.warning} ${warning.code}: ${warning.message}`)
   }
+  if (model.answerGuidance.length) {
+    lines.push("", colorize("Answer guidance", "bold"))
+    for (const guidance of model.answerGuidance) lines.push(`  ${figures.pointerSmall} ${guidance}`)
+  }
   const freshnessActionOutput = formatFreshnessAdvisoryActionOutput(model.freshness)
   if (freshnessActionOutput.lines.length) lines.push("", ...freshnessActionOutput.lines)
   const allFreshnessActions = new Set(formatFreshnessAdvisoryActionOutput(model.freshness, { maxActions: Number.POSITIVE_INFINITY }).actions)

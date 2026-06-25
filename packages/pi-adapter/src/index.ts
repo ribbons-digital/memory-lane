@@ -181,6 +181,12 @@ function renderPiContinuityContext(model: any): string {
     for (const warning of warnings.slice(0, 3)) lines.push(`- ${warning.code}: ${warning.message}`)
   }
 
+  const answerGuidance = model?.answerGuidance ?? []
+  if (answerGuidance.length) {
+    lines.push("", "Answer guidance:")
+    for (const guidance of answerGuidance.slice(0, 5)) lines.push(`- ${guidance}`)
+  }
+
   const actions = model?.suggestedActions ?? []
   if (actions.length) {
     lines.push("", "Suggested authoritative inspection:")
