@@ -105,6 +105,118 @@ describe("init wizard", () => {
     })
   })
 
+  it("routes broad pi before_agent_start continuity prompts to continuity query", () => {
+    const nativeBinary = path.join(home, ".local/bin/memory-lane")
+    const logPath = path.join(home, "calls.jsonl")
+    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
+    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
+if (args[0] === "status") {
+  console.log(JSON.stringify({ data: { contextPolicyMode: "selective", contextPolicyPromptMaxItems: 2 } }));
+} else if (args[0] === "continuity") {
+  console.log(JSON.stringify({ data: { latestApproved: { project: { id: "latest1", preview: "PR #51 merged and v0.2.28 released." } }, workstreamDiscovery: { candidates: [{ id: "latest1", preview: "PR #51 merged and v0.2.28 released." }], suggestedActions: ["memory-lane continuity --json"] }, suggestedActions: ["memory-lane continuity --json"], answerGuidance: ["Verify against repository state."] } }));
+} else if (args[0] === "recall") {
+  console.log(JSON.stringify({ data: { memories: [{ id: "wrong", text: "Plain recall should not be used for broad continuity." }] } }));
+} else {
+  console.log(JSON.stringify({ data: {} }));
+}
+`, "utf8")
+    fs.chmodSync(nativeBinary, 0o755)
+
+    run(["init", "--yes", "--only", "pi"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: nativeBinary,
+    })
+
+    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
+    const smoke = `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const prompts = [
+        "What were we last working on?",
+        "Where are we in the project?",
+        "What's the latest progress?",
+        "Where did we leave off?",
+        "Where was lifecycle continuity implemented?",
+        "Let's resume building prompt continuity intents",
+      ];
+      for (const prompt of prompts) {
+        const result = await handlers.before_agent_start({ prompt }, { cwd: process.cwd() });
+        if (!result?.message || result.message.customType !== "memory-lane") throw new Error("expected memory-lane message");
+        if (!result.message.content.includes("Memory Lane continuity context")) throw new Error("expected continuity context");
+        if (!result.message.content.includes("latest1")) throw new Error("expected continuity candidate");
+      }
+    `
+    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
+      encoding: "utf8",
+      env: { ...process.env, PI_EXTENSION_FILE: piExt },
+    })
+
+    const calls = fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    for (const prompt of [
+      "What were we last working on?",
+      "Where are we in the project?",
+      "What's the latest progress?",
+      "Where did we leave off?",
+      "Where was lifecycle continuity implemented?",
+      "Let's resume building prompt continuity intents",
+    ]) {
+      assert.ok(calls.some((args) => args[0] === "continuity" && args.includes("--query") && args.includes(prompt)), `expected continuity call for ${prompt}`)
+    }
+    assert.equal(calls.some((args) => args[0] === "recall"), false)
+  })
+
+  it("emits pi CLI bridge policy-only guidance without memory body lookup", () => {
+    const nativeBinary = path.join(home, ".local/bin/memory-lane")
+    const logPath = path.join(home, "policy-only-calls.jsonl")
+    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
+    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
+if (args[0] === "status") {
+  console.log(JSON.stringify({ data: { contextPolicyMode: "policy-only", contextPolicyPromptMaxItems: 2 } }));
+} else if (args[0] === "continuity" || args[0] === "recall") {
+  console.log(JSON.stringify({ data: { shouldNotBeRead: true } }));
+} else {
+  console.log(JSON.stringify({ data: {} }));
+}
+`, "utf8")
+    fs.chmodSync(nativeBinary, 0o755)
+
+    run(["init", "--yes", "--only", "pi"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: nativeBinary,
+    })
+
+    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
+    const smoke = `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const result = await handlers.before_agent_start({ prompt: "What were we last working on?" }, { cwd: process.cwd() });
+      if (!result?.message || result.message.customType !== "memory-lane") throw new Error("expected memory-lane message");
+      if (!result.message.content.includes("Memory Lane continuity guidance")) throw new Error("expected continuity guidance");
+      if (!result.message.content.includes("memory-lane continuity --json")) throw new Error("expected continuity command guidance");
+      if (result.message.content.includes("shouldNotBeRead")) throw new Error("policy-only leaked lookup body");
+    `
+    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
+      encoding: "utf8",
+      env: { ...process.env, PI_EXTENSION_FILE: piExt },
+    })
+
+    const calls = fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    assert.equal(calls.some((args) => args[0] === "continuity"), false)
+    assert.equal(calls.some((args) => args[0] === "recall"), false)
+  })
+
   it("writes pi CLI bridge before_agent_start messages with Pi's custom message shape", () => {
     const nativeBinary = path.join(home, ".local/bin/memory-lane")
     fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })

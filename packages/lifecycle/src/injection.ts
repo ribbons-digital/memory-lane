@@ -484,6 +484,7 @@ export function detectContinuityIntent(prompt: string): ContinuityIntent {
   }
 
   if (/\bwhere\s+are\s+we\s+(?:in|on)\s+(?:the\s+)?project\b/iu.test(normalized)
+    || /\bwhere\s+did\s+we\s+leave\s+off\b/iu.test(normalized)
     || /\bwhat(?:\s+s|\s+is)\s+the\s+latest\s+progress\b/iu.test(normalized)
     || /\bwhat\s+were\s+we\s+last\s+working\s+on\b/iu.test(normalized)) {
     return { detected: true, family: "project-position" }

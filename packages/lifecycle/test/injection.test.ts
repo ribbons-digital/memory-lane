@@ -184,6 +184,10 @@ test("detects project-position and next-work continuity intents", () => {
     detected: true,
     family: "project-position",
   })
+  assert.deepEqual(detectContinuityIntent("Where did we leave off?"), {
+    detected: true,
+    family: "project-position",
+  })
   assert.deepEqual(detectContinuityIntent("What should we work on next?"), {
     detected: true,
     family: "next-work",
