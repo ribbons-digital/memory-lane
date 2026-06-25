@@ -1,6 +1,7 @@
 import { classifyCheckpointCandidate } from "./checkpoint-candidates.js"
 import { containsLikelySecret } from "./secret-detection.js"
 import { buildContinuityHints } from "./continuity-hints.js"
+import { classifyContinuityRole } from "./continuity-roles.js"
 import { buildFreshnessStatus } from "./freshness.js"
 import { discoverWorkstreams } from "./workstream-discovery.js"
 import { selectOperatingAgreements, summarizeOperatingAgreements } from "./operating-agreements.js"
@@ -17,6 +18,7 @@ import type {
 
 const DEFAULT_PREVIEW_MAX_CHARS = 240
 const DEFAULT_MAX_PENDING_CONTINUITY = 5
+const DEFAULT_MAX_OPERATING_GUIDANCE = 5
 const CONTINUITY_KINDS = new Set<MemoryKind>(["project_checkpoint", "session_summary", "decision", "correction", "procedure", "project_fact"])
 const GLOBAL_WORKFLOW_TEXT_PATTERN = /\b(?:workflow|tooling|code review|review gate|pr process|pull request|release process|project[- ]loop|harness|mcp|memory-lane|(?:cli|command(?:s)?)\s+(?:workflow|tooling|inspection|usage))\b/iu
 const REQUIRED_CONTINUITY_ACTIONS = [
@@ -191,6 +193,15 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
   const approvedGlobal = visibleApproved
     .filter((memory) => isWorkflowRelevantGlobal(memory))
     .sort(compareNewest)
+  const latestProgressCandidates = approvedProject
+    .filter((memory) => classifyContinuityRole(memory) === "progress")
+    .sort(compareApprovedProject)
+  const operatingGuidanceCandidates = visibleApproved
+    .filter((memory) => {
+      const role = classifyContinuityRole(memory)
+      return role === "correction" || role === "procedure" || role === "operating_agreement" || role === "global_workflow"
+    })
+    .sort(compareNewest)
   const pendingReview = memories.filter((memory) => memory.status === "pending" && visibleInProject(memory, projectScope))
   const pendingContinuityCandidates = pendingReview
     .filter((memory) => projectScoped(memory, projectScope) && isPendingContinuity(memory))
@@ -210,6 +221,11 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
   const continuityHints = buildContinuityHints(memories, { projectScopeKey: projectScope })
   const operatingAgreements = summarizeOperatingAgreements(selectOperatingAgreements(memories, { projectScopeKey: projectScope }))
   const latestProject = approvedProject.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
+  const latestProgress = latestProgressCandidates.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
+  const operatingGuidance = operatingGuidanceCandidates
+    .map((memory) => preview(memory, previewMaxChars))
+    .filter((item): item is ContinuityMemoryPreview => Boolean(item))
+    .slice(0, DEFAULT_MAX_OPERATING_GUIDANCE)
   const latestGlobal = approvedGlobal.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
   const hintCodes = new Set(continuityHints.hints.map((hint) => hint.code))
   const warnings = buildWarnings({ projectScope, latestProject, pendingContinuityCandidates, hintCodes, caller: options.caller })
@@ -236,6 +252,8 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
       ...(latestProject ? { project: latestProject } : {}),
       ...(latestGlobal ? { global: latestGlobal } : {}),
     },
+    ...(latestProgress ? { latestProgress } : {}),
+    ...(operatingGuidance.length ? { operatingGuidance } : {}),
     pendingContinuity,
     ...(handoffProposal ? { handoffProposal } : {}),
     ...(workstreamDiscovery ? { workstreamDiscovery } : {}),

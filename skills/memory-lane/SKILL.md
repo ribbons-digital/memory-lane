@@ -69,6 +69,8 @@ memory-lane continuity --query "what were we last working on?" --json
 
 MCP-capable harnesses should call `memory_continuity({ projectPath, query })`. CLI-only harnesses may use the command above; correct continuity behavior does not require direct MCP usage.
 
+When present, prefer `latestProgress` for broad “last worked on / where are we” answers. Treat `latestApproved.project` as a legacy compatibility slot that may still contain corrections/procedures, and apply bounded `operatingGuidance` as workflow guidance rather than as the main progress answer.
+
 ### Operating agreements
 
 When you need the current project workflow, review gates, PR process, release process, or tooling workflow rules, prefer the explicit command:

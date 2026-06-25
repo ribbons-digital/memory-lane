@@ -116,7 +116,7 @@ fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
 if (args[0] === "status") {
   console.log(JSON.stringify({ data: { contextPolicyMode: "selective", contextPolicyPromptMaxItems: 2 } }));
 } else if (args[0] === "continuity") {
-  console.log(JSON.stringify({ data: { latestApproved: { project: { id: "latest1", preview: "PR #51 merged and v0.2.28 released." } }, workstreamDiscovery: { candidates: [{ id: "latest1", preview: "PR #51 merged and v0.2.28 released." }], suggestedActions: ["memory-lane continuity --json"] }, suggestedActions: ["memory-lane continuity --json"], answerGuidance: ["Verify against repository state."] } }));
+  console.log(JSON.stringify({ data: { latestApproved: { project: { id: "latest1", preview: "PR #51 merged and v0.2.28 released." } }, latestProgress: { id: "latest1", preview: "PR #51 merged and v0.2.28 released." }, workstreamDiscovery: { candidates: [{ id: "latest1", preview: "PR #51 merged and v0.2.28 released." }], suggestedActions: ["memory-lane continuity --json"] }, suggestedActions: ["memory-lane continuity --json"], answerGuidance: ["Verify against repository state."] } }));
 } else if (args[0] === "recall") {
   console.log(JSON.stringify({ data: { memories: [{ id: "wrong", text: "Plain recall should not be used for broad continuity." }] } }));
 } else {
@@ -150,10 +150,12 @@ if (args[0] === "status") {
         const result = await handlers.before_agent_start({ prompt }, { cwd: process.cwd() });
         if (!result?.message || result.message.customType !== "memory-lane") throw new Error("expected memory-lane message");
         if (!result.message.content.includes("Memory Lane continuity context")) throw new Error("expected continuity context");
+        if (!result.message.content.includes("Latest project progress")) throw new Error("expected latest progress context");
         if (!result.message.content.includes("latest1")) throw new Error("expected continuity candidate");
       }
       const toolResult = await tools.memory_continuity.execute("tool-1", { query: "what were we last working on?" }, undefined, undefined, { cwd: process.cwd() });
       if (!toolResult.content[0].text.includes("Memory Lane continuity context")) throw new Error("expected continuity tool context");
+      if (!toolResult.content[0].text.includes("Latest project progress")) throw new Error("expected latest progress tool context");
       if (!toolResult.content[0].text.includes("latest1")) throw new Error("expected continuity tool candidate");
     `
     execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {

@@ -1223,6 +1223,35 @@ describe("CLI integration", () => {
     assert.doesNotMatch(output.stdout, /SECRET stale continuity body/u)
   })
 
+  it("continuity --json includes latest progress and operating guidance alongside legacy latest approved", () => {
+    const dir = tempDir()
+    const project = path.join(dir, "project")
+    fs.mkdirSync(project)
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-continuity-typing" }))
+    const mem = path.join(dir, "memory.jsonl")
+    const env = { MEMORY_LANE_FILE: mem, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json"), NO_COLOR: "1" }
+    writeMemoryRecords(mem, [
+      { id: "release", text: "Released v0.2.30 and Pi Slice D installed-artifact dogfood passed.", category: "project", scope: { type: "project", key: "cli-continuity-typing" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-25T10:00:00.000Z", updatedAt: "2026-06-25T10:00:00.000Z" },
+      { id: "correction", text: "Workflow correction: use gh pr edit --body-file for GitHub PR Markdown.", category: "project", scope: { type: "project", key: "cli-continuity-typing" }, status: "approved", source: "manual", kind: "correction", createdAt: "2026-06-25T11:00:00.000Z", updatedAt: "2026-06-25T11:00:00.000Z" },
+    ] as MemoryRecord[])
+
+    const jsonOutput = runProcess(["continuity", "--json"], { env, cwd: project })
+    assert.equal(jsonOutput.status, 0, jsonOutput.stderr)
+    const parsed = JSON.parse(jsonOutput.stdout)
+    assert.equal(parsed.data.latestApproved.project.id, "correction")
+    assert.equal(parsed.data.latestProgress.id, "release")
+    assert.deepEqual(parsed.data.operatingGuidance.map((item: any) => item.id), ["correction"])
+    assert.equal(parsed.data.roleSummary, undefined)
+
+    const humanOutput = runProcess(["continuity"], { env, cwd: project })
+    assert.equal(humanOutput.status, 0, humanOutput.stderr)
+    assert.match(humanOutput.stdout, /Latest progress/u)
+    assert.match(humanOutput.stdout, /\[release\]/u)
+    assert.match(humanOutput.stdout, /Operating guidance/u)
+    assert.match(humanOutput.stdout, /\[correction\]/u)
+    assert.match(humanOutput.stdout, /Latest approved/u)
+  })
+
   it("continuity --query --json returns workstream discovery candidates", () => {
     const dir = tempDir()
     const project = path.join(dir, "project")

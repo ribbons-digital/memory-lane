@@ -148,8 +148,17 @@ function renderPiContinuityContext(model: any): string {
     "Use this read-only continuity state before answering prior-work, next-action, or project-status questions. Verify against current repository state when available.",
   ]
 
+  const latestProgress = model?.latestProgress
+  if (latestProgress) lines.push("", `Latest project progress: [${latestProgress.id}] ${latestProgress.preview}`)
+
   const latestProject = model?.latestApproved?.project
   if (latestProject) lines.push("", `Latest approved project continuity: [${latestProject.id}] ${latestProject.preview}`)
+
+  const operatingGuidance = model?.operatingGuidance ?? []
+  if (operatingGuidance.length) {
+    lines.push("", "Operating guidance:")
+    for (const item of operatingGuidance.slice(0, 5)) lines.push(`- [${item.id}] ${item.preview}`)
+  }
 
   const latestGlobal = model?.latestApproved?.global
   if (latestGlobal) lines.push("", `Relevant global workflow context: [${latestGlobal.id}] ${latestGlobal.preview}`)

@@ -316,6 +316,8 @@ export interface ContinuityReadModel {
     project?: ContinuityMemoryPreview
     global?: ContinuityMemoryPreview
   }
+  latestProgress?: ContinuityMemoryPreview
+  operatingGuidance?: ContinuityMemoryPreview[]
   pendingContinuity: ContinuityMemoryPreview[]
   handoffProposal?: HandoffProposal
   workstreamDiscovery?: WorkstreamDiscoveryResult

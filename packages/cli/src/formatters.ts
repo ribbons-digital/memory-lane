@@ -700,8 +700,15 @@ export function formatContinuityReadModel(model: ContinuityReadModel, json: bool
     ].join("\n"), { title: "Memory Lane Continuity", titleAlignment: "center", padding: 1, borderStyle: "round", borderColor: supportsColor() ? "cyan" : undefined }),
   ]
 
+  if (model.latestProgress) {
+    lines.push("", colorize("Latest progress", "bold"), `  [${model.latestProgress.id}] ${model.latestProgress.preview}`)
+  }
   if (model.latestApproved.project) {
     lines.push("", colorize("Latest approved", "bold"), `  [${model.latestApproved.project.id}] ${model.latestApproved.project.preview}`)
+  }
+  if (model.operatingGuidance?.length) {
+    lines.push("", colorize("Operating guidance", "bold"))
+    for (const item of model.operatingGuidance) lines.push(`  [${item.id}] ${item.preview}`)
   }
   if (model.latestApproved.global) {
     lines.push("", colorize("Latest approved (global)", "bold"), `  [${model.latestApproved.global.id}] ${model.latestApproved.global.preview}`)
