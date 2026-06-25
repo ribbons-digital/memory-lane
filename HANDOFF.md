@@ -90,11 +90,11 @@
 
 ## Current state
 
-Current branch is `docs/continuity-ranking-roadmap`, based on `main` after `v0.2.30` (`a8e7167`, `fix: align pi continuity parity (#54)`). Latest release tag is `v0.2.30`. This branch only updates roadmap/handoff docs to record completed Pi Slice D and the future continuity typing/ranking follow-up found during dogfooding.
+Current branch is `spec/continuity-typing-eval`, based on `main` after PR #55 (`31fa5d4`, `docs: track continuity typing follow-up (#55)`). Latest release tag is `v0.2.30`. This branch drafts the eval-first continuity typing/ranking design and plan before any implementation changes.
 
 Phase 21 Handoff-Free Sessions has progressed through the Pi continuity routing follow-up: Slice 1 established the handoff-mode contract, Slice 2 added review-mode proposals, Slice 3 added continuity baseline markers, Slice 4 validated review/baseline behavior, Slice 5/5a added automatic SessionStart handoff selection, Slice 5b validated automatic mode, Slice 6/6a added read-only workstream discovery on continuity, Slice 6b-6e hardened desktop/CLI routing and generated skill writes, hygiene UX added exact-id inspection/scope correction, and the Pi follow-up sequence released `v0.2.26` through `v0.2.30` for native-binary Pi startup, upgrade reapply, custom-message shape, Slice A continuity routing, Slice C explicit continuity parity, and Slice D installed-artifact dogfood. The remaining continuity-quality follow-up is eval-first typing/ranking, not an urgent harness integration blocker.
 
-The current product/design center remains cross-agent continuity without silent autonomy: bounded context, explicit review, text-free diagnostics where possible, harness-neutral learning, and no silent durable rule mutation. The postmortem learning follow-up implements `docs/superpowers/specs/2026-06-25-postmortem-learning-capture-design.md`: Stop lifecycle can queue pending project-scoped `correction`/`procedure` candidates from high-confidence debugging postmortems and explicit user challenge/correction turns, without auto-approval, raw transcript capture, new commands/tools, or recall-ranking changes.
+The current product/design center remains cross-agent continuity without silent autonomy: bounded context, explicit review, text-free diagnostics where possible, harness-neutral learning, and no silent durable rule mutation. The postmortem learning follow-up implements `docs/superpowers/specs/2026-06-25-postmortem-learning-capture-design.md`: Stop lifecycle can queue pending project-scoped `correction`/`procedure` candidates from high-confidence debugging postmortems and explicit user challenge/correction turns, without auto-approval, raw transcript capture, new commands/tools, or recall-ranking changes. The next continuity quality slice is specified in `docs/superpowers/specs/2026-06-25-continuity-typing-ranking-eval-design.md` with plan `docs/superpowers/plans/2026-06-25-continuity-typing-ranking-eval.md`; it is eval-first and should not jump directly to ranking rewrites.
 
 Phase 13 Session-End Summarization manual flow is merged to `main`. The former feature worktree `~/.config/superpowers/worktrees/memory-lane/session-end-summarization` has been removed after merge.
 
@@ -411,8 +411,8 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Open a PR for `docs/continuity-ranking-roadmap` and wait for user merge; do not merge directly into `main`.
-2. Recommended next implementation slice: do **not** jump directly into ranking rewrites. If prioritizing this area, first write a small eval/design spec for continuity typing/ranking using real dogfood examples, including the `c78cdc00` vs release/checkpoint case from Pi Slice D.
+1. Open a PR for `spec/continuity-typing-eval` and wait for user merge; do not merge directly into `main`.
+2. If approved, implement the continuity typing/ranking eval plan next: start with fixtures for the Pi Slice D `c78cdc00` vs release/checkpoint case, then add deterministic role classification before changing any ranking behavior.
 3. Keep future learning enhancements harness-neutral. Core/lifecycle should own shared continuity semantics, while adapters for pi, Codex, Claude Code, Cursor, Hermes, etc. should only supply bounded lifecycle evidence and render shared outputs.
 4. Do not add automatic pi `agent_end`, `session_shutdown`, or compaction summarization without a separate supported-event design and explicit approval.
 5. For Codex Desktop MCP setup, keep guidance portable: use absolute paths and avoid `~`, but write placeholders such as `<node-binary>`, `<memory-lane-checkout>/packages/mcp-server/dist/index.js`, and `<project-path>` rather than machine-specific paths. Prefer `memory-lane init` for release-style installs; for local-checkout development setup, point readers to `README.md` → “MCP clients: point at the local server” and `examples/harness-integrations/mcp.md`.
