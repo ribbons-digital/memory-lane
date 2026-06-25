@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft for review.
+Implemented on feature branch `docs/v0-2-29-handoff-and-learning-design`; pending final verification and PR review.
 
 ## Background
 

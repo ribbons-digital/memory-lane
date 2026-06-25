@@ -33,7 +33,7 @@
 - Create: `packages/lifecycle/test/postmortem-learning.test.ts`
 - Create later in Task 2: `packages/lifecycle/src/postmortem-learning.ts`
 
-- [ ] **Step 1: Create the test file with RED tests**
+- [x] **Step 1: Create the test file with RED tests**
 
 Create `packages/lifecycle/test/postmortem-learning.test.ts` with this content:
 
@@ -161,7 +161,7 @@ test("postmortem learning keys identify known domains", () => {
 })
 ```
 
-- [ ] **Step 2: Run focused test to verify it fails because module is missing**
+- [x] **Step 2: Run focused test to verify it fails because module is missing**
 
 Run:
 
@@ -171,7 +171,7 @@ pnpm --filter @memory-lane/lifecycle test -- postmortem-learning.test.ts
 
 Expected: FAIL with an import/module error for `../src/postmortem-learning.ts`.
 
-- [ ] **Step 3: Commit the RED tests**
+- [x] **Step 3: Commit the RED tests**
 
 ```bash
 git add packages/lifecycle/test/postmortem-learning.test.ts
@@ -186,7 +186,7 @@ git commit -m "test: specify postmortem learning capture"
 - Create: `packages/lifecycle/src/postmortem-learning.ts`
 - Test: `packages/lifecycle/test/postmortem-learning.test.ts`
 
-- [ ] **Step 1: Create `postmortem-learning.ts` with deterministic evidence gates**
+- [x] **Step 1: Create `postmortem-learning.ts` with deterministic evidence gates**
 
 Create `packages/lifecycle/src/postmortem-learning.ts` with this content:
 
@@ -353,7 +353,7 @@ export function filterSameTurnPostmortemLearningCandidates(existingCandidates: M
 }
 ```
 
-- [ ] **Step 2: Run focused test**
+- [x] **Step 2: Run focused test**
 
 Run:
 
@@ -365,7 +365,7 @@ Expected: PASS for `postmortem-learning.test.ts`.
 
 If the package script ignores the trailing test filename and runs all lifecycle tests, expected result is all lifecycle tests pass.
 
-- [ ] **Step 3: Run typecheck/build for lifecycle package**
+- [x] **Step 3: Run typecheck/build for lifecycle package**
 
 Run:
 
@@ -375,7 +375,7 @@ pnpm --filter @memory-lane/lifecycle build
 
 Expected: PASS, TypeScript emits `dist/` without type errors.
 
-- [ ] **Step 4: Commit implementation**
+- [x] **Step 4: Commit implementation**
 
 ```bash
 git add packages/lifecycle/src/postmortem-learning.ts packages/lifecycle/test/postmortem-learning.test.ts
@@ -391,7 +391,7 @@ git commit -m "feat: extract postmortem learning candidates"
 - Modify: `packages/lifecycle/test/handlers.test.ts`
 - Test: `packages/lifecycle/test/handlers.test.ts`
 
-- [ ] **Step 1: Add handler integration tests**
+- [x] **Step 1: Add handler integration tests**
 
 Append these tests near the existing Stop correction tests in `packages/lifecycle/test/handlers.test.ts`:
 
@@ -457,7 +457,7 @@ test("stop skips duplicate postmortem learning candidate when approved workflow 
 })
 ```
 
-- [ ] **Step 2: Run handler tests to verify RED**
+- [x] **Step 2: Run handler tests to verify RED**
 
 Run:
 
@@ -467,7 +467,7 @@ pnpm --filter @memory-lane/lifecycle test -- handlers.test.ts
 
 Expected: FAIL because `handleStop` does not yet include postmortem candidates.
 
-- [ ] **Step 3: Modify `handlers.ts` imports**
+- [x] **Step 3: Modify `handlers.ts` imports**
 
 Change the imports near the top of `packages/lifecycle/src/handlers.ts` from:
 
@@ -482,7 +482,7 @@ import { filterDuplicatePostmortemLearningCandidates, filterSameTurnPostmortemLe
 import { filterDuplicateProcedureCandidates, summarizeToolOutcome } from "./tool-outcomes.js"
 ```
 
-- [ ] **Step 4: Modify `handleStop` candidate flow**
+- [x] **Step 4: Modify `handleStop` candidate flow**
 
 Replace the current `handleStop` implementation body:
 
@@ -524,7 +524,7 @@ export function handleStop(engine: MemoryEngine, input: StopInput, options?: Lif
 }
 ```
 
-- [ ] **Step 5: Run focused handler tests**
+- [x] **Step 5: Run focused handler tests**
 
 Run:
 
@@ -534,7 +534,7 @@ pnpm --filter @memory-lane/lifecycle test -- handlers.test.ts
 
 Expected: PASS for handler tests, or all lifecycle tests pass if the package script runs every test file.
 
-- [ ] **Step 6: Run full lifecycle tests**
+- [x] **Step 6: Run full lifecycle tests**
 
 Run:
 
@@ -544,7 +544,7 @@ pnpm --filter @memory-lane/lifecycle test
 
 Expected: PASS, including existing correction capture, tool-outcome procedure capture, checkpoint capture, and new postmortem tests.
 
-- [ ] **Step 7: Commit integration**
+- [x] **Step 7: Commit integration**
 
 ```bash
 git add packages/lifecycle/src/handlers.ts packages/lifecycle/test/handlers.test.ts
@@ -561,7 +561,7 @@ git commit -m "feat: persist postmortem learning on stop"
 - Modify: `HANDOFF.md`
 - Read: `docs/superpowers/specs/2026-06-25-postmortem-learning-capture-design.md`
 
-- [ ] **Step 1: Update `skills/memory-lane/SKILL.md` lifecycle learning text**
+- [x] **Step 1: Update `skills/memory-lane/SKILL.md` lifecycle learning text**
 
 Find this paragraph near the bottom:
 
@@ -575,7 +575,7 @@ Replace it with:
 In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save explicitly, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates. `turn_end` may queue pending project-scoped checkpoints, explicit workflow corrections, or high-confidence debugging-postmortem learning candidates when bounded context includes a concrete symptom, cause, prevention, and verification/recovery signal. `tool_result` may queue conservative procedure candidates from safe failed-command recovery evidence. These lifecycle suggestions remain pending review; they are not durable operating agreements until approved. Use `/memory review` to inspect pending suggestions.
 ```
 
-- [ ] **Step 2: Update `ROADMAP.md` Phase 21 status sentence**
+- [x] **Step 2: Update `ROADMAP.md` Phase 21 status sentence**
 
 Find the sentence that references `docs/superpowers/specs/2026-06-25-postmortem-learning-capture-design.md` in Phase 21 status. Change it so it says implementation is complete after the PR/branch is ready, for example:
 
@@ -583,7 +583,7 @@ Find the sentence that references `docs/superpowers/specs/2026-06-25-postmortem-
 The postmortem learning follow-up implements the approved design in `docs/superpowers/specs/2026-06-25-postmortem-learning-capture-design.md`: high-confidence debugging postmortems and explicit user challenge/correction turns can queue pending project-scoped `correction`/`procedure` candidates through existing review surfaces, without auto-approval, raw transcript capture, recall-ranking changes, or durable rule mutation.
 ```
 
-- [ ] **Step 3: Update `HANDOFF.md` recent/current state**
+- [x] **Step 3: Update `HANDOFF.md` recent/current state**
 
 Add a recent-changes bullet near the top:
 
@@ -593,7 +593,7 @@ Add a recent-changes bullet near the top:
 
 Update the current-state paragraph to say the implementation is complete on the feature branch and needs review/PR, not that the next step is to write the spec.
 
-- [ ] **Step 4: Run docs diff check**
+- [x] **Step 4: Run docs diff check**
 
 Run:
 

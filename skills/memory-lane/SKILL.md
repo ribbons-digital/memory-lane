@@ -351,7 +351,7 @@ To upgrade to the latest release while preserving existing harness configs and m
 memory-lane upgrade
 ```
 
-In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save explicitly, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal stop candidates and successful workflow rules. Use `/memory review` to inspect pending suggestions.
+In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save explicitly, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates. `turn_end` may queue pending project-scoped checkpoints, explicit workflow corrections, or high-confidence debugging-postmortem learning candidates when bounded context includes a concrete symptom, cause, prevention, and verification/recovery signal. `tool_result` may queue conservative procedure candidates from safe failed-command recovery evidence. These lifecycle suggestions remain pending review; they are not durable operating agreements until approved. Use `/memory review` to inspect pending suggestions.
 
 Optional Memory Lane plugins extend the CLI and MCP server. For example, `@memory-lane/plugin-obsidian-wiki` adds Obsidian/Garden knowledge-base search and reading. Enable plugins in `~/.memory-lane/config.json` under `plugins`.
 
