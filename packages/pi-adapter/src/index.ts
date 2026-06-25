@@ -338,31 +338,35 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
 
       try {
         const e = getEngine(ctx.cwd)
-        if (cmd === "list") {
-        const allScope = parts.includes("--all")
-        const mems = e.list({ all: allScope })
-        notify(ctx, mems.length ? mems.map(formatMemory).join("\n") : "No memories.")
-      } else if (cmd === "search") {
-        const mems = e.search(rest)
-        notify(ctx, mems.length ? mems.map(formatMemory).join("\n") : "No matches.")
-      } else if (cmd === "delete") {
-        const mem = e.delete(rest)
-        notify(ctx, mem ? `Deleted memory ${rest}` : `Memory not found: ${rest}`, mem ? "info" : "warning")
-      } else if (cmd === "use") {
-        const result = await e.recall(rest)
-        if (!result.memories.length) notify(ctx, "No matching memories.", "info")
-        else notify(ctx, `Recalled ${result.memories.length} memories.\n` + result.memories.map(formatMemory).join("\n"))
-      } else if (cmd === "review") {
-        const pending = e.reviewPending()
-        notify(ctx, pending.length ? pending.map(formatMemory).join("\n") : "No pending memories.")
-      } else if (cmd === "compact") {
-        const report = e.compact()
-        notify(ctx, `Compact: removed ${report.removedMemories} memories, ${report.removedEmbeddings} embeddings`)
-      } else if (cmd === "status" || cmd === "doctor") {
-        const d = e.doctor()
-        notify(ctx, Object.entries(d).map(([k, v]) => `${k}: ${v}`).join("\n"))
+        if (cmd === "continuity") {
+          const query = rest.trim() || undefined
+          const continuity = e.continuity({ caller: "core", query })
+          notify(ctx, renderPiContinuityContext(continuity))
+        } else if (cmd === "list") {
+          const allScope = parts.includes("--all")
+          const mems = e.list({ all: allScope })
+          notify(ctx, mems.length ? mems.map(formatMemory).join("\n") : "No memories.")
+        } else if (cmd === "search") {
+          const mems = e.search(rest)
+          notify(ctx, mems.length ? mems.map(formatMemory).join("\n") : "No matches.")
+        } else if (cmd === "delete") {
+          const mem = e.delete(rest)
+          notify(ctx, mem ? `Deleted memory ${rest}` : `Memory not found: ${rest}`, mem ? "info" : "warning")
+        } else if (cmd === "use") {
+          const result = await e.recall(rest)
+          if (!result.memories.length) notify(ctx, "No matching memories.", "info")
+          else notify(ctx, `Recalled ${result.memories.length} memories.\n` + result.memories.map(formatMemory).join("\n"))
+        } else if (cmd === "review") {
+          const pending = e.reviewPending()
+          notify(ctx, pending.length ? pending.map(formatMemory).join("\n") : "No pending memories.")
+        } else if (cmd === "compact") {
+          const report = e.compact()
+          notify(ctx, `Compact: removed ${report.removedMemories} memories, ${report.removedEmbeddings} embeddings`)
+        } else if (cmd === "status" || cmd === "doctor") {
+          const d = e.doctor()
+          notify(ctx, Object.entries(d).map(([k, v]) => `${k}: ${v}`).join("\n"))
         } else {
-          notify(ctx, "Usage: /memory list [--all] | search <q> | delete <id> | use [q] | review | compact | status | session-summary | init-project-local")
+          notify(ctx, "Usage: /memory list [--all] | search <q> | continuity [q] | delete <id> | use [q] | review | compact | status | session-summary | init-project-local")
         }
       } catch (err) {
         notify(ctx, storageGuidance(err), "warning")
@@ -433,6 +437,33 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         return {
           content: [{ type: "text", text: `Skipped: ${result.reason}` }],
           details: { skipped: result.reason },
+        }
+      } catch (err) {
+        return { content: [{ type: "text", text: storageGuidance(err) }], details: { error: "storage-unavailable" } }
+      }
+    },
+  })
+
+  const memoryContinuitySchema = Type.Object({
+    query: Type.Optional(Type.String({ description: "Optional broad continuity question, e.g. what were we last working on?" })),
+  })
+
+  pi.registerTool({
+    name: "memory_continuity",
+    label: "Memory Continuity",
+    description: "Read canonical Memory Lane continuity state for broad prior-work, next-action, or project-status questions. Use before memory_recall for handoff-style prompts.",
+    parameters: memoryContinuitySchema,
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      try {
+        const e = getEngine(ctx.cwd)
+        const continuity = e.continuity({ caller: "core", query: params.query })
+        return {
+          content: [{ type: "text", text: renderPiContinuityContext(continuity) }],
+          details: {
+            projectScope: continuity.projectScope,
+            latestApproved: continuity.latestApproved,
+            pendingContinuityCount: continuity.status?.pendingContinuityCount,
+          },
         }
       } catch (err) {
         return { content: [{ type: "text", text: storageGuidance(err) }], details: { error: "storage-unavailable" } }
