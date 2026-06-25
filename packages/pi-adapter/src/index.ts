@@ -1,5 +1,5 @@
 import { Type } from "typebox"
-import { createOpenAICompatibleProvider, handlePostToolUse, handleSessionEnd, handleStop, handleUserPromptSubmit } from "@memory-lane/lifecycle"
+import { createOpenAICompatibleProvider, detectContinuityIntent, handlePostToolUse, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy } from "@memory-lane/lifecycle"
 import type { PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
 import {
   MemoryEngine, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableMemoryPaths, type SaveResult,
@@ -128,7 +128,7 @@ function piSessionId(ctx: ExtensionContext): string | undefined {
   }
 }
 
-function memoryLaneContextMessage(content: string) {
+function memoryLaneContextMessage(content: string, details: Record<string, unknown> = {}) {
   return {
     customType: "memory-lane",
     content,
@@ -136,8 +136,49 @@ function memoryLaneContextMessage(content: string) {
     details: {
       source: "memory-lane",
       lifecycleEvent: "user_prompt_submit",
+      ...details,
     },
   }
+}
+
+function renderPiContinuityContext(model: any): string {
+  const lines = [
+    "Memory Lane continuity context",
+    "",
+    "Use this read-only continuity state before answering prior-work, next-action, or project-status questions. Verify against current repository state when available.",
+  ]
+
+  const latestProject = model?.latestApproved?.project
+  if (latestProject) lines.push("", `Latest approved project continuity: [${latestProject.id}] ${latestProject.preview}`)
+
+  const latestGlobal = model?.latestApproved?.global
+  if (latestGlobal) lines.push("", `Relevant global workflow context: [${latestGlobal.id}] ${latestGlobal.preview}`)
+
+  const candidates = model?.workstreamDiscovery?.candidates ?? []
+  if (candidates.length) {
+    lines.push("", "Workstream candidates:")
+    for (const candidate of candidates.slice(0, 3)) lines.push(`- [${candidate.id}] ${candidate.preview}`)
+  }
+
+  const pending = model?.pendingContinuity ?? []
+  if (pending.length) {
+    lines.push("", "Pending continuity candidates require review before treating as fact:")
+    for (const item of pending.slice(0, 3)) lines.push(`- [${item.id}] ${item.preview}`)
+  }
+
+  const warnings = model?.warnings ?? []
+  if (warnings.length) {
+    lines.push("", "Continuity warnings:")
+    for (const warning of warnings.slice(0, 3)) lines.push(`- ${warning.code}: ${warning.message}`)
+  }
+
+  const actions = model?.suggestedActions ?? []
+  if (actions.length) {
+    lines.push("", "Suggested authoritative inspection:")
+    for (const action of actions.slice(0, 4)) lines.push(`- ${action}`)
+  }
+
+  return lines.join("\n")
 }
 
 function formatMemory(m: { id: string; scope: { type: string }; category: string; text: string; status?: string }): string {
@@ -433,6 +474,14 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
 
     try {
       const e = getEngine(ctx.cwd)
+      const policy = resolveContextPolicy(e.getContextPolicy())
+      const continuityIntent = detectContinuityIntent(prompt)
+      if (continuityIntent.detected && policy.mode === "selective") {
+        e.refreshScope(ctx.cwd)
+        const continuity = e.continuity({ caller: "lifecycle", query: prompt })
+        return { message: memoryLaneContextMessage(renderPiContinuityContext(continuity), { surface: "continuity" }) }
+      }
+
       const result = await handleUserPromptSubmit(e, {
         cwd: ctx.cwd,
         prompt,

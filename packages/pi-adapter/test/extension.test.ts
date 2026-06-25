@@ -220,6 +220,32 @@ test("before_agent_start injects shared lifecycle memory block for relevant appr
   assert.equal(fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8"), before)
 })
 
+test("before_agent_start injects continuity context for broad prior-work prompts", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const ctx = baseCtx(env.dir)
+
+  const saveTool = pi.tools.get("memory_save")
+  await saveTool.execute("tool-1", { text: "PR #51 merged and v0.2.28 was released after fixing Pi bridge continuity.", category: "project" }, undefined, () => {}, ctx)
+  const before = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8")
+
+  const result = await runBeforeAgentStart(pi, { prompt: "What were we last working on?" }, ctx)
+
+  assert.equal(result?.message.customType, "memory-lane")
+  assert.match(result?.message.content ?? "", /Memory Lane continuity context/u)
+  assert.match(result?.message.content ?? "", /PR #51 merged/u)
+  assert.doesNotMatch(result?.message.content ?? "", /Memory Lane continuity guidance/u)
+  assert.equal(result?.message.display, false)
+  assert.deepEqual(result?.message.details, {
+    source: "memory-lane",
+    lifecycleEvent: "user_prompt_submit",
+    surface: "continuity",
+  })
+  assert.equal(fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8"), before)
+})
+
 test("input ignores implicit durable statements", async () => {
   const env = makeTempEnv()
   cleanup = env.restore
