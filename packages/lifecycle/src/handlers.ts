@@ -3,6 +3,7 @@ import { analyzeAutomaticHandoff, detectContinuityIntent, isMemoryManagementList
 import { extractStopCandidates } from "./candidates.js"
 import { checkpointKeyFromText, extractCheckpointCandidatesFromPostToolUse, extractCheckpointCandidatesFromStop, filterDuplicateCheckpointCandidates } from "./checkpoint-capture.js"
 import { extractCorrectionCandidatesFromStop, filterDuplicateCorrectionCandidates, filterSameTurnCorrectionCandidates } from "./correction-capture.js"
+import { extractPostmortemLearningCandidatesFromStop, filterDuplicatePostmortemLearningCandidates, filterSameTurnPostmortemLearningCandidates } from "./postmortem-learning.js"
 import { filterDuplicateProcedureCandidates, summarizeToolOutcome } from "./tool-outcomes.js"
 import type { AutomaticHandoffContextDecision, LifecycleResult, MemoryCandidate, MemoryContextDecision, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
 
@@ -308,7 +309,12 @@ export function handleStop(engine: MemoryEngine, input: StopInput, options?: Lif
     stopCandidates,
     filterDuplicateCorrectionCandidates(engine, extractCorrectionCandidatesFromStop(input)),
   )
-  return persistCandidates(engine, [...correctionCandidates, ...checkpointCandidates, ...stopCandidates], input, "turn_stop", options)
+  const sameTurnLearningCandidates = filterSameTurnPostmortemLearningCandidates(
+    [...stopCandidates, ...correctionCandidates],
+    filterDuplicatePostmortemLearningCandidates(engine, extractPostmortemLearningCandidatesFromStop(input)),
+  )
+  const learningCandidates = correctionCandidates.length > 0 ? [] : sameTurnLearningCandidates
+  return persistCandidates(engine, [...correctionCandidates, ...learningCandidates, ...checkpointCandidates, ...stopCandidates], input, "turn_stop", options)
 }
 
 export function handlePostToolUse(engine: MemoryEngine, input: PostToolUseInput, options?: LifecycleHandlerOptions): LifecycleResult {

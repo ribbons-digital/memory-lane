@@ -748,6 +748,66 @@ test("stop skips workflow correction candidate when approved workflow rule alrea
   assert.equal(result.saved.length, 0)
 })
 
+test("stop persists high-confidence postmortem learning candidate as pending with provenance", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: "Why did Pi prompt submit crash after upgrade?",
+    lastAssistantMessage: "Pi prompt submit crashed after upgrade. The root cause was that the generated native bridge returned a raw string instead of Pi's custom-message object, violating the host API return shape. Future generated harness adapter changes should add executable contract tests for lifecycle return shape and dogfood the installed artifact through prompt submit before release. Verified by smoke-loading the installed Pi extension and running the prompt-submit lifecycle.",
+  }, { adapter: "test" })
+
+  assert.equal(result.saved.length, 1)
+  assert.equal(result.saved[0]?.status, "saved")
+  if (result.saved[0]?.status !== "saved") throw new Error("expected saved postmortem learning")
+  assert.equal(result.saved[0].memory.status, "pending")
+  assert.equal(result.saved[0].memory.kind, "procedure")
+  assert.equal(result.saved[0].memory.category, "project")
+  assert.equal(result.saved[0].memory.scope.type, "project")
+  assert.equal(result.saved[0].memory.source, "agent-suggested")
+  assert.equal(result.saved[0].memory.provenance?.adapter, "test")
+  assert.equal(result.saved[0].memory.provenance?.lifecycleEvent, "turn_stop")
+  assert.match(result.saved[0].memory.text, /generated harness adapter return shapes/u)
+})
+
+test("stop skips duplicate same-turn correction and postmortem learning candidates", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastUserMessage: "You missed that generated harness adapter contract tests and installed artifact dogfood are required; reviewer inspection was not enough.",
+    lastAssistantMessage: "The issue happened because generated harness adapter behavior differed from repo-local adapter behavior. Future generated harness adapter changes should add contract tests and installed artifact dogfood before release. Verified by prompt-submit dogfood.",
+  })
+
+  const learningMemories = result.saved
+    .filter((entry) => entry.status === "saved")
+    .map((entry) => entry.memory)
+    .filter((memory) => memory.kind === "correction" || memory.kind === "procedure")
+
+  assert.equal(learningMemories.length, 1)
+})
+
+test("stop skips duplicate postmortem learning candidate when approved workflow rule covers it", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+  engine.save({
+    text: "Procedure: Verify generated harness adapter return shapes with executable contract tests and installed-artifact dogfood. When: changing generated harness adapters or templates. Steps: invoke each generated lifecycle branch with realistic fake harness inputs; assert host API return shape; compare generated behavior with repo-local adapter behavior when both exist; dogfood the installed artifact through the user-triggered lifecycle event. Pitfall: load-smoke tests and reviewer inspection can miss host API shape regressions. Verify: the installed artifact exercises the lifecycle event without crashing.",
+    status: "approved",
+    category: "project",
+    scopeType: "project",
+    kind: "workflow_rule",
+  })
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastAssistantMessage: "Pi prompt submit crashed. The root cause was generated bridge return shape mismatch. Future generated harness adapter changes should add contract tests and installed artifact dogfood. Verified by prompt-submit dogfood.",
+  })
+
+  assert.equal(result.saved.length, 0)
+})
+
 test("post-tool-use captures successful release command as pending checkpoint", () => {
   const project = tempDir()
   const engine = engineInTemp(project)
