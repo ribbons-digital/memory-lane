@@ -99,12 +99,12 @@ function isPendingContinuity(memory: MemoryRecord): boolean {
 
 function isWorkflowRelevantGlobal(memory: MemoryRecord): boolean {
   if (memory.scope.type !== "global") return false
+  if (isDumpLikeMemoryBody(memory.text)) return false
   if (memory.kind === "workflow_rule") return true
   if (memory.category === "personal" || memory.kind === "personal_context") return false
   if (memory.category !== "preference") return false
   if (memory.source !== "manual") return false
   if (memory.kind && memory.kind !== "preference" && memory.kind !== "misc") return false
-  if (isDumpLikeMemoryBody(memory.text)) return false
   return GLOBAL_WORKFLOW_TEXT_PATTERN.test(memory.text)
 }
 

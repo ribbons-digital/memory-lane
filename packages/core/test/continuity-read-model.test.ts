@@ -197,9 +197,18 @@ description: Use the ytai YouTube AI-ingestion CLI to prepare, ingest, scout, su
       kind: "preference",
       updatedAt: "2026-06-26T12:00:00.000Z",
     }),
+    memory({
+      id: "ytai-workflow-rule-dump",
+      text: skillDump,
+      category: "preference",
+      scope: { type: "global" },
+      source: "manual",
+      kind: "workflow_rule",
+      updatedAt: "2026-06-26T13:00:00.000Z",
+    }),
   ], { projectScopeKey: "project-a" })
 
-  assert.equal(result.operatingGuidance?.some((item) => item.id === "ytai-skill-dump") ?? false, false)
+  assert.equal(result.operatingGuidance?.some((item) => item.id === "ytai-skill-dump" || item.id === "ytai-workflow-rule-dump") ?? false, false)
   assert.equal(result.latestApproved.global?.id, undefined)
 })
 
