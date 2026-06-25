@@ -1,224 +1,251 @@
-# Memory Lane
+# Memory Lane vs Paper/Screenshot Loop: Write → Consolidate → Recall → Apply
 
-A cross-harness, lightweight memory system for AI agent harnesses. Stores memories as append-only JSONL files, with optional semantic search via local or remote embedding providers.
+## Overview
 
-## Language
+This review maps Memory Lane's current codebase against the four-stage loop from the
+paper ("Distilling Feedback into Memory-as-a-Tool", arXiv:2601.05960, ICLR 2026 MemAgents Workshop).
+Each stage is evaluated for: what exists today, gaps, and harness-neutral steering mechanisms.
 
-**Memory record**:
-A single stored fact, preference, checkpoint, or decision. Has an id, status lifecycle (pending → approved → rejected/deleted), and can be scoped globally or to a project.
+---
 
-**Memory store**:
-The primary append-only JSONL file at `~/.memory-lane/memory.jsonl` containing all memory records. Records are folded on read to produce the latest version of each memory by id.
+## Stage 1 — Write (Capture feedback/outcomes as memories)
 
-**Embedding sidecar**:
-A secondary append-only JSONL file at `~/.memory-lane/embeddings.jsonl` storing both vector embeddings for approved memories (keyed by memory id, profile name, and content hash) and embedding invalidation records (prefixed by `type: "invalidation"`).
+### What exists
 
-**Project identity**:
-Determined by checking for a `.memory-lane-scope` file (walking up from cwd) first. If none exists, Memory Lane uses Git metadata: normal repos use the repo root, while linked Git worktrees use the common Git directory's main checkout path as the project key so worktrees share project memories by default. If neither a scope file nor Git identity is available, project scope is unavailable. Scope files are never auto-created and remain the explicit override for custom/stable identities.
+Memory Lane has **multiple capture pathways**, all harness-triggered through lifecycle events:
 
-**Semantic retrieval**:
-The pipeline that combines embedding-based cosine similarity, lexical token overlap, recency scoring, and kind-based boosting to rank memories for a recall query. Falls back gracefully through semantic → lexical → all-visible.
+| Lifecycle event | File(s) | What it captures |
+|---|---|---|
+| `Stop` (last user msg) | `packages/lifecycle/src/candidates.ts` | Explicit memory requests, checkpoint save requests, durable project statements |
+| `Stop` (corrections) | `packages/lifecycle/src/correction-capture.ts` | Workflow corrections from user challenge signals (e.g., "you forgot to...") |
+| `Stop` (postmortems) | `packages/lifecycle/src/postmortem-learning.ts` | Debugging postmortems with symptom + cause + prevention + verification evidence |
+| `Stop` (checkpoints) | `packages/lifecycle/src/checkpoint-capture.ts` | Strong checkpoint evidence (release, merge, verification statements) |
+| `PostToolUse` | `packages/lifecycle/src/tool-outcomes.ts` | Recovery procedures (pnpm test/build/install recovery), tool outcome evidence |
+| `PostToolUse` (checkpoints) | `packages/lifecycle/src/checkpoint-capture.ts` | Successful release/merge commands |
+| `SessionEnd` | `packages/lifecycle/src/session-end.ts` | LLM-generated structured session summaries → pending `session_summary` |
+| Direct save/suggest | `packages/core/src/engine.ts` (`save()`, `suggest()`) | Explicit CLI/MCP tool saves, pi adapter `input`/`memory_save`/`memory_suggest` |
 
-**Compaction**:
-The process of rewriting storage files to remove deleted/rejected memory tombstones, stale embeddings, and invalidation records. Runs on engine startup if dead weight exceeds 30%, and is also available as an explicit manual command. Never runs mid-session.
+All capture pathways write to **JSONL file storage** via `MemoryEngine.save()` /
+`suggest()`. Candidates are prefixed to text (e.g., `"Workflow correction: ..."`,
+`"Procedure: ..."`). Deduplication uses content keys in `correctionKeyFromText()`,
+`postmortemLearningKeyFromText()`, etc.
 
-**Auto-embed**:
-When semantic search is enabled and an embedding provider is configured, newly saved approved memories are automatically embedded at save time on a fire-and-forget async path. This ensures incremental saves can become available for semantic recall without manual `reindex`; if embedding fails, `reindex` can rebuild embeddings later.
+### Paper correspondence
 
-**Intent detection**:
-Regex-based pattern matching for memory-related user intents (save, suggest, recall) lives in the core. LLM-powered intent classification lives in the adapter layer (harness-specific). Harnesses with lifecycle hooks or events can trigger Memory Lane through adapters; harnesses without hooks or events can still rely on prompt instructions directing the LLM to invoke the CLI.
+The paper's Write phase: agent receives feedback → LLM abstracts it into general rules →
+agent calls `write_file`/`edit_file` to persist. **This is agent-driven and LLM-synthesized.**
 
-**Memory provenance**:
-Optional harness-neutral origin metadata on a memory record that identifies which adapter and lifecycle event produced the memory. Provenance explains where a memory came from without storing raw hook payloads, transcripts, or harness-specific implementation details.
+Memory Lane's Write phase: lifecycle hook fires → deterministic pattern-matching code
+extracts evidence → templated text is persisted as a pending memory. **This is
+harness-driven and rule-based.**
 
-**Operating agreement memory**:
-An approved memory that describes how agents should work for a user, project, or workflow, such as a project loop, global working preference, release process, PR process, or review gate. The first supported convention uses existing memory fields such as `kind`, `scope`, `category`, `source`, and `updatedAt`; explicit revision fields such as `canonical`, `supersedes`, `supersededBy`, or `revisionOf` are separate future concepts.
-_Avoid_: Revision record, superseded memory, lifecycle injection
+### Gaps
 
-**Workflow area**:
-A coarse label for the kind of operating agreement a memory describes, used to keep separate agreements from hiding each other. Initial areas are `project-loop`, `review-gate`, `pr-process`, `release-process`, `tooling-preference`, and `other`.
-_Avoid_: Memory kind, category, project scope
+1. **No agent-driven write.** The agent never decides "this feedback is worth remembering."
+   Capture rules are hardcoded in lifecycle handlers. If a pattern doesn't match, nothing
+   is captured — even if the agent or user would find it useful.
 
-**Primary operating agreement**:
-The best currently applicable operating agreement selected for a workflow area. Selection prefers explicit `workflow_rule` memories, then project scope over global scope for the same area, then newer updates. Primary selection is a read-only view and does not mark other memories as superseded.
-_Avoid_: Canonical revision, automatic cleanup, superseded memory
+2. **No LLM abstraction step.** Raw correction/postmortem text is template-fitted, not
+   LLM-synthesized. `postmortem-learning.ts` `candidateText()` maps input patterns to
+   one of ~4 hardcoded procedure/correction templates. The paper's abstraction step
+   (episodic → semantic) is absent.
 
-**Related operating agreement candidate**:
-An approved visible memory that looks like an operating agreement but overlaps with a primary agreement or was matched heuristically. Related candidates are surfaced for human review and future revision/supersede workflows, not hidden or cleaned up automatically.
-_Avoid_: Rejected duplicate, cleanup recommendation, superseded memory
+3. **No `write_file`/`edit_file` tool.** The paper's agent calls explicit file tools.
+   Memory Lane uses `memory_save` / `memory_suggest` — but these are opaque to the
+   agent (no `write_file` tool exists). The generated Pi bridge has `memory_save` and
+   `memory_suggest`, not a generic write tool.
 
-**Global preference layer**:
-A bounded automatic-context selection layer for approved global preference-like memories, including global `preference` category records, `preference` kind records, and `workflow_rule` records. It lets durable user-wide preferences influence sessions across harnesses without crowding out current-project continuity.
-_Avoid_: Unbounded global memory injection, automatic preference approval, override rule
+---
 
-**Project preference layer**:
-The automatic-context selection layer for approved current-project preference-like memories. It renders before global preferences so narrower project guidance is easier to follow, without creating an explicit supersede, cleanup, or conflict-resolution relationship.
-_Avoid_: Supersede relationship, automatic override, project memory cleanup
+## Stage 2 — Consolidate (Distill raw experiences into structured, reusable knowledge)
 
-**Same-id update**:
-An append-only revision of an active memory that keeps the same memory id while changing fields such as text, category, kind, or approved/pending status. It corrects or refines the same durable memory and preserves created-at identity.
-_Avoid_: Replacement memory, supersede relationship, deletion
+### What exists
 
-**Supersede relationship**:
-Explicit revision metadata showing that one approved memory is now replaced by another approved memory. Superseded memories remain approved historical records; they are not rejected, deleted, or assigned a new status. A single successor may supersede multiple older memories when the user invokes the relationship explicitly.
-_Avoid_: Automatic cleanup, rejected memory, deleted memory, new status
+Memory Lane has **several deterministic consolidation surfaces**:
 
-**Workstream**:
-The user-meaningful unit of ongoing work across one or more manual threads, harness sessions, orchestrator threads, subagent runs, branches, PRs, and session summaries. Memory Lane should infer workstream pointers from existing approved memory metadata before adding first-class workstream ids or thread metadata.
-_Avoid_: Thread id, branch id, transcript, subagent task log
+| Surface | File | What it does |
+|---|---|---|
+| Continuity role classification | `packages/core/src/continuity-roles.ts` | Classifies approved memories as `progress`, `correction`, `procedure`, `operating_agreement`, `global_workflow`, `other` |
+| Continuity read model | `packages/core/src/continuity-read-model.ts` | Builds `latestProgress`, `operatingGuidance`, `latestApproved`, `pendingContinuity`, `workstreamDiscovery` — the canonical consolidated view |
+| Operating agreements | `packages/core/src/operating-agreements.ts` | Selects workflow-like approved memories by area (`project-loop`, `review-gate`, `pr-process`, etc.) with primary/related structure |
+| Continuity hints | `packages/core/src/continuity-hints.ts` | Detects superseded-visible, operating-agreement overlaps, scope hygiene candidates, freshness advisories |
+| Freshness classification | `packages/core/src/freshness.ts` | Classifies memories as `current`, `stale`, `expired`, or `none` based on advisory freshness metadata |
+| Session-end summarization | `packages/lifecycle/src/session-end.ts` | LLM-generated structured session summaries (decisions, blockers, next steps, key facts) — the only LLM-driven consolidation |
+| Checkpoint candidates | `packages/core/src/checkpoint-candidates.ts` | Classifies pending memories as release/merge/verification milestone types |
+| Revision system | `packages/core/src/engine.ts` (`update`, `replace`, `supersede`) | Explicit memory revision with append-only history and successor/superseded relationships |
 
-**Workstream discovery**:
-A read-only continuity operation that takes a natural-language query and returns bounded candidate pointers to approved project-visible continuity records that may represent the user-meaningful workstream. It is not recall, raw transcript search, lifecycle injection, or a persisted workstream index.
-_Avoid_: Semantic recall, transcript search, thread browser, automatic handoff injection
+### Paper correspondence
 
-**Workstream candidate**:
-A bounded pointer to an approved memory record selected by workstream discovery. It includes memory metadata, a safe preview, match reasons, and derived references such as PR numbers, branch-like names, or commit SHAs when those appear in the approved memory text. It is not an approved answer by itself.
-_Avoid_: Authoritative current state, raw memory dump, pending review item, live GitHub result
+Paper's Consolidation: LLM receives feedback → abstracts → writes structured principles
+file with sections (Core Principles, Specific Techniques, etc.) → resolves conflicts
+between old and new feedback.
 
-**Continuity notice**:
-A compact, plain-language lifecycle signal that Memory Lane has newer approved state, current operating agreements, or continuity hints worth inspecting. It is guidance inside lifecycle context, not a memory body, transcript summary, or cleanup recommendation.
-_Avoid_: Relevant memory, session summary, automatic handoff, cleanup recommendation
+Memory Lane's Consolidation: deterministic classifiers and selectors build structured
+read models from approved/pending memories. The only LLM-driven consolidation is
+`session-end.ts`.
 
-**Continuity baseline marker**:
-An advisory per-project timestamp recording when Memory Lane last evaluated SessionStart continuity for that project. It lets a future session ask whether approved Memory Lane state is newer than the prior baseline. It is not a memory, session summary, approval, checkpoint, or source of truth.
-_Avoid_: Memory record, session summary, checkpoint, approval, transcript marker
+### Gaps
 
-**Resolved continuity baseline**:
-The timestamp actually used for a freshness or continuity check. For SessionStart, Memory Lane prefers the prior project baseline marker when present; otherwise it can fall back to the adapter-provided session timestamp. The marker is read before it is updated for the current session.
-_Avoid_: Current session start only, handoff body, memory text, automatic approval
+1. **No LLM synthesis for cross-memory consolidation.** The paper has the LLM actively
+   synthesize abstract rules across multiple experiences. Memory Lane treats each memory
+   independently; there is no cross-memory abstraction step.
 
-**Handoff mode**:
-The configured continuity posture for how proactive Memory Lane should be across sessions. It is separate from context policy: handoff mode describes the continuity posture, while context policy controls whether and how much memory body content can be injected.
-_Avoid_: Context policy mode, automatic handoff injection, thread memory
+2. **No conflict resolution.** The paper's LLM decides whether to create a new file or
+   update an existing one based on whether old and new feedback contradict. Memory Lane
+   has content-key dedup (skip if same key exists) but no contradiction detection.
 
-**Manual handoff mode**:
-The default handoff mode. Existing inspection-first behavior remains active: users and agents rely on explicit review/status/list/continuity surfaces and current bounded lifecycle notices.
-_Avoid_: Disabled memory, no continuity, automatic handoff
+3. **No structured "principles" document.** The paper produces organized memory files
+   with sections. Memory Lane stores compact template text — no principles/techniques/
+   pitfall sections exist for corrections (though `tool-outcomes.ts` procedures do have
+   a `Procedure`/`When`/`Steps`/`Pitfall`/`Verify` template).
 
-**Review handoff mode**:
-A handoff mode where Memory Lane assembles existing pending project-scoped continuity candidates into read-only handoff proposals on explicit continuity surfaces. It is review-first: users inspect and approve pending records before relying on them as handoff state. It does not generate new summaries, inject handoff bodies into lifecycle context, or approve anything automatically.
-_Avoid_: Automatic approval, automatic injection, generated handoff state, cleanup workflow
+4. **`operatingGuidance` is bounded to 5 items.** The read model caps guidance, so if
+   many operating rules accumulate, older ones are silently dropped from the surface.
 
-**Review-mode handoff proposal**:
-A read-only aggregation of pending project-scoped continuity candidates assembled when `memory.handoffMode` is `review`. It helps a user inspect what Memory Lane would use as the next handoff trail if approved. It is not an approved fact, lifecycle injection, automatic summary, or cleanup recommendation.
-_Avoid_: Approved checkpoint, automatic handoff, generated summary, mutation plan
+---
 
-**Handoff proposal item**:
-A bounded preview and metadata pointer to an existing pending continuity candidate inside a review-mode handoff proposal. Items reuse the continuity read model's pending-continuity selection, preview cap, and secret filtering.
-_Avoid_: Raw memory body, transcript excerpt, approved fact, auto-injected context
+## Stage 3 — Recall (Retrieve relevant memories when needed)
 
-**Automatic handoff mode**:
-An explicit opt-in handoff mode where SessionStart may reserve part of the existing context budget for the latest approved current-project handoff pointer. It is subordinate to context policy: `off` disables lifecycle context, `policy-only` can emit text-free handoff guidance, and `selective` can inject the bounded pointer body. It does not generate summaries, approve pending records, mutate storage, increase budgets, or add new CLI/MCP surfaces.
-_Avoid_: Silent transcript memory, unbounded injection, cleanup automation, pending-memory bypass
+### What exists
 
-**Automatic handoff layer**:
-The SessionStart selection layer used only in automatic handoff mode to prioritize at most one approved `session_summary` or `project_checkpoint` for the active project before generic baseline selection. It is a budgeted selection layer, not a memory status, recall ranker, summary generator, or approval mechanism.
-_Avoid_: Retrieval rewrite, token-budget expansion, pending proposal, workstream discovery
+Memory Lane has **multiple recall pathways** for different use cases:
 
-**Handoff pointer**:
-An approved project-visible `session_summary` or `project_checkpoint` that identifies where project work left off. Automatic mode treats it as historical context to inspect, not authoritative current truth. Expired or superseded handoff pointers are not eligible for the automatic handoff layer.
-_Avoid_: Raw transcript, tool output, pending review item, current repository state
+| Surface | File | What it does |
+|---|---|---|
+| Semantic retrieval | `packages/core/src/retrieval.ts` | Cosine similarity + lexical + recency weighted scoring, configurable embedding provider |
+| Lexical retrieval | `packages/core/src/search.ts` | Basic text matching with token scoring |
+| Workstream discovery | `packages/core/src/workstream-discovery.ts` | Query-specific topic discovery across approved continuity memories with scoring/references |
+| Continuity read model | `packages/core/src/continuity-read-model.ts` | The full continuity surface (latest progress, operating guidance, pending items) |
+| Lifecycle injection | `packages/lifecycle/src/injection.ts` (`selectMemoriesForInjection`, `selectBaselineMemories`) | Layered memory selection for lifecycle context (current-project, global preferences, etc.) |
+| Continuity intent routing | `packages/lifecycle/src/injection.ts` (`detectContinuityIntent`) | Classifies prompt as resume/lookup/project-position/next-work → routes to continuity before recall |
+| CLI recall tool | `packages/cli/src/index.ts` | `memory-lane recall <query> --json` |
+| MCP recall tool | `packages/mcp-server/src/handlers.ts` | `memory_recall({ query })` |
+| Pi recall | `packages/pi-adapter/src/index.ts` | `memory_recall` tool, `/memory use <query>` |
 
-**Continuity intent**:
-A natural-language user prompt that asks an agent to resume prior work, locate where or when prior work happened, understand current project progress, or decide the next work item. It triggers bounded Memory Lane inspection guidance and, when topic-specific, targeted recall/search. It is not a lifecycle continuity notice, session summary, or automatic handoff.
-_Avoid_: Continuity notice, session summary, automatic handoff, lifecycle event
+**Retrieval selection logic** in `injection.ts`:
+1. Layered groups: current-project preferences → current-project content → global preferences → global memory → other
+2. Each layer budgeted by `maxItems`/`maxChars` from `memory.contextPolicy`
+3. Secrets filtered, dedup by text key, lexical overlap required when semantic misses
 
-**Continuity read model**:
-A read-only, project-scoped summary of Memory Lane continuity state for resumption/status questions. It combines approved project state, pending continuity candidates, freshness and hygiene signals, operating-agreement metadata, and harness guidance into one bounded structured result. It does not mutate memories, approve pending records, run cleanup, or replace repository inspection when current repo access is available.
-_Avoid_: Recall result, lifecycle injection, session summary, automatic checkpoint capture
+### Paper correspondence
 
-**Exact-id lookup**:
-A read operation that returns one Memory Lane record by id, subject to the caller's explicit scope/status options. It is not recall, semantic search, lexical search, or a ranked relevance result.
-_Avoid_: Recall query, search result, relevance-filtered memory context, cleanup action
+Paper's Recall: agent calls `ls("/memories/")` → reads filenames → reasons about
+relevance → calls `read_file(path)` to get content. **Agent-driven, filename-based,
+explicit read.**
 
-**Scope correction**:
-A same-id append-only metadata revision that changes where an active memory is visible, such as global to project or project to global, without changing the memory text or minting a successor id. It is the explicit command action that can resolve a scope hygiene candidate; Memory Lane never performs scope correction automatically.
-_Avoid_: Delete-and-resave, supersede relationship, automatic rescope, project inheritance
+Memory Lane's Recall: automatic lifecycle injection (layered, filtered, budgeted) +
+explicit `memory_recall` tool (query → scored results). **Hybrid: automatic for lifecycle,
+tool-based for explicit queries.**
 
-**Source skill file**:
-A skill document that belongs to the Memory Lane source tree, such as `skills/memory-lane/SKILL.md`. It is project documentation/source material and must not be overwritten by installer or upgrade flows.
-_Avoid_: Installed skill file, generated harness config, user skill destination
+### Gaps
 
-**Installed skill file**:
-A skill document written by `memory-lane init` or upgrade reconfiguration into a user's harness skill directory, such as `~/.claude/skills/memory-lane/SKILL.md` or `~/.agents/skills/memory-lane/SKILL.md`. It is generated integration configuration, but its path may follow symlinks; installers must guard against resolving it to a source skill file.
-_Avoid_: Source skill file, repository documentation, package skill source
+1. **No agent-navigated filesystem.** The agent cannot `ls` available memories or
+   browse by filename — it can only query. The paper argues filename semantics force
+   the agent to actively reason about what exists.
 
-**Checkpoint candidate**:
-A pending Memory Lane memory that represents high-value project progress, such as a merge, release, verification milestone, docs sync, major fix, or roadmap decision. It is review-first: Memory Lane may suggest it from strong evidence, but it does not affect future continuity until approved.
-_Avoid_: Approved checkpoint, session summary, automatic handoff, lifecycle notice
+2. **No explicit "check memory before generating" prompt.** The paper's system prompt
+   instructs "Before generating...check your ./memories/ directory." Memory Lane's
+   SKILL.md has similar guidance ("Use continuity first for broad handoff-style
+   questions") but this is external documentation, not an embedded prompt instruction.
 
-**Checkpoint capture**:
-A lifecycle-driven suggestion of a compact checkpoint candidate from high-confidence project progress evidence such as a release, merged PR, verification milestone, docs sync, major fix, or roadmap decision. It writes only pending Memory Lane records, deduplicates near-duplicate events, and relies on automatic review reminders before affecting future continuity.
-_Avoid_: Approved checkpoint, automatic approval, transcript capture, explicit memory API
+3. **Lifecycle injection is invisible to the agent.** Injected `<memory-context>` blocks
+   appear automatically — the agent doesn't know it should look. This works but doesn't
+   teach the agent to proactively check memory.
 
-**Correction candidate**:
-A pending project-scoped memory suggested from an explicit user correction that says an agent violated, forgot, skipped, or ignored an expected workflow, operating agreement, procedure, review gate, or project rule. It is review-first and uses compact normalized wording instead of raw conversation text.
-_Avoid_: Approved correction, automatic rule update, transcript summary, tool failure
+4. **No hierarchical or categorized memory listing.** The paper mentions hierarchical
+   file structures as future work. Memory Lane has flat memory with project scope,
+   but no agent-facing browse/categorize surface beyond `list --kind --status --source`.
 
-**Procedure memory**:
-A durable memory describing a repeatable workflow or process, typically with when-to-use conditions, steps, pitfalls, and verification. Memory Lane stores procedure memories as normal JSONL records first; native skill/rule export is a later optional integration layer.
-_Avoid_: Harness-native skill, automatic checklist enforcement, background rule rewrite
+---
 
-**Recovery-backed procedure candidate**:
-A pending project-scoped procedure memory suggested from bounded tool evidence only when a failed shell action is followed by a safe successful recovery, such as a failed npm command followed by a successful pnpm command. The saved text uses compact templates and omits raw stdout, stderr, transcripts, and secrets.
-_Avoid_: Raw tool-output memory, automatic approval, failure log, background learning
+## Stage 4 — Apply (Use retrieved knowledge to guide behavior)
 
-**Memory freshness metadata**:
-Optional time-awareness metadata on a memory record describing when its content expires, when it should be reconsidered as stale, or what event/session time it represents. It is advisory and can be surfaced in read-only status/continuity signals; it is not a new memory status and does not by itself change recall, injection, cleanup, or visibility.
-_Avoid_: Expired status, automatic deletion, recall filtering, lifecycle injection behavior
+### What exists
 
-**Freshness advisory**:
-A deterministic read-only classification of approved visible memories with explicit freshness metadata as `current`, `stale`, or `expired`, plus counts/ids for inspection. It is shown through status/doctor/MCP status and continuity warnings without memory text. Stale/expired entries may include bounded per-id dry-run revision commands using existing `update`, `replace`, and `supersede` workflows. It does not mutate records, hide memories, down-rank recall, trigger refresh/consolidation, or suggest destructive reject/delete actions.
-_Avoid_: Stale classifier, refresh command, cleanup recommendation, memory text preview
+Memory Lane **applies memories through context injection and guidance surfaces**:
 
-**Continuity record temporal context**:
-Advisory time metadata on generated continuity records, especially session summaries and checkpoint candidates, that describes the best known time represented by the record. It uses `freshness.capturedAt` when a trustworthy timestamp already exists; it is not the same as write time and does not by itself change recall, injection, cleanup, or review behavior.
-_Avoid_: Current-time fallback, expiration behavior, automatic recency ranking, timestamp migration
+| Surface | File | What it does |
+|---|---|---|
+| Lifecycle context injection | `packages/lifecycle/src/injection.ts` (`renderMemoryContext`, `composePromptContext`, `composeSessionStartContext`) | Injects `<memory-context>` blocks into lifecycle events with grouped/rendered memories |
+| Continuity intent guidance | `packages/lifecycle/src/injection.ts` (`renderContinuityIntentGuidance`) | Injects inspection-first guidance text when a continuity intent is detected |
+| Policy-only guidance | `packages/lifecycle/src/injection.ts` (`renderMemoryContext` in policy-only mode) | "Use Memory Lane recall/list tools" guidance without memory bodies |
+| Continuity read model answerGuidance | `packages/core/src/continuity-read-model.ts` | Structured guidance: "Use this continuity read model before answering..." |
+| Continuity read model harnessGuidance | Same file | Per-harness guidance (CLI commands, MCP tools) |
+| Notification/continuity guidance | Same file | "Continuity is read-only; no mutation is performed" |
+| Skill file guidance | `skills/memory-lane/SKILL.md` | Agent-facing instructions for using Memory Lane tools/commands |
+| Pi adapter rendering | `packages/pi-adapter/src/index.ts` | `renderPiContinuityContext` — human-readable continuity summary |
+| Generated bridge rendering | `packages/cli/src/installer/config.ts` | `renderContinuityContext` — same shape for native binary installs |
+| CLI formatters | `packages/cli/src/formatters.ts` | Human-readable continuity/dashboard/status output |
 
-**Pending continuity candidate debounce**:
-Deterministic suppression of a newly generated pending session summary or checkpoint candidate when an equivalent pending or approved candidate is already visible for the same project or session. It prevents duplicate review-queue entries before writing; it does not delete, reject, approve, merge, supersede, or consolidate existing memories.
-_Avoid_: Consolidation, cleanup, automatic rejection, fuzzy duplicate classifier
+**Policy modes** in `memory.contextPolicy`:
+- `selective`: Injects bounded selected approved memories in `<memory-context>` block
+- `policy-only`: Injects "use Memory Lane tools" guidance, no memory bodies
+- `off`: No automatic context injection
 
-**Scope hygiene candidate**:
-An approved visible memory whose scope metadata may be broader than its content warrants, such as a global memory that appears to describe a specific project, repository, session, checkpoint, release, or implementation detail. It is an inspection signal only; Memory Lane does not automatically rescope, delete, reject, or supersede it.
-_Avoid_: Scope error, automatic cleanup, rejected memory, rescope recommendation
+### Paper correspondence
 
-**Obsidian mirror**:
-An optional one-way Markdown projection of Memory Lane's JSONL memory records into an Obsidian vault. The JSONL memory store remains the source of truth; edits to mirrored Markdown are not imported by the mirror.
-_Avoid_: Obsidian-backed storage, import, sync
+Paper's Apply: agent reads memory file content → it directly primes the model's response
+generation. The memory content is prepended to context and influences output distribution.
 
-**Obsidian import**:
-An explicit operation that reads user-marked Markdown notes from `<vault>/<folder>/imports/` and validates them into Memory Lane records. Import is separate from the Obsidian mirror, includes conflict handling, and leaves source notes untouched. It is not automatic sync, bidirectional sync, or Obsidian-backed storage.
-_Avoid_: Mirror, automatic sync, bidirectional sync, source-note rewrite
+Memory Lane's Apply: memory content is injected as `<memory-context>` blocks, continuity
+guidance text, or explicit tool output. The agent reading the injected context is
+expected to use it.
 
-**Obsidian import area**:
-The dedicated folder within Memory Lane's configured Obsidian folder where user-authored Markdown notes may be considered for explicit import. The first import workflow uses `<vault>/<folder>/imports/` and does not scan the whole vault.
-_Avoid_: Obsidian mirror folder, whole-vault scan
+### Gaps
 
-**Importable memory note**:
-A user-authored Markdown note intentionally placed in Memory Lane's Obsidian import area and marked with top-of-file `memory_lane: true` frontmatter for import into the Memory Lane JSONL memory store. It is not generated by the mirror, is not imported automatically, and is not rewritten after import.
-_Avoid_: Mirrored memory file, generated note, whole-vault note, bidirectional sync note
+1. **No agent self-reminder step.** The paper trains the agent to pro-actively "check
+   ./memories/" before each generation. Memory Lane relies on automatic injection or
+   external skill guidance — the agent doesn't have an ingrained habit.
 
-**Obsidian mirror/import support**:
-The overall feature area that includes both one-way Obsidian mirror and explicit Obsidian import. It is not the same as Obsidian-backed storage.
-_Avoid_: Obsidian-backed storage
+2. **Continuity read model is a summary, not raw access.** The read model provides
+   bounded previews and derived guidance — not the full memory text. This is a
+   deliberate privacy/safety choice, but it means the agent gets a curated report
+   rather than the raw material it might need to reason about.
 
-**Mirrored memory file**:
-A generated Markdown file in an Obsidian mirror that represents one active Memory Lane record by stable memory id. It is human-readable but not user-authored; changes may be overwritten because JSONL remains the source of truth.
-_Avoid_: Imported note, source record
+3. **No agent-controlled "apply this rule" mechanism.** In the paper, if the agent reads
+   a principle like "Use synesthetic blending," it can actively apply it. Memory Lane's
+   guidance is passive: "Inspect continuity before answering" — it doesn't directly
+   embed usable rules.
 
-**Mirror index file**:
-A generated Markdown file in an Obsidian mirror that links to mirrored memory files by status, project, category, kind, or recency. It is generated from the JSONL memory store, may be overwritten by mirror sync, and is not imported.
-_Avoid_: User-authored note, import note, editable index
+---
 
-**Mirror sync**:
-An explicit repair or backfill operation that reconciles the Obsidian mirror folder with the active approved and pending records in the JSONL memory store. It may create, update, or delete generated mirrored memory files only inside Memory Lane's configured mirror folder.
-_Avoid_: Import, bidirectional sync
+## Harness-Neutral Steering Mechanisms
 
-**Obsidian LLM Wiki**:
-A future knowledge-base integration that lets LLM clients search and read selected user-authored Obsidian or Garden notes as source-backed reference material with citations. It is not a Memory Lane memory store and does not automatically convert notes into memories.
-_Avoid_: Obsidian mirror, Obsidian import, Obsidian-backed storage, automatic memory creation
+Memory Lane already has several mechanisms that work **harness-neutrally**:
 
-**Wiki-derived memory**:
-A Memory Lane memory explicitly created from a fact or decision found in an Obsidian LLM Wiki source note. Creation is deliberate and uses normal Memory Lane validation, review, scope, and source-of-truth rules.
-_Avoid_: Automatic extraction, source note, citation
+| Mechanism | Where | How it steers |
+|---|---|---|
+| `memory.contextPolicy` | lifecycle config | `selective`/`policy-only`/`off` — works for any harness |
+| `memory.handoffMode` | lifecycle config | `manual`/`review`/`automatic` — harness-neutral handoff behavior |
+| Continuity read model | `packages/core/src/continuity-read-model.ts` | Same JSON shape for CLI, MCP, Pi, generated bridge |
+| `harnessGuidance` | Same file | Per-harness CLI/MCP command suggestions from shared core |
+| `answerGuidance` | Same file | Generic guidance that works regardless of harness |
+| SKILL.md | `skills/memory-lane/SKILL.md` | Agent-facing instructions, harness-agnostic |
+| Generated bridge template | `packages/cli/src/installer/config.ts` | Same continuity rendering for all native-binary installs |
+| Core exports | `packages/core/src/index.ts` | All continuity/retrieval/classification functions available to any adapter |
+
+**Steering directions** (what Memory Lane tells harnesses):
+
+1. **"Use continuity before recall"** — broad project-position questions should go to
+   `memory_continuity` first, not `memory_recall`.
+
+2. **"Prefer `latestProgress` for broad answers"** — treatments guide the agent to
+   distinguish progress from corrections.
+
+3. **"Treat pending as review candidates, not approved facts"** — safety boundary.
+
+4. **"Inspect Memory Lane state before relying on older context"** — freshness notice.
+
+5. **"Use authoritative surfaces for memory management"** — `list`, `review`, `status`
+   rather than injected context.
+
+---
+
+## Summary Table
+
+| Phase | Paper approach | Memory Lane approach | Key gap |
+|---|---|---|---|
+| **Write** | Agent calls `write_file`/`edit_file` after LLM abstracts feedback | Lifecycle hooks trigger deterministic capture to JSONL | No agent-driven write; no LLM abstraction step |
+| **Consolidate** | LLM synthesizes abstract rules from multiple experiences, resolves conflicts | Deterministic role classification + read model construction; only session-end uses LLM | No cross-memory synthesis; no conflict resolution; no structured principles doc |
+| **Recall** | Agent calls `ls()` → reads filenames → reasons → calls `read_file()` | Automatic lifecycle injection + explicit `memory_recall` query tool | No agent-navigated filesystem; no "check before generating" habit |
+| **Apply** | Agent reads memory content, it directly primes generation | `<memory-context>` blocks injected automatically; continuity guidance text | No agent self-reminder step; read model is curated summary not raw access |
