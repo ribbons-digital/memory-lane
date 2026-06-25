@@ -313,6 +313,8 @@ export function handleStop(engine: MemoryEngine, input: StopInput, options?: Lif
     [...stopCandidates, ...correctionCandidates],
     filterDuplicatePostmortemLearningCandidates(engine, extractPostmortemLearningCandidatesFromStop(input)),
   )
+  // When both fire in one stop event, keep one learning item and prefer the richer
+  // postmortem procedure over a generic correction from the same turn.
   const effectiveCorrectionCandidates = learningCandidates.length > 0 ? [] : correctionCandidates
   return persistCandidates(engine, [...effectiveCorrectionCandidates, ...learningCandidates, ...checkpointCandidates, ...stopCandidates], input, "turn_stop", options)
 }
