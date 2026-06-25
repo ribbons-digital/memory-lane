@@ -518,7 +518,7 @@ memory-lane agreements --all
 
 ### Continuity read model
 
-Use `memory-lane continuity --json` as the canonical CLI surface for continuity questions such as “what were we last working on?”, “what changed?”, “what did we accomplish?”, “what should we do next?”, and project status/resumption checks. The read model combines latest approved project/global continuity, pending continuity review candidates, freshness, operating-agreement metadata, continuity hints, warnings, suggested actions, and harness guidance in one bounded response.
+Use `memory-lane continuity --json` as the canonical CLI surface for continuity questions such as “what were we last working on?”, “what changed?”, “what did we accomplish?”, “what should we do next?”, and project status/resumption checks. The read model combines latest progress (`latestProgress`), legacy latest approved project/global continuity (`latestApproved`), bounded operating guidance (`operatingGuidance`), pending continuity review candidates, freshness, operating-agreement metadata, continuity hints, warnings, suggested actions, and harness guidance in one bounded response.
 
 For topic-specific workstream questions such as “resume building X” or “where was X implemented?”, pass a query: `memory-lane continuity --query "resume building X" --json`. This adds a bounded `workstreamDiscovery` block derived from approved current-project continuity memories, with compact previews, match reasons, provenance/revision metadata, and derived PR/branch/commit/release references when present. Human output includes the same section compactly.
 

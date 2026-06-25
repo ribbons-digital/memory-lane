@@ -86,6 +86,151 @@ test("continuity read model includes pending correction candidates", () => {
 })
 
 
+test("continuity read model separates latest progress from newer correction guidance", () => {
+  const result = buildContinuityReadModel([
+    memory({
+      id: "release-checkpoint",
+      text: "Released v0.2.30 and Pi Slice D installed-artifact dogfood passed at commit a8e7167.",
+      kind: "project_checkpoint",
+      updatedAt: "2026-06-25T10:00:00.000Z",
+    }),
+    memory({
+      id: "c78cdc00",
+      text: "Workflow correction: when editing GitHub PR Markdown with gh, use --body-file instead of escaped newline shell strings.",
+      kind: "correction",
+      updatedAt: "2026-06-25T11:00:00.000Z",
+    }),
+  ], { projectScopeKey: "project-a", query: "What were we last working on?" })
+
+  assert.equal(result.latestApproved.project?.id, "c78cdc00")
+  assert.equal(result.latestProgress?.id, "release-checkpoint")
+  assert.deepEqual(result.operatingGuidance?.map((item) => item.id), ["c78cdc00"])
+  assert.doesNotMatch(JSON.stringify(result), /roleSummary|latestProgressRole|excludedFromLatestProgress/u)
+})
+
+
+test("continuity read model allows checkpoint-like corrections to count as latest progress", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "older", text: "Older checkpoint", kind: "project_checkpoint", updatedAt: "2026-06-25T09:00:00.000Z" }),
+    memory({
+      id: "checkpoint-correction",
+      text: "Correction after failed release: merged PR #57, released v0.2.31, and verification passed.",
+      kind: "correction",
+      updatedAt: "2026-06-25T12:00:00.000Z",
+    }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.latestApproved.project?.id, "checkpoint-correction")
+  assert.equal(result.latestProgress?.id, "checkpoint-correction")
+  assert.equal(result.operatingGuidance?.some((item) => item.id === "checkpoint-correction") ?? false, false)
+})
+
+
+test("continuity read model includes procedure-only memories as operating guidance", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "Implemented continuity typing fixtures.", kind: "project_checkpoint", updatedAt: "2026-06-25T10:00:00.000Z" }),
+    memory({
+      id: "procedure",
+      text: "Procedure: when editing PR bodies, write the body to a temporary markdown file and run gh pr edit --body-file.",
+      kind: "procedure",
+      updatedAt: "2026-06-25T12:00:00.000Z",
+    }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.latestApproved.project?.id, "procedure")
+  assert.equal(result.latestProgress?.id, "checkpoint")
+  assert.deepEqual(result.operatingGuidance?.map((item) => item.id), ["procedure"])
+})
+
+
+test("continuity read model bounds operating guidance and filters secret-like guidance", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "Released v0.2.30 with Pi continuity dogfood complete.", kind: "project_checkpoint", updatedAt: "2026-06-25T10:00:00.000Z" }),
+    memory({ id: "secret-guidance", text: "Procedure: use API_KEY=sk-test-secret-secret-secret-secret-secret-secret when editing PRs.", kind: "procedure", updatedAt: "2026-06-25T16:00:00.000Z" }),
+    memory({ id: "guidance-6", text: "Procedure: review PR body formatting before merge.", kind: "procedure", updatedAt: "2026-06-25T15:00:00.000Z" }),
+    memory({ id: "guidance-5", text: "Procedure: review PR checklist before merge.", kind: "procedure", updatedAt: "2026-06-25T14:00:00.000Z" }),
+    memory({ id: "guidance-4", text: "Procedure: review release notes before publish.", kind: "procedure", updatedAt: "2026-06-25T13:00:00.000Z" }),
+    memory({ id: "guidance-3", text: "Procedure: review build output before release.", kind: "procedure", updatedAt: "2026-06-25T12:00:00.000Z" }),
+    memory({ id: "guidance-2", text: "Procedure: review test output before release.", kind: "procedure", updatedAt: "2026-06-25T11:00:00.000Z" }),
+    memory({ id: "guidance-1", text: "Procedure: review git status before release.", kind: "procedure", updatedAt: "2026-06-25T10:30:00.000Z" }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.deepEqual(result.operatingGuidance?.map((item) => item.id), ["guidance-6", "guidance-5", "guidance-4", "guidance-3", "guidance-2"])
+  assert.equal(result.operatingGuidance?.length, 5)
+  assert.doesNotMatch(JSON.stringify(result), /sk-test-secret/u)
+})
+
+
+test("continuity read model excludes non-manual global preferences from operating guidance", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "Released v0.2.30 with Pi continuity dogfood complete.", kind: "project_checkpoint", updatedAt: "2026-06-25T10:00:00.000Z" }),
+    memory({
+      id: "generated-global-workflow",
+      text: "Global workflow preference: always use a PR before merge.",
+      category: "preference",
+      scope: { type: "global" },
+      source: "user-suggested",
+      kind: "preference",
+      updatedAt: "2026-06-25T12:00:00.000Z",
+    }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.latestApproved.global, undefined)
+  assert.equal(result.operatingGuidance?.some((item) => item.id === "generated-global-workflow") ?? false, false)
+})
+
+
+test("continuity read model keeps global workflow out of latest progress", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "Released v0.2.30 with Pi continuity dogfood complete.", kind: "project_checkpoint", updatedAt: "2026-06-25T10:00:00.000Z" }),
+    memory({
+      id: "global-pr",
+      text: "Global workflow: use PR-protected workflow and wait for merge.",
+      category: "preference",
+      scope: { type: "global" },
+      kind: "workflow_rule",
+      updatedAt: "2026-06-25T13:00:00.000Z",
+    }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.latestProgress?.id, "checkpoint")
+  assert.equal(result.operatingGuidance?.some((item) => item.id === "global-pr"), true)
+  assert.notEqual(result.latestProgress?.id, result.latestApproved.global?.id)
+})
+
+
+test("continuity read model still allows topic-specific workstream discovery to return corrections", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "Released v0.2.30 with Pi continuity dogfood complete.", kind: "project_checkpoint", updatedAt: "2026-06-25T10:00:00.000Z" }),
+    memory({
+      id: "c78cdc00",
+      text: "Workflow correction: PR body formatting fix uses gh pr edit --body-file for GitHub Markdown.",
+      kind: "correction",
+      updatedAt: "2026-06-25T11:00:00.000Z",
+    }),
+  ], { projectScopeKey: "project-a", query: "where did we fix PR body formatting?" })
+
+  assert.equal(result.latestProgress?.id, "checkpoint")
+  assert.equal(result.workstreamDiscovery?.candidates[0]?.id, "c78cdc00")
+})
+
+
+test("continuity read model includes newer session summary as latest progress", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "fact", text: "Older project fact", kind: "project_fact", updatedAt: "2026-06-25T09:00:00.000Z" }),
+    memory({
+      id: "summary",
+      text: "## Session Summary\nCompleted continuity typing eval spec. Next step: implement fixtures.",
+      kind: "session_summary",
+      source: "session-summary",
+      updatedAt: "2026-06-25T12:00:00.000Z",
+    }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.latestProgress?.id, "summary")
+})
+
+
 test("continuity read model includes authoritative inspection actions and MCP guidance", () => {
   const result = buildContinuityReadModel([
     memory({ id: "approved", text: "Approved checkpoint", kind: "project_checkpoint" }),

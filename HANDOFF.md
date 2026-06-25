@@ -6,7 +6,7 @@
 
 - Pi continuity Slice A/B/C/D is complete. Slice A prompt-time continuity routing shipped in `v0.2.29`; Slice B repo-local/generated parity is aligned where feasible; Slice C explicit continuity access shipped in `v0.2.30` with repo-local `/memory continuity [query]`, repo-local/generated `memory_continuity`, and generated-bridge registration/execution tests; Slice D installed-artifact dogfood passed after upgrading to `v0.2.30`. In a fresh Pi session, prompt “What were we last working on?” caused Pi to use `memory_continuity`, inspect Memory Lane continuity, verify git state, and correctly answer that current work was Memory Lane continuity / Pi dogfooding at commit `a8e7167` and tag `v0.2.30`.
 
-- Pi Slice D exposed one non-blocking continuity-quality follow-up: `latestApproved.project` selected the newly approved PR-body-format correction `c78cdc00`, while more useful release/checkpoint memories appeared under workstream candidates. Pi recovered by checking git, so Slice D passed. `ROADMAP.md` now tracks a future eval-first continuity typing/ranking slice to separate latest progress/checkpoints from corrections/procedures/operating agreements before changing ranking behavior.
+- Pi Slice D exposed one non-blocking continuity-quality follow-up: `latestApproved.project` selected the newly approved PR-body-format correction `c78cdc00`, while more useful release/checkpoint memories appeared under workstream candidates. Pi recovered by checking git, so Slice D passed. The eval-first continuity typing implementation is complete on branch `feat/continuity-typing-eval`: core adds `latestProgress` and bounded `operatingGuidance` while preserving legacy `latestApproved.project` semantics.
 
 - Postmortem learning capture was merged via PR #53 into `main` at `d177d34` and released in `v0.2.30`: Stop lifecycle detects high-confidence debugging postmortems and explicit user challenge/correction turns using loose natural-language signals plus strict evidence gates, then queues compact pending project-scoped `correction`/`procedure` candidates through existing review paths. The slice adds no LLM classifier, no auto-approval, no raw transcript capture, no new commands/tools, and no recall-ranking changes.
 
@@ -90,7 +90,7 @@
 
 ## Current state
 
-Current branch is `spec/continuity-typing-eval`, based on `main` after PR #55 (`31fa5d4`, `docs: track continuity typing follow-up (#55)`). Latest release tag is `v0.2.30`. This branch drafts the eval-first continuity typing/ranking design and plan before any implementation changes.
+Current branch is `feat/continuity-typing-eval`, based on `main` after PR #56 (`392429c`, `docs: specify continuity typing eval slice (#56)`). Latest release tag is `v0.2.30`. This branch implements the approved eval-first continuity typing/ranking slice: deterministic core role classification, additive `latestProgress`, bounded `operatingGuidance`, and CLI/MCP/Pi rendering/test coverage. Full validation passed and Opus 4.8 final review said “Ship it.”
 
 Phase 21 Handoff-Free Sessions has progressed through the Pi continuity routing follow-up: Slice 1 established the handoff-mode contract, Slice 2 added review-mode proposals, Slice 3 added continuity baseline markers, Slice 4 validated review/baseline behavior, Slice 5/5a added automatic SessionStart handoff selection, Slice 5b validated automatic mode, Slice 6/6a added read-only workstream discovery on continuity, Slice 6b-6e hardened desktop/CLI routing and generated skill writes, hygiene UX added exact-id inspection/scope correction, and the Pi follow-up sequence released `v0.2.26` through `v0.2.30` for native-binary Pi startup, upgrade reapply, custom-message shape, Slice A continuity routing, Slice C explicit continuity parity, and Slice D installed-artifact dogfood. The remaining continuity-quality follow-up is eval-first typing/ranking, not an urgent harness integration blocker.
 
@@ -411,8 +411,8 @@ External comparison references discussed:
 
 ## Suggested next steps
 
-1. Open a PR for `spec/continuity-typing-eval` and wait for user merge; do not merge directly into `main`.
-2. If approved, implement the continuity typing/ranking eval plan next: start with fixtures for the Pi Slice D `c78cdc00` vs release/checkpoint case, then add deterministic role classification before changing any ranking behavior.
+1. Open a PR for `feat/continuity-typing-eval` and wait for user merge; do not merge directly into `main`.
+2. After merge, sync `main`, delete the feature branch, and plan the next scoped slice only if the user asks.
 3. Keep future learning enhancements harness-neutral. Core/lifecycle should own shared continuity semantics, while adapters for pi, Codex, Claude Code, Cursor, Hermes, etc. should only supply bounded lifecycle evidence and render shared outputs.
 4. Do not add automatic pi `agent_end`, `session_shutdown`, or compaction summarization without a separate supported-event design and explicit approval.
 5. For Codex Desktop MCP setup, keep guidance portable: use absolute paths and avoid `~`, but write placeholders such as `<node-binary>`, `<memory-lane-checkout>/packages/mcp-server/dist/index.js`, and `<project-path>` rather than machine-specific paths. Prefer `memory-lane init` for release-style installs; for local-checkout development setup, point readers to `README.md` → “MCP clients: point at the local server” and `examples/harness-integrations/mcp.md`.

@@ -236,6 +236,7 @@ test("before_agent_start injects continuity context for broad prior-work prompts
 
   assert.equal(result?.message.customType, "memory-lane")
   assert.match(result?.message.content ?? "", /Memory Lane continuity context/u)
+  assert.match(result?.message.content ?? "", /Latest project progress/u)
   assert.match(result?.message.content ?? "", /PR #51 merged/u)
   assert.doesNotMatch(result?.message.content ?? "", /Memory Lane continuity guidance/u)
   assert.equal(result?.message.display, false)
@@ -261,9 +262,42 @@ test("memory_continuity tool returns canonical continuity context", async () => 
   const result = await continuityTool.execute("tool-2", { query: "what were we last working on?" }, undefined, () => {}, ctx)
 
   assert.match(result.content[0].text, /Memory Lane continuity context/u)
+  assert.match(result.content[0].text, /Latest project progress/u)
   assert.match(result.content[0].text, /PR #52 released v0\.2\.29/u)
   assert.equal(result.details.projectScope, "pi-test-project")
   assert.equal(result.details.latestApproved.project.id.length, 8)
+})
+
+test("memory_continuity tool renders five operating guidance items", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const ctx = baseCtx(env.dir)
+
+  const records = [
+    { id: "release1", text: "Released v0.2.30 with Pi continuity dogfood complete.", category: "project", scope: { type: "project", key: "pi-test-project" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-25T10:00:00.000Z", updatedAt: "2026-06-25T10:00:00.000Z" },
+    ...Array.from({ length: 5 }, (_, index) => ({
+      id: `guide00${index + 1}`,
+      text: `Procedure: use review workflow step ${index + 1} before release.`,
+      category: "project",
+      scope: { type: "project", key: "pi-test-project" },
+      status: "approved",
+      source: "manual",
+      kind: "procedure",
+      createdAt: `2026-06-25T11:0${index}:00.000Z`,
+      updatedAt: `2026-06-25T11:0${index}:00.000Z`,
+    })),
+  ]
+  fs.writeFileSync(path.join(env.dir, "memory.jsonl"), records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
+
+  const continuityTool = pi.tools.get("memory_continuity")
+  const result = await continuityTool.execute("tool-2", { query: "what were we last working on?" }, undefined, () => {}, ctx)
+
+  assert.match(result.content[0].text, /Operating guidance:/u)
+  for (const id of ["guide001", "guide002", "guide003", "guide004", "guide005"]) {
+    assert.match(result.content[0].text, new RegExp(`\\[${id}\\]`, "u"))
+  }
 })
 
 test("memory continuity command returns canonical continuity context", async () => {
@@ -279,6 +313,7 @@ test("memory continuity command returns canonical continuity context", async () 
   await runMemoryCommand(pi, "continuity what were we last working on?", ctx)
 
   assert.match(notifications.at(-1)?.message ?? "", /Memory Lane continuity context/u)
+  assert.match(notifications.at(-1)?.message ?? "", /Latest project progress/u)
   assert.match(notifications.at(-1)?.message ?? "", /PR #52 released v0\.2\.29/u)
 })
 

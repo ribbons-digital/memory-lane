@@ -15,7 +15,7 @@ export interface CheckpointCandidateMetadata {
   reason: string
 }
 
-const CHECKPOINT_PATTERNS: Array<{ kind: CheckpointCandidateKind; reason: string; pattern: RegExp }> = [
+export const CHECKPOINT_PATTERNS: Array<{ kind: CheckpointCandidateKind; reason: string; pattern: RegExp }> = [
   { kind: "release", reason: "matched release version phrase", pattern: /\b(?:released|tagged|published)\s+v?\d+\.\d+\.\d+(?:[-+][\w.]+)?\b/iu },
   { kind: "merge", reason: "matched merged pull request phrase", pattern: /\b(?:merged\s+(?:PR|pull request)\s*#?\d+|(?:PR|pull request)\s*#?\d+\s+merged|merged\s+pull\s+request)\b/iu },
   { kind: "verification", reason: "matched verification passed phrase", pattern: /\b(?:(?:tests?|build|verification)\s+passed|verified\s+release)\b/iu },
