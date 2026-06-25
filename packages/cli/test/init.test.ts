@@ -97,7 +97,7 @@ describe("init wizard", () => {
       const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
       const pi = { commands: [], tools: [], events: [], registerCommand(name) { this.commands.push(name) }, registerTool(tool) { this.tools.push(tool.name) }, on(name) { this.events.push(name) } };
       fn(pi);
-      if (!pi.commands.includes("memory") || !pi.tools.includes("memory_save") || !pi.tools.includes("memory_get") || !pi.events.includes("before_agent_start")) process.exit(1);
+      if (!pi.commands.includes("memory") || !pi.tools.includes("memory_save") || !pi.tools.includes("memory_continuity") || !pi.tools.includes("memory_get") || !pi.events.includes("before_agent_start")) process.exit(1);
     `
     execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
       encoding: "utf8",
@@ -135,7 +135,8 @@ if (args[0] === "status") {
       const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
       const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
       const handlers = {};
-      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      const tools = {};
+      const pi = { registerCommand() {}, registerTool(tool) { tools[tool.name] = tool }, on(name, handler) { handlers[name] = handler } };
       fn(pi);
       const prompts = [
         "What were we last working on?",
@@ -151,6 +152,9 @@ if (args[0] === "status") {
         if (!result.message.content.includes("Memory Lane continuity context")) throw new Error("expected continuity context");
         if (!result.message.content.includes("latest1")) throw new Error("expected continuity candidate");
       }
+      const toolResult = await tools.memory_continuity.execute("tool-1", { query: "what were we last working on?" }, undefined, undefined, { cwd: process.cwd() });
+      if (!toolResult.content[0].text.includes("Memory Lane continuity context")) throw new Error("expected continuity tool context");
+      if (!toolResult.content[0].text.includes("latest1")) throw new Error("expected continuity tool candidate");
     `
     execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
       encoding: "utf8",

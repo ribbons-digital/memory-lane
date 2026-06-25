@@ -175,6 +175,7 @@ test("registers pi commands tools input and before_agent_start handlers", () => 
   assert.ok(pi.commands.has("memory"))
   assert.ok(pi.tools.has("memory_save"))
   assert.ok(pi.tools.has("memory_suggest"))
+  assert.ok(pi.tools.has("memory_continuity"))
   assert.ok(pi.tools.has("memory_recall"))
   assert.equal(pi.events.get("input")?.length, 1)
   assert.equal(pi.events.get("turn_end")?.length, 1)
@@ -244,6 +245,41 @@ test("before_agent_start injects continuity context for broad prior-work prompts
     surface: "continuity",
   })
   assert.equal(fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8"), before)
+})
+
+test("memory_continuity tool returns canonical continuity context", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const ctx = baseCtx(env.dir)
+
+  const saveTool = pi.tools.get("memory_save")
+  await saveTool.execute("tool-1", { text: "PR #52 released v0.2.29 with Pi continuity routing.", category: "project" }, undefined, () => {}, ctx)
+
+  const continuityTool = pi.tools.get("memory_continuity")
+  const result = await continuityTool.execute("tool-2", { query: "what were we last working on?" }, undefined, () => {}, ctx)
+
+  assert.match(result.content[0].text, /Memory Lane continuity context/u)
+  assert.match(result.content[0].text, /PR #52 released v0\.2\.29/u)
+  assert.equal(result.details.projectScope, "pi-test-project")
+  assert.equal(result.details.latestApproved.project.id.length, 8)
+})
+
+test("memory continuity command returns canonical continuity context", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const notifications: FakeNotification[] = []
+  const ctx = ctxWithUi(env.dir, { notifications })
+
+  const saveTool = pi.tools.get("memory_save")
+  await saveTool.execute("tool-1", { text: "PR #52 released v0.2.29 with Pi continuity routing.", category: "project" }, undefined, () => {}, ctx)
+  await runMemoryCommand(pi, "continuity what were we last working on?", ctx)
+
+  assert.match(notifications.at(-1)?.message ?? "", /Memory Lane continuity context/u)
+  assert.match(notifications.at(-1)?.message ?? "", /PR #52 released v0\.2\.29/u)
 })
 
 test("input ignores implicit durable statements", async () => {
