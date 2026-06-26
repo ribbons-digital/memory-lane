@@ -201,6 +201,19 @@ export async function handleUserPromptSubmit(
     }))
   }
 
+  if (intent.detected && (intent.family === "project-position" || intent.family === "next-work")) {
+    const rendered = composePromptContext({ guidance, memoryContext: "", policy })
+    return createResult(rendered || undefined, contextDecision({
+      event: "prompt",
+      mode: policy.mode,
+      ...budget,
+      selected: 0,
+      omitted: 0,
+      omittedReasons: ["broad-continuity-no-recall"],
+      ...(continuityIntent ? { continuityIntent } : {}),
+    }))
+  }
+
   const recallQuery = intent.detected && intent.topic ? intent.topic : input.prompt
   const recalled = await engine.recall(recallQuery)
   const projectScope = engine.getProjectScope()?.key
