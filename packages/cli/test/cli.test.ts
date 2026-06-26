@@ -935,6 +935,54 @@ describe("CLI integration", () => {
     assert.equal(ambiguous.checkpointCandidate, undefined)
   })
 
+  it("review human output marks likely operational summary chatter", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+    const engine = new MemoryEngine({ memoryPath: memFile, embeddingsPath: embFile, configPath: cfgFile })
+    engine.save({
+      text: "## Session Summary\n\n- Delegated subagent completed task 3 only.\n- Acceptance finalization compared the current work to the acceptance contract.",
+      category: "project",
+      scopeType: "project",
+      status: "pending",
+      source: "session-summary",
+      kind: "session_summary",
+    })
+
+    const output = run(["review"], env)
+
+    assert.match(output, /review hint: likely operational chatter/iu)
+    assert.match(output, /delegated-subagent/iu)
+    assert.match(output, /consider rejecting/iu)
+  })
+
+  it("review json includes reviewHygiene metadata for likely operational summary chatter", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const engine = new MemoryEngine({ memoryPath: memFile, embeddingsPath: embFile, configPath: cfgFile })
+    engine.save({
+      text: "## Session Summary\n\n- Delegated subagent completed task 3 only.\n- Report status as APPROVED.",
+      category: "project",
+      scopeType: "project",
+      status: "pending",
+      source: "session-summary",
+      kind: "session_summary",
+    })
+
+    const payload = JSON.parse(run(["review", "--json"], env))
+    const memory = payload.data.memories[0]
+
+    assert.equal(memory.reviewHygiene.operationalChatter, true)
+    assert.equal(memory.reviewHygiene.suggestedAction, "consider-rejecting")
+    assert.ok(memory.reviewHygiene.reasons.includes("delegated-subagent"))
+  })
+
   it("captured checkpoint candidates appear in review and continuity", () => {
     const project = tempDir()
     fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-captured-checkpoint" }))

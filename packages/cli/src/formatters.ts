@@ -2,7 +2,7 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { buildContinuityHints, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, type CheckpointCandidateMetadata, type MemoryRecord, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type UpdatePreview, type RescopeResult, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
+import { buildContinuityHints, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryRecord, type MemoryRecordWithReviewHygiene, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type UpdatePreview, type RescopeResult, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
@@ -244,11 +244,12 @@ function reviewPreview(memory: MemoryRecord): string {
   return memory.kind === "session_summary" ? sessionSummaryPreview(memory.text) : compactPreview(memory.text)
 }
 
-type ReviewMemoryOutput = MemoryRecord & { checkpointCandidate?: CheckpointCandidateMetadata }
+type ReviewMemoryOutput = MemoryRecordWithReviewHygiene & { checkpointCandidate?: CheckpointCandidateMetadata }
 
 function withCheckpointCandidate(memory: MemoryRecord): ReviewMemoryOutput {
+  const withHygiene = withReviewHygiene(memory)
   const checkpointCandidate = classifyCheckpointCandidate(memory)
-  return checkpointCandidate ? { ...memory, checkpointCandidate } : memory
+  return checkpointCandidate ? { ...withHygiene, checkpointCandidate } : withHygiene
 }
 
 function checkpointCandidateLines(memory: MemoryRecord): string[] {
@@ -265,6 +266,16 @@ function correctionCandidateLines(memory: MemoryRecord): string[] {
   return [
     `    Workflow ${memory.kind} candidate — review-first learning`,
     "    Review: approve only if this should become durable project workflow guidance.",
+  ]
+}
+
+function reviewHygieneLines(memory: MemoryRecord): string[] {
+  const analyzed = withReviewHygiene(memory)
+  if (!analyzed.reviewHygiene) return []
+  const action = analyzed.reviewHygiene.suggestedAction === "consider-rejecting" ? "consider rejecting after inspection" : "inspect"
+  return [
+    `    review hint: likely operational chatter — ${analyzed.reviewHygiene.reasons.join(", ")}`,
+    `    Review: ${action}; do not approve unless this contains durable project continuity.`,
   ]
 }
 
@@ -345,6 +356,7 @@ export function formatReviewMemories(memories: MemoryRecord[], json: boolean, ex
         `    ${reviewPreview(memory)}  (saved ${formatDate(memory.createdAt)})`,
         ...checkpointCandidateLines(memory),
         ...correctionCandidateLines(memory),
+        ...reviewHygieneLines(memory),
         `    Suggested: ${reviewAction(memory)}`,
       )
     }
