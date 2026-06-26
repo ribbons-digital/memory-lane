@@ -260,6 +260,16 @@ test("skips generic prompts", () => {
   assert.equal(shouldSkipAutomaticInjection("how do we run tests in this repo"), false)
 })
 
+test("skips greeting prompts without suppressing meaningful technical prompts", () => {
+  for (const prompt of ["hi", "Hi!", "hello", "hello there", "hey", "hey there", "hiya", "yo", "good morning", "good afternoon", "good evening"]) {
+    assert.equal(shouldSkipAutomaticInjection(prompt), true, prompt)
+  }
+
+  for (const prompt of ["how do I run tests", "pnpm package manager", "pnpm", "docker", "wrangler"]) {
+    assert.equal(shouldSkipAutomaticInjection(prompt), false, prompt)
+  }
+})
+
 test("selects at most maxItems and enforces budget", () => {
   const memories = Array.from({ length: 10 }, (_, i) => memory(String(i), `This repo uses pnpm for tests ${i}`))
   const selected = selectMemoriesForInjection("pnpm tests", recall(memories), {

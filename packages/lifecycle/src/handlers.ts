@@ -1,5 +1,5 @@
 import type { MemoryEngine, MemoryProvenance, MemorySource, SaveResult } from "@memory-lane/core"
-import { analyzeAutomaticHandoff, detectContinuityIntent, isMemoryManagementListIntent, isUnsafeAutomaticHandoffPointer, limitsFromContextPolicy, renderContinuityIntentGuidance, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, resolveContextPolicy, selectBaselineMemories, selectMemoriesForInjection, type AutomaticHandoffAnalysis, type MemoryInjectionLimits } from "./injection.js"
+import { analyzeAutomaticHandoff, detectContinuityIntent, isMemoryManagementListIntent, isUnsafeAutomaticHandoffPointer, limitsFromContextPolicy, renderContinuityIntentGuidance, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, resolveContextPolicy, selectBaselineMemories, selectMemoriesForInjection, shouldSkipAutomaticInjection, type AutomaticHandoffAnalysis, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
 import { checkpointKeyFromText, extractCheckpointCandidatesFromPostToolUse, extractCheckpointCandidatesFromStop, filterDuplicateCheckpointCandidates } from "./checkpoint-capture.js"
 import { correctionKeyFromText, extractCorrectionCandidatesFromStop, filterDuplicateCorrectionCandidates, filterSameTurnCorrectionCandidates } from "./correction-capture.js"
@@ -181,6 +181,7 @@ export async function handleUserPromptSubmit(
   const policy = resolveContextPolicy(engine.getContextPolicy())
   const budget = contextBudget("prompt", policy)
   if (policy.mode === "off") return createResult(undefined, contextDecision({ event: "prompt", mode: policy.mode, ...budget, selected: 0, omitted: 0, omittedReasons: ["off"] }))
+  if (shouldSkipAutomaticInjection(input.prompt)) return createResult(undefined, contextDecision({ event: "prompt", mode: policy.mode, ...budget, selected: 0, omitted: 0, omittedReasons: ["low-signal-prompt"] }))
 
   const intent = detectContinuityIntent(input.prompt)
   const guidance = renderContinuityIntentGuidance(intent)

@@ -221,6 +221,23 @@ test("before_agent_start injects shared lifecycle memory block for relevant appr
   assert.equal(fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8"), before)
 })
 
+test("before_agent_start skips greeting prompts", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const ctx = baseCtx(env.dir)
+
+  const saveTool = pi.tools.get("memory_save")
+  await saveTool.execute("tool-1", { text: "This repo uses pnpm test for verification", category: "project" }, undefined, () => {}, ctx)
+  const before = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8")
+
+  const result = await runBeforeAgentStart(pi, { prompt: "hi" }, ctx)
+
+  assert.equal(result, undefined)
+  assert.equal(fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8"), before)
+})
+
 test("before_agent_start injects continuity context for broad prior-work prompts", async () => {
   const env = makeTempEnv()
   cleanup = env.restore

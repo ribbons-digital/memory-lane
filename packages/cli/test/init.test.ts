@@ -237,7 +237,7 @@ if (args[0] === "status") {
     fs.writeFileSync(nativeBinary, `#!/bin/sh
 case "$1" in
   status)
-    printf '%s\n' '{"data":{"contextPolicyMode":"auto","contextPolicyPromptMaxItems":2}}'
+    printf '%s\n' '{"data":{"contextPolicyMode":"auto","contextPolicyPromptMaxItems":2,"contextPolicyPromptMaxChars":3000}}'
     ;;
   recall)
     printf '%s\n' '{"data":{"memories":[{"id":"abc12345","text":"Use object-shaped Pi custom messages."}]}}'
@@ -272,6 +272,77 @@ esac
       encoding: "utf8",
       env: { ...process.env, PI_EXTENSION_FILE: piExt },
     })
+  })
+
+  it("generated pi CLI bridge skips greeting prompt injection without recall", () => {
+    const nativeBinary = path.join(home, ".local/bin/memory-lane")
+    const logPath = path.join(home, "greeting-calls.jsonl")
+    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
+    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
+if (args[0] === "status") {
+  console.log(JSON.stringify({ data: { contextPolicyMode: "selective", contextPolicyPromptMaxItems: 2, contextPolicyPromptMaxChars: 3000 } }));
+} else if (args[0] === "recall") {
+  console.log(JSON.stringify({ data: { memories: [{ id: "wrong", text: "Greeting should not recall." }] } }));
+} else {
+  console.log(JSON.stringify({ data: {} }));
+}
+`, "utf8")
+    fs.chmodSync(nativeBinary, 0o755)
+
+    run(["init", "--yes", "--only", "pi"], { HOME: home, MEMORY_LANE_INSTALL_BINARY: nativeBinary })
+
+    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
+    const smoke = `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const result = await handlers.before_agent_start({ prompt: "Hi!" }, { cwd: process.cwd() });
+      if (result !== undefined) throw new Error("expected no greeting context");
+    `
+    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], { encoding: "utf8", env: { ...process.env, PI_EXTENSION_FILE: piExt } })
+
+    const calls = fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    assert.equal(calls.some((args) => args[0] === "recall"), false)
+  })
+
+  it("generated pi CLI bridge caps automatic recall context and keeps explicit recall full fidelity", () => {
+    const nativeBinary = path.join(home, ".local/bin/memory-lane")
+    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
+    const longText = "Relevant pnpm memory. " + "extra details. ".repeat(600)
+    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === "status") {
+  console.log(JSON.stringify({ data: { contextPolicyMode: "selective", contextPolicyPromptMaxItems: 2 } }));
+} else if (args[0] === "recall") {
+  console.log(JSON.stringify({ data: { memories: [{ id: "long1234", text: ${JSON.stringify(longText)} }] } }));
+} else {
+  console.log(JSON.stringify({ data: {} }));
+}
+`, "utf8")
+    fs.chmodSync(nativeBinary, 0o755)
+
+    run(["init", "--yes", "--only", "pi"], { HOME: home, MEMORY_LANE_INSTALL_BINARY: nativeBinary })
+
+    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
+    const smoke = `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const tools = {};
+      const pi = { registerCommand() {}, registerTool(tool) { tools[tool.name] = tool }, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const autoResult = await handlers.before_agent_start({ prompt: "pnpm package manager" }, { cwd: process.cwd() });
+      if (!autoResult?.message?.content?.includes("long1234")) throw new Error("expected capped automatic context");
+      if (autoResult.message.content.length > 3300) throw new Error("automatic context exceeded fallback prompt budget: " + autoResult.message.content.length);
+      const explicit = await tools.memory_recall.execute("tool-1", { query: "pnpm" }, undefined, undefined, { cwd: process.cwd() });
+      if (explicit.content[0].text.length <= autoResult.message.content.length) throw new Error("explicit recall should remain fuller than automatic context");
+    `
+    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], { encoding: "utf8", env: { ...process.env, PI_EXTENSION_FILE: piExt } })
   })
 
   it("writes install manifest", () => {
