@@ -1,3 +1,4 @@
 dist/
 dist-binaries/
 node_modules/
+.worktrees/

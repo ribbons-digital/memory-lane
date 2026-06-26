@@ -1,4 +1,4 @@
-import { classifyCheckpointCandidate, groupReviewMemories, type CheckpointCandidateMetadata, type MemoryEngine, type MemoryMutationResult, type MemoryRecord, type RecallResult, type SaveResult } from "@memory-lane/core"
+import { classifyCheckpointCandidate, groupReviewMemories, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryEngine, type MemoryMutationResult, type MemoryRecord, type MemoryRecordWithReviewHygiene, type RecallResult, type SaveResult } from "@memory-lane/core"
 import type {
   ContinuityToolInput, ListToolInput, MemoryGetToolInput, MemoryIdToolInput, RecallToolInput, ReviewFilters, ReviewToolInput, SaveToolInput, StatusToolInput, SuggestToolInput, ToolEnvelope,
 } from "./types.js"
@@ -181,11 +181,12 @@ function filterReviewMemories(memories: MemoryRecord[], filters: ReviewFilters):
   })
 }
 
-type ReviewMemoryOutput = MemoryRecord & { checkpointCandidate?: CheckpointCandidateMetadata }
+type ReviewMemoryOutput = MemoryRecordWithReviewHygiene & { checkpointCandidate?: CheckpointCandidateMetadata }
 
 function withCheckpointCandidate(memory: MemoryRecord): ReviewMemoryOutput {
+  const withHygiene = withReviewHygiene(memory)
   const checkpointCandidate = classifyCheckpointCandidate(memory)
-  return checkpointCandidate ? { ...memory, checkpointCandidate } : memory
+  return checkpointCandidate ? { ...withHygiene, checkpointCandidate } : withHygiene
 }
 
 export async function handleMemoryReview(engine: MemoryEngine, input: ReviewToolInput) {

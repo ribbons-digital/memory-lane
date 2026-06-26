@@ -2,6 +2,8 @@
 
 ## Recent changes (since this handoff was last updated)
 
+- Phase 21 Slice 7 summary hygiene is implemented on `feat/phase-21-slice-7-summary-hygiene`: `handleSessionEnd` suppresses generated session summaries dominated by operational subagent/orchestrator chatter when no durable project outcome is present, and CLI/MCP review surfaces expose read-only `reviewHygiene` hints for existing pending suspect summaries. The slice remains review-first and non-mutating: no auto-reject/delete/supersede, no schema expansion, no retrieval/ranking changes, and no raw transcript indexing.
+
 - PR #61 (`fix: harden continuity guidance hygiene`) merged to `main` at `d5e6aa2`. It completes the minimal continuity hygiene slice after v0.2.32: dump-like skill/tool-doc bodies are excluded from operating guidance, operating-agreement overlap, and workflow-rule global selection; truncated operating guidance is marked; and CLI/Pi/generated bridge renderers tell agents to inspect full guidance with `memory-lane show <id>`. Next release target: `v0.2.33`.
 
 - v0.2.32 was released from `main` at `d336ecb` after PR #60 (`fix: align generated pi operating guidance cap`). The release follows PR #57 continuity typing/read-model fields, PR #59 memory-as-tool context docs, and generated Pi bridge alignment. Memory Lane continuity records the v0.2.32 release/dogfood checkpoint.
@@ -100,7 +102,7 @@ Phase 21 Handoff-Free Sessions has progressed through the Pi continuity routing 
 
 The continuity hygiene slice is complete. It addresses two dogfood issues without broad ranking changes: skill/tool-doc dump memories such as the approved ytai-cli skill body must not become operating guidance, agreement-overlap candidates, or workflow-rule global guidance; and truncated critical operating guidance must signal agents to inspect the full memory by id before applying it. The current product/design center remains cross-agent continuity without silent autonomy: bounded context, explicit review, text-free diagnostics where possible, harness-neutral learning, and no silent durable rule mutation. The Memory-as-a-Tool paper analysis is parked at `MEMORY_AS_TOOL_REVIEW.md`; it should inform future review-first consolidation proposals, but not interrupt the release path.
 
-Next recommended roadmap slice after `v0.2.33`: Phase 21 Slice 7 — distinguish orchestrator/session-level summaries from subagent task chatter so parallel-agent workflows produce one durable workstream trail instead of many noisy operational memories. Start with design/spec, keep it review-first and bounded, and avoid retrieval rewrites, auto-consolidation, silent deletion, or raw transcript indexing.
+Current active slice: Phase 21 Slice 7 summary hygiene on `feat/phase-21-slice-7-summary-hygiene`. It distinguishes orchestrator/session-level summaries from subagent task chatter by suppressing generated operational-only summaries before write and adding read-only `reviewHygiene` hints to CLI/MCP review output. Keep follow-up work review-first and bounded; avoid retrieval rewrites, auto-consolidation, silent deletion, schema expansion, or raw transcript indexing.
 
 Phase 13 Session-End Summarization manual flow is merged to `main`. The former feature worktree `~/.config/superpowers/worktrees/memory-lane/session-end-summarization` has been removed after merge.
 

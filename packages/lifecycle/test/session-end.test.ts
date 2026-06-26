@@ -171,6 +171,41 @@ test("keeps distinct session summary with different session id and content", asy
   assert.match(result[0].text, /add debounce/u)
 })
 
+test("session-end suppresses operational-only subagent summary", async () => {
+  const engine = makeEngine()
+  const provider: LLMProvider = { complete: async () => `## Session Summary
+
+- Delegated subagent completed task 3 only.
+- Acceptance finalization compared the current work to the acceptance contract.
+- Reviewer returned APPROVED.` }
+
+  const candidates = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    sessionId: "session-subagent-only",
+    messages: [{ role: "user", content: "remember this session" }, { role: "assistant", content: "Subagent review completed." }],
+  }, { provider, confirmed: true, requireConfirmation: true, adapter: "test" })
+
+  assert.deepStrictEqual(candidates, [])
+})
+
+test("session-end keeps subagent summary with durable project outcome", async () => {
+  const engine = makeEngine()
+  const provider: LLMProvider = { complete: async () => `## Session Summary
+
+- Subagent reviewed the implementation.
+- Merged PR #62 and released v0.2.33 after tests passed.
+- Next step: design Phase 21 Slice 7 summary hygiene.` }
+
+  const candidates = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    sessionId: "session-subagent-durable",
+    messages: [{ role: "user", content: "remember this session" }, { role: "assistant", content: "Release completed." }],
+  }, { provider, confirmed: true, requireConfirmation: true, adapter: "test" })
+
+  assert.strictEqual(candidates.length, 1)
+  assert.match(candidates[0].text, /released v0\.2\.33/iu)
+})
+
 test("removes obvious Memory Lane review-management chatter from generated summaries", async () => {
   const engine = makeEngine()
   const provider: LLMProvider = {
