@@ -14,6 +14,10 @@ Local-first persistent memory system with semantic retrieval for coding agents.
 - **You need a targeted approved fact, preference, or project memory** → use `memory_recall` tool
 - **User asks broad continuity questions like "what were we working on?", "where are we?", or "what should we do next?"** → use `memory_continuity` (MCP) or `memory-lane continuity --query "..." --json` (CLI) before falling back to recall/roadmap inspection
 
+## Project Docs Sync Rule
+
+For the Memory Lane repository itself, do not call a phase/slice/merge/release complete and do not recommend next work until project status docs are checked and synced. At minimum verify `HANDOFF.md`, `ROADMAP.md`, `README.md`, and this skill (`skills/memory-lane/SKILL.md`) when status, commands, workflow guidance, or release state changed. Memory checkpoints are helpful but not sufficient; repository docs must remain authoritative for new sessions.
+
 ## CLI Commands
 
 All commands support `--json` for machine-readable output.
