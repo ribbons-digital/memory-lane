@@ -108,6 +108,16 @@ const GENERIC_PROMPTS = new Set([
   "looks good",
   "thanks",
   "thank you",
+  "hi",
+  "hello",
+  "hello there",
+  "hey",
+  "hey there",
+  "hiya",
+  "yo",
+  "good morning",
+  "good afternoon",
+  "good evening",
 ])
 
 const STOP_WORDS = new Set([

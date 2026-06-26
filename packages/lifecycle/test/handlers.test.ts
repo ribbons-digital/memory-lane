@@ -170,6 +170,22 @@ test("user-prompt ordinary prompt remains unchanged", async () => {
   assert.equal(result.contextDecision?.continuityIntent, undefined)
 })
 
+test("user-prompt greeting injects no prompt context", async () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "selective" } })
+  engine.save({ text: "This repo uses pnpm", status: "approved", category: "project", scopeType: "project" })
+
+  const result = await handleUserPromptSubmit(engine, {
+    cwd: project,
+    prompt: "Hi!",
+  })
+
+  assert.equal(result.additionalContext, undefined)
+  assert.equal(result.contextDecision?.selected, 0)
+  assert.equal(result.contextDecision?.continuityIntent, undefined)
+  assert.deepEqual(result.contextDecision?.omittedReasons, ["low-signal-prompt"])
+})
+
 test("user-prompt selective labels current project memory", async () => {
   const project = tempDir()
   const engine = engineInTemp(project, { contextPolicy: { mode: "selective" } })
