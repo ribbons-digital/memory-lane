@@ -232,6 +232,25 @@ test("memory_review includes grouped project source kind and provenance metadata
   ])
 })
 
+test("memory_review includes review hygiene metadata for operational summary chatter", async () => {
+  const engine = engineInTemp()
+  engine.save({
+    text: "## Session Summary\n\n- Delegated subagent completed task 3 only.\n- Report status as APPROVED.",
+    status: "pending",
+    category: "project",
+    scopeType: "project",
+    source: "session-summary",
+    kind: "session_summary",
+  })
+
+  const result = parseToolResult(await handleMemoryReview(engine, {}))
+  const memory = result.data.memories[0]
+
+  assert.equal(memory.reviewHygiene.operationalChatter, true)
+  assert.equal(memory.reviewHygiene.suggestedAction, "consider-rejecting")
+  assert.ok(memory.reviewHygiene.reasons.includes("delegated-subagent"))
+})
+
 test("memory_review filters pending memories by kind source and provenance", async () => {
   const projectA = tempDir()
   fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "review-filter-project" }))
