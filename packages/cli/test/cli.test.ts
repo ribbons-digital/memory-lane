@@ -1252,6 +1252,27 @@ describe("CLI integration", () => {
     assert.match(humanOutput.stdout, /Latest approved/u)
   })
 
+  it("continuity human output includes truncated operating guidance inspection instruction", () => {
+    const dir = tempDir()
+    const project = path.join(dir, "project")
+    fs.mkdirSync(project)
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-continuity-truncated-guidance" }))
+    const mem = path.join(dir, "memory.jsonl")
+    const env = { MEMORY_LANE_FILE: mem, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json"), NO_COLOR: "1" }
+    const filler = "Review workflow requires Opus before design approval and before PR. ".repeat(6)
+    writeMemoryRecords(mem, [
+      { id: "release", text: "Released v0.2.32 and Pi continuity dogfood passed.", category: "project", scope: { type: "project", key: "cli-continuity-truncated-guidance" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-26T10:00:00.000Z", updatedAt: "2026-06-26T10:00:00.000Z" },
+      { id: "opus001", text: `${filler}Do not summon Opus 4.8 through subagents; invoke it with claude -p --model=claude-opus-4-8 and request high-effort thinking in the prompt.`, category: "preference", scope: { type: "global" }, status: "approved", source: "manual", kind: "workflow_rule", createdAt: "2026-06-26T11:00:00.000Z", updatedAt: "2026-06-26T11:00:00.000Z" },
+    ] as MemoryRecord[])
+
+    const output = runProcess(["continuity"], { env, cwd: project })
+    assert.equal(output.status, 0, output.stderr)
+    assert.match(output.stdout, /Operating guidance/u)
+    assert.match(output.stdout, /opus001/u)
+    assert.doesNotMatch(output.stdout, /claude -p --model=claude-opus-4-8/u)
+    assert.match(output.stdout, /memory-lane show opus001/u)
+  })
+
   it("continuity --query --json returns workstream discovery candidates", () => {
     const dir = tempDir()
     const project = path.join(dir, "project")

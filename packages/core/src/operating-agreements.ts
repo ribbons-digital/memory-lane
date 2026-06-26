@@ -1,3 +1,4 @@
+import { isDumpLikeMemoryBody } from "./dump-like-memory.js"
 import type {
   MemoryKind,
   MemoryRecord,
@@ -49,6 +50,7 @@ function visibleApproved(memory: MemoryRecord, projectScopeKey: string | undefin
 }
 
 function matchReason(memory: MemoryRecord): "explicit-kind" | "heuristic" | undefined {
+  if (isDumpLikeMemoryBody(memory.text)) return undefined
   if (memory.kind === "workflow_rule") return "explicit-kind"
   if (!memory.kind || !AGREEMENT_COMPATIBLE_KINDS.has(memory.kind)) return undefined
   return OPERATING_AGREEMENT_PATTERN.test(memory.text) ? "heuristic" : undefined

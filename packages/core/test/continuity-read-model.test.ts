@@ -161,6 +161,99 @@ test("continuity read model bounds operating guidance and filters secret-like gu
 })
 
 
+test("continuity read model excludes skill body dumps from operating guidance", () => {
+  const skillDump = `<skill>
+<name>ytai-cli</name>
+---
+name: ytai-cli
+description: Use the ytai YouTube AI-ingestion CLI to prepare, ingest, scout, summarize, clip, and extract frames from YouTube videos.
+---
+
+# ytai CLI
+
+\`ytai\` is a globally installed TypeScript CLI for local YouTube AI ingestion.
+
+## Quick Reference
+
+| Command | Purpose |
+| --- | --- |
+| \`ytai prepare\` | Full workflow: ingest then summarize |
+| \`ytai ingest\` | Download assets |
+
+### Safety Rules
+
+- Never shell-interpolate YouTube URLs.
+- Use command arrays when wrapping CLI calls.
+`
+
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "Released v0.2.32 with Pi continuity dogfood complete.", kind: "project_checkpoint", updatedAt: "2026-06-26T10:00:00.000Z" }),
+    memory({
+      id: "ytai-skill-dump",
+      text: skillDump,
+      category: "preference",
+      scope: { type: "global" },
+      source: "manual",
+      kind: "preference",
+      updatedAt: "2026-06-26T12:00:00.000Z",
+    }),
+    memory({
+      id: "ytai-workflow-rule-dump",
+      text: skillDump,
+      category: "preference",
+      scope: { type: "global" },
+      source: "manual",
+      kind: "workflow_rule",
+      updatedAt: "2026-06-26T13:00:00.000Z",
+    }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.operatingGuidance?.some((item) => item.id === "ytai-skill-dump" || item.id === "ytai-workflow-rule-dump") ?? false, false)
+  assert.equal(result.latestApproved.global?.id, undefined)
+})
+
+
+test("continuity read model keeps legitimate XML-ish workflow guidance eligible", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "Released v0.2.32 with Pi continuity dogfood complete.", kind: "project_checkpoint", updatedAt: "2026-06-26T10:00:00.000Z" }),
+    memory({
+      id: "opus-workflow",
+      text: "Workflow rule: <review>Before presenting a design, run claude -p --model=claude-opus-4-8 and ask for high-effort thinking.</review>",
+      category: "preference",
+      scope: { type: "global" },
+      source: "manual",
+      kind: "workflow_rule",
+      updatedAt: "2026-06-26T12:00:00.000Z",
+    }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.operatingGuidance?.some((item) => item.id === "opus-workflow"), true)
+})
+
+
+test("continuity read model marks truncated operating guidance and instructs full inspection", () => {
+  const filler = "Review workflow requires Opus before design approval and before PR. ".repeat(6)
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "Released v0.2.32 with Pi continuity dogfood complete.", kind: "project_checkpoint", updatedAt: "2026-06-26T10:00:00.000Z" }),
+    memory({
+      id: "opus-review-rule",
+      text: `${filler}Do not summon Opus 4.8 through subagents; invoke it with claude -p --model=claude-opus-4-8 and request high-effort thinking in the prompt.`,
+      category: "preference",
+      scope: { type: "global" },
+      source: "manual",
+      kind: "workflow_rule",
+      updatedAt: "2026-06-26T12:00:00.000Z",
+    }),
+  ], { projectScopeKey: "project-a" })
+
+  const guidance = result.operatingGuidance?.find((item) => item.id === "opus-review-rule")
+  assert.equal(guidance?.truncated, true)
+  assert.doesNotMatch(guidance?.preview ?? "", /claude -p --model=claude-opus-4-8/u)
+  assert.match(result.answerGuidance.join("\n"), /opus-review-rule/u)
+  assert.match(result.answerGuidance.join("\n"), /memory-lane show opus-review-rule/u)
+})
+
+
 test("continuity read model excludes non-manual global preferences from operating guidance", () => {
   const result = buildContinuityReadModel([
     memory({ id: "checkpoint", text: "Released v0.2.30 with Pi continuity dogfood complete.", kind: "project_checkpoint", updatedAt: "2026-06-25T10:00:00.000Z" }),

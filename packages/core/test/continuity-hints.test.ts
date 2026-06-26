@@ -55,6 +55,41 @@ test("continuity hints report operating agreement overlap by workflow area", () 
   assert.match(result.suggestedActions.join("\n"), /memory-lane agreements --area project-loop/u)
 })
 
+test("continuity hints do not report skill body dumps as operating agreement overlap", () => {
+  const skillDump = `<skill>
+<name>ytai-cli</name>
+---
+name: ytai-cli
+description: Use the ytai YouTube AI-ingestion CLI to prepare, ingest, scout, summarize, clip, and extract frames from YouTube videos.
+---
+
+# ytai CLI
+
+## Quick Reference
+
+| Command | Purpose |
+| --- | --- |
+| ytai prepare | Full workflow |
+| ytai clip | Extract clip |
+`
+
+  const result = buildContinuityHints([
+    memory({ id: "project-loop-current", text: "Project workflow loop: spec approval then implementation", kind: "workflow_rule", updatedAt: "2026-06-18T10:00:00.000Z" }),
+    memory({
+      id: "ytai-skill-dump",
+      text: skillDump,
+      category: "preference",
+      scope: { type: "global" },
+      kind: "preference",
+      updatedAt: "2026-06-18T09:00:00.000Z",
+    }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.operatingAgreementOverlaps.some((overlap) => overlap.relatedIds.includes("ytai-skill-dump")), false)
+  assert.equal(result.hints.some((hint) => hint.code === "operating-agreement-overlap" && hint.memoryIds.includes("ytai-skill-dump")), false)
+})
+
+
 test("continuity hints report project global preference overlap", () => {
   const result = buildContinuityHints([
     memory({ id: "project-pr", text: "PR process: open a pull request and wait for merge", kind: "workflow_rule", category: "project", scope: { type: "project", key: "project-a" } }),

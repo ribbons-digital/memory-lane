@@ -4,6 +4,7 @@ import { buildContinuityHints } from "./continuity-hints.js"
 import { classifyContinuityRole } from "./continuity-roles.js"
 import { buildFreshnessStatus } from "./freshness.js"
 import { discoverWorkstreams } from "./workstream-discovery.js"
+import { isDumpLikeMemoryBody } from "./dump-like-memory.js"
 import { selectOperatingAgreements, summarizeOperatingAgreements } from "./operating-agreements.js"
 import type {
   ContinuityMemoryPreview,
@@ -51,16 +52,17 @@ function projectScoped(memory: MemoryRecord, projectScopeKey?: string): boolean 
   return Boolean(projectScopeKey) && memory.scope.type === "project" && memory.scope.key === projectScopeKey
 }
 
-function compactPreview(text: string, maxChars: number): string {
+function compactPreview(text: string, maxChars: number): { text: string; truncated: boolean } {
   const normalized = text.replace(/\s+/gu, " ").trim()
-  if (normalized.length <= maxChars) return normalized
-  if (maxChars <= 1) return "…"
-  return `${normalized.slice(0, maxChars - 1).trimEnd()}…`
+  if (normalized.length <= maxChars) return { text: normalized, truncated: false }
+  if (maxChars <= 1) return { text: "…", truncated: true }
+  return { text: `${normalized.slice(0, maxChars - 1).trimEnd()}…`, truncated: true }
 }
 
 function preview(memory: MemoryRecord, maxChars: number): ContinuityMemoryPreview | undefined {
   if (containsLikelySecret(memory.text)) return undefined
   const checkpointCandidate = classifyCheckpointCandidate(memory)
+  const compact = compactPreview(memory.text, maxChars)
   return {
     id: memory.id,
     status: memory.status as "approved" | "pending",
@@ -71,7 +73,8 @@ function preview(memory: MemoryRecord, maxChars: number): ContinuityMemoryPrevie
     updatedAt: memory.updatedAt,
     kind: memory.kind,
     provenance: memory.provenance,
-    preview: compactPreview(memory.text, maxChars),
+    preview: compact.text,
+    ...(compact.truncated ? { truncated: true } : {}),
     ...(checkpointCandidate ? { checkpointCandidate } : {}),
   }
 }
@@ -96,6 +99,7 @@ function isPendingContinuity(memory: MemoryRecord): boolean {
 
 function isWorkflowRelevantGlobal(memory: MemoryRecord): boolean {
   if (memory.scope.type !== "global") return false
+  if (isDumpLikeMemoryBody(memory.text)) return false
   if (memory.kind === "workflow_rule") return true
   if (memory.category === "personal" || memory.kind === "personal_context") return false
   if (memory.category !== "preference") return false
@@ -226,6 +230,7 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
     .map((memory) => preview(memory, previewMaxChars))
     .filter((item): item is ContinuityMemoryPreview => Boolean(item))
     .slice(0, DEFAULT_MAX_OPERATING_GUIDANCE)
+  const truncatedOperatingGuidanceIds = operatingGuidance.filter((item) => item.truncated).map((item) => item.id)
   const latestGlobal = approvedGlobal.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
   const hintCodes = new Set(continuityHints.hints.map((hint) => hint.code))
   const warnings = buildWarnings({ projectScope, latestProject, pendingContinuityCandidates, hintCodes, caller: options.caller })
@@ -265,6 +270,9 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
     answerGuidance: [
       "Use this continuity read model before answering last-worked-on, accomplished, or next-action questions.",
       "Treat pending continuity as review candidates, not approved facts.",
+      ...(truncatedOperatingGuidanceIds.length
+        ? [`Some operating-guidance items are truncated; inspect the full memory before applying them: ${truncatedOperatingGuidanceIds.map((id) => `memory-lane show ${id}`).join("; ")}.`]
+        : []),
       projectScope ? "If repository access is available, compare this result with current git state and roadmap/docs before finalizing the answer." : "Pass projectPath or run from a project directory for project-scoped continuity.",
     ],
     harnessGuidance: {

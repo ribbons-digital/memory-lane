@@ -300,6 +300,30 @@ test("memory_continuity tool renders five operating guidance items", async () =>
   }
 })
 
+test("memory_continuity tool renders truncated operating guidance inspection instruction", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const ctx = baseCtx(env.dir)
+  const filler = "Review workflow requires Opus before design approval and before PR. ".repeat(6)
+
+  const records = [
+    { id: "release1", text: "Released v0.2.32 with Pi continuity dogfood complete.", category: "project", scope: { type: "project", key: "pi-test-project" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-26T10:00:00.000Z", updatedAt: "2026-06-26T10:00:00.000Z" },
+    { id: "opus001", text: `${filler}Do not summon Opus 4.8 through subagents; invoke it with claude -p --model=claude-opus-4-8 and request high-effort thinking in the prompt.`, category: "preference", scope: { type: "global" }, status: "approved", source: "manual", kind: "workflow_rule", createdAt: "2026-06-26T11:00:00.000Z", updatedAt: "2026-06-26T11:00:00.000Z" },
+  ]
+  fs.writeFileSync(path.join(env.dir, "memory.jsonl"), records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
+
+  const continuityTool = pi.tools.get("memory_continuity")
+  const result = await continuityTool.execute("tool-2", { query: "what should we work on next?" }, undefined, () => {}, ctx)
+
+  assert.match(result.content[0].text, /Operating guidance:/u)
+  assert.match(result.content[0].text, /opus001/u)
+  assert.doesNotMatch(result.content[0].text, /claude -p --model=claude-opus-4-8/u)
+  assert.match(result.content[0].text, /memory-lane show opus001/u)
+})
+
+
 test("memory continuity command returns canonical continuity context", async () => {
   const env = makeTempEnv()
   cleanup = env.restore

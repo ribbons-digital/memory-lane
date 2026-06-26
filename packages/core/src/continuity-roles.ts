@@ -1,4 +1,5 @@
 import { CHECKPOINT_PATTERNS } from "./checkpoint-candidates.js"
+import { isDumpLikeMemoryBody } from "./dump-like-memory.js"
 import type { MemoryKind, MemoryRecord } from "./types.js"
 
 export type ContinuityRole = "progress" | "operating_agreement" | "correction" | "procedure" | "global_workflow" | "other"
@@ -27,6 +28,7 @@ function hasProgressEvidence(memory: MemoryRecord): boolean {
 }
 
 function isFieldDerivedOperatingAgreement(memory: MemoryRecord): boolean {
+  if (isDumpLikeMemoryBody(memory.text)) return false
   if (memory.kind === "workflow_rule") return true
   if (memory.scope.type === "global") {
     if (memory.category === "personal" || memory.kind === "personal_context") return false
@@ -39,6 +41,7 @@ function isFieldDerivedOperatingAgreement(memory: MemoryRecord): boolean {
 }
 
 function isGlobalWorkflow(memory: MemoryRecord): boolean {
+  if (isDumpLikeMemoryBody(memory.text)) return false
   if (memory.scope.type !== "global") return false
   if (memory.kind === "workflow_rule") return true
   if (memory.category === "personal" || memory.kind === "personal_context") return false

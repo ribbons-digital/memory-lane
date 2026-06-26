@@ -231,6 +231,7 @@ export interface ContinuityMemoryPreview {
   kind?: MemoryKind
   provenance?: MemoryProvenance
   preview: string
+  truncated?: boolean
   checkpointCandidate?: import("./checkpoint-candidates.js").CheckpointCandidateMetadata
 }
 
