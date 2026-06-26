@@ -45,12 +45,55 @@ test("summary hygiene hints memory-review-management summaries", () => {
   assert.ok(result.reasons.includes("memory-review-management"))
 })
 
+test("summary hygiene detects memory review management short forms", () => {
+  const rejectId = analyzeSummaryHygiene("Next step: reject 7d2a32a9", { kind: "session_summary", source: "session-summary" })
+  assert.equal(rejectId.operationalChatter, true)
+  assert.equal(rejectId.durableOutcome, false)
+  assert.equal(rejectId.action, "suppress")
+  assert.ok(rejectId.reasons.includes("memory-review-management"))
+
+  const approveMemory = analyzeSummaryHygiene("Approve memory 33428846 after checking the queue.", { kind: "session_summary", source: "session-summary" })
+  assert.equal(approveMemory.operationalChatter, true)
+  assert.equal(approveMemory.action, "suppress")
+
+  const rejectThose = analyzeSummaryHygiene("Reject those memories because they are duplicate review chatter.", { kind: "session_summary", source: "session-summary" })
+  assert.equal(rejectThose.operationalChatter, true)
+  assert.equal(rejectThose.action, "suppress")
+})
+
+test("summary hygiene detects slash review command and spaced review status", () => {
+  const slashReview = analyzeSummaryHygiene("Run /memory review and approve memory 33428846.", { kind: "session_summary", source: "session-summary" })
+  assert.equal(slashReview.operationalChatter, true)
+  assert.ok(slashReview.reasons.includes("memory-review-management"))
+
+  const changesRequested = analyzeSummaryHygiene("Reviewer returned changes requested for task 2 only.", { kind: "session_summary", source: "session-summary" })
+  assert.equal(changesRequested.operationalChatter, true)
+  assert.ok(changesRequested.reasons.includes("review-status-label"))
+})
+
 test("summary hygiene ignores ordinary project summary", () => {
   const result = analyzeSummaryHygiene(`## Session Summary\n\n- Implemented continuity read-model fields.\n- Tests and build passed.\n- Next step: cut release.`, { kind: "session_summary", source: "session-summary" })
 
   assert.equal(result.operationalChatter, false)
   assert.equal(result.durableOutcome, true)
   assert.equal(result.action, "keep")
+})
+
+test("summary hygiene returns hint for operational chatter without session-summary options", () => {
+  const result = analyzeSummaryHygiene("Delegated subagent completed task 3 only and reported status as blocked.")
+
+  assert.equal(result.operationalChatter, true)
+  assert.equal(result.durableOutcome, false)
+  assert.equal(result.action, "hint")
+  assert.ok(result.reasons.includes("delegated-subagent"))
+})
+
+test("summary hygiene returns hint for non-summary operational memories", () => {
+  const result = analyzeSummaryHygiene("Delegated subagent completed task 3 only and reported status as blocked.", { kind: "project_fact", source: "agent-suggested" })
+
+  assert.equal(result.operationalChatter, true)
+  assert.equal(result.durableOutcome, false)
+  assert.equal(result.action, "hint")
 })
 
 test("withReviewHygiene adds read-only metadata only for suspect pending memories", () => {
@@ -60,6 +103,9 @@ test("withReviewHygiene adds read-only metadata only for suspect pending memorie
 
   const normal = withReviewHygiene(memory({ id: "m2", text: "## Session Summary\nReleased v0.2.33 and verified the release workflow." }))
   assert.equal(normal.reviewHygiene, undefined)
+
+  const operationalWithOutcome = withReviewHygiene(memory({ id: "m4", text: "## Session Summary\nSubagent reviewed the implementation. Merged PR #62 and released v0.2.33." }))
+  assert.equal(operationalWithOutcome.reviewHygiene, undefined)
 
   const approved = withReviewHygiene(memory({ id: "m3", status: "approved", text: "Delegated subagent completed task only." }))
   assert.equal(approved.reviewHygiene, undefined)

@@ -15,11 +15,13 @@ export interface ReviewHygieneMetadata {
 
 export type MemoryRecordWithReviewHygiene = MemoryRecord & { reviewHygiene?: ReviewHygieneMetadata }
 
+const MEMORY_REVIEW_MANAGEMENT_PATTERN = /\b(?:approve|reject|review)\s+(?:(?:these|those)\s+(?:memory\s+)?(?:ids?|memories)|(?:pending\s+)?memories|(?:memory\s+)?ids?|memory\s+[0-9a-f]{6,}|[0-9a-f]{6,})\b|\bmemory-lane\s+review\b|\/memory\s+review\b/iu
+
 const OPERATIONAL_PATTERNS: Array<{ reason: string; pattern: RegExp }> = [
   { reason: "delegated-subagent", pattern: /\b(?:delegated\s+subagent|subagent\s+session|subagent\s+(?:reported|completed|reviewed)|worker\s+\d+|agent\s+\d+)\b/iu },
   { reason: "acceptance-finalization", pattern: /\b(?:acceptance\s+finalization|acceptance\s+contract|compare\s+the\s+current\s+work\s+to\s+the\s+acceptance\s+contract)\b/iu },
-  { reason: "review-status-label", pattern: /\b(?:APPROVED|CHANGES_REQUESTED|DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED)\b/u },
-  { reason: "memory-review-management", pattern: /\b(?:approve|reject|review)\s+(?:these\s+)?(?:memory\s+)?(?:ids?|memories|pending\s+memories)\b|\bmemory-lane\s+review\b|\b\/memory\s+review\b/iu },
+  { reason: "review-status-label", pattern: /\b(?:approved|changes[_\s-]?requested|done[_\s-]?with[_\s-]?concerns|needs[_\s-]?context|blocked)\b/iu },
+  { reason: "memory-review-management", pattern: MEMORY_REVIEW_MANAGEMENT_PATTERN },
   { reason: "orchestration-status", pattern: /\b(?:task\s+\d+\s+only|coordinator\s+should\s+collect|collect\s+(?:the\s+)?results|reported\s+status)\b/iu },
 ]
 
@@ -29,7 +31,7 @@ const DURABLE_OUTCOME_PATTERNS: RegExp[] = [
   /\b(?:PR|pull\s+request)\s*#?\d+\b/iu,
   /\bv\d+\.\d+\.\d+(?:[-+][A-Za-z0-9._-]+)?\b/u,
   /\b(?:root\s+cause|blocker|decision|decided|user\s+prefers|preference)\b/iu,
-  /^\s*[-*]?\s*next\s+(?:step|action)s?\s*:\s*(?!.*\b(?:approve|reject|review)\s+(?:these\s+)?(?:memory\s+)?(?:ids?|memories|pending\s+memories)\b)(?!.*\bmemory-lane\s+review\b).+$/imu,
+  /^\s*[-*]?\s*next\s+(?:step|action)s?\s*:\s*(?!.*(?:\b(?:approve|reject|review)\s+(?:(?:these|those)\s+(?:memory\s+)?(?:ids?|memories)|(?:pending\s+)?memories|(?:memory\s+)?ids?|memory\s+[0-9a-f]{6,}|[0-9a-f]{6,})\b|\bmemory-lane\s+review\b|\/memory\s+review\b)).+$/imu,
   /\b(?:Procedure|When|Steps|Pitfall|Verify):\b/u,
 ]
 
