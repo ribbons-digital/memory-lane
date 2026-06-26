@@ -79,6 +79,22 @@ test("summary hygiene ignores ordinary project summary", () => {
   assert.equal(result.action, "keep")
 })
 
+test("summary hygiene does not treat standalone approval prose as review-status label", () => {
+  const result = analyzeSummaryHygiene("Approved the proposed onboarding copy after comparing it with the product goals.", { kind: "session_summary", source: "session-summary" })
+
+  assert.equal(result.operationalChatter, false)
+  assert.equal(result.action, "keep")
+})
+
+test("summary hygiene treats section headers as durable outcomes", () => {
+  const result = analyzeSummaryHygiene("Procedure:\n- Run memory-lane review before approving memories.", { kind: "session_summary", source: "session-summary" })
+
+  assert.equal(result.operationalChatter, true)
+  assert.equal(result.durableOutcome, true)
+  assert.equal(result.action, "keep")
+  assert.ok(result.reasons.includes("durable-outcome"))
+})
+
 test("summary hygiene returns hint for operational chatter without session-summary options", () => {
   const result = analyzeSummaryHygiene("Delegated subagent completed task 3 only and reported status as blocked.")
 
