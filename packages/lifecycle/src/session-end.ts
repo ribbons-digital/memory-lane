@@ -1,4 +1,4 @@
-import { containsLikelySecret, normalizeMemoryText, type MemoryEngine, type MemoryFreshness, type MemoryRecord } from "@memory-lane/core"
+import { analyzeSummaryHygiene, containsLikelySecret, normalizeMemoryText, type MemoryEngine, type MemoryFreshness, type MemoryRecord } from "@memory-lane/core"
 import { createOpenAICompatibleProvider } from "./llm-provider.js"
 import type { LLMProvider, SessionEndInput, SessionEndOptions } from "./types.js"
 
@@ -190,6 +190,8 @@ export async function handleSessionEnd(
 
   const cleaned = cleanGeneratedSummary(raw)
   if (!sessionSummaryContentKey(cleaned)) return []
+  const hygiene = analyzeSummaryHygiene(cleaned, { kind: "session_summary", source: "session-summary" })
+  if (hygiene.action === "suppress") return []
 
   const heading = `## Session Summary (${new Date().toISOString().slice(0, 10)})`
   const text = [heading, "", cleaned].join("\n")
