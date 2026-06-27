@@ -2,9 +2,9 @@
 
 ## Current state
 
-- Branch context for this handoff: `main` is synced through `6d234c3` (`docs: prep v0.2.37 release status`) after PR #68 merged as `5707c6c` (`fix: tighten continuity selection hygiene (#68)`).
+- Branch context for this handoff: `main` is synced through `57923c6` (`docs: sync v0.2.37 release status`) after PR #68 merged as `5707c6c` (`fix: tighten continuity selection hygiene (#68)`).
 - Latest release: `v0.2.37` at tag/commit `6d234c3`. Release workflow `28275316878` passed and published 8 assets.
-- Phase 21 Slice 7/8/9 context-hygiene track is complete and dogfooded:
+- Phase 21 “Handoff-Free Sessions” is declared complete. Slice 7/8/9 context-hygiene track is complete and dogfooded:
   - Slice 7 (`v0.2.34`) suppresses generated session summaries dominated by operational subagent/orchestrator chatter when no durable project outcome exists, and exposes read-only `reviewHygiene` hints.
   - Slice 8 (`v0.2.35`) suppresses low-signal greeting prompt injection, caps generated Pi bridge automatic recall bodies, preserves meaningful technical recall, and keeps explicit recall/get full-fidelity.
   - Slice 9 (`v0.2.36`) makes Claude/Codex broad project-position/next-work prompt families render continuity guidance without ordinary `## Relevant Memory` recall bodies while preserving topic-specific recall.
@@ -79,6 +79,6 @@ Prior v0.2.36 context-hygiene dogfood also passed: broad Claude/Codex prompt emi
 
 ## Suggested next steps
 
-1. Save a release checkpoint memory for `v0.2.37`.
-2. Recommend declaring Phase 21 complete unless the user wants another evidence-backed follow-up.
-3. If Phase 21 is complete, choose the next approved roadmap track through the normal planning/review gate before implementation.
+1. Treat Phase 21 as complete; do not add more Phase 21 hardening unless new dogfood reveals a concrete regression.
+2. Next recommended roadmap track: Retrieval Quality / Continuity Evaluation, starting eval-first with a small reproducible corpus and measured recall/precision/failure cases before retrieval/ranking changes.
+3. Separately, consider a documentation/context-budget slice to reduce or retire `HANDOFF.md`/large roadmap loading once Memory Lane continuity is good enough to replace most manual handoff use.
