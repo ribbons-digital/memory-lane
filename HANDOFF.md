@@ -2,8 +2,8 @@
 
 ## Current state
 
-- Branch context: `main` is synced through `5202336 docs: sync post-pr-69 status`.
-- Latest release: `v0.2.37` at tag/commit `6d234c3`; release workflow `28275316878` passed and published 8 assets. Current release target is `v0.2.38` for the docs/context-budget slice.
+- Branch context: `main` is synced through `3576417 docs: prep v0.2.38 release status`.
+- Latest release: `v0.2.38` at tag/commit `3576417`; release workflow `28276304985` passed and published 8 assets.
 - Phase 21 `Handoff-Free Sessions` is complete and dogfooded. Fresh-thread prompt `where are we in the project and what should we work on next?` used about 11.8% context, improved from the previous 14.x% range.
 - Docs/context-budget slice is merged: root `ROADMAP.md` is now a compact active index, historical roadmap detail through Phase 20.5 is archived, `HANDOFF.md` is a status card, and Memory Lane skill guidance emphasizes bounded reads.
 
@@ -32,7 +32,7 @@ Recommended product track: **Retrieval Quality / Continuity Evaluation**.
 - Installed topic-specific continuity query still returned workstream candidates.
 - Phase 21 completion checkpoint memory: `2e8348f6`.
 - PR #69 merged as `4ebf447`; local/remote `docs/context-budget` branches were cleaned up.
-- Release target: `v0.2.38` from `main` after post-PR #69 docs sync.
+- `v0.2.38` release completed; installed upgrade via `memory-lane upgrade --yes` passed and reconfigured Pi.
 
 ## Key references
 
