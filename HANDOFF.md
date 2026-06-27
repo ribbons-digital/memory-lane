@@ -2,8 +2,8 @@
 
 ## Current state
 
-- Branch context for this handoff: `main` is synced through `5707c6c` (`fix: tighten continuity selection hygiene (#68)`).
-- Latest release: `v0.2.36` at tag/commit `1623e67`. Release workflow `28272568916` passed and published 8 assets. Current release target after PR #68 is `v0.2.37`.
+- Branch context for this handoff: `main` is synced through `6d234c3` (`docs: prep v0.2.37 release status`) after PR #68 merged as `5707c6c` (`fix: tighten continuity selection hygiene (#68)`).
+- Latest release: `v0.2.37` at tag/commit `6d234c3`. Release workflow `28275316878` passed and published 8 assets.
 - Phase 21 Slice 7/8/9 context-hygiene track is complete and dogfooded:
   - Slice 7 (`v0.2.34`) suppresses generated session summaries dominated by operational subagent/orchestrator chatter when no durable project outcome exists, and exposes read-only `reviewHygiene` hints.
   - Slice 8 (`v0.2.35`) suppresses low-signal greeting prompt injection, caps generated Pi bridge automatic recall bodies, preserves meaningful technical recall, and keeps explicit recall/get full-fidelity.
@@ -19,7 +19,7 @@ PR #67 completed the docs/skill context-hygiene slice:
 2. `ROADMAP.md` Phase 21 status is compact and points to specs/validation/archive instead of carrying release-by-release prose inline.
 3. `skills/memory-lane/SKILL.md` now gives broad project-status/next-work prompts a bounded fast path: continuity first, compact current-state docs, no subagent Opus 4.8. Long-form guidance moved to `skills/memory-lane/REFERENCE.md`.
 
-PR #68 completed deferred item 4 continuity selection/ranking hygiene. Design/spec: `docs/superpowers/specs/2026-06-27-phase-21-item-4-continuity-selection-hygiene-design.md`. The slice prevents generic broad next/status queries from surfacing stale workstream candidates, and prevents release/checkpoint-style project facts from appearing as operating guidance. Non-goals held: no retrieval rewrite, embeddings/RRF, schema changes, memory mutation/cleanup, lifecycle injection changes, generated adapter changes, token budget retuning, or persisted workstream IDs. Next action: cut release `v0.2.37` from `main`.
+PR #68 completed deferred item 4 continuity selection/ranking hygiene and it is released in `v0.2.37`. Design/spec: `docs/superpowers/specs/2026-06-27-phase-21-item-4-continuity-selection-hygiene-design.md`. The slice prevents generic broad next/status queries from surfacing stale workstream candidates, and prevents release/checkpoint-style project facts from appearing as operating guidance. Non-goals held: no retrieval rewrite, embeddings/RRF, schema changes, memory mutation/cleanup, lifecycle injection changes, generated adapter changes, token budget retuning, or persisted workstream IDs. Installed-artifact dogfood after `memory-lane upgrade --yes` passed.
 
 ## Load-bearing constraints
 
@@ -35,31 +35,15 @@ PR #68 completed deferred item 4 continuity selection/ranking hygiene. Design/sp
 Latest release/dogfood evidence:
 
 ```text
-v0.2.36 release workflow: 28272568916 passed, 8 assets published
-Installed upgrade: memory-lane upgrade --yes passed
-Claude/Codex broad prompt: guidance-only, no ## Relevant Memory
-Claude/Codex hi: {}
-Claude/Codex topic lookup: bounded relevant memory preserved
-Generated Pi bridge fake-host smoke: hi skipped, broad prompt surface=continuity, pnpm technical recall preserved
-Post-release docs sync: 01df251
-Memory reindex: semantic coverage 186/186 at last checkpoint
+v0.2.37 release workflow: 28275316878 passed, 8 assets published
+Local pre-release verification: pnpm build, pnpm test, git diff --check
+Installed upgrade: memory-lane upgrade --yes passed and reconfigured Pi
+Installed broad next-work continuity: latestProgress present, workstreamCandidates empty, warnings=no-topic
+Installed operating guidance excludes stale release/checkpoint ids 1098781c, 7eab3ad9, 0b56ed5d
+Installed topic-specific continuity query still returns workstream candidates
 ```
 
-Current item 4 verification so far:
-
-```bash
-pnpm --filter @memory-lane/core test
-pnpm --filter @memory-lane/cli test
-pnpm --filter @memory-lane/mcp-server test
-pnpm build
-pnpm test
-git diff --check
-node packages/cli/dist/index.js continuity --query "what should we work on next?" --json
-# latestProgress=d0dd92ee, workstreamCandidates=empty, warnings=no-topic
-# operating guidance excludes stale release/checkpoint ids 1098781c, 7eab3ad9, 0b56ed5d
-node packages/cli/dist/index.js continuity --query "where did we fix PR body formatting?" --json
-# topic-specific workstream candidates still returned
-```
+Prior v0.2.36 context-hygiene dogfood also passed: broad Claude/Codex prompt emitted guidance-only context, `hi` returned `{}`, topic lookup preserved bounded relevant memory, and generated Pi bridge fake-host smoke preserved continuity routing plus technical recall.
 
 ## Key references
 
@@ -95,6 +79,6 @@ node packages/cli/dist/index.js continuity --query "where did we fix PR body for
 
 ## Suggested next steps
 
-1. Run local pre-release verification on `main`.
-2. Tag and push `v0.2.37`; wait for the GitHub Release workflow to pass and publish assets.
-3. After release, upgrade/dogfood installed artifact if appropriate, sync docs/checkpoint memory, and recommend whether Phase 21 can be declared complete.
+1. Save a release checkpoint memory for `v0.2.37`.
+2. Recommend declaring Phase 21 complete unless the user wants another evidence-backed follow-up.
+3. If Phase 21 is complete, choose the next approved roadmap track through the normal planning/review gate before implementation.
