@@ -34,7 +34,7 @@ Use this bounded path for prompts like “what were we working on?”, “where 
 - **You proactively identify something worth remembering** → use `memory_suggest` or `memory-lane suggest` so the user can review later.
 - **You need a targeted approved fact, preference, or project memory** → use `memory_recall` or `memory-lane recall`.
 - **User asks broad continuity / prior-work / next-action questions** → use the fast path above.
-- **You need setup/status without memory text** → use `memory-lane status --json`, `memory-lane doctor --json`, `memory_status`, or `memory-lane dashboard`.
+- **You need setup/status without memory text** → use `memory-lane status --json`, `memory-lane doctor --json`, or `memory_status`.
 
 ## Project docs sync rule
 
@@ -101,7 +101,7 @@ Use `--dry-run` where available before changing scope or relationships. Do not a
 
 - Use `memory-lane continuity --query "..." --json` / `memory_continuity({ query })` for broad workstream state.
 - Use `memory-lane agreements` for project workflow, review gates, PR process, release process, or tooling workflow rules.
-- Use `memory-lane dashboard`, `status --json`, `doctor --json`, or MCP `memory_status` for text-free continuity/staleness metadata.
+- Use `memory-lane status --json`, `memory-lane doctor --json`, or MCP `memory_status` for text-free continuity/staleness metadata. Use `memory-lane dashboard` only when a compact human-facing overview is appropriate.
 - Treat pending continuity as review candidates, not approved facts.
 - Inspect full memories by exact id with `memory-lane show <id>` or MCP `memory_get` when continuity says operating guidance was truncated.
 
