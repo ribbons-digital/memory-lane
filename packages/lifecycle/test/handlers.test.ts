@@ -156,6 +156,82 @@ test("user-prompt selective emits continuity guidance before relevant memory", a
   })
 })
 
+test("user-prompt selective next-work continuity intent suppresses ordinary recall bodies", async () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "selective" } })
+  engine.save({
+    text: "STALE NEXT SLICE BODY: proceed with an old already-completed implementation slice.",
+    status: "approved",
+    category: "project",
+    scopeType: "project",
+    kind: "project_fact",
+  })
+  engine.recall = async () => {
+    throw new Error("broad next-work prompts should not run ordinary recall")
+  }
+
+  const result = await handleUserPromptSubmit(engine, {
+    cwd: project,
+    prompt: "What should we work on next?",
+  })
+  const context = result.additionalContext ?? ""
+
+  assert.match(context, /<memory-context mode="selective" event="prompt">/u)
+  assert.match(context, /Memory Lane continuity guidance/u)
+  assert.match(context, /memory-lane continuity --json/u)
+  assert.match(context, /memory_continuity\(\{ projectPath \}\)/u)
+  assert.match(context, /Do not answer from memory_recall alone/u)
+  assert.match(context, /review current plan, roadmap, and review queue when present/u)
+  assert.doesNotMatch(context, /## Relevant Memory/u)
+  assert.doesNotMatch(context, /STALE NEXT SLICE BODY/u)
+  assert.equal(result.contextDecision?.selected, 0)
+  assert.equal(result.contextDecision?.omitted, 0)
+  assert.deepEqual(result.contextDecision?.omittedReasons, ["broad-continuity-no-recall"])
+  assert.deepEqual(result.contextDecision?.continuityIntent, {
+    detected: true,
+    family: "next-work",
+    guidanceInjected: true,
+  })
+})
+
+test("user-prompt selective project-position continuity intent suppresses ordinary recall bodies", async () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "selective" } })
+  engine.save({
+    text: "STALE PROJECT POSITION BODY: an old checkpoint should not compete with continuity.",
+    status: "approved",
+    category: "project",
+    scopeType: "project",
+    kind: "project_fact",
+  })
+  engine.recall = async () => {
+    throw new Error("broad project-position prompts should not run ordinary recall")
+  }
+
+  const result = await handleUserPromptSubmit(engine, {
+    cwd: project,
+    prompt: "What were we last working on?",
+  })
+  const context = result.additionalContext ?? ""
+
+  assert.match(context, /<memory-context mode="selective" event="prompt">/u)
+  assert.match(context, /Memory Lane continuity guidance/u)
+  assert.match(context, /memory-lane continuity --json/u)
+  assert.match(context, /memory_continuity\(\{ projectPath \}\)/u)
+  assert.match(context, /Do not answer from memory_recall alone/u)
+  assert.match(context, /review current plan, roadmap, and review queue when present/u)
+  assert.doesNotMatch(context, /## Relevant Memory/u)
+  assert.doesNotMatch(context, /STALE PROJECT POSITION BODY/u)
+  assert.equal(result.contextDecision?.selected, 0)
+  assert.equal(result.contextDecision?.omitted, 0)
+  assert.deepEqual(result.contextDecision?.omittedReasons, ["broad-continuity-no-recall"])
+  assert.deepEqual(result.contextDecision?.continuityIntent, {
+    detected: true,
+    family: "project-position",
+    guidanceInjected: true,
+  })
+})
+
 test("user-prompt ordinary prompt remains unchanged", async () => {
   const project = tempDir()
   const engine = engineInTemp(project, { contextPolicy: { mode: "selective" } })
