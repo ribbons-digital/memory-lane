@@ -2,14 +2,14 @@
 
 ## Current state
 
-- Branch context: `main` is synced through `309021e docs: declare phase 21 complete`; current docs/context-budget work is on feature branch `docs/context-budget`.
+- Branch context: `main` is synced through `4ebf447 docs: reduce roadmap context budget (#69)`.
 - Latest release: `v0.2.37` at tag/commit `6d234c3`; release workflow `28275316878` passed and published 8 assets.
 - Phase 21 `Handoff-Free Sessions` is complete and dogfooded. Fresh-thread prompt `where are we in the project and what should we work on next?` used about 11.8% context, improved from the previous 14.x% range.
-- Active docs/context-budget slice goal: make root docs safe to inspect by default by archiving historical roadmap bulk and strengthening continuity-first skill guidance.
+- Docs/context-budget slice is merged: root `ROADMAP.md` is now a compact active index, historical roadmap detail through Phase 20.5 is archived, `HANDOFF.md` is a status card, and Memory Lane skill guidance emphasizes bounded reads.
 
 ## Current decision / next work
 
-After this docs/context-budget slice, the recommended product track is **Retrieval Quality / Continuity Evaluation**:
+Recommended product track: **Retrieval Quality / Continuity Evaluation**.
 
 1. build a small reproducible eval corpus from real dogfooded Memory Lane records;
 2. add labeled continuity/recall queries;
@@ -31,6 +31,7 @@ After this docs/context-budget slice, the recommended product track is **Retriev
 - Installed operating guidance excluded stale release/checkpoint ids `1098781c`, `7eab3ad9`, and `0b56ed5d`.
 - Installed topic-specific continuity query still returned workstream candidates.
 - Phase 21 completion checkpoint memory: `2e8348f6`.
+- PR #69 merged as `4ebf447`; local/remote `docs/context-budget` branches were cleaned up.
 
 ## Key references
 
