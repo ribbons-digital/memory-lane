@@ -21,7 +21,7 @@ const ELIGIBLE_KINDS = new Set<MemoryKind>([
 ])
 const STRONG_MATCH_KINDS = new Set<MemoryKind>(["correction", "procedure"])
 const STOPWORDS = new Set([
-  "a", "an", "and", "are", "as", "at", "be", "building", "by", "did", "do", "for", "from", "how", "i", "in", "is", "it", "me", "of", "on", "or", "please", "resume", "show", "status", "tell", "the", "to", "was", "we", "were", "what", "when", "where", "with", "work", "worked", "working",
+  "a", "an", "and", "are", "as", "at", "be", "building", "by", "current", "did", "do", "for", "from", "how", "i", "in", "is", "it", "item", "latest", "me", "next", "of", "on", "or", "please", "progress", "project", "resume", "should", "show", "slice", "status", "tell", "the", "to", "was", "we", "were", "what", "when", "where", "with", "work", "worked", "working",
 ])
 const KIND_WEIGHT = new Map<MemoryKind, number>([
   ["project_checkpoint", 8],
@@ -173,6 +173,7 @@ export function discoverWorkstreams(memories: MemoryRecord[], options: Workstrea
       .filter((memory) => !containsLikelySecret(memory.text))
       .filter((memory) => !isExpired(memory, referenceNow))
       .map((memory) => {
+        if (!topicTerms.length) return undefined
         const { score, reasons, references, matched } = scoreMemory(memory, topicTerms, intent, referenceNow)
         if (!matched) return undefined
         if (memory.kind && STRONG_MATCH_KINDS.has(memory.kind) && !reasons.some((reason) => reason.startsWith("topic:"))) return undefined

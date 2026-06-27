@@ -19,7 +19,7 @@ PR #67 completed the docs/skill context-hygiene slice:
 2. `ROADMAP.md` Phase 21 status is compact and points to specs/validation/archive instead of carrying release-by-release prose inline.
 3. `skills/memory-lane/SKILL.md` now gives broad project-status/next-work prompts a bounded fast path: continuity first, compact current-state docs, no subagent Opus 4.8. Long-form guidance moved to `skills/memory-lane/REFERENCE.md`.
 
-Recommended next decision: either declare Phase 21 complete and move to the next approved roadmap track, or explicitly approve the deferred item 4 follow-up: Memory Lane continuity selection/ranking hygiene for stale workstream candidates and non-operating release/checkpoint guidance. Do **not** start item 4 without user approval.
+Current work: deferred item 4 continuity selection/ranking hygiene is implemented on branch `fix/continuity-selection-hygiene`. Design/spec: `docs/superpowers/specs/2026-06-27-phase-21-item-4-continuity-selection-hygiene-design.md`. The slice prevents generic broad next/status queries from surfacing stale workstream candidates, and prevents release/checkpoint-style project facts from appearing as operating guidance. Non-goals held: no retrieval rewrite, embeddings/RRF, schema changes, memory mutation/cleanup, lifecycle injection changes, generated adapter changes, token budget retuning, or persisted workstream IDs.
 
 ## Load-bearing constraints
 
@@ -45,16 +45,21 @@ Post-release docs sync: 01df251
 Memory reindex: semantic coverage 186/186 at last checkpoint
 ```
 
-For the completed docs/skill hygiene slice, verification was documentation-only and passed:
+Current item 4 verification so far:
 
 ```bash
-rg -n "<old pre-v0.2.36 next-step wording>" HANDOFF.md ROADMAP.md README.md skills/memory-lane/SKILL.md
-# no stale active-doc hits
-# local path-existence checks for new archive/reference links passed
+pnpm --filter @memory-lane/core test
+pnpm --filter @memory-lane/cli test
+pnpm --filter @memory-lane/mcp-server test
+pnpm build
+pnpm test
 git diff --check
+node packages/cli/dist/index.js continuity --query "what should we work on next?" --json
+# latestProgress=d0dd92ee, workstreamCandidates=empty, warnings=no-topic
+# operating guidance excludes stale release/checkpoint ids 1098781c, 7eab3ad9, 0b56ed5d
+node packages/cli/dist/index.js continuity --query "where did we fix PR body formatting?" --json
+# topic-specific workstream candidates still returned
 ```
-
-No code tests were required because no executable behavior changed.
 
 ## Key references
 
@@ -90,6 +95,6 @@ No code tests were required because no executable behavior changed.
 
 ## Suggested next steps
 
-1. Wait for the user to choose the next path.
-2. If the user approves the deferred continuity selection/ranking hygiene slice, draft a focused design/spec first and get Opus 4.8 review with `claude --model claude-opus-4-8 -p '<review prompt>'` before presenting it for approval.
-3. If the user declares Phase 21 complete instead, pick the next approved roadmap track and follow the normal planning/review gate before implementation.
+1. Run Opus 4.8 implementation review with `claude --model claude-opus-4-8 -p '<review prompt>'` and address any blockers.
+2. Open a PR and wait for user merge before syncing main or starting the next item.
+3. After merge, sync main, delete feature branch, update docs/checkpoint memory, and recommend whether Phase 21 can be declared complete.
