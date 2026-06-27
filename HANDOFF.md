@@ -2,8 +2,8 @@
 
 ## Current state
 
-- Branch context for this handoff: `main` is synced through `78ea89e` (`docs: compact handoff and memory lane skill guidance (#67)`).
-- Latest release: `v0.2.36` at tag/commit `1623e67`. Release workflow `28272568916` passed and published 8 assets.
+- Branch context for this handoff: `main` is synced through `5707c6c` (`fix: tighten continuity selection hygiene (#68)`).
+- Latest release: `v0.2.36` at tag/commit `1623e67`. Release workflow `28272568916` passed and published 8 assets. Current release target after PR #68 is `v0.2.37`.
 - Phase 21 Slice 7/8/9 context-hygiene track is complete and dogfooded:
   - Slice 7 (`v0.2.34`) suppresses generated session summaries dominated by operational subagent/orchestrator chatter when no durable project outcome exists, and exposes read-only `reviewHygiene` hints.
   - Slice 8 (`v0.2.35`) suppresses low-signal greeting prompt injection, caps generated Pi bridge automatic recall bodies, preserves meaningful technical recall, and keeps explicit recall/get full-fidelity.
@@ -19,7 +19,7 @@ PR #67 completed the docs/skill context-hygiene slice:
 2. `ROADMAP.md` Phase 21 status is compact and points to specs/validation/archive instead of carrying release-by-release prose inline.
 3. `skills/memory-lane/SKILL.md` now gives broad project-status/next-work prompts a bounded fast path: continuity first, compact current-state docs, no subagent Opus 4.8. Long-form guidance moved to `skills/memory-lane/REFERENCE.md`.
 
-Current work: deferred item 4 continuity selection/ranking hygiene is implemented on branch `fix/continuity-selection-hygiene`. Design/spec: `docs/superpowers/specs/2026-06-27-phase-21-item-4-continuity-selection-hygiene-design.md`. The slice prevents generic broad next/status queries from surfacing stale workstream candidates, and prevents release/checkpoint-style project facts from appearing as operating guidance. Non-goals held: no retrieval rewrite, embeddings/RRF, schema changes, memory mutation/cleanup, lifecycle injection changes, generated adapter changes, token budget retuning, or persisted workstream IDs.
+PR #68 completed deferred item 4 continuity selection/ranking hygiene. Design/spec: `docs/superpowers/specs/2026-06-27-phase-21-item-4-continuity-selection-hygiene-design.md`. The slice prevents generic broad next/status queries from surfacing stale workstream candidates, and prevents release/checkpoint-style project facts from appearing as operating guidance. Non-goals held: no retrieval rewrite, embeddings/RRF, schema changes, memory mutation/cleanup, lifecycle injection changes, generated adapter changes, token budget retuning, or persisted workstream IDs. Next action: cut release `v0.2.37` from `main`.
 
 ## Load-bearing constraints
 
@@ -95,6 +95,6 @@ node packages/cli/dist/index.js continuity --query "where did we fix PR body for
 
 ## Suggested next steps
 
-1. Run Opus 4.8 implementation review with `claude --model claude-opus-4-8 -p '<review prompt>'` and address any blockers.
-2. Open a PR and wait for user merge before syncing main or starting the next item.
-3. After merge, sync main, delete feature branch, update docs/checkpoint memory, and recommend whether Phase 21 can be declared complete.
+1. Run local pre-release verification on `main`.
+2. Tag and push `v0.2.37`; wait for the GitHub Release workflow to pass and publish assets.
+3. After release, upgrade/dogfood installed artifact if appropriate, sync docs/checkpoint memory, and recommend whether Phase 21 can be declared complete.
