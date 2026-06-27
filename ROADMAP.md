@@ -649,7 +649,7 @@ Out of scope for Phase 20.5:
 
 ## Phase 21 — Handoff-Free Sessions
 
-**Status:** Phase 21 is complete through Slice 9 and released in `v0.2.36` (`1623e67`, PR #66). Slice 7/8/9 context-hygiene validation and installed-artifact dogfood passed. The current approved follow-up is a docs/skill context-hygiene slice to reduce agent context waste before new feature work; runtime continuity selection/ranking hygiene is deferred to the future track below unless explicitly approved.
+**Status:** Phase 21 is complete through Slice 9 and released in `v0.2.36` (`1623e67`, PR #66). Slice 7/8/9 context-hygiene validation and installed-artifact dogfood passed. PR #67 (`78ea89e`) completed the docs/skill context-hygiene follow-up: `HANDOFF.md` is compact, old chronology is archived, Phase 21 roadmap status is compressed, and the Memory Lane skill now points broad project-status/next-work prompts to bounded continuity-first inspection. Runtime continuity selection/ranking hygiene is deferred to the future track below unless explicitly approved.
 
 **Evidence and references:**
 
@@ -671,11 +671,11 @@ Out of scope for Phase 20.5:
 8. Context-pollution hardening suppresses low-signal greetings, caps generated Pi bridge automatic recall context, and preserves meaningful technical recall plus explicit recall/get fidelity.
 9. Broad continuity injection hygiene makes Claude/Codex project-position/next-work prompts inject continuity guidance without ordinary recall bodies while preserving topic-specific recall.
 
-**Current docs/skill hygiene follow-up:**
+**Completed docs/skill hygiene follow-up (PR #67):**
 
-- Compact `HANDOFF.md` into a current-state document and archive old chronology.
-- Keep this Phase 21 roadmap section compact and link to specs/validation/archive instead of carrying release-by-release prose inline.
-- Update `skills/memory-lane/SKILL.md` so broad project-status/next-work prompts inspect continuity and compact current-state docs first, and so Opus 4.8 review is invoked through the Claude CLI rather than subagents.
+- `HANDOFF.md` is a current-state document; old chronology is archived at `docs/superpowers/archive/2026-06-26-pre-docs-hygiene-handoff.md`.
+- This Phase 21 roadmap section stays compact and links to specs/validation/archive instead of carrying release-by-release prose inline.
+- `skills/memory-lane/SKILL.md` directs broad project-status/next-work prompts to continuity-first compact inspection, keeps text-free status guidance on JSON/status surfaces, and uses the canonical Opus 4.8 Claude CLI form rather than subagents.
 
 **Non-goals unless a new slice explicitly approves them:** retrieval rewrites, auto-consolidation, silent deletion, schema expansion, raw transcript indexing, persisted workstream IDs, or runtime continuity selection/ranking changes.
 

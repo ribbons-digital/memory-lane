@@ -2,7 +2,7 @@
 
 ## Current state
 
-- Branch context for this handoff: `main` is synced through `01df251` (`docs: sync v0.2.36 release status`), after PR #66 merged at `1623e67` (`fix: suppress broad continuity recall bodies (#66)`).
+- Branch context for this handoff: `main` is synced through `78ea89e` (`docs: compact handoff and memory lane skill guidance (#67)`).
 - Latest release: `v0.2.36` at tag/commit `1623e67`. Release workflow `28272568916` passed and published 8 assets.
 - Phase 21 Slice 7/8/9 context-hygiene track is complete and dogfooded:
   - Slice 7 (`v0.2.34`) suppresses generated session summaries dominated by operational subagent/orchestrator chatter when no durable project outcome exists, and exposes read-only `reviewHygiene` hints.
@@ -13,14 +13,13 @@
 
 ## Current decision / next work
 
-The user approved a docs/skill context-hygiene slice before starting new feature work:
+PR #67 completed the docs/skill context-hygiene slice:
 
-1. Compact `HANDOFF.md` into this current-state handoff and archive old chronology.
-2. Compact `ROADMAP.md` Phase 21 status so agents do not read a giant inline chronology for current status.
-3. Improve `skills/memory-lane/SKILL.md` so broad project-status/next-work prompts use bounded inspection: continuity first, compact current-state docs, no subagent Opus 4.8.
-4. After this slice, consider item 4 from the prior analysis: Memory Lane continuity selection/ranking hygiene for stale workstream candidates and non-operating release/checkpoint guidance.
+1. `HANDOFF.md` is now this current-state handoff; the old chronology is archived at `docs/superpowers/archive/2026-06-26-pre-docs-hygiene-handoff.md`.
+2. `ROADMAP.md` Phase 21 status is compact and points to specs/validation/archive instead of carrying release-by-release prose inline.
+3. `skills/memory-lane/SKILL.md` now gives broad project-status/next-work prompts a bounded fast path: continuity first, compact current-state docs, no subagent Opus 4.8. Long-form guidance moved to `skills/memory-lane/REFERENCE.md`.
 
-Do **not** treat item 4 as part of this docs/skill slice unless the user explicitly approves it.
+Recommended next decision: either declare Phase 21 complete and move to the next approved roadmap track, or explicitly approve the deferred item 4 follow-up: Memory Lane continuity selection/ranking hygiene for stale workstream candidates and non-operating release/checkpoint guidance. Do **not** start item 4 without user approval.
 
 ## Load-bearing constraints
 
@@ -46,16 +45,16 @@ Post-release docs sync: 01df251
 Memory reindex: semantic coverage 186/186 at last checkpoint
 ```
 
-For this docs/skill hygiene slice, expected verification is documentation-only:
+For the completed docs/skill hygiene slice, verification was documentation-only and passed:
 
 ```bash
+rg -n "<old pre-v0.2.36 next-step wording>" HANDOFF.md ROADMAP.md README.md skills/memory-lane/SKILL.md
+# no stale active-doc hits
+# local path-existence checks for new archive/reference links passed
 git diff --check
-rg -n "v0\.2\.36|docs/skill context-hygiene|Current decision" HANDOFF.md ROADMAP.md skills/memory-lane/SKILL.md README.md
-# also verify no stale pre-v0.2.36 next-step wording remains in active docs (archives may preserve old text)
-# plus path-existence checks for every new archive/spec/validation link
 ```
 
-Run code tests only if executable behavior changes; this slice should not change runtime behavior.
+No code tests were required because no executable behavior changed.
 
 ## Key references
 
@@ -89,8 +88,8 @@ Run code tests only if executable behavior changes; this slice should not change
 - Project identity is `.memory-lane-scope` first, then Git common-dir identity, then no project scope/global fallback.
 - Obsidian mirror/import remain explicit and JSONL remains the operational source of truth.
 
-## Suggested next steps after this slice
+## Suggested next steps
 
-1. Finish docs/skill hygiene, run documentation verification, and open a PR.
-2. After merge, sync main and update this handoff if needed.
-3. Then decide whether to run the deferred continuity selection/ranking hygiene slice for stale workstream candidates and release/checkpoint-looking operating guidance, or declare Phase 21 complete and move to the next approved roadmap track.
+1. Wait for the user to choose the next path.
+2. If the user approves the deferred continuity selection/ranking hygiene slice, draft a focused design/spec first and get Opus 4.8 review with `claude --model claude-opus-4-8 -p '<review prompt>'` before presenting it for approval.
+3. If the user declares Phase 21 complete instead, pick the next approved roadmap track and follow the normal planning/review gate before implementation.
