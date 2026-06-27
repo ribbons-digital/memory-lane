@@ -44,17 +44,15 @@ Key Phase 21 references:
 - Item 4 continuity selection hygiene design: `docs/superpowers/specs/2026-06-27-phase-21-item-4-continuity-selection-hygiene-design.md`
 - Docs/context-budget design: `docs/superpowers/specs/2026-06-27-docs-context-budget-design.md`
 
-## Recommended next track — Retrieval Quality / Continuity Evaluation
+## Active track — Retrieval Quality / Continuity Evaluation
 
 Before adding heavier retrieval, consolidation, RRF, reranking, embeddings changes, or viewer work, Memory Lane should establish an eval-first retrieval/continuity quality track.
 
-First slice:
+Slice status: the internal/test-only eval baseline is implemented on `feat/retrieval-continuity-eval-baseline`. It adds a sanitized six-scenario corpus, test-only core eval helpers, structural tests, and baseline findings without changing retrieval/ranking or adding a public eval command.
 
-1. Define a small reproducible eval corpus from real dogfooded Memory Lane records.
-2. Add labeled continuity/recall queries.
-3. Measure current behavior: recall@k, precision@k, and failure cases.
-4. Produce a short findings doc.
-5. Do not change retrieval/ranking until the eval justifies a specific change.
+Baseline findings: `docs/superpowers/validation/2026-06-27-retrieval-continuity-eval-baseline.md` reports mean recall@k 1.00 and mean precision@k 0.54 across four ranked evals. Continuity slotting behaved well on the small corpus. Explicit recall retrieved required records, but the current release-status query exposed one expected default lexical-fallback weakness: stale release status can rank at or above current release status when lexical overlap is similar. Topic-specific recall/workstream queries also showed a lower-ranked docs/release checkpoint entering via generic PR token/reference overlap.
+
+Next step after PR review/merge: decide whether the baseline justifies a narrow follow-up for currentness/recency treatment in explicit recall, or whether to keep broad/current-status questions continuity-first and use recall only for topic-specific follow-up.
 
 Why this next: Phase 21 made continuity usable and cleaner. The next product risk is changing retrieval based on vibes rather than evidence.
 
