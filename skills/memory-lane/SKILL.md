@@ -16,11 +16,12 @@ Use this bounded path for prompts like “what were we working on?”, “where 
    memory-lane continuity --query "<user question>" --json
    ```
 2. Prefer `latestProgress` for current progress. Treat `latestApproved.project` as a legacy compatibility slot that may contain corrections/procedures.
-3. Verify against compact repo state when available:
-   - `HANDOFF.md` → `## Current state`, `## Current decision / next work`, `## Load-bearing constraints`
-   - `ROADMAP.md` → current phase/status section, not the whole file unless needed
-   - `README.md` only for user-facing command/setup changes
-   - this skill only for workflow/Memory Lane command guidance
+3. Verify against compact repo state with bounded reads:
+   - `HANDOFF.md` → status card: current state, next work, constraints.
+   - `ROADMAP.md` → active index: current status and next track first.
+   - `docs/superpowers/archive/*` → history only; skip unless asked.
+   - `README.md` → user-facing command/setup changes only.
+   - this skill → workflow/Memory Lane command guidance only.
 4. Use targeted `memory_recall` / `memory-lane recall` only as a follow-up for a specific topic, not as the first stop for broad continuity.
 5. For Memory Lane design/spec or pre-PR implementation reviews, invoke Opus 4.8 directly with Claude CLI:
    ```bash
@@ -38,7 +39,7 @@ Use this bounded path for prompts like “what were we working on?”, “where 
 
 ## Project docs sync rule
 
-For the Memory Lane repository itself, do not call a phase/slice/merge/release complete and do not recommend next work until project status docs are checked and synced. Use compact current-state sections first; do not read whole long reference docs unless their details are necessary. At minimum check whether `HANDOFF.md`, `ROADMAP.md`, `README.md`, and this skill need updates when status, commands, workflow guidance, or release state changed. Memory checkpoints are helpful but not sufficient; repository docs must remain authoritative for new sessions.
+For the Memory Lane repository itself, do not call a phase/slice/merge/release complete or recommend next work until status docs are synced. Use continuity first, then compact current docs. Skip archived roadmap/history and long references unless required. At minimum check whether `HANDOFF.md`, root `ROADMAP.md`, `README.md`, and this skill need updates when status, commands, workflow guidance, or release state changed. Memory checkpoints help but are not sufficient; root docs stay authoritative for new sessions.
 
 ## Core commands
 
