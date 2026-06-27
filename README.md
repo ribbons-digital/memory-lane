@@ -147,7 +147,7 @@ After source changes, run `pnpm build` again and reload/restart the harness you 
 
 #### Project status docs sync guardrail
 
-When completing a Memory Lane phase/slice, merging a PR, cutting a release, or recommending the next work item, update status docs before calling the work complete. At minimum check and sync `HANDOFF.md`, `ROADMAP.md`, `README.md`, and `skills/memory-lane/SKILL.md` when their status, commands, or workflow guidance changed. Do not rely only on Memory Lane checkpoint memories; future sessions and users must be able to recover current project state from the repository docs.
+When completing a Memory Lane phase/slice, merging a PR, cutting a release, or recommending the next work item, update status docs before calling the work complete. Start with compact current-state sections in `HANDOFF.md` and the relevant current roadmap section, then check `README.md` and `skills/memory-lane/SKILL.md` only when their status, commands, or workflow guidance changed. Do not rely only on Memory Lane checkpoint memories; future sessions and users must be able to recover current project state from the repository docs without reading archived chronology by default.
 
 #### Harness adapter/template release guardrail
 
