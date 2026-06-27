@@ -280,8 +280,8 @@ function failureTagsForRanked(query: EvalQuery, actualIds: string[]): string[] {
 
 function scoreNonZeroIds(query: EvalQuery, memories: MemoryRecord[]): string[] {
   return memories
-    .slice(0, query.k)
     .filter((record) => lexicalScore(query.query, record.text) > 0)
+    .slice(0, query.k)
     .map((record) => record.id)
 }
 
@@ -337,10 +337,16 @@ function evaluateContinuity(query: EvalQuery, records: MemoryRecord[]): EvalQuer
   const rankedExpectation = query.continuityExpectations?.find((expectation) => expectation.slot === "workstreamDiscovery.candidates")
   const rankedIds = rankedExpectation ? slotIds(model, "workstreamDiscovery.candidates").slice(0, query.k) : []
   const actualIds = unique(slotResults.flatMap((result) => result.actualIds))
+  const latestProgressRequired = query.continuityExpectations
+    ?.find((expectation) => expectation.slot === "latestProgress")
+    ?.required ?? []
+  const requiredProgressInOtherSlot = latestProgressRequired.some((id) =>
+    slotResults.some((result) => result.slot !== "latestProgress" && result.actualIds.includes(id)),
+  )
   const slotFailureTags: string[] = []
   if (slotResults.some((result) => result.missingRequired.length)) slotFailureTags.push("missing-required")
   if (slotResults.some((result) => result.forbiddenPresent.length)) slotFailureTags.push("forbidden-returned")
-  if (slotResults.some((result) => result.slot === "latestProgress" && result.forbiddenPresent.length)) slotFailureTags.push("wrong-slot")
+  if (requiredProgressInOtherSlot || slotResults.some((result) => result.slot === "latestProgress" && result.forbiddenPresent.length)) slotFailureTags.push("wrong-slot")
 
   return {
     id: query.id,

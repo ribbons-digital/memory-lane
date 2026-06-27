@@ -203,7 +203,7 @@ For each recall query:
    - a required id is missing from top-k (`missing-required`);
    - a forbidden id appears in top-k (`forbidden-returned`);
    - a forbidden stale record ranks above a required current record (`stale-over-current`);
-   - most returned ids are distractors (`topic-mismatch`).
+   - more than 50% of the scored top-k ids are labeled `distractor` or `forbidden` (`topic-mismatch`).
 
 The first slice records these metrics but does not fail CI based on their values.
 
