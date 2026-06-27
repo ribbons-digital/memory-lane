@@ -48,11 +48,11 @@ Key Phase 21 references:
 
 Before adding heavier retrieval, consolidation, RRF, reranking, embeddings changes, or viewer work, Memory Lane should establish an eval-first retrieval/continuity quality track.
 
-Slice status: the internal/test-only eval baseline is implemented on `feat/retrieval-continuity-eval-baseline`. It adds a sanitized six-scenario corpus, test-only core eval helpers, structural tests, and baseline findings without changing retrieval/ranking or adding a public eval command.
+Slice status: the internal/test-only eval baseline merged in PR #70 as `7d5a8a6`. It adds a sanitized six-scenario corpus, test-only core eval helpers, structural tests, and baseline findings without changing retrieval/ranking or adding a public eval command.
 
 Baseline findings: `docs/superpowers/validation/2026-06-27-retrieval-continuity-eval-baseline.md` reports mean recall@k 1.00 and mean precision@k 0.54 across four ranked evals. Continuity slotting behaved well on the small corpus. Explicit recall retrieved required records, but the current release-status query exposed one expected default lexical-fallback weakness: stale release status can rank at or above current release status when lexical overlap is similar. Topic-specific recall/workstream queries also showed a lower-ranked docs/release checkpoint entering via generic PR token/reference overlap.
 
-Next step after PR review/merge: decide whether the baseline justifies a narrow follow-up for currentness/recency treatment in explicit recall, or whether to keep broad/current-status questions continuity-first and use recall only for topic-specific follow-up.
+Next decision: decide whether the baseline justifies a narrow follow-up for currentness/recency treatment in explicit recall, or whether to keep broad/current-status questions continuity-first and use recall only for topic-specific follow-up.
 
 Why this next: Phase 21 made continuity usable and cleaner. The next product risk is changing retrieval based on vibes rather than evidence.
 
