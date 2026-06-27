@@ -293,7 +293,7 @@ test("continuity read model keeps global workflow out of latest progress", () =>
 
 
 test("continuity read model still allows topic-specific workstream discovery to return corrections", () => {
-  const result = buildContinuityReadModel([
+  const records = [
     memory({ id: "checkpoint", text: "Released v0.2.30 with Pi continuity dogfood complete.", kind: "project_checkpoint", updatedAt: "2026-06-25T10:00:00.000Z" }),
     memory({
       id: "c78cdc00",
@@ -301,10 +301,55 @@ test("continuity read model still allows topic-specific workstream discovery to 
       kind: "correction",
       updatedAt: "2026-06-25T11:00:00.000Z",
     }),
-  ], { projectScopeKey: "project-a", query: "where did we fix PR body formatting?" })
+  ]
 
-  assert.equal(result.latestProgress?.id, "checkpoint")
-  assert.equal(result.workstreamDiscovery?.candidates[0]?.id, "c78cdc00")
+  const bodyQuery = buildContinuityReadModel(records, { projectScopeKey: "project-a", query: "where did we fix PR body formatting?" })
+  const currentQuery = buildContinuityReadModel(records, { projectScopeKey: "project-a", query: "current PR formatting" })
+
+  assert.equal(bodyQuery.latestProgress?.id, "checkpoint")
+  assert.equal(bodyQuery.workstreamDiscovery?.candidates[0]?.id, "c78cdc00")
+  assert.equal(currentQuery.workstreamDiscovery?.candidates[0]?.id, "c78cdc00")
+})
+
+
+test("continuity read model keeps release and checkpoint progress out of operating guidance", () => {
+  const result = buildContinuityReadModel([
+    memory({
+      id: "1098781c",
+      text: "Cross-harness Memory Lane review checkpoint (2026-06-16): reviewing pending memories from Pi, Claude Desktop, and Codex Desktop exposed useful installer/onboarding preferences and hygiene issues. Durable takeaways: approve/retain preferences for one-line install, menu-driven low-friction first-run setup, broad harness support, ~/.local/bin binary location, uninstall support, and non-breaking future-harness/token-aware enhancements; ignore/reject the intentionally duplicated/truncated 7d2a32a9; treat duplicate session-summary pairs as evidence for debounce/review hygiene hardening. Product lesson: Memory Lane must preserve cross-harness continuity while avoiding context pollution and oversized injected memories.",
+      kind: "project_fact",
+      updatedAt: "2026-06-26T10:00:00.000Z",
+    }),
+    memory({
+      id: "7eab3ad9",
+      text: "Released Memory Lane `v0.2.34` from main commit `f84ee46` after PR #63 (Phase 21 Slice 7 summary hygiene). Local validation before tagging passed: `pnpm build`, `pnpm test`, `git diff --check`. Release workflow `28223214725` succeeded, built packages, ran tests, built binaries, smoke-tested current-platform binary, generated notes, and published 8 assets. Release URL: https://github.com/ribbons-digital/memory-lane/releases/tag/v0.2.34",
+      kind: "project_fact",
+      updatedAt: "2026-06-26T11:00:00.000Z",
+    }),
+    memory({
+      id: "0b56ed5d",
+      text: "Released Memory Lane v0.2.33 from `main` at `5046d8d` after PR #61 continuity hygiene and PR #62 handoff sync. Release workflow `28211638059` passed: packages built, tests ran, binaries built, current-platform binary smoke-tested, and GitHub Release published with install scripts, SHA256SUMS, and macOS/Linux/Windows assets. Next recommended roadmap slice: Phase 21 Slice 7 design/spec for orchestrator/session-level summary hygiene to prevent subagent/task chatter and duplicate parallel-session summaries from becoming durable continuity noise.",
+      kind: "project_fact",
+      updatedAt: "2026-06-26T12:00:00.000Z",
+    }),
+    memory({
+      id: "1f373bd2",
+      text: "Project workflow rule: At every Memory Lane phase/slice completion, release, merge, or recommendation of next work, sync project status docs before calling the work complete. Required docs include HANDOFF.md, ROADMAP.md, README.md, and the Memory Lane skill docs. Verify these docs reflect the current branch/release/status and next step; do not rely only on memory checkpoints.",
+      kind: "project_fact",
+      updatedAt: "2026-06-26T13:00:00.000Z",
+    }),
+    memory({
+      id: "d0dd92ee",
+      text: "Memory Lane PR #67 merged as `78ea89e docs: compact handoff and memory lane skill guidance (#67)`. Post-merge cleanup completed and no runtime behavior changed.",
+      kind: "project_checkpoint",
+      updatedAt: "2026-06-26T14:00:00.000Z",
+    }),
+  ], { projectScopeKey: "project-a", query: "what should we work on next?" })
+
+  assert.equal(result.latestProgress?.id, "d0dd92ee")
+  assert.deepEqual(result.operatingGuidance?.map((item) => item.id), ["1f373bd2"])
+  assert.deepEqual(result.workstreamDiscovery?.candidates, [])
+  assert.ok(result.workstreamDiscovery?.warnings.some((warning) => warning.code === "no-topic"))
 })
 
 

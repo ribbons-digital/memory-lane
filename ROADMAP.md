@@ -649,7 +649,7 @@ Out of scope for Phase 20.5:
 
 ## Phase 21 — Handoff-Free Sessions
 
-**Status:** Phase 21 is complete through Slice 9 and released in `v0.2.36` (`1623e67`, PR #66). Slice 7/8/9 context-hygiene validation and installed-artifact dogfood passed. PR #67 (`78ea89e`) completed the docs/skill context-hygiene follow-up: `HANDOFF.md` is compact, old chronology is archived, Phase 21 roadmap status is compressed, and the Memory Lane skill now points broad project-status/next-work prompts to bounded continuity-first inspection. Runtime continuity selection/ranking hygiene is deferred to the future track below unless explicitly approved.
+**Status:** Phase 21 is complete through Slice 9 and released in `v0.2.36` (`1623e67`, PR #66). Slice 7/8/9 context-hygiene validation and installed-artifact dogfood passed. PR #67 (`78ea89e`) completed the docs/skill context-hygiene follow-up: `HANDOFF.md` is compact, old chronology is archived, Phase 21 roadmap status is compressed, and the Memory Lane skill now points broad project-status/next-work prompts to bounded continuity-first inspection. Deferred item 4 continuity selection/ranking hygiene is implemented on `fix/continuity-selection-hygiene`; design spec: `docs/superpowers/specs/2026-06-27-phase-21-item-4-continuity-selection-hygiene-design.md`. It keeps generic broad next/status queries from producing stale workstream candidates, classifies release/checkpoint project facts as progress instead of operating guidance, and preserves topic-specific workstream discovery.
 
 **Evidence and references:**
 
@@ -677,7 +677,7 @@ Out of scope for Phase 20.5:
 - This Phase 21 roadmap section stays compact and links to specs/validation/archive instead of carrying release-by-release prose inline.
 - `skills/memory-lane/SKILL.md` directs broad project-status/next-work prompts to continuity-first compact inspection, keeps text-free status guidance on JSON/status surfaces, and uses the canonical Opus 4.8 Claude CLI form rather than subagents.
 
-**Non-goals unless a new slice explicitly approves them:** retrieval rewrites, auto-consolidation, silent deletion, schema expansion, raw transcript indexing, persisted workstream IDs, or runtime continuity selection/ranking changes.
+**Item 4 non-goals:** no retrieval rewrite, embeddings/RRF, schema changes, memory mutation/cleanup, lifecycle injection changes, generated adapter changes, token budget retuning, or persisted workstream IDs.
 
 **Goal:** Enable seamless cross-session and cross-harness continuity for users who have validated their memory pipeline.
 

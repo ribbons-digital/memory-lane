@@ -6,7 +6,9 @@ export type ContinuityRole = "progress" | "operating_agreement" | "correction" |
 
 const EXTRA_PROGRESS_TEXT_PATTERNS: RegExp[] = [
   /\b(?:implemented|completed|landed|dogfood(?:ed)?\s+passed|validation\s+passed|installed-artifact\s+dogfood\s+passed)\b/iu,
-  /\b(?:commit|sha|revision)\s+[a-f0-9]{7,40}\b/iu,
+  /\b(?:released|tagged|published)\b[^\n.!?]{0,120}\bv?\d+\.\d+\.\d+(?:[-+][\w.]+)?\b/iu,
+  /\b(?:commit|sha|revision)\s+`?[a-f0-9]{7,40}`?\b/iu,
+  /\b(?:[\p{L}\p{N}_-]+\s+)?checkpoint\b/iu,
 ]
 
 function hasCheckpointProgressText(text: string): boolean {
@@ -15,6 +17,7 @@ function hasCheckpointProgressText(text: string): boolean {
 
 const OPERATING_AGREEMENT_COMPATIBLE_KINDS = new Set<MemoryKind>(["preference", "project_fact", "correction", "procedure"])
 const OPERATING_AGREEMENT_PATTERN = /\b(workflow|loop|operating agreement|working preference|review gate|code review|spec review|quality review|approval gate|pr|pull request|branch|merge|worktree|release|tag|version|publish|package manager|installer|onboarding|harness setup|setup wizard|pnpm|use sfw|process)\b/iu
+const PROJECT_DURABLE_RULE_PATTERN = /\b(?:project\s+workflow\s+rule|workflow\s+rule|procedure|operating\s+agreement)\s*:|\b(?:always|must|do\s+not)\b|\bwhen\b[\s\S]{0,120}\buse\b/iu
 const GLOBAL_WORKFLOW_PATTERN = /\b(?:workflow|tooling|code review|review gate|pr process|pull request|release process|project[- ]loop|harness|mcp|memory-lane|(?:cli|command(?:s)?)\s+(?:workflow|tooling|inspection|usage))\b/iu
 
 function hasProgressEvidence(memory: MemoryRecord): boolean {
@@ -37,6 +40,9 @@ function isFieldDerivedOperatingAgreement(memory: MemoryRecord): boolean {
     if (memory.kind && memory.kind !== "preference" && memory.kind !== "misc") return false
   }
   if (!memory.kind || !OPERATING_AGREEMENT_COMPATIBLE_KINDS.has(memory.kind)) return false
+  if (memory.scope.type === "project" && (memory.kind === "project_fact" || memory.kind === "preference")) {
+    return PROJECT_DURABLE_RULE_PATTERN.test(memory.text)
+  }
   return OPERATING_AGREEMENT_PATTERN.test(memory.text)
 }
 
