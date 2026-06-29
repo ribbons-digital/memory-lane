@@ -72,6 +72,17 @@ export interface MemoryContextDecision {
   continuity?: ContinuityContextDecision
   continuityIntent?: PromptContinuityIntentDecision
   automaticHandoff?: AutomaticHandoffContextDecision
+  descriptorIndex?: {
+    injected: boolean
+    maxItems: number
+    maxChars: number
+    effectiveMaxChars: number
+    selected: number
+    omitted: number
+    generatedFallbackCount: number
+    fullBodySelected: number
+    fullBodyOmitted: number
+  }
 }
 
 export interface LifecycleResult {

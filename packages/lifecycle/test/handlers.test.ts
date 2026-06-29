@@ -399,7 +399,7 @@ test("session-start automatic policy-only emits text-free handoff guidance witho
   })
 })
 
-test("session-start automatic selective prioritizes latest approved handoff inside budget", () => {
+test("session-start automatic selective prioritizes latest approved handoff as a descriptor without double rendering", () => {
   const project = tempDir()
   const engine = engineInTemp(project, { contextPolicy: { mode: "selective", maxItems: { sessionStart: 1, prompt: 6 } }, handoffMode: "automatic" })
   engine.save({ text: "Latest approved handoff body", status: "approved", category: "project", scopeType: "project", source: "session-summary", kind: "session_summary" })
@@ -409,10 +409,12 @@ test("session-start automatic selective prioritizes latest approved handoff insi
   const result = handleSessionStart(engine, { cwd: project })
   const context = result.additionalContext ?? ""
 
+  assert.match(context, /## Memory Index/u)
   assert.match(context, /### Latest approved handoff/u)
-  assert.match(context, /Latest approved handoff body/u)
-  assert.doesNotMatch(context, /Newer project fact that would otherwise crowd out handoff/u)
-  assert.equal(result.contextDecision?.selected, 1)
+  assert.match(context, /\[[a-f0-9]+\] Session summary — Latest approved handoff body/u)
+  assert.doesNotMatch(context, /## Always-on Memory[\s\S]*Latest approved handoff body/u)
+  assert.equal((context.match(/Latest approved handoff body/gu) ?? []).length, 1)
+  assert.equal(result.contextDecision?.descriptorIndex?.selected, 2)
   assert.deepEqual(result.contextDecision?.automaticHandoff, {
     active: true,
     eligibleCount: 1,
@@ -451,7 +453,7 @@ test("session-start context policy off does not report automatic handoff metadat
   assert.equal(engine.list({ all: true }).length, 1)
 })
 
-test("session-start selective injects continuity notice before relevant memory", () => {
+test("session-start selective injects continuity notice before memory index", () => {
   const project = tempDir()
   const engine = engineInTemp(project, { contextPolicy: { mode: "selective", maxItems: { sessionStart: 1 } } })
   saveWorkflowAgreement(engine)
@@ -461,11 +463,11 @@ test("session-start selective injects continuity notice before relevant memory",
   const context = result.additionalContext ?? ""
 
   assert.match(context, /Continuity notice:/u)
-  assert.match(context, /## Relevant Memory/u)
-  assert.ok(context.indexOf("Continuity notice:") < context.indexOf("## Relevant Memory"))
+  assert.match(context, /## Memory Index/u)
+  assert.ok(context.indexOf("Continuity notice:") < context.indexOf("## Memory Index"))
   assert.match(context, /### Current project/u)
-  assert.match(context, /\*\*Project fact\*\*/u)
-  assert.match(context, /Baseline memory body/u)
+  assert.match(context, /\[[a-f0-9]+\] Project fact — Baseline memory body/u)
+  assert.match(context, /memory_get <id>/u)
   assert.doesNotMatch(context, /PRIVATE WORKFLOW AGREEMENT TEXT/u)
   assert.equal(result.contextDecision?.selected, 1)
   assert.equal(result.contextDecision?.omitted, 0)
@@ -489,8 +491,9 @@ test("session-start selects current project memory before newer global memory", 
   const context = result.additionalContext ?? ""
 
   assert.match(context, /Current project checkpoint should win baseline selection/u)
-  assert.doesNotMatch(context, /Global preference newest for all projects/u)
+  assert.match(context, /Global preference newest for all projects/u)
   assert.match(context, /### Current project/u)
+  assert.match(context, /### Global preferences and workflow rules/u)
 })
 
 test("session-start selective preserves preference caps while applying remaining continuity budget", () => {
@@ -605,15 +608,16 @@ test("session-start selective policy uses configured item budget", () => {
   const result = handleSessionStart(engine, { cwd: project })
 
   assert.match(result.additionalContext ?? "", /<memory-context/u)
+  assert.match(result.additionalContext ?? "", /## Memory Index/u)
   assert.match(result.additionalContext ?? "", /baseline memory/u)
-  assert.equal((result.additionalContext?.match(/baseline memory/gu) ?? []).length, 1)
+  assert.equal((result.additionalContext?.match(/baseline memory/gu) ?? []).length, 2)
   assert.deepEqual(result.contextDecision, {
     event: "sessionStart",
     mode: "selective",
     maxItems: 1,
     maxChars: 1600,
-    selected: 1,
-    omitted: 1,
+    selected: 2,
+    omitted: 0,
     continuity: {
       generated: false,
       injected: false,
@@ -625,7 +629,18 @@ test("session-start selective policy uses configured item budget", () => {
       suggestedActions: [],
       continuityBaseline: { source: "none" },
     },
-    omittedReasons: ["budget-or-filter"],
+    descriptorIndex: {
+      injected: true,
+      maxItems: 16,
+      maxChars: 1200,
+      effectiveMaxChars: 1200,
+      selected: 2,
+      omitted: 0,
+      generatedFallbackCount: 2,
+      fullBodySelected: 0,
+      fullBodyOmitted: 0,
+    },
+    omittedReasons: [],
   })
 })
 

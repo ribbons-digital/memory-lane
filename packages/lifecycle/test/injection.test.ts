@@ -6,8 +6,11 @@ import {
   shouldSkipAutomaticInjection,
   selectMemoriesForInjection,
   selectBaselineMemories,
+  selectAlwaysOnMemories,
+  selectDescriptorMemories,
   renderMemoryBlock,
   renderMemoryContext,
+  renderSessionStartMemoryContext,
   renderContinuityNotice,
   detectContinuityIntent,
   renderContinuityIntentGuidance,
@@ -683,6 +686,47 @@ test("selectBaselineMemories skips secrets and deduplicates", () => {
   })
 
   assert.deepEqual(selected.map((m) => m.id), ["2"])
+})
+
+test("session-start descriptor helpers keep tiny rules full-body and larger memories as descriptors", () => {
+  const smallRule = { ...projectMemoryWithUpdatedAt("rule", "repo", "Use pnpm for package management.", "2026-06-20T00:00:00.000Z"), kind: "workflow_rule" as const }
+  const checkpoint = { ...projectMemoryWithUpdatedAt("checkpoint", "repo", "Released v0.2.35 with context-pollution hardening and low-signal prompt filtering after PR #65 merged.", "2026-06-19T00:00:00.000Z"), kind: "project_checkpoint" as const }
+  const selectedFull = selectAlwaysOnMemories([checkpoint, smallRule], { projectScope: "repo", maxItems: 2, hardMaxChars: 500, targetChars: 500, absoluteMaxChars: 500 })
+  const selectedDescriptors = selectDescriptorMemories([checkpoint], { projectScope: "repo", maxItems: 16, hardMaxChars: 1000 })
+  const rendered = renderSessionStartMemoryContext({
+    fullBodyMemories: selectedFull,
+    descriptorMemories: selectedDescriptors.memories,
+    policy: { mode: "selective" },
+    projectScope: "repo",
+  })
+
+  assert.match(rendered, /## Always-on Memory/u)
+  assert.match(rendered, /Use pnpm for package management/u)
+  assert.match(rendered, /## Memory Index/u)
+  assert.match(rendered, /memory_get <id>/u)
+  assert.match(rendered, /\[checkpoint\] Project checkpoint/u)
+  assert.equal(selectedDescriptors.generatedFallbackCount, 1)
+})
+
+test("session-start descriptors omit secret-looking memories based on original body", () => {
+  const secret = projectMemoryWithUpdatedAt("secret", "repo", "Safe-looking intro. API key is sk-1234567890abcdef1234567890abcdef", "2026-06-20T00:00:00.000Z")
+  const selected = selectDescriptorMemories([secret], { projectScope: "repo", maxItems: 16, hardMaxChars: 1000 })
+
+  assert.deepEqual(selected.memories, [])
+  assert.equal(selected.generatedFallbackCount, 0)
+})
+
+test("session-start descriptors do not select pending priority memories", () => {
+  const pendingPriority = { ...projectMemoryWithUpdatedAt("pending-priority", "repo", "Pending handoff should not appear", "2026-06-20T00:00:00.000Z"), status: "pending" as const, kind: "session_summary" as const }
+  const approved = projectMemoryWithUpdatedAt("approved", "repo", "Approved descriptor can appear", "2026-06-19T00:00:00.000Z")
+  const selected = selectDescriptorMemories([approved], {
+    projectScope: "repo",
+    priorityMemories: [pendingPriority],
+    maxItems: 16,
+    hardMaxChars: 1000,
+  })
+
+  assert.deepEqual(selected.memories.map((memory) => memory.id), ["approved"])
 })
 
 test("analyzeAutomaticHandoff selects latest approved project handoff and omits expired", () => {
