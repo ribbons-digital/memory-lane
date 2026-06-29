@@ -34,6 +34,7 @@ Recent completion evidence:
 - Installed-artifact dogfood after `memory-lane upgrade --yes` passed: broad next-work continuity has empty workstream candidates plus `no-topic`, stale release/checkpoint ids are absent from operating guidance, and topic-specific queries still return candidates.
 - Phase-completion docs sync landed in `309021e docs: declare phase 21 complete`.
 - PR #69 (`4ebf447`) completed the docs/context-budget slice: root `ROADMAP.md` is compact, historical roadmap detail through Phase 20.5 is archived, and skill guidance uses bounded reads.
+- PR #71 (`e0deba1`) completed SessionStart descriptor index Slice A: selective SessionStart context now uses tiny always-on memories plus compact descriptor cards with fetch-by-id guidance, without adding memory schema or YAML/frontmatter persistence.
 
 Key Phase 21 references:
 
@@ -44,6 +45,14 @@ Key Phase 21 references:
 - Item 4 continuity selection hygiene design: `docs/superpowers/specs/2026-06-27-phase-21-item-4-continuity-selection-hygiene-design.md`
 - Docs/context-budget design: `docs/superpowers/specs/2026-06-27-docs-context-budget-design.md`
 
+## Recent context-budget follow-up — SessionStart Descriptor Index
+
+Slice A merged in PR #71 as `e0deba1`. It is schema-free: descriptor cards are generated from existing approved memories, pending/secret-looking memories are filtered before both ordinary and priority descriptor selection, and full memory bodies remain available through explicit `memory_get` / `memory-lane show <id>`.
+
+Next decision for this track: release/dogfood PR #71 and inspect real SessionStart context before deciding whether to proceed to Slice B structured descriptor metadata/YAML frontmatter, token-aware policy refinement, or pause this track.
+
+Reference: `docs/superpowers/specs/2026-06-30-session-start-descriptor-index-design.md`.
+
 ## Active track — Retrieval Quality / Continuity Evaluation
 
 Before adding heavier retrieval, consolidation, RRF, reranking, embeddings changes, or viewer work, Memory Lane should establish an eval-first retrieval/continuity quality track.
@@ -52,7 +61,7 @@ Slice status: the internal/test-only eval baseline merged in PR #70 as `7d5a8a6`
 
 Baseline findings: `docs/superpowers/validation/2026-06-27-retrieval-continuity-eval-baseline.md` reports mean recall@k 1.00 and mean precision@k 0.54 across four ranked evals. Continuity slotting behaved well on the small corpus. Explicit recall retrieved required records, but the current release-status query exposed one expected default lexical-fallback weakness: stale release status can rank at or above current release status when lexical overlap is similar. Topic-specific recall/workstream queries also showed a lower-ranked docs/release checkpoint entering via generic PR token/reference overlap.
 
-Next decision: decide whether the baseline justifies a narrow follow-up for currentness/recency treatment in explicit recall, or whether to keep broad/current-status questions continuity-first and use recall only for topic-specific follow-up.
+Next decision when returning to this track: decide whether the baseline justifies a narrow follow-up for currentness/recency treatment in explicit recall, or whether to keep broad/current-status questions continuity-first and use recall only for topic-specific follow-up.
 
 Why this next: Phase 21 made continuity usable and cleaner. The next product risk is changing retrieval based on vibes rather than evidence.
 
