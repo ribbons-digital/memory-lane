@@ -617,6 +617,166 @@ export function renderMemoryBlock(memories: MemoryRecord[], options?: MemoryBloc
   return lines.join("\n")
 }
 
+export const SESSION_START_DESCRIPTOR_MAX_ITEMS = 16
+export const SESSION_START_DESCRIPTOR_MAX_CHARS = 1200
+
+const SESSION_START_ALWAYS_ON_MAX_ITEMS = 2
+const SESSION_START_ALWAYS_ON_MAX_CHARS = 500
+const SESSION_START_ALWAYS_ON_MAX_BODY_CHARS = 320
+const SESSION_START_DESCRIPTOR_PREVIEW_CHARS = 160
+
+export function isAlwaysOnMemory(memory: MemoryRecord): boolean {
+  if (containsLikelySecret(memory.text)) return false
+  if (memory.text.length > SESSION_START_ALWAYS_ON_MAX_BODY_CHARS) return false
+  return memory.kind === "workflow_rule" || memory.kind === "preference"
+}
+
+function appendFullBodyMemory(memory: MemoryRecord, limits: MemoryInjectionLimits, state: LayeredSelectionState): void {
+  appendLayeredMemory(memory, limits, state)
+}
+
+export function selectAlwaysOnMemories(memories: MemoryRecord[], options?: MemorySelectionOptions): MemoryRecord[] {
+  const limits = capLimits({
+    maxItems: Math.min(options?.maxItems ?? SESSION_START_ALWAYS_ON_MAX_ITEMS, SESSION_START_ALWAYS_ON_MAX_ITEMS),
+    targetChars: Math.min(options?.targetChars ?? SESSION_START_ALWAYS_ON_MAX_CHARS, SESSION_START_ALWAYS_ON_MAX_CHARS),
+    hardMaxChars: Math.min(options?.hardMaxChars ?? SESSION_START_ALWAYS_ON_MAX_CHARS, SESSION_START_ALWAYS_ON_MAX_CHARS),
+    absoluteMaxChars: Math.min(options?.absoluteMaxChars ?? SESSION_START_ALWAYS_ON_MAX_CHARS, SESSION_START_ALWAYS_ON_MAX_CHARS),
+    preferenceMaxItems: Math.min(options?.preferenceMaxItems ?? SESSION_START_ALWAYS_ON_MAX_ITEMS, SESSION_START_ALWAYS_ON_MAX_ITEMS),
+    preferenceMaxChars: Math.min(options?.preferenceMaxChars ?? SESSION_START_ALWAYS_ON_MAX_CHARS, SESSION_START_ALWAYS_ON_MAX_CHARS),
+  })
+  const eligible = memories.filter((memory) => memory.status === "approved" && isAlwaysOnMemory(memory))
+  const state: LayeredSelectionState = {
+    selected: [],
+    seen: new Set<string>(),
+    seenIds: new Set<string>(),
+    chars: 0,
+    preferenceChars: 0,
+    preferenceCount: 0,
+  }
+
+  for (const layer of layeredMemoryGroups(eligible, options?.projectScope).map(sortByUpdatedAtDesc)) {
+    for (const memory of layer) {
+      if (state.selected.length >= limits.maxItems) break
+      appendFullBodyMemory(memory, limits, state)
+    }
+  }
+
+  return state.selected
+}
+
+function descriptorPreview(memory: MemoryRecord, maxChars = SESSION_START_DESCRIPTOR_PREVIEW_CHARS): string | undefined {
+  if (containsLikelySecret(memory.text)) return undefined
+  const normalized = memory.text.trim().replace(/\s+/gu, " ")
+  return truncateAtBoundary(normalized, maxChars) ?? normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd() + "…"
+}
+
+function descriptorLine(memory: MemoryRecord): string | undefined {
+  const preview = descriptorPreview(memory)
+  if (!preview) return undefined
+  return `- [${memory.id}] ${readableMemoryKind(memory)} — ${preview}`
+}
+
+interface DescriptorSelectionState {
+  selected: MemoryRecord[]
+  seenIds: Set<string>
+  seenKeys: Set<string>
+  chars: number
+  generatedFallbackCount: number
+}
+
+function appendDescriptor(memory: MemoryRecord, limits: { maxItems: number; maxChars: number }, state: DescriptorSelectionState): void {
+  if (state.selected.length >= limits.maxItems) return
+  if (memory.status !== "approved") return
+  if (state.seenIds.has(memory.id)) return
+  if (containsLikelySecret(memory.text)) return
+  const key = normalizedMemoryKey(memory.text)
+  if (!key || state.seenKeys.has(key)) return
+  const line = descriptorLine(memory)
+  if (!line) return
+  const additionalChars = line.length + 1
+  if (state.chars + additionalChars > limits.maxChars) return
+  state.selected.push(memory)
+  state.seenIds.add(memory.id)
+  state.seenKeys.add(key)
+  state.chars += additionalChars
+  // Slice A has no persisted descriptor metadata, so every selected descriptor uses the generated fallback preview.
+  state.generatedFallbackCount += 1
+}
+
+export function selectDescriptorMemories(memories: MemoryRecord[], options?: BaselineSelectionOptions): { memories: MemoryRecord[]; generatedFallbackCount: number; omitted: number } {
+  const maxItems = Math.max(0, Math.min(options?.maxItems ?? SESSION_START_DESCRIPTOR_MAX_ITEMS, SESSION_START_DESCRIPTOR_MAX_ITEMS))
+  const maxChars = Math.max(0, Math.min(options?.hardMaxChars ?? SESSION_START_DESCRIPTOR_MAX_CHARS, SESSION_START_DESCRIPTOR_MAX_CHARS))
+  const excludedIds = new Set(options?.priorityMemories?.filter((memory) => isAlwaysOnMemory(memory)).map((memory) => memory.id) ?? [])
+  const eligible = memories.filter((memory) => memory.status === "approved" && !excludedIds.has(memory.id) && !containsLikelySecret(memory.text))
+  const state: DescriptorSelectionState = {
+    selected: [],
+    seenIds: new Set<string>(),
+    seenKeys: new Set<string>(),
+    chars: 0,
+    generatedFallbackCount: 0,
+  }
+
+  appendLayeredDescriptors(state, { maxItems, maxChars }, options?.priorityMemories?.filter((memory) => memory.status === "approved" && !excludedIds.has(memory.id)) ?? [])
+  for (const layer of layeredMemoryGroups(eligible, options?.projectScope).map(sortByUpdatedAtDesc)) {
+    appendLayeredDescriptors(state, { maxItems, maxChars }, layer)
+  }
+
+  return {
+    memories: state.selected,
+    generatedFallbackCount: state.generatedFallbackCount,
+    omitted: Math.max(0, eligible.length - state.selected.length),
+  }
+}
+
+function appendLayeredDescriptors(state: DescriptorSelectionState, limits: { maxItems: number; maxChars: number }, memories: MemoryRecord[]): void {
+  for (const memory of memories) {
+    if (state.selected.length >= limits.maxItems) break
+    appendDescriptor(memory, limits, state)
+  }
+}
+
+export function renderSessionStartMemoryContext(input: {
+  fullBodyMemories: MemoryRecord[]
+  descriptorMemories: MemoryRecord[]
+  policy?: MemoryContextPolicyConfig
+  projectScope?: string
+  latestHandoffIds?: Set<string>
+}): string {
+  const policy = resolveContextPolicy(input.policy)
+  if (policy.mode !== "selective") return ""
+  const lines: string[] = []
+
+  if (input.fullBodyMemories.length) {
+    lines.push(
+      "## Always-on Memory",
+      "",
+      "Memory Lane selected these small approved rules/preferences for immediate use.",
+    )
+    for (const group of groupMemoriesForContext(input.fullBodyMemories, { projectScope: input.projectScope, latestHandoffIds: input.latestHandoffIds })) {
+      lines.push("", `### ${group.title}`, "")
+      for (const memory of group.memories) lines.push(`- **${readableMemoryKind(memory)}**`, `  ${memory.text}`)
+    }
+  }
+
+  if (input.descriptorMemories.length) {
+    if (lines.length) lines.push("")
+    lines.push(
+      "## Memory Index",
+      "",
+      "Memory Lane selected compact descriptors for this session. Fetch the full body only when needed with `memory_get <id>` or `memory-lane show <id>` before relying on details not shown.",
+    )
+    for (const group of groupMemoriesForContext(input.descriptorMemories, { projectScope: input.projectScope, latestHandoffIds: input.latestHandoffIds })) {
+      lines.push("", `### ${group.title}`, "")
+      for (const memory of group.memories) {
+        const line = descriptorLine(memory)
+        if (line) lines.push(line)
+      }
+    }
+  }
+
+  return lines.join("\n")
+}
+
 export interface ContinuityNoticeResult extends ContinuityContextDecision {
   text: string
 }

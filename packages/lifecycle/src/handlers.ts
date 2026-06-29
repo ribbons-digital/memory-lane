@@ -1,5 +1,5 @@
 import type { MemoryEngine, MemoryProvenance, MemorySource, SaveResult } from "@memory-lane/core"
-import { analyzeAutomaticHandoff, detectContinuityIntent, isMemoryManagementListIntent, isUnsafeAutomaticHandoffPointer, limitsFromContextPolicy, renderContinuityIntentGuidance, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, resolveContextPolicy, selectBaselineMemories, selectMemoriesForInjection, shouldSkipAutomaticInjection, type AutomaticHandoffAnalysis, type MemoryInjectionLimits } from "./injection.js"
+import { analyzeAutomaticHandoff, detectContinuityIntent, isAlwaysOnMemory, isMemoryManagementListIntent, isUnsafeAutomaticHandoffPointer, limitsFromContextPolicy, renderContinuityIntentGuidance, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, renderSessionStartMemoryContext, resolveContextPolicy, selectAlwaysOnMemories, selectDescriptorMemories, selectMemoriesForInjection, shouldSkipAutomaticInjection, SESSION_START_DESCRIPTOR_MAX_CHARS, SESSION_START_DESCRIPTOR_MAX_ITEMS, type AutomaticHandoffAnalysis, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
 import { checkpointKeyFromText, extractCheckpointCandidatesFromPostToolUse, extractCheckpointCandidatesFromStop, filterDuplicateCheckpointCandidates } from "./checkpoint-capture.js"
 import { correctionKeyFromText, extractCorrectionCandidatesFromStop, filterDuplicateCorrectionCandidates, filterSameTurnCorrectionCandidates } from "./correction-capture.js"
@@ -36,7 +36,8 @@ function composeSessionStartContext(input: {
       .replace(/^<memory-context[^>]*>\n?/u, "")
       .replace(/\n?<\/memory-context>$/u, "")
     : memoryContext
-  const inner = input.policy.mode === "selective" && rawInner && !rawInner.includes("## Relevant Memory")
+  const hasSessionStartSections = rawInner.includes("## Relevant Memory") || rawInner.includes("## Always-on Memory") || rawInner.includes("## Memory Index")
+  const inner = input.policy.mode === "selective" && rawInner && !hasSessionStartSections
     ? `## Relevant Memory\n\n${rawInner}`
     : rawInner
   const body = [noticeText, inner].filter((part) => part.trim().length > 0).join("\n\n")
@@ -281,24 +282,61 @@ export function handleSessionStart(
     ...operatingAgreements.relatedCandidates.map((agreement) => agreement.id),
   ])
   const baselineCandidates = approved.filter((memory) => !operatingAgreementIds.has(memory.id) && !(automaticActive && isUnsafeAutomaticHandoffPointer(memory, projectScope)))
-  const selectionLimits = limitsFromContextPolicy("sessionStart", policy, {
+  const sessionStartPreferenceMaxChars = policy.preferenceMaxChars.sessionStart ?? 600
+  const sessionStartPreferenceMaxItems = policy.preferenceMaxItems.sessionStart ?? 2
+  const fullBodyBudgetChars = Math.min(remainingChars, sessionStartPreferenceMaxChars)
+  const fullBodySelectionLimits = limitsFromContextPolicy("sessionStart", policy, {
     ...options,
-    hardMaxChars: remainingChars,
-    targetChars: remainingChars,
-    absoluteMaxChars: remainingChars,
+    maxItems: Math.min(options?.maxItems ?? sessionStartPreferenceMaxItems, sessionStartPreferenceMaxItems),
+    hardMaxChars: fullBodyBudgetChars,
+    targetChars: fullBodyBudgetChars,
+    absoluteMaxChars: fullBodyBudgetChars,
   })
-  const selected = selectBaselineMemories(baselineCandidates, { ...selectionLimits, projectScope, priorityMemories: automaticAnalysis.eligible })
-  const selectedAutomaticCount = automaticAnalysis.eligible.filter((memory) => selected.some((selectedMemory) => selectedMemory.id === memory.id)).length
-  const latestHandoffIds = new Set(automaticAnalysis.eligible.map((memory) => memory.id).filter((id) => selected.some((selectedMemory) => selectedMemory.id === id)))
-  const memoryContext = renderMemoryContext({ event: "sessionStart", memories: selected, policy, projectScope, latestHandoffIds })
+  let fullBodySelected = selectAlwaysOnMemories(baselineCandidates, { ...fullBodySelectionLimits, projectScope })
+  const latestHandoffIds = new Set(automaticAnalysis.eligible.map((memory) => memory.id))
+  let bodyContext = renderSessionStartMemoryContext({ fullBodyMemories: fullBodySelected, descriptorMemories: [], policy, projectScope, latestHandoffIds })
+  while (bodyContext.length > remainingChars && fullBodySelected.length > 0) {
+    fullBodySelected = fullBodySelected.slice(0, -1)
+    bodyContext = renderSessionStartMemoryContext({ fullBodyMemories: fullBodySelected, descriptorMemories: [], policy, projectScope, latestHandoffIds })
+  }
+  const fullBodySelectedIds = new Set(fullBodySelected.map((memory) => memory.id))
+  const descriptorRemainingChars = Math.max(0, remainingChars - (bodyContext ? bodyContext.length + 2 : 0))
+  const descriptorMaxChars = Math.min(SESSION_START_DESCRIPTOR_MAX_CHARS, descriptorRemainingChars)
+  const descriptorCandidates = baselineCandidates.filter((memory) => !fullBodySelectedIds.has(memory.id))
+  const descriptorSelection = selectDescriptorMemories(descriptorCandidates, {
+    projectScope,
+    priorityMemories: automaticAnalysis.eligible.filter((memory) => !fullBodySelectedIds.has(memory.id)),
+    maxItems: SESSION_START_DESCRIPTOR_MAX_ITEMS,
+    hardMaxChars: descriptorMaxChars,
+  })
+  let descriptorMemories = descriptorSelection.memories
+  let memoryContext = renderSessionStartMemoryContext({ fullBodyMemories: fullBodySelected, descriptorMemories, policy, projectScope, latestHandoffIds })
+  while (memoryContext.length > remainingChars && descriptorMemories.length > 0) {
+    descriptorMemories = descriptorMemories.slice(0, -1)
+    memoryContext = renderSessionStartMemoryContext({ fullBodyMemories: fullBodySelected, descriptorMemories, policy, projectScope, latestHandoffIds })
+  }
+  const selectedAutomaticCount = automaticAnalysis.eligible.filter((memory) => fullBodySelected.some((selectedMemory) => selectedMemory.id === memory.id) || descriptorMemories.some((selectedMemory) => selectedMemory.id === memory.id)).length
   const rendered = composeSessionStartContext({ noticeText, memoryContext, policy })
+  const fullBodyOmitted = Math.max(0, baselineCandidates.filter((memory) => !fullBodySelectedIds.has(memory.id) && isAlwaysOnMemory(memory)).length)
+  const descriptorOmitted = Math.max(0, descriptorCandidates.length - descriptorMemories.length)
   const result = createResult(rendered || undefined, contextDecision({
     event: "sessionStart",
     mode: policy.mode,
     ...budget,
-    selected: selected.length,
-    omitted: Math.max(0, baselineCandidates.length - selected.length),
+    selected: fullBodySelected.length + descriptorMemories.length,
+    omitted: Math.max(0, baselineCandidates.length - fullBodySelected.length - descriptorMemories.length),
     continuity: continuityDecision(notice),
+    descriptorIndex: {
+      injected: descriptorMemories.length > 0,
+      maxItems: SESSION_START_DESCRIPTOR_MAX_ITEMS,
+      maxChars: SESSION_START_DESCRIPTOR_MAX_CHARS,
+      effectiveMaxChars: descriptorMaxChars,
+      selected: descriptorMemories.length,
+      omitted: descriptorOmitted,
+      generatedFallbackCount: Math.min(descriptorSelection.generatedFallbackCount, descriptorMemories.length),
+      fullBodySelected: fullBodySelected.length,
+      fullBodyOmitted,
+    },
     ...(automaticActive ? {
       automaticHandoff: automaticHandoffDecision({
         active: true,
