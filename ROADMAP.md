@@ -31,6 +31,7 @@ Recent completion evidence:
 - PR #67 (`78ea89e`) compacted `HANDOFF.md`, archived old handoff chronology, compressed Phase 21 roadmap status, and moved long Memory Lane skill reference material to `skills/memory-lane/REFERENCE.md`.
 - PR #68 (`5707c6c`) completed continuity selection/ranking hygiene: generic broad next/status queries no longer surface stale workstream candidates, release/checkpoint project facts classify as progress rather than operating guidance, and topic-specific workstream discovery is preserved.
 - Release `v0.2.38` (`3576417`) passed workflow `28276304985` and published 8 assets, shipping the docs/context-budget slice.
+- Release `v0.2.39` (`9021435`) passed workflow `28410566489` and published 8 assets, shipping the SessionStart descriptor index Slice A.
 - Installed-artifact dogfood after `memory-lane upgrade --yes` passed: broad next-work continuity has empty workstream candidates plus `no-topic`, stale release/checkpoint ids are absent from operating guidance, and topic-specific queries still return candidates.
 - Phase-completion docs sync landed in `309021e docs: declare phase 21 complete`.
 - PR #69 (`4ebf447`) completed the docs/context-budget slice: root `ROADMAP.md` is compact, historical roadmap detail through Phase 20.5 is archived, and skill guidance uses bounded reads.
@@ -47,11 +48,11 @@ Key Phase 21 references:
 
 ## Recent context-budget follow-up — SessionStart Descriptor Index
 
-Slice A merged in PR #71 as `e0deba1`. It is schema-free: descriptor cards are generated from existing approved memories, pending/secret-looking memories are filtered before both ordinary and priority descriptor selection, and full memory bodies remain available through explicit `memory_get` / `memory-lane show <id>`.
+Slice A merged in PR #71 as `e0deba1` and released in `v0.2.39` (`9021435`). It is schema-free: descriptor cards are generated from existing approved memories, pending/secret-looking memories are filtered before both ordinary and priority descriptor selection, and full memory bodies remain available through explicit `memory_get` / `memory-lane show <id>`.
 
-Next decision for this track: release/dogfood PR #71 and inspect real SessionStart context before deciding whether to proceed to Slice B structured descriptor metadata/YAML frontmatter, token-aware policy refinement, or pause this track.
+Dogfood passed: real-project installed SessionStart output used `## Always-on Memory` plus `## Memory Index` within the 1600-char budget, an isolated fixture proved descriptor breadth beyond the old body-oriented cap, policy-only/off smokes passed, and fetch-by-id worked. Validation: `docs/superpowers/validation/2026-06-30-session-start-descriptor-index-dogfood.md`.
 
-Reference: `docs/superpowers/specs/2026-06-30-session-start-descriptor-index-design.md`.
+Next decision for this track: decide whether to proceed to Slice B structured descriptor metadata/YAML frontmatter, Slice D token-aware policy refinement, or pause this track.
 
 ## Active track — Retrieval Quality / Continuity Evaluation
 
