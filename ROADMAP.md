@@ -33,6 +33,7 @@ Recent completion evidence:
 - Release `v0.2.38` (`3576417`) passed workflow `28276304985` and published 8 assets, shipping the docs/context-budget slice.
 - Release `v0.2.39` (`9021435`) passed workflow `28410566489` and published 8 assets, shipping the SessionStart descriptor index Slice A.
 - Release `v0.2.40` (`7578bb5`) passed workflow `28419273491` and published 8 assets, shipping SessionStart descriptor metadata Slice B.
+- Release `v0.2.41` (`9f9cdde`) passed workflow `28423317038` and published 8 assets, shipping the retrieval currentness tie-break from PR #75.
 - Installed-artifact dogfood after `memory-lane upgrade --yes` passed: broad next-work continuity has empty workstream candidates plus `no-topic`, stale release/checkpoint ids are absent from operating guidance, and topic-specific queries still return candidates.
 - Phase-completion docs sync landed in `309021e docs: declare phase 21 complete`.
 - PR #69 (`4ebf447`) completed the docs/context-budget slice: root `ROADMAP.md` is compact, historical roadmap detail through Phase 20.5 is archived, and skill guidance uses bounded reads.
@@ -69,7 +70,9 @@ Baseline findings: `docs/superpowers/validation/2026-06-27-retrieval-continuity-
 
 Currentness tie-break slice merged in PR #75 as `6e5f67a`. It adds an equality-only currentness tie-break for lexical fallback recall. For currentness-like queries, exact lexical-score ties between `project_checkpoint` records sort by newer `updatedAt`; lexical score remains primary. Spec: `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md`. Validation: `docs/superpowers/validation/2026-06-30-retrieval-currentness-tie-break-validation.md`.
 
-Next step: release and dogfood `v0.2.41` for the currentness tie-break. Dogfood should verify the installed artifact prefers the newer checkpoint for an explicit current release-status recall tie. After dogfood, decide whether the remaining lower-ranked precision findings need a separate eval-backed proposal. Do not broaden this slice into threshold recency boosts, filtering, RRF, reranking, or embedding changes without a new approval gate.
+Release `v0.2.41` passed workflow `28423317038` and installed-artifact dogfood verified that explicit current release-status recall prefers the newer checkpoint when lexical scores tie. Validation: `docs/superpowers/validation/2026-06-30-v0.2.41-release-dogfood.md`.
+
+Next decision: decide whether the remaining lower-ranked precision findings need a separate eval-backed proposal. Current recommendation is to pause retrieval-ranking work unless dogfood or later eval evidence shows clear user value. Do not broaden this slice into threshold recency boosts, filtering, RRF, reranking, or embedding changes without a new approval gate.
 
 Why this next: Phase 21 made continuity usable and cleaner. The next product risk is changing retrieval based on vibes rather than evidence.
 
