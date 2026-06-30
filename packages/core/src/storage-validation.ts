@@ -1,6 +1,8 @@
+import { containsLikelySecret } from "./secret-detection.js"
 import type {
   MemoryRecord, MemoryStatus, MemoryCategory, MemoryScopeType, MemorySource,
   MemoryLifecycleEvent, MemoryKind, MemoryRevisionActor, MemoryFreshness, SaveInput,
+  MemoryDescriptorMetadata,
 } from "./types.js"
 
 export const VALID_STATUSES = new Set<MemoryStatus>(["pending", "approved", "rejected", "deleted"])
@@ -28,6 +30,10 @@ export const VALID_LIFECYCLE_EVENTS = new Set<MemoryLifecycleEvent>([
   "pre_compact",
 ])
 export const VALID_REVISION_ACTORS = new Set<MemoryRevisionActor>(["manual", "cli", "mcp"])
+
+const DESCRIPTOR_TEXT_MAX_CHARS = 240
+const DESCRIPTOR_KEYWORD_MAX_CHARS = 40
+const DESCRIPTOR_KEYWORD_MAX_ITEMS = 12
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -119,6 +125,59 @@ function hasValidFreshness(value: Record<string, unknown>): boolean {
     && (candidate.staleAfterDays === undefined || (Number.isInteger(candidate.staleAfterDays) && candidate.staleAfterDays >= 1))
 }
 
+function assertDescriptorText(field: "description" | "fetchHint", value: unknown): string | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== "string") throw new Error(`Invalid descriptor.${field}. Expected a string`)
+  const normalized = value.trim()
+  if (!normalized) throw new Error(`Invalid descriptor.${field}. Expected a non-empty string`)
+  if (normalized.length > DESCRIPTOR_TEXT_MAX_CHARS) throw new Error(`Invalid descriptor.${field}. Expected at most ${DESCRIPTOR_TEXT_MAX_CHARS} characters`)
+  if (containsLikelySecret(normalized)) throw new Error(`Invalid descriptor.${field}. Value contains a likely secret`)
+  return normalized
+}
+
+function normalizeDescriptorKeywords(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value)) throw new Error("Invalid descriptor.keywords. Expected an array of strings")
+  if (value.length > DESCRIPTOR_KEYWORD_MAX_ITEMS) throw new Error(`Invalid descriptor.keywords. Expected at most ${DESCRIPTOR_KEYWORD_MAX_ITEMS} items`)
+  const seen = new Set<string>()
+  const keywords: string[] = []
+  for (const item of value) {
+    if (typeof item !== "string") throw new Error("Invalid descriptor.keywords. Expected an array of strings")
+    const keyword = item.trim().toLowerCase()
+    if (!keyword) throw new Error("Invalid descriptor.keywords. Expected non-empty strings")
+    if (keyword.length > DESCRIPTOR_KEYWORD_MAX_CHARS) throw new Error(`Invalid descriptor.keywords. Expected each keyword to be at most ${DESCRIPTOR_KEYWORD_MAX_CHARS} characters`)
+    if (containsLikelySecret(keyword)) throw new Error("Invalid descriptor.keywords. Value contains a likely secret")
+    if (!seen.has(keyword)) {
+      seen.add(keyword)
+      keywords.push(keyword)
+    }
+  }
+  return keywords.length ? keywords : undefined
+}
+
+export function normalizeMemoryDescriptor(value: unknown): MemoryDescriptorMetadata | undefined {
+  if (value === undefined) return undefined
+  if (!isPlainObject(value)) throw new Error("Invalid descriptor. Expected an object")
+  const description = assertDescriptorText("description", value.description)
+  const fetchHint = assertDescriptorText("fetchHint", value.fetchHint)
+  const keywords = normalizeDescriptorKeywords(value.keywords)
+  const descriptor: MemoryDescriptorMetadata = {
+    ...(description ? { description } : {}),
+    ...(fetchHint ? { fetchHint } : {}),
+    ...(keywords ? { keywords } : {}),
+  }
+  return Object.keys(descriptor).length ? descriptor : undefined
+}
+
+function hasValidDescriptor(value: Record<string, unknown>): boolean {
+  try {
+    normalizeMemoryDescriptor(value.descriptor)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function allowedValues<T extends string>(allowed: Set<T>): string {
   return [...allowed].join(", ")
 }
@@ -162,6 +221,7 @@ export function validateSaveInput(input: SaveInput): void {
     }
     throw new Error("Invalid freshness. Expected at least one freshness field")
   }
+  if (input.descriptor !== undefined) normalizeMemoryDescriptor(input.descriptor)
 }
 
 function normalizeScope(value: Record<string, unknown>): MemoryRecord["scope"] | undefined {
@@ -184,8 +244,12 @@ export function normalizeMemoryRecord(value: unknown): MemoryRecord | undefined 
   const source = normalizeSource(value)
   const scope = normalizeScope(value)
   if (source === undefined || scope === undefined) return undefined
-  if (!hasValidProject(value) || !hasValidKind(value) || !hasValidProvenance(value) || !hasValidRevision(value) || !hasValidFreshness(value)) return undefined
-  return { ...value, source, scope } as MemoryRecord
+  if (!hasValidProject(value) || !hasValidKind(value) || !hasValidProvenance(value) || !hasValidRevision(value) || !hasValidFreshness(value) || !hasValidDescriptor(value)) return undefined
+  const descriptor = normalizeMemoryDescriptor(value.descriptor)
+  const record = { ...value, source, scope } as MemoryRecord
+  if (descriptor) record.descriptor = descriptor
+  else delete record.descriptor
+  return record
 }
 
 export function isMemoryRecord(value: unknown): value is MemoryRecord {

@@ -37,6 +37,12 @@ export interface MemoryFreshness {
   capturedAt?: string
 }
 
+export interface MemoryDescriptorMetadata {
+  description?: string
+  fetchHint?: string
+  keywords?: string[]
+}
+
 export type MemoryKind =
   | "preference"
   | "personal_context"
@@ -74,6 +80,7 @@ export interface MemoryRecord {
   provenance?: MemoryProvenance
   revision?: MemoryRevision
   freshness?: MemoryFreshness
+  descriptor?: MemoryDescriptorMetadata
 }
 
 export type FreshnessClassification = "none" | "current" | "stale" | "expired"
@@ -419,6 +426,7 @@ export interface SaveInput {
   provenance?: MemoryProvenance
   revision?: MemoryRevision
   freshness?: MemoryFreshness
+  descriptor?: MemoryDescriptorMetadata
 }
 
 export interface UpdateInput {
