@@ -92,6 +92,14 @@ export function isCheckpointRecallQuery(query: string): boolean {
     /\bresume\s+work\b/u.test(n)
 }
 
+export function isCurrentnessRecallQuery(query: string): boolean {
+  const n = query.toLowerCase().replace(/\s+/gu, " ").trim()
+  if (!n) return false
+  const hasCurrentness = /\b(?:current|latest)\b/u.test(n) || /\brelease\s+status\b/u.test(n)
+  const hasStatusTopic = /\b(?:release|status|progress|checkpoint)\b/u.test(n)
+  return hasCurrentness && hasStatusTopic
+}
+
 // ── Regex Detection (for adapters that don't have LLM classifier) ─
 
 export function parseExplicitMemoryRequest(text: string): string | undefined {

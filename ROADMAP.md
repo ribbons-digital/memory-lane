@@ -67,7 +67,9 @@ Slice status: the internal/test-only eval baseline merged in PR #70 as `7d5a8a6`
 
 Baseline findings: `docs/superpowers/validation/2026-06-27-retrieval-continuity-eval-baseline.md` reports mean recall@k 1.00 and mean precision@k 0.54 across four ranked evals. Continuity slotting behaved well on the small corpus. Explicit recall retrieved required records, but the current release-status query exposed one expected default lexical-fallback weakness: stale release status can rank at or above current release status when lexical overlap is similar. Topic-specific recall/workstream queries also showed a lower-ranked docs/release checkpoint entering via generic PR token/reference overlap.
 
-Next decision when returning to this track: decide whether the baseline justifies a narrow follow-up for currentness/recency treatment in explicit recall, or whether to keep broad/current-status questions continuity-first and use recall only for topic-specific follow-up.
+Current implementation slice on `docs/retrieval-quality-currentness-scope`: add an equality-only currentness tie-break for lexical fallback recall. For currentness-like queries, exact lexical-score ties between `project_checkpoint` records sort by newer `updatedAt`; lexical score remains primary. Spec: `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md`. Validation: `docs/superpowers/validation/2026-06-30-retrieval-currentness-tie-break-validation.md`.
+
+Next decision after this slice: if merged and dogfooded, decide whether the remaining lower-ranked precision findings need a separate eval-backed proposal. Do not broaden this slice into threshold recency boosts, filtering, RRF, reranking, or embedding changes without a new approval gate.
 
 Why this next: Phase 21 made continuity usable and cleaner. The next product risk is changing retrieval based on vibes rather than evidence.
 

@@ -22,7 +22,7 @@ Use this bounded path for prompts like “what were we working on?”, “where 
    - `docs/superpowers/archive/*` → history only; skip unless asked.
    - `README.md` → user-facing command/setup changes only.
    - this skill → workflow/Memory Lane command guidance only.
-4. Use targeted `memory_recall` / `memory-lane recall` only as a follow-up for a specific topic, not as the first stop for broad continuity.
+4. Use targeted `memory_recall` / `memory-lane recall` only as a follow-up for a specific topic, not as the first stop for broad continuity. Recall keeps lexical relevance primary; currentness-like exact ties between project checkpoints prefer newer `updatedAt`.
 5. For Memory Lane design/spec or pre-PR implementation reviews, invoke Opus 4.8 directly with Claude CLI:
    ```bash
    claude --model claude-opus-4-8 -p '<review prompt>'
