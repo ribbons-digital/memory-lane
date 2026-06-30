@@ -315,6 +315,7 @@ export function handleSessionStart(
     descriptorMemories = descriptorMemories.slice(0, -1)
     memoryContext = renderSessionStartMemoryContext({ fullBodyMemories: fullBodySelected, descriptorMemories, policy, projectScope, latestHandoffIds })
   }
+  const generatedFallbackCount = descriptorMemories.filter((memory) => descriptorSelection.generatedFallbackMemoryIds.has(memory.id)).length
   const selectedAutomaticCount = automaticAnalysis.eligible.filter((memory) => fullBodySelected.some((selectedMemory) => selectedMemory.id === memory.id) || descriptorMemories.some((selectedMemory) => selectedMemory.id === memory.id)).length
   const rendered = composeSessionStartContext({ noticeText, memoryContext, policy })
   const fullBodyOmitted = Math.max(0, baselineCandidates.filter((memory) => !fullBodySelectedIds.has(memory.id) && isAlwaysOnMemory(memory)).length)
@@ -333,7 +334,7 @@ export function handleSessionStart(
       effectiveMaxChars: descriptorMaxChars,
       selected: descriptorMemories.length,
       omitted: descriptorOmitted,
-      generatedFallbackCount: Math.min(descriptorSelection.generatedFallbackCount, descriptorMemories.length),
+      generatedFallbackCount,
       fullBodySelected: fullBodySelected.length,
       fullBodyOmitted,
     },

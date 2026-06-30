@@ -703,6 +703,7 @@ interface DescriptorSelectionState {
   seenKeys: Set<string>
   chars: number
   generatedFallbackCount: number
+  generatedFallbackMemoryIds: Set<string>
 }
 
 function appendDescriptor(memory: MemoryRecord, limits: { maxItems: number; maxChars: number }, state: DescriptorSelectionState): void {
@@ -721,10 +722,13 @@ function appendDescriptor(memory: MemoryRecord, limits: { maxItems: number; maxC
   state.seenIds.add(memory.id)
   state.seenKeys.add(key)
   state.chars += additionalChars
-  if (usesGeneratedDescriptorFallback(memory)) state.generatedFallbackCount += 1
+  if (usesGeneratedDescriptorFallback(memory)) {
+    state.generatedFallbackCount += 1
+    state.generatedFallbackMemoryIds.add(memory.id)
+  }
 }
 
-export function selectDescriptorMemories(memories: MemoryRecord[], options?: BaselineSelectionOptions): { memories: MemoryRecord[]; generatedFallbackCount: number; omitted: number } {
+export function selectDescriptorMemories(memories: MemoryRecord[], options?: BaselineSelectionOptions): { memories: MemoryRecord[]; generatedFallbackCount: number; generatedFallbackMemoryIds: Set<string>; omitted: number } {
   const maxItems = Math.max(0, Math.min(options?.maxItems ?? SESSION_START_DESCRIPTOR_MAX_ITEMS, SESSION_START_DESCRIPTOR_MAX_ITEMS))
   const maxChars = Math.max(0, Math.min(options?.hardMaxChars ?? SESSION_START_DESCRIPTOR_MAX_CHARS, SESSION_START_DESCRIPTOR_MAX_CHARS))
   const excludedIds = new Set(options?.priorityMemories?.filter((memory) => isAlwaysOnMemory(memory)).map((memory) => memory.id) ?? [])
@@ -735,6 +739,7 @@ export function selectDescriptorMemories(memories: MemoryRecord[], options?: Bas
     seenKeys: new Set<string>(),
     chars: 0,
     generatedFallbackCount: 0,
+    generatedFallbackMemoryIds: new Set<string>(),
   }
 
   appendLayeredDescriptors(state, { maxItems, maxChars }, options?.priorityMemories?.filter((memory) => memory.status === "approved" && !excludedIds.has(memory.id)) ?? [])
@@ -745,6 +750,7 @@ export function selectDescriptorMemories(memories: MemoryRecord[], options?: Bas
   return {
     memories: state.selected,
     generatedFallbackCount: state.generatedFallbackCount,
+    generatedFallbackMemoryIds: state.generatedFallbackMemoryIds,
     omitted: Math.max(0, eligible.length - state.selected.length),
   }
 }
