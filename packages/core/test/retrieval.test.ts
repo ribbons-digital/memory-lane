@@ -1,7 +1,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { retrieveSemanticMemories } from "../src/retrieval.js"
-import type { MemoryRecord, EmbeddingRecord, SemanticMemoryConfig } from "../src/types.js"
+import type { MemoryRecord, EmbeddingRecord, EmbeddingInvalidationRecord, SemanticMemoryConfig } from "../src/types.js"
 
 const BASE_CONFIG: SemanticMemoryConfig["semantic"] = {
   enabled: false,
@@ -94,6 +94,68 @@ describe("retrieveSemanticMemories", () => {
     const r = await retrieveSemanticMemories(memories, embeddings, [], "package manager", "", config, provider)
     assert.equal(r.semantic.enabled, true)
     assert.equal(r.semantic.used, true)
+  })
+
+  it("uses embeddings written after an invalidation", async () => {
+    const memories = [rec({ id: "a", text: "use pnpm" })]
+    const config = enabledSemanticConfig()
+    const provider = {
+      async embed() { return [[0.5, 0.5]] },
+    }
+    const contentHash = "962d19749afe5a8fb511ea7b17458065dbf11a89ee104a67d0e5cb89d16485c7"
+    const embeddings: EmbeddingRecord[] = [{
+      memoryId: "a",
+      memoryUpdatedAt: "2026-01-01T00:00:00.000Z",
+      contentHash,
+      profileName: "test",
+      model: "test",
+      dimensions: 2,
+      vector: [0.5, 0.5],
+      createdAt: "2026-01-01T00:00:01.000Z",
+    }]
+    const invalidations: EmbeddingInvalidationRecord[] = [{
+      type: "invalidation",
+      memoryId: "a",
+      invalidatedAt: "2026-01-01T00:00:00.000Z",
+      reason: "updated",
+    }]
+
+    const r = await retrieveSemanticMemories(memories, embeddings, invalidations, "package manager", "", config, provider)
+
+    assert.equal(r.semantic.enabled, true)
+    assert.equal(r.semantic.used, true)
+    assert.equal(r.memories[0]?.id, "a")
+  })
+
+  it("ignores embeddings written before an invalidation", async () => {
+    const memories = [rec({ id: "a", text: "use pnpm" })]
+    const config = enabledSemanticConfig()
+    const provider = {
+      async embed() { return [[0.5, 0.5]] },
+    }
+    const contentHash = "962d19749afe5a8fb511ea7b17458065dbf11a89ee104a67d0e5cb89d16485c7"
+    const embeddings: EmbeddingRecord[] = [{
+      memoryId: "a",
+      memoryUpdatedAt: "2026-01-01T00:00:00.000Z",
+      contentHash,
+      profileName: "test",
+      model: "test",
+      dimensions: 2,
+      vector: [0.5, 0.5],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    }]
+    const invalidations: EmbeddingInvalidationRecord[] = [{
+      type: "invalidation",
+      memoryId: "a",
+      invalidatedAt: "2026-01-01T00:00:01.000Z",
+      reason: "updated",
+    }]
+
+    const r = await retrieveSemanticMemories(memories, embeddings, invalidations, "package manager", "", config, provider)
+
+    assert.equal(r.semantic.enabled, true)
+    assert.equal(r.semantic.used, true)
+    assert.equal(r.semantic.fallbackReason, "No semantic matches")
   })
 
   it("falls back gracefully when provider throws", async () => {

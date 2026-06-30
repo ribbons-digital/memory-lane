@@ -37,10 +37,10 @@ export async function retrieveSemanticMemories(
       const vectors = await provider.embed([q], signal)
       if (vectors?.length === 1) {
         const queryVec = vectors[0]
-        const invalidatedIds = new Set(invalidations.map((i) => i.memoryId))
+        const latestInvalidations = latestInvalidationTimes(invalidations)
         const folded = new Map<string, EmbeddingRecord>()
         for (const e of embeddings) {
-          if (!invalidatedIds.has(e.memoryId)) folded.set(e.memoryId, e)
+          if (isEmbeddingAfterLatestInvalidation(e, latestInvalidations.get(e.memoryId))) folded.set(e.memoryId, e)
         }
 
         const profileName = config.activeEmbeddingProfile
@@ -113,6 +113,23 @@ export async function retrieveSemanticMemories(
     memories: lexScored.map((s) => s.memory),
     semantic: { enabled: config.enabled, used: false },
   }
+}
+
+function latestInvalidationTimes(invalidations: EmbeddingInvalidationRecord[]): Map<string, number> {
+  const latest = new Map<string, number>()
+  for (const invalidation of invalidations) {
+    const invalidatedAt = Date.parse(invalidation.invalidatedAt)
+    const time = Number.isFinite(invalidatedAt) ? invalidatedAt : Number.POSITIVE_INFINITY
+    const existing = latest.get(invalidation.memoryId)
+    if (existing === undefined || existing <= time) latest.set(invalidation.memoryId, time)
+  }
+  return latest
+}
+
+function isEmbeddingAfterLatestInvalidation(embedding: EmbeddingRecord, latestInvalidatedAt: number | undefined): boolean {
+  if (latestInvalidatedAt === undefined) return true
+  const embeddedAt = Date.parse(embedding.createdAt)
+  return Number.isFinite(embeddedAt) && embeddedAt >= latestInvalidatedAt
 }
 
 function hashText(text: string): string {

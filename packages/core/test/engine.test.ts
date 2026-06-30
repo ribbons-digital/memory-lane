@@ -729,6 +729,9 @@ describe("MemoryEngine", () => {
     const embeddingLog = readJsonl(path.join(dir, "emb.jsonl"))
     assert.ok(embeddingLog.some((entry) => entry.type === "invalidation" && entry.memoryId === saved.memory.id && entry.reason === "updated"))
     assert.ok(embeddingLog.some((entry) => entry.memoryId === saved.memory.id && entry.memoryUpdatedAt === approved?.updatedAt))
+    const recalled = await e.recall("semantic")
+    assert.equal(recalled.semantic.used, true)
+    assert.equal(recalled.memories[0]?.id, saved.memory.id)
   })
 
   it("update returns Obsidian mirror warnings without preventing JSONL update", () => {
