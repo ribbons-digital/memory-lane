@@ -304,9 +304,25 @@ const engine = new MemoryEngine()
 
 // Save approved (no review needed)
 engine.save({ text: "...", status: "approved", category: "project" })
+engine.save({
+  text: "...",
+  status: "approved",
+  descriptor: {
+    description: "Compact SessionStart summary.",
+    fetchHint: "when deciding whether to inspect the full memory",
+    keywords: ["session-start"],
+  },
+})
 
 // Suggest (pending review)
 engine.suggest("...")
+engine.suggest("...", "project", "project", "project_fact", "pending", undefined, {
+  description: "Compact SessionStart summary.",
+})
+
+// Descriptor strings are trimmed and bounded; keywords are lowercased and
+// deduplicated before enforcing the 12-keyword limit. Secret-looking
+// descriptor fields are rejected.
 
 // Recall (semantic + lexical)
 const result = await engine.recall("query")

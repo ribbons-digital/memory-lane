@@ -316,7 +316,10 @@ export class MemoryEngine {
     return this.withMirrorWarnings(dup ? this.upgradePendingDuplicate(dup, input, ctx) : this.persistMemory(input, ctx))
   }
 
-  /** Queue a memory suggestion. Defaults to pending, but can auto-approve for explicit user requests. */
+  /**
+   * Queue a memory suggestion. Defaults to pending, but can auto-approve for explicit user requests.
+   * Optional descriptor metadata is the final parameter.
+   */
   suggest(text: string, category?: MemoryCategory, scopeType?: MemoryScopeType, kind?: MemoryKind, status?: MemoryStatus, freshness?: MemoryFreshness, descriptor?: MemoryRecord["descriptor"]): SaveResult {
     const nextStatus = status ?? "pending"
     validateSaveInput({ text, category, scopeType, source: "user-suggested", status: nextStatus, kind, freshness, descriptor })

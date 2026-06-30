@@ -782,9 +782,19 @@ engine.save({
     keywords: ["pnpm", "dependencies"],
   },
 })
+engine.suggest(
+  "Use pnpm for package management in this repo.",
+  "preference",
+  "project",
+  "preference",
+  "pending",
+  undefined,
+  { description: "Package manager convention for this project." },
+)
 
 // Descriptor strings are trimmed and bounded; keywords are lowercased and
-// deduplicated before enforcing the 12-keyword limit.
+// deduplicated before enforcing the 12-keyword limit. Secret-looking
+// descriptor fields are rejected.
 
 // Recall (semantic or lexical)
 const result = await engine.recall("package manager")
