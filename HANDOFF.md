@@ -2,20 +2,21 @@
 
 ## Current state
 
-- Branch context: working branch `docs/session-start-descriptor-slice-b` is based after `9021435 docs: sync post-pr-71 status`; latest feature merge is `e0deba1 feat: add session-start descriptor index (#71)`.
+- Branch context: `main` is synced through `bc02d04 feat(core): add structured memory descriptors (#72)`. Local and remote `docs/session-start-descriptor-slice-b` branches were cleaned up after merge.
 - Latest release: `v0.2.39` at tag `v0.2.39` / commit `9021435`; release workflow `28410566489` passed and published 8 assets.
 - Phase 21 `Handoff-Free Sessions` is complete and dogfooded. Fresh-thread prompt `where are we in the project and what should we work on next?` used about 11.8% context, improved from the previous 14.x% range.
 - Docs/context-budget slice is merged: root `ROADMAP.md` is now a compact active index, historical roadmap detail through Phase 20.5 is archived, `HANDOFF.md` is a status card, and Memory Lane skill guidance emphasizes bounded reads.
 - Retrieval/continuity eval baseline PR #70 merged as `7d5a8a6`; local/remote `feat/retrieval-continuity-eval-baseline` branches are cleaned up. The slice added a sanitized six-scenario corpus, test-only core eval helpers, structural tests, and baseline findings doc.
 - SessionStart descriptor index Slice A PR #71 merged as `e0deba1`; local/remote `docs/session-start-descriptor-index` branches are cleaned up. The slice keeps SessionStart schema-free while replacing full-body baseline dumping with tiny always-on memories plus compact descriptor cards under existing char budgets.
+- SessionStart descriptor metadata Slice B PR #72 merged as `bc02d04`; local/remote `docs/session-start-descriptor-slice-b` branches are cleaned up. The slice adds optional bounded descriptor metadata and uses it in SessionStart descriptor cards and exact-memory inspection.
 
 ## Current decision / next work
 
 Recent product track: **SessionStart descriptor index / context-budget follow-up**.
 
-Slice A is merged and released. Slice B structured descriptor persistence is approved and implemented locally, not yet PR-reviewed.
+Slice A is merged and released. Slice B structured descriptor persistence is merged in PR #72 and awaiting release/dogfood decision.
 
-Implemented Slice B first vertical scope:
+Merged Slice B first vertical scope:
 
 1. optional bounded `descriptor` metadata on `MemoryRecord` with `description`, `fetchHint`, and normalized lowercase `keywords`;
 2. core save/suggest persistence, duplicate approved-upgrade semantics, and storage normalization validation;
@@ -24,6 +25,8 @@ Implemented Slice B first vertical scope:
 5. exact `show/get` JSON naturally includes descriptors, and human exact show renders a compact descriptor section.
 
 Deferred by design: CLI descriptor authoring flags, descriptor update/clear, Obsidian/YAML frontmatter, token policy changes, embeddings/retrieval changes, and LLM-generated descriptors.
+
+Recommended next decision: release and dogfood Slice B, then decide between Slice C Obsidian/YAML frontmatter, Slice D token-aware policy refinement, pausing this track, or returning to Retrieval Quality / Continuity Evaluation. Do not start the next item until the user approves the direction.
 
 ## Load-bearing constraints
 
@@ -54,6 +57,7 @@ Deferred by design: CLI descriptor authoring flags, descriptor update/clear, Obs
 - `v0.2.39` release workflow `28410566489` passed and published 8 assets; installed `memory-lane upgrade --yes` passed and reconfigured Pi.
 - Installed SessionStart dogfood passed: real-project `memory-lane codex session-start` emitted 1494 chars under the 1600-char budget, used `## Always-on Memory` plus `## Memory Index`, included fetch guidance, and omitted old `## Relevant Memory`. Isolated fixture proved 8 descriptor cards in 1302 chars with no full-body dump. Policy-only/off and fetch-by-id smokes passed.
 - Slice B local verification passed: `pnpm --filter @memory-lane/core test`, `pnpm --filter @memory-lane/lifecycle test`, `pnpm --filter @memory-lane/cli test`, `pnpm build`, `pnpm test`, and `git diff --check`.
+- Slice B no-mistakes/PR validation before merge: Opus 4.8 implementation review found no blockers; no-mistakes review found and fixed secret-like keyword pre-normalization and fallback-count-after-trim issues; CodeRabbit inline keyword-limit feedback was fixed by applying the keyword item cap after normalization/deduplication; GitHub PR checks passed (`test` and CodeRabbit). PR #72 merged as `bc02d04`.
 
 ## Key references
 
