@@ -72,7 +72,7 @@ Slice plan:
 2. **Slice 1 — project-local default for new project-scoped writes.** Requires a fresh approval gate. Derive the project-local root from existing project scope resolution, keep explicit `MEMORY_LANE_*` paths authoritative and single-store, and keep global preferences/personal memories home-side.
 3. **Slice 2 — migration/compatibility diagnostics.** Requires a fresh approval gate. Detect legacy home-stored project memories and provide bounded warnings plus explicit dry-run migration; do not silently move/delete/approve/consolidate.
 
-Current implementation branch: Slice 0 is in progress on `feat/storage-facade-proof`. It adds the single-store facade and preserves existing default write locations. Before PR, run full validation and Opus 4.8 implementation review.
+Current implementation branch: Slice 0 is implemented on `feat/storage-facade-proof`. It adds the single-store facade and preserves existing default write locations. Before PR, run full validation and Opus 4.8 implementation review.
 
 Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in `v0.2.41`; pause retrieval-ranking work unless new dogfood/eval evidence justifies another proposal.
 

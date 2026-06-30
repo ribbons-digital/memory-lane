@@ -4,11 +4,19 @@ import { createEmbeddingStore, type EmbeddingLine } from "./embedding-store.js"
 import { createMemoryStore, type MemoryStore, type MemoryStoreDiagnostics } from "./storage.js"
 import type { CompactReport, EmbeddingInvalidationRecord, EmbeddingRecord, MemoryRecord } from "./types.js"
 
+/**
+ * Storage facade used by MemoryEngine.
+ * The single-store implementation preserves legacy JSONL paths, while future implementations can merge multiple stores and route writes by memory origin or scope.
+ */
 export interface MemoryEngineStorage {
+  /** Primary memory JSONL path reported by diagnostics for the active facade. */
   readonly memoryFile: string
+  /** Primary embedding JSONL path reported by diagnostics for the active facade. */
   readonly embeddingFile: string
+  /** Path for continuity baseline markers associated with this storage facade. */
   readonly continuityBaselinePath: string
   appendMemory(record: MemoryRecord): void
+  /** Append records atomically per underlying store and refresh memory caches. */
   appendMemories(records: MemoryRecord[]): void
   readMemoryLog(): MemoryRecord[]
   listMemories(): MemoryRecord[]
@@ -20,6 +28,7 @@ export interface MemoryEngineStorage {
   compact(): CompactReport
 }
 
+/** Create the backward-compatible single JSONL store facade for MemoryEngine. */
 export function createSingleStoreEngineStorage(memoryPath: string, embeddingsPath: string): MemoryEngineStorage {
   let memoryStore: MemoryStore = createMemoryStore(memoryPath)
 

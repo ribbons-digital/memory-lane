@@ -2,7 +2,7 @@
 
 ## Current state
 
-- Branch context: working branch `feat/storage-facade-proof` is based on main after `ab580f3 docs: record v0.2.41 release dogfood validation (#77)`. Current work implements approved project-local storage Slice 0 without changing default storage locations.
+- Branch context: working branch `feat/storage-facade-proof` is based on main after `ab580f3 docs: record v0.2.41 release dogfood validation (#77)`. Current work has implemented approved project-local storage Slice 0 without changing default storage locations.
 - Latest release: `v0.2.41` at tag `v0.2.41` / commit `9f9cdde`; release workflow `28423317038` passed and published 8 assets.
 - Phase 21 `Handoff-Free Sessions` is complete and dogfooded. Fresh-thread prompt `where are we in the project and what should we work on next?` used about 11.8% context, improved from the previous 14.x% range.
 - Docs/context-budget slice is merged: root `ROADMAP.md` is now a compact active index, historical roadmap detail through Phase 20.5 is archived, `HANDOFF.md` is a status card, and Memory Lane skill guidance emphasizes bounded reads.
@@ -17,7 +17,7 @@ Active product track: **Project-local Storage Defaults**.
 
 Approved design: `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`.
 
-Slice 0 scope now being implemented:
+Slice 0 scope implemented on this branch:
 
 1. preserve current storage behavior and default write locations;
 2. add an injectable `MemoryEngineStorage` facade with memory append/list/read-log/diagnostics, batch append, embedding append/read/invalidation, compaction, storage path metadata, and continuity-baseline path seam;

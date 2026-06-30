@@ -639,6 +639,7 @@ export interface SemanticMemoryConfig {
 export interface MemoryEngineConfig {
   memoryPath?: string
   embeddingsPath?: string
+  /** Optional storage facade. When provided, it owns memory, embedding, compaction, diagnostics, and continuity-baseline storage paths. */
   storage?: MemoryEngineStorage
   configPath?: string
   embeddingProvider?: EmbeddingProvider

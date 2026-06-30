@@ -43,7 +43,8 @@ memory-lane/
 │   │   │   ├── index.ts          # Public export barrel
 │   │   │   ├── types.ts          # Data model types
 │   │   │   ├── engine.ts         # MemoryEngine class (main API)
-│   │   │   ├── storage.ts        # JSONL store with cache + compaction
+│   │   │   ├── storage.ts        # JSONL store with cache and batch append
+│   │   │   ├── storage-facade.ts # Engine storage facade for memories, embeddings, compaction, and baselines
 │   │   │   ├── search.ts         # Lexical search, secret detection, dedup
 │   │   │   ├── project-scope.ts  # Project identity (scope file + git fallback)
 │   │   │   ├── embedding-store.ts # Embedding JSONL sidecar
@@ -268,6 +269,7 @@ Triggered on engine construction (if dead weight / total records > 0.3 and total
 interface MemoryEngineConfig {
   memoryPath?: string           // default: ~/.memory-lane/memory.jsonl
   embeddingsPath?: string       // default: ~/.memory-lane/embeddings.jsonl
+  storage?: MemoryEngineStorage // optional facade for memory, embeddings, compaction, diagnostics, and continuity baselines
   configPath?: string           // default: ~/.memory-lane/config.json (pi adapter overrides to ~/.pi/agent/memory.config.json for backward compat)
   embeddingProvider?: EmbeddingProvider  // optional; lexical-only without it
 }
@@ -278,7 +280,6 @@ class MemoryEngine {
 ```
 
 **Instance lifecycle recommendation:** Create one `MemoryEngine` per process and reuse it. The in-memory cache makes this significantly faster than per-operation construction. The pi adapter uses a singleton; the CLI creates one per invocation (naturally isolated processes).
-```
 
 ### Save & Suggest
 

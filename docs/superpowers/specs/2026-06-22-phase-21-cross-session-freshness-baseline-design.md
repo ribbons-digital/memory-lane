@@ -217,7 +217,7 @@ Responsibilities:
 
 Update `MemoryEngine`:
 
-- derive `continuityBaselinePath` from `path.dirname(this.memPath)`;
+- derive `continuityBaselinePath` from the active storage facade, which preserves the legacy `path.dirname(memoryPath)` behavior for the single-store facade;
 - expose `continuityBaselineDoctor()` through `doctor()`;
 - add methods needed by lifecycle, for example:
 

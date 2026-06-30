@@ -2,11 +2,12 @@
 
 ## Status
 
-Approved for Slice 0 implementation; Slice 1 and Slice 2 remain gated follow-ups.
+Slice 0 implemented on `feat/storage-facade-proof`; Slice 1 and Slice 2 remain gated follow-ups.
 
 ## Entry gate
 
-Planning/spec only. Do not implement until the user approves this design.
+Slice 0 was approved and implemented as an internal storage facade proof.
+Do not implement Slice 1 or Slice 2 until the user approves the next design gate.
 
 ## Context
 
@@ -300,6 +301,7 @@ Do not treat rescope as a simple origin-store re-append when project/global stor
 
 ## Approval status
 
-User feedback agrees with Slice 0 as the next implementation target: an internal storage facade proof that preserves current storage behavior while removing the single-store assumptions that would make project-local-by-default risky.
+User feedback agreed with Slice 0 as the implementation target: an internal storage facade proof that preserves current storage behavior while removing the single-store assumptions that would make project-local-by-default risky.
 
-Slice 0 implementation should preserve current storage behavior. Slice 1 and Slice 2 remain planned follow-ups requiring their own approval gates.
+Slice 0 implementation preserves current storage behavior through `MemoryEngineStorage` and `createSingleStoreEngineStorage`.
+Slice 1 and Slice 2 remain planned follow-ups requiring their own approval gates.

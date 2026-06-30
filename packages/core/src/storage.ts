@@ -25,6 +25,7 @@ export interface MemoryStoreDiagnostics {
 export interface MemoryStore {
   readonly file: string
   append(record: MemoryRecord): void
+  /** Append records in one atomic file rewrite and refresh the folded-read cache. */
   appendMany(records: MemoryRecord[]): void
   readLog(): MemoryRecord[]
   list(): MemoryRecord[]

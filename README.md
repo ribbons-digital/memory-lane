@@ -771,6 +771,9 @@ import { MemoryEngine } from "@memory-lane/core"
 
 const engine = new MemoryEngine()
 
+// Advanced tests or integrations can inject a MemoryEngineStorage facade.
+// Existing memoryPath and embeddingsPath options still build the legacy single-store facade.
+
 // Save
 engine.save({ text: "use pnpm for all installs", status: "approved" })
 engine.save({
