@@ -2,7 +2,7 @@
 
 ## Current state
 
-- Branch context: working branch `docs/retrieval-quality-currentness-scope` is based on `89a98ed docs: record v0.2.40 dogfood (#74)`.
+- Branch context: `main` is synced through `6e5f67a feat(core): prefer current checkpoints on recall ties (#75)`. Local and remote `docs/retrieval-quality-currentness-scope` branches were cleaned up after merge.
 - Latest release: `v0.2.40` at tag `v0.2.40` / commit `7578bb5`; release workflow `28419273491` passed and published 8 assets.
 - Phase 21 `Handoff-Free Sessions` is complete and dogfooded. Fresh-thread prompt `where are we in the project and what should we work on next?` used about 11.8% context, improved from the previous 14.x% range.
 - Docs/context-budget slice is merged: root `ROADMAP.md` is now a compact active index, historical roadmap detail through Phase 20.5 is archived, `HANDOFF.md` is a status card, and Memory Lane skill guidance emphasizes bounded reads.
@@ -16,9 +16,9 @@
 Active product track: **Retrieval Quality / Continuity Evaluation**.
 
 The user approved the Opus-reviewed recommendation to implement a narrow equality-only currentness tie-break for lexical fallback recall.
-Implementation is in progress on `docs/retrieval-quality-currentness-scope`.
+The slice merged in PR #75 as `6e5f67a`.
 
-Current slice scope:
+Merged slice scope:
 
 1. characterize the old lexical-only stale-over-current failure for `recall-current-release-status`;
 2. add a narrow `isCurrentnessRecallQuery()` helper beside checkpoint query detection;
@@ -27,6 +27,8 @@ Current slice scope:
 5. document the follow-up validation.
 
 Explicitly out of scope: threshold recency boosts, filtering stale records out of top-k, RRF/reranking, embedding-default changes, public eval commands, schema changes, lifecycle budget changes, and any broad retrieval rewrite.
+
+Recommended next step: release and dogfood `v0.2.41` for the currentness tie-break. Dogfood should verify the installed artifact prefers the newer checkpoint for an explicit current release-status recall tie. Do not start a new retrieval/ranking proposal unless dogfood or later eval evidence shows clear user value.
 
 ## Load-bearing constraints
 
@@ -57,7 +59,8 @@ Explicitly out of scope: threshold recency boosts, filtering stale records out o
 - `v0.2.39` release workflow `28410566489` passed and published 8 assets; installed `memory-lane upgrade --yes` passed and reconfigured Pi.
 - Installed SessionStart dogfood passed: real-project `memory-lane codex session-start` emitted 1494 chars under the 1600-char budget, used `## Always-on Memory` plus `## Memory Index`, included fetch guidance, and omitted old `## Relevant Memory`. Isolated fixture proved 8 descriptor cards in 1302 chars with no full-body dump. Policy-only/off and fetch-by-id smokes passed.
 - Slice B local verification passed: `pnpm --filter @memory-lane/core test`, `pnpm --filter @memory-lane/lifecycle test`, `pnpm --filter @memory-lane/cli test`, `pnpm build`, `pnpm test`, and `git diff --check`.
-- Retrieval currentness tie-break local verification passed: `pnpm --filter @memory-lane/core test` with 316 tests. Validation doc: `docs/superpowers/validation/2026-06-30-retrieval-currentness-tie-break-validation.md`.
+- Retrieval currentness tie-break local verification passed: `pnpm --filter @memory-lane/core test` with 316 tests, `pnpm test`, `pnpm build`, and `git diff --check`. Validation doc: `docs/superpowers/validation/2026-06-30-retrieval-currentness-tie-break-validation.md`.
+- PR #75 merged as `6e5f67a`; post-merge cleanup synced `main` and deleted local/remote `docs/retrieval-quality-currentness-scope` branches.
 - Slice B no-mistakes/PR validation before merge: Opus 4.8 implementation review found no blockers; no-mistakes review found and fixed secret-like keyword pre-normalization and fallback-count-after-trim issues; CodeRabbit inline keyword-limit feedback was fixed by applying the keyword item cap after normalization/deduplication; GitHub PR checks passed (`test` and CodeRabbit). PR #72 merged as `bc02d04`.
 - `v0.2.40` release workflow `28419273491` passed and published 8 assets; installed `memory-lane upgrade --yes` passed and reconfigured Pi.
 - Installed Slice B dogfood passed: exact human and JSON `show` exposed descriptor metadata, released `memory-lane codex session-start` rendered structured descriptor summaries plus fetch hints, full descriptor-card bodies stayed out of SessionStart, and generated fallback descriptors still worked. Validation: `docs/superpowers/validation/2026-06-30-session-start-descriptor-metadata-dogfood.md`.
