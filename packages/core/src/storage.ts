@@ -106,7 +106,14 @@ export function createMemoryStore(filePath: string): MemoryStore {
         const owner = JSON.parse(fs.readFileSync(ownerFile, "utf8")) as { pid?: unknown; createdAt?: unknown }
         const pid = typeof owner.pid === "number" ? owner.pid : undefined
         const createdAt = typeof owner.createdAt === "number" ? owner.createdAt : fs.statSync(lockDir).mtimeMs
-        if ((pid !== undefined && !processIsAlive(pid)) || Date.now() - createdAt > 5 * 60_000) {
+        if (pid !== undefined) {
+          if (!processIsAlive(pid)) {
+            fs.rmSync(lockDir, { recursive: true, force: true })
+            return true
+          }
+          return false
+        }
+        if (Date.now() - createdAt > 30_000) {
           fs.rmSync(lockDir, { recursive: true, force: true })
           return true
         }
@@ -122,13 +129,29 @@ export function createMemoryStore(filePath: string): MemoryStore {
     return false
   }
 
+  function releaseAppendLock(lockDir: string, token: string): void {
+    try {
+      const ownerFile = path.join(lockDir, "owner.json")
+      const owner = JSON.parse(fs.readFileSync(ownerFile, "utf8")) as { token?: unknown }
+      if (owner.token === token) fs.rmSync(lockDir, { recursive: true, force: true })
+    } catch {
+      return
+    }
+  }
+
   function withAppendLock(write: () => void): void {
     const lockDir = filePath + ".lock"
     const startedAt = Date.now()
+    const token = crypto.randomBytes(16).toString("hex")
     while (true) {
       try {
         fs.mkdirSync(lockDir)
-        fs.writeFileSync(path.join(lockDir, "owner.json"), JSON.stringify({ pid: process.pid, createdAt: Date.now() }), "utf8")
+        try {
+          fs.writeFileSync(path.join(lockDir, "owner.json"), JSON.stringify({ pid: process.pid, createdAt: Date.now(), token }), "utf8")
+        } catch (error) {
+          fs.rmSync(lockDir, { recursive: true, force: true })
+          throw error
+        }
         break
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code
@@ -142,7 +165,7 @@ export function createMemoryStore(filePath: string): MemoryStore {
     try {
       write()
     } finally {
-      fs.rmSync(lockDir, { recursive: true, force: true })
+      releaseAppendLock(lockDir, token)
     }
   }
 
