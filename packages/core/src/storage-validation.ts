@@ -143,10 +143,11 @@ function normalizeDescriptorKeywords(value: unknown): string[] | undefined {
   const keywords: string[] = []
   for (const item of value) {
     if (typeof item !== "string") throw new Error("Invalid descriptor.keywords. Expected an array of strings")
-    const keyword = item.trim().toLowerCase()
-    if (!keyword) throw new Error("Invalid descriptor.keywords. Expected non-empty strings")
-    if (keyword.length > DESCRIPTOR_KEYWORD_MAX_CHARS) throw new Error(`Invalid descriptor.keywords. Expected each keyword to be at most ${DESCRIPTOR_KEYWORD_MAX_CHARS} characters`)
-    if (containsLikelySecret(keyword)) throw new Error("Invalid descriptor.keywords. Value contains a likely secret")
+    const trimmedKeyword = item.trim()
+    if (!trimmedKeyword) throw new Error("Invalid descriptor.keywords. Expected non-empty strings")
+    if (trimmedKeyword.length > DESCRIPTOR_KEYWORD_MAX_CHARS) throw new Error(`Invalid descriptor.keywords. Expected each keyword to be at most ${DESCRIPTOR_KEYWORD_MAX_CHARS} characters`)
+    if (containsLikelySecret(trimmedKeyword)) throw new Error("Invalid descriptor.keywords. Value contains a likely secret")
+    const keyword = trimmedKeyword.toLowerCase()
     if (!seen.has(keyword)) {
       seen.add(keyword)
       keywords.push(keyword)

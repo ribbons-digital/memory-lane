@@ -255,6 +255,12 @@ describe("MemoryEngine", () => {
     }), /Invalid descriptor\.fetchHint/u)
 
     assert.throws(() => e.save({
+      text: "Secret descriptor keyword",
+      status: "approved",
+      descriptor: { keywords: ["Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8Ii9Jj0Kk1Ll2"] },
+    }), /Invalid descriptor\.keywords/u)
+
+    assert.throws(() => e.save({
       text: "Long descriptor",
       status: "approved",
       descriptor: { description: "x".repeat(241) },
