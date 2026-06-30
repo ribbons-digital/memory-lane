@@ -670,8 +670,29 @@ function descriptorPreview(memory: MemoryRecord, maxChars = SESSION_START_DESCRI
   return truncateAtBoundary(normalized, maxChars) ?? normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd() + "…"
 }
 
+function hasSecretDescriptorMetadata(memory: MemoryRecord): boolean {
+  const descriptor = memory.descriptor
+  if (!descriptor) return false
+  return [descriptor.description, descriptor.fetchHint, ...(descriptor.keywords ?? [])]
+    .filter((value): value is string => typeof value === "string")
+    .some((value) => containsLikelySecret(value))
+}
+
+function structuredDescriptorText(memory: MemoryRecord): string | undefined {
+  const descriptor = memory.descriptor
+  if (!descriptor?.description) return undefined
+  if (hasSecretDescriptorMetadata(memory)) return undefined
+  return descriptor.fetchHint
+    ? `${descriptor.description} Fetch when: ${descriptor.fetchHint}`
+    : descriptor.description
+}
+
+function usesGeneratedDescriptorFallback(memory: MemoryRecord): boolean {
+  return structuredDescriptorText(memory) === undefined
+}
+
 function descriptorLine(memory: MemoryRecord): string | undefined {
-  const preview = descriptorPreview(memory)
+  const preview = structuredDescriptorText(memory) ?? descriptorPreview(memory)
   if (!preview) return undefined
   return `- [${memory.id}] ${readableMemoryKind(memory)} — ${preview}`
 }
@@ -682,6 +703,7 @@ interface DescriptorSelectionState {
   seenKeys: Set<string>
   chars: number
   generatedFallbackCount: number
+  generatedFallbackMemoryIds: Set<string>
 }
 
 function appendDescriptor(memory: MemoryRecord, limits: { maxItems: number; maxChars: number }, state: DescriptorSelectionState): void {
@@ -689,6 +711,7 @@ function appendDescriptor(memory: MemoryRecord, limits: { maxItems: number; maxC
   if (memory.status !== "approved") return
   if (state.seenIds.has(memory.id)) return
   if (containsLikelySecret(memory.text)) return
+  if (hasSecretDescriptorMetadata(memory)) return
   const key = normalizedMemoryKey(memory.text)
   if (!key || state.seenKeys.has(key)) return
   const line = descriptorLine(memory)
@@ -699,11 +722,13 @@ function appendDescriptor(memory: MemoryRecord, limits: { maxItems: number; maxC
   state.seenIds.add(memory.id)
   state.seenKeys.add(key)
   state.chars += additionalChars
-  // Slice A has no persisted descriptor metadata, so every selected descriptor uses the generated fallback preview.
-  state.generatedFallbackCount += 1
+  if (usesGeneratedDescriptorFallback(memory)) {
+    state.generatedFallbackCount += 1
+    state.generatedFallbackMemoryIds.add(memory.id)
+  }
 }
 
-export function selectDescriptorMemories(memories: MemoryRecord[], options?: BaselineSelectionOptions): { memories: MemoryRecord[]; generatedFallbackCount: number; omitted: number } {
+export function selectDescriptorMemories(memories: MemoryRecord[], options?: BaselineSelectionOptions): { memories: MemoryRecord[]; generatedFallbackCount: number; generatedFallbackMemoryIds: Set<string>; omitted: number } {
   const maxItems = Math.max(0, Math.min(options?.maxItems ?? SESSION_START_DESCRIPTOR_MAX_ITEMS, SESSION_START_DESCRIPTOR_MAX_ITEMS))
   const maxChars = Math.max(0, Math.min(options?.hardMaxChars ?? SESSION_START_DESCRIPTOR_MAX_CHARS, SESSION_START_DESCRIPTOR_MAX_CHARS))
   const excludedIds = new Set(options?.priorityMemories?.filter((memory) => isAlwaysOnMemory(memory)).map((memory) => memory.id) ?? [])
@@ -714,6 +739,7 @@ export function selectDescriptorMemories(memories: MemoryRecord[], options?: Bas
     seenKeys: new Set<string>(),
     chars: 0,
     generatedFallbackCount: 0,
+    generatedFallbackMemoryIds: new Set<string>(),
   }
 
   appendLayeredDescriptors(state, { maxItems, maxChars }, options?.priorityMemories?.filter((memory) => memory.status === "approved" && !excludedIds.has(memory.id)) ?? [])
@@ -724,6 +750,7 @@ export function selectDescriptorMemories(memories: MemoryRecord[], options?: Bas
   return {
     memories: state.selected,
     generatedFallbackCount: state.generatedFallbackCount,
+    generatedFallbackMemoryIds: state.generatedFallbackMemoryIds,
     omitted: Math.max(0, eligible.length - state.selected.length),
   }
 }

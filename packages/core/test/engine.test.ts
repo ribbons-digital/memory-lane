@@ -211,6 +211,164 @@ describe("MemoryEngine", () => {
     assert.equal(normalizeMemoryRecord(base)?.freshness, undefined)
   })
 
+  it("save persists normalized descriptor metadata", () => {
+    const e = engine()
+    const result = e.save({
+      text: "Descriptor metadata source memory",
+      status: "approved",
+      descriptor: {
+        description: "  Compact descriptor summary  ",
+        fetchHint: "  when setting up descriptors  ",
+        keywords: ["Descriptor", "metadata", "DESCRIPTOR"],
+      },
+    })
+
+    assert.equal(result.status, "saved")
+    if (result.status !== "saved") throw new Error("expected saved")
+    assert.deepEqual(result.memory.descriptor, {
+      description: "Compact descriptor summary",
+      fetchHint: "when setting up descriptors",
+      keywords: ["descriptor", "metadata"],
+    })
+    assert.deepEqual(e.list()[0].descriptor, result.memory.descriptor)
+  })
+
+  it("descriptor keyword limit applies after normalization and deduplication", () => {
+    const e = engine()
+    const result = e.save({
+      text: "Descriptor keyword duplicate source",
+      status: "approved",
+      descriptor: { keywords: ["One", "one", "TWO", "two", "three", "THREE", "four", "FOUR", "five", "FIVE", "six", "SIX", "seven"] },
+    })
+
+    assert.equal(result.status, "saved")
+    if (result.status !== "saved") throw new Error("expected saved")
+    assert.deepEqual(result.memory.descriptor?.keywords, ["one", "two", "three", "four", "five", "six", "seven"])
+  })
+
+  it("save rejects invalid descriptor metadata", () => {
+    const e = engine()
+
+    assert.throws(() => e.save({
+      text: "Bad descriptor description",
+      status: "approved",
+      descriptor: { description: "   " },
+    }), /Invalid descriptor\.description/u)
+
+    assert.throws(() => e.save({
+      text: "Bad descriptor keyword",
+      status: "approved",
+      descriptor: { keywords: [""] },
+    }), /Invalid descriptor\.keywords/u)
+
+    assert.throws(() => e.save({
+      text: "Secret descriptor",
+      status: "approved",
+      descriptor: { fetchHint: "api key is sk-abc123def456ghi789jkl" },
+    }), /Invalid descriptor\.fetchHint/u)
+
+    assert.throws(() => e.save({
+      text: "Secret descriptor keyword",
+      status: "approved",
+      descriptor: { keywords: ["Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8Ii9Jj0Kk1Ll2"] },
+    }), /Invalid descriptor\.keywords/u)
+
+    assert.throws(() => e.save({
+      text: "Long descriptor",
+      status: "approved",
+      descriptor: { description: "x".repeat(241) },
+    }), /descriptor\.description.*240 characters/u)
+
+    assert.throws(() => e.save({
+      text: "Too many descriptor keywords",
+      status: "approved",
+      descriptor: { keywords: Array.from({ length: 13 }, (_, index) => `keyword-${index}`) },
+    }), /descriptor\.keywords.*12 items/u)
+  })
+
+  it("ordinary text update preserves descriptor metadata until descriptor update support exists", () => {
+    const e = engine()
+    const saved = e.save({
+      text: "Descriptor update source",
+      status: "approved",
+      descriptor: { description: "Existing descriptor" },
+    })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") throw new Error("expected saved")
+
+    const updated = e.update(saved.memory.id, { text: "Descriptor update revised text" })
+
+    assert.equal(updated?.text, "Descriptor update revised text")
+    assert.deepEqual(updated?.descriptor, { description: "Existing descriptor" })
+  })
+
+  it("approved duplicate upgrade applies explicit descriptor and otherwise preserves existing descriptor", () => {
+    const e = engine()
+    const pending = e.save({
+      text: "Duplicate descriptor fact",
+      status: "pending",
+      descriptor: { description: "Original descriptor" },
+    })
+    assert.equal(pending.status, "saved")
+
+    const upgraded = e.save({
+      text: "Duplicate descriptor fact",
+      status: "approved",
+      descriptor: { description: "Updated descriptor", keywords: ["Updated"] },
+    })
+    assert.equal(upgraded.status, "saved")
+    if (upgraded.status !== "saved") throw new Error("expected saved")
+    assert.deepEqual(upgraded.memory.descriptor, { description: "Updated descriptor", keywords: ["updated"] })
+
+    const secondEngine = engine()
+    const secondPending = secondEngine.save({
+      text: "Duplicate descriptor preserved",
+      status: "pending",
+      descriptor: { description: "Preserved descriptor" },
+    })
+    assert.equal(secondPending.status, "saved")
+    const secondUpgraded = secondEngine.save({ text: "Duplicate descriptor preserved", status: "approved" })
+    assert.equal(secondUpgraded.status, "saved")
+    if (secondUpgraded.status !== "saved") throw new Error("expected saved")
+    assert.deepEqual(secondUpgraded.memory.descriptor, { description: "Preserved descriptor" })
+  })
+
+  it("normalization accepts historical records without descriptor and rejects malformed descriptors", () => {
+    const base = {
+      id: "descriptor-invalid",
+      status: "approved",
+      text: "Stored descriptor validation",
+      category: "project",
+      scope: { type: "project" },
+      source: "manual",
+      createdAt: "2026-06-21T00:00:00.000Z",
+      updatedAt: "2026-06-21T00:00:00.000Z",
+    }
+
+    assert.equal(normalizeMemoryRecord(base)?.descriptor, undefined)
+    assert.equal(normalizeMemoryRecord({ ...base, descriptor: { description: "Valid descriptor", keywords: ["One", "one"] } })?.descriptor?.keywords?.join(","), "one")
+    assert.equal(normalizeMemoryRecord({ ...base, descriptor: { description: 123 } }), undefined)
+    assert.equal(normalizeMemoryRecord({ ...base, descriptor: { keywords: [""] } }), undefined)
+  })
+
+  it("approve and rescope preserve descriptor metadata", () => {
+    const e = engine()
+    const saved = e.save({
+      text: "Descriptor preservation fact",
+      status: "pending",
+      category: "project",
+      scopeType: "project",
+      descriptor: { description: "Preserve this descriptor" },
+    })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") throw new Error("expected saved")
+
+    const approved = e.approve(saved.memory.id)
+    assert.deepEqual(approved?.descriptor, { description: "Preserve this descriptor" })
+    const rescoped = e.rescope(saved.memory.id, { scopeType: "global" })
+    assert.deepEqual(rescoped?.proposed.descriptor, { description: "Preserve this descriptor" })
+  })
+
   it("save stores optional memory provenance", () => {
     const e = engine()
     const result = e.save({
@@ -642,6 +800,24 @@ describe("MemoryEngine", () => {
     assert.equal(result.successor.kind, "workflow_rule")
     assert.deepEqual(result.successor.revision?.supersedes, [old.memory.id])
     assert.equal(result.superseded[0].revision?.supersededBy, result.successor.id)
+  })
+
+  it("replace does not auto-copy descriptor metadata from old memory", () => {
+    const e = engine()
+    const old = e.save({
+      text: "Old descriptor replacement source",
+      status: "approved",
+      category: "project",
+      kind: "project_fact",
+      descriptor: { description: "Old descriptor should not copy" },
+    })
+    assert.equal(old.status, "saved")
+    if (old.status !== "saved") return
+
+    const result = e.replace([old.memory.id], { text: "New descriptor-free replacement", status: "approved" })
+
+    assert.equal(result.successor.text, "New descriptor-free replacement")
+    assert.equal(result.successor.descriptor, undefined)
   })
 
   it("replace approved supersedes multiple old memories in order", () => {

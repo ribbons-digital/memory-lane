@@ -104,7 +104,7 @@ Use `--dry-run` where available before changing scope or relationships. Do not a
 - Use `memory-lane agreements` for project workflow, review gates, PR process, release process, or tooling workflow rules.
 - Use `memory-lane status --json`, `memory-lane doctor --json`, or MCP `memory_status` for text-free continuity/staleness metadata. Use `memory-lane dashboard` only when a compact human-facing overview is appropriate.
 - Treat pending continuity as review candidates, not approved facts.
-- Inspect full memories by exact id with `memory-lane show <id>` or MCP `memory_get` when continuity says operating guidance was truncated.
+- Inspect full memories by exact id with `memory-lane show <id>` or MCP `memory_get` when continuity says operating guidance was truncated or a SessionStart `Memory Index` descriptor is relevant. Exact inspection includes descriptor metadata when present.
 
 ## Lifecycle context semantics
 
@@ -116,7 +116,7 @@ Automatic lifecycle context is controlled by `memory.contextPolicy`:
 
 Prompt-time broad continuity guidance is not a memory body. It is a cue to inspect continuity/status/dashboard/roadmap before answering from chat context alone. Broad project-position/next-work prompts should receive guidance without ordinary recall bodies; topic-specific prompts can still include bounded relevant memory.
 
-At `SessionStart`, Memory Lane may inject a compact `Continuity notice` in `policy-only` or `selective` modes. The notice shares the existing SessionStart budget and omits memory ids, memory text, transcripts, and tool outputs.
+At `SessionStart`, Memory Lane may inject a compact `Continuity notice` in `policy-only` or `selective` modes. In `selective` mode, it can also render tiny always-on memories plus a `Memory Index` of descriptor cards; structured descriptors use stored `description` and `fetchHint` metadata when present, otherwise generated previews. The notice shares the existing SessionStart budget and omits memory ids, memory text, transcripts, and tool outputs.
 
 ## Hook adapters and harness boundaries
 

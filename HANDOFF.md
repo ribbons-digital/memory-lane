@@ -2,7 +2,7 @@
 
 ## Current state
 
-- Branch context: `main` is synced through `9021435 docs: sync post-pr-71 status`; latest feature merge is `e0deba1 feat: add session-start descriptor index (#71)`.
+- Branch context: working branch `docs/session-start-descriptor-slice-b` is based after `9021435 docs: sync post-pr-71 status`; latest feature merge is `e0deba1 feat: add session-start descriptor index (#71)`.
 - Latest release: `v0.2.39` at tag `v0.2.39` / commit `9021435`; release workflow `28410566489` passed and published 8 assets.
 - Phase 21 `Handoff-Free Sessions` is complete and dogfooded. Fresh-thread prompt `where are we in the project and what should we work on next?` used about 11.8% context, improved from the previous 14.x% range.
 - Docs/context-budget slice is merged: root `ROADMAP.md` is now a compact active index, historical roadmap detail through Phase 20.5 is archived, `HANDOFF.md` is a status card, and Memory Lane skill guidance emphasizes bounded reads.
@@ -13,15 +13,17 @@
 
 Recent product track: **SessionStart descriptor index / context-budget follow-up**.
 
-Current slice is merged. Implemented scope:
+Slice A is merged and released. Slice B structured descriptor persistence is approved and implemented locally, not yet PR-reviewed.
 
-1. schema-free SessionStart descriptor cards generated from existing approved memories;
-2. tiny always-on workflow/preference lane plus broader `## Memory Index` descriptor lane;
-3. approved-status and secret filtering on both ordinary and priority descriptor paths;
-4. additive `descriptorIndex` diagnostics with explicit top-level hybrid count semantics;
-5. spec `docs/superpowers/specs/2026-06-30-session-start-descriptor-index-design.md` records future Slice B descriptor metadata/YAML as deferred.
+Implemented Slice B first vertical scope:
 
-Release/dogfood for PR #71 is complete. Recommended next decision: decide whether to proceed to Slice B structured descriptor metadata, Slice D token-aware policy refinement, pause the SessionStart descriptor track, or return to Retrieval Quality / Continuity Evaluation currentness/recency follow-up. Do not start the next item until the user approves the direction.
+1. optional bounded `descriptor` metadata on `MemoryRecord` with `description`, `fetchHint`, and normalized lowercase `keywords`;
+2. core save/suggest persistence, duplicate approved-upgrade semantics, and storage normalization validation;
+3. preservation through approve/reject/delete/rescope, while replacement successors do not auto-copy stale descriptors;
+4. SessionStart descriptor cards prefer structured descriptions and compact fetch hints, with fallback diagnostics updated;
+5. exact `show/get` JSON naturally includes descriptors, and human exact show renders a compact descriptor section.
+
+Deferred by design: CLI descriptor authoring flags, descriptor update/clear, Obsidian/YAML frontmatter, token policy changes, embeddings/retrieval changes, and LLM-generated descriptors.
 
 ## Load-bearing constraints
 
@@ -51,6 +53,7 @@ Release/dogfood for PR #71 is complete. Recommended next decision: decide whethe
 - PR #71 merged as `e0deba1`; post-merge cleanup synced `main` and deleted local/remote `docs/session-start-descriptor-index` branches.
 - `v0.2.39` release workflow `28410566489` passed and published 8 assets; installed `memory-lane upgrade --yes` passed and reconfigured Pi.
 - Installed SessionStart dogfood passed: real-project `memory-lane codex session-start` emitted 1494 chars under the 1600-char budget, used `## Always-on Memory` plus `## Memory Index`, included fetch guidance, and omitted old `## Relevant Memory`. Isolated fixture proved 8 descriptor cards in 1302 chars with no full-body dump. Policy-only/off and fetch-by-id smokes passed.
+- Slice B local verification passed: `pnpm --filter @memory-lane/core test`, `pnpm --filter @memory-lane/lifecycle test`, `pnpm --filter @memory-lane/cli test`, `pnpm build`, `pnpm test`, and `git diff --check`.
 
 ## Key references
 
@@ -61,6 +64,7 @@ Release/dogfood for PR #71 is complete. Recommended next decision: decide whethe
 - Retrieval/continuity eval baseline design: `docs/superpowers/specs/2026-06-27-retrieval-continuity-eval-baseline-design.md`
 - Retrieval/continuity eval baseline findings: `docs/superpowers/validation/2026-06-27-retrieval-continuity-eval-baseline.md`
 - SessionStart descriptor index design: `docs/superpowers/specs/2026-06-30-session-start-descriptor-index-design.md`
+- SessionStart descriptor metadata Slice B design: `docs/superpowers/specs/2026-06-30-session-start-descriptor-metadata-design.md`
 - SessionStart descriptor index release/dogfood validation: `docs/superpowers/validation/2026-06-30-session-start-descriptor-index-dogfood.md`
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package docs: `README.md`

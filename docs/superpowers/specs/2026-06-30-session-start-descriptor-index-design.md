@@ -2,7 +2,7 @@
 
 ## Status
 
-Approved for Slice A implementation. This is a context-budget follow-up slice for Memory Lane automatic lifecycle context.
+Approved and implemented for Slice A. Slice B structured descriptor persistence is tracked separately in `docs/superpowers/specs/2026-06-30-session-start-descriptor-metadata-design.md`.
 
 ## Entry gate
 
@@ -63,7 +63,7 @@ Full-body SessionStart baseline injection is safe but not always optimal:
 
 Slice A is schema-free. It must not add a `MemoryRecord.descriptor` field, change JSONL storage, or require migration of existing memories. SessionStart descriptor cards are generated deterministically from existing approved `MemoryRecord` fields.
 
-A future Slice B may add optional structured descriptor metadata rather than embedding YAML in `text`:
+Slice B adds optional structured descriptor metadata rather than embedding YAML in `text`:
 
 ```ts
 interface MemoryDescriptorMetadata {
@@ -213,7 +213,7 @@ Descriptor-index-specific fields are scoped as follows:
 
 - `descriptorIndex.selected`: descriptor cards selected for `## Memory Index` only.
 - `descriptorIndex.omitted`: descriptor-eligible candidates omitted from `## Memory Index` only.
-- `descriptorIndex.generatedFallbackCount`: selected descriptor cards whose preview was generated from existing memory text because Slice A has no stored descriptor metadata.
+- `descriptorIndex.generatedFallbackCount`: selected descriptor cards whose preview was generated from existing memory text. Slice B keeps this field but excludes cards that use structured `descriptor.description`.
 - `descriptorIndex.fullBodySelected`: always-on full-body items selected for `## Always-on Memory`.
 - `descriptorIndex.fullBodyOmitted`: always-on-eligible full-body candidates omitted from `## Always-on Memory`.
 
@@ -351,4 +351,4 @@ Start with Slice A as a lifecycle-only, non-schema implementation:
 - descriptor cards allowed beyond the old 4-item body cap but bounded by existing `maxChars.sessionStart`;
 - explicit fetch guidance by id.
 
-This validates the product behavior before adding persistent descriptor metadata or YAML/frontmatter support.
+This validated the product behavior before adding persistent descriptor metadata in Slice B. YAML/frontmatter support remains deferred.

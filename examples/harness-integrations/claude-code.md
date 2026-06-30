@@ -29,7 +29,7 @@ Use `memory-lane init --yes` to auto-accept all detected harnesses.
             "type": "command",
             "command": "memory-lane claude session-start",
             "timeout": 10,
-            "statusMessage": "Loading baseline memory"
+            "statusMessage": "Loading memory context"
           }
         ]
       }
@@ -120,7 +120,7 @@ For isolated testing, prefer absolute temp paths in hook commands, for example `
 
 ## What each hook does
 
-`SessionStart` injects a small baseline of recent, approved project memories when a new Claude Code session begins. It uses a stricter budget than `UserPromptSubmit` and does not dump the full project history. It is safe to leave enabled alongside `UserPromptSubmit`.
+`SessionStart` injects compact session-opening context when a new Claude Code session begins. In `selective` mode, it can include tiny always-on memory bodies plus `Memory Index` descriptor cards that point to exact `memory-lane show|get <id>` inspection; descriptor cards use stored metadata when present and generated previews otherwise. It uses a stricter budget than `UserPromptSubmit` and does not dump the full project history. It is safe to leave enabled alongside `UserPromptSubmit`.
 
 `UserPromptSubmit` recalls relevant approved memories and injects them via `hookSpecificOutput.additionalContext` before Claude processes the prompt.
 

@@ -278,6 +278,7 @@ export class MemoryEngine {
       project: dup.project,
       provenance: dup.provenance ?? input.provenance,
       freshness: input.freshness ?? dup.freshness,
+      descriptor: ctx.descriptor ?? dup.descriptor,
     })
     this.store.append(upgraded)
     this.invalidateEmbedding(dup.id, "updated")
@@ -315,12 +316,15 @@ export class MemoryEngine {
     return this.withMirrorWarnings(dup ? this.upgradePendingDuplicate(dup, input, ctx) : this.persistMemory(input, ctx))
   }
 
-  /** Queue a memory suggestion. Defaults to pending, but can auto-approve for explicit user requests. */
-  suggest(text: string, category?: MemoryCategory, scopeType?: MemoryScopeType, kind?: MemoryKind, status?: MemoryStatus, freshness?: MemoryFreshness): SaveResult {
+  /**
+   * Queue a memory suggestion. Defaults to pending, but can auto-approve for explicit user requests.
+   * Optional descriptor metadata is the final parameter.
+   */
+  suggest(text: string, category?: MemoryCategory, scopeType?: MemoryScopeType, kind?: MemoryKind, status?: MemoryStatus, freshness?: MemoryFreshness, descriptor?: MemoryRecord["descriptor"]): SaveResult {
     const nextStatus = status ?? "pending"
-    validateSaveInput({ text, category, scopeType, source: "user-suggested", status: nextStatus, kind, freshness })
+    validateSaveInput({ text, category, scopeType, source: "user-suggested", status: nextStatus, kind, freshness, descriptor })
     if (nextStatus === "pending" && isMetaTaskPromptText(text)) return { status: "skipped", reason: "meta task prompt" }
-    return this.save({ text, category, scopeType, source: "user-suggested", status: nextStatus, kind, freshness })
+    return this.save({ text, category, scopeType, source: "user-suggested", status: nextStatus, kind, freshness, descriptor })
   }
 
   /** Approve a pending memory by id. Returns the updated memory plus mirror warnings, or undefined. */

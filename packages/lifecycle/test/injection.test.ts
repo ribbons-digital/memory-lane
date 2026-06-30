@@ -708,6 +708,50 @@ test("session-start descriptor helpers keep tiny rules full-body and larger memo
   assert.equal(selectedDescriptors.generatedFallbackCount, 1)
 })
 
+test("session-start descriptors prefer structured descriptor metadata with fetch hints", () => {
+  const structured = {
+    ...projectMemoryWithUpdatedAt("structured", "repo", "Original body text should not be used in descriptor line when structured metadata exists.", "2026-06-20T00:00:00.000Z"),
+    descriptor: {
+      description: "Structured descriptor summary",
+      fetchHint: "working on descriptor persistence",
+      keywords: ["descriptor"],
+    },
+  }
+  const selected = selectDescriptorMemories([structured], { projectScope: "repo", maxItems: 16, hardMaxChars: 1000 })
+  const rendered = renderSessionStartMemoryContext({
+    fullBodyMemories: [],
+    descriptorMemories: selected.memories,
+    policy: { mode: "selective" },
+    projectScope: "repo",
+  })
+
+  assert.equal(selected.generatedFallbackCount, 0)
+  assert.match(rendered, /Structured descriptor summary Fetch when: working on descriptor persistence/u)
+  assert.doesNotMatch(rendered, /Original body text/u)
+})
+
+test("session-start descriptors omit structured descriptor lines that exceed budget", () => {
+  const structured = {
+    ...projectMemoryWithUpdatedAt("structured-budget", "repo", "Original body could fit, but structured descriptor line should be budgeted as rendered.", "2026-06-20T00:00:00.000Z"),
+    descriptor: { description: "Structured descriptor summary", fetchHint: "working on descriptor persistence" },
+  }
+  const selected = selectDescriptorMemories([structured], { projectScope: "repo", maxItems: 16, hardMaxChars: 30 })
+
+  assert.deepEqual(selected.memories, [])
+  assert.equal(selected.generatedFallbackCount, 0)
+})
+
+test("session-start descriptors omit secret-looking descriptor metadata", () => {
+  const secretDescriptor = {
+    ...projectMemoryWithUpdatedAt("secret-descriptor", "repo", "Safe memory body for descriptor metadata secret test.", "2026-06-20T00:00:00.000Z"),
+    descriptor: { description: "Safe summary", fetchHint: "api key is sk-1234567890abcdef1234567890abcdef" },
+  }
+  const selected = selectDescriptorMemories([secretDescriptor], { projectScope: "repo", maxItems: 16, hardMaxChars: 1000 })
+
+  assert.deepEqual(selected.memories, [])
+  assert.equal(selected.generatedFallbackCount, 0)
+})
+
 test("session-start descriptors omit secret-looking memories based on original body", () => {
   const secret = projectMemoryWithUpdatedAt("secret", "repo", "Safe-looking intro. API key is sk-1234567890abcdef1234567890abcdef", "2026-06-20T00:00:00.000Z")
   const selected = selectDescriptorMemories([secret], { projectScope: "repo", maxItems: 16, hardMaxChars: 1000 })

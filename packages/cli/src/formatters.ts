@@ -441,6 +441,12 @@ export function formatMemoryGet(id: string, memory: MemoryRecord | undefined, js
   if (memory.provenance) lines.push(`Provenance: ${memory.provenance.adapter}/${memory.provenance.lifecycleEvent}`)
   const revision = revisionSummary(memory)
   if (revision) lines.push(`Revision: ${revision}`)
+  if (memory.descriptor) {
+    lines.push("Descriptor:")
+    if (memory.descriptor.description) lines.push(`  Description: ${memory.descriptor.description}`)
+    if (memory.descriptor.fetchHint) lines.push(`  Fetch hint: ${memory.descriptor.fetchHint}`)
+    if (memory.descriptor.keywords?.length) lines.push(`  Keywords: ${memory.descriptor.keywords.join(", ")}`)
+  }
   lines.push(`Created: ${memory.createdAt}`, `Updated: ${memory.updatedAt}`, "", memory.text)
   return lines.join("\n")
 }

@@ -8,6 +8,7 @@ import type {
 } from "./types.js"
 import type { loadConfig } from "./config.js"
 import { createMemoryId } from "./storage.js"
+import { normalizeMemoryDescriptor } from "./storage-validation.js"
 
 export type SemanticConfig = ReturnType<typeof loadConfig>["semantic"]
 export type SaveContext = {
@@ -16,6 +17,7 @@ export type SaveContext = {
   scopeType: MemoryScopeType
   kind: MemoryKind
   scope: MemoryRecord["scope"]
+  descriptor?: MemoryRecord["descriptor"]
 }
 
 export function contentHash(text: string): string {
@@ -51,6 +53,7 @@ export function saveContext(input: SaveInput, text: string, projectScope: Projec
     scopeType,
     kind: resolveKind(input, text, category),
     scope: memoryScope(scopeType, projectScope),
+    descriptor: normalizeMemoryDescriptor(input.descriptor),
   }
 }
 
@@ -69,6 +72,7 @@ export function createNewMemory(input: SaveInput, ctx: SaveContext, scope: Proje
     kind: ctx.kind,
     provenance: input.provenance,
     ...(input.freshness ? { freshness: input.freshness } : {}),
+    ...(ctx.descriptor ? { descriptor: ctx.descriptor } : {}),
   }
 }
 

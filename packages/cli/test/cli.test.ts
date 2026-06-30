@@ -7,7 +7,7 @@ import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
 import { MemoryEngine, type ContinuityReadModel, type MemoryRecord } from "@memory-lane/core"
-import { formatContinuityReadModel } from "../src/formatters.ts"
+import { formatContinuityReadModel, formatMemoryGet } from "../src/formatters.ts"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -41,6 +41,54 @@ function escapeRegExp(value: string): string {
 function writeMemoryRecords(filePath: string, records: MemoryRecord[]): void {
   fs.writeFileSync(filePath, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
 }
+
+describe("formatMemoryGet", () => {
+  it("renders descriptor metadata on exact human show output", () => {
+    const memory: MemoryRecord = {
+      id: "descriptor-human",
+      text: "Full memory body remains visible.",
+      category: "project",
+      scope: { type: "project", key: "repo" },
+      status: "approved",
+      source: "manual",
+      kind: "project_fact",
+      createdAt: "2026-06-30T00:00:00.000Z",
+      updatedAt: "2026-06-30T00:00:00.000Z",
+      descriptor: {
+        description: "Compact exact-show descriptor",
+        fetchHint: "working on exact memory inspection",
+        keywords: ["descriptor", "show"],
+      },
+    }
+
+    const output = formatMemoryGet(memory.id, memory, false, false)
+
+    assert.match(output, /Descriptor:/u)
+    assert.match(output, /Description: Compact exact-show descriptor/u)
+    assert.match(output, /Fetch hint: working on exact memory inspection/u)
+    assert.match(output, /Keywords: descriptor, show/u)
+    assert.match(output, /Full memory body remains visible/u)
+  })
+
+  it("includes descriptor metadata in exact JSON show output", () => {
+    const memory: MemoryRecord = {
+      id: "descriptor-json",
+      text: "JSON memory body.",
+      category: "project",
+      scope: { type: "project", key: "repo" },
+      status: "approved",
+      source: "manual",
+      kind: "project_fact",
+      createdAt: "2026-06-30T00:00:00.000Z",
+      updatedAt: "2026-06-30T00:00:00.000Z",
+      descriptor: { description: "JSON descriptor" },
+    }
+
+    const parsed = JSON.parse(formatMemoryGet(memory.id, memory, true, false))
+
+    assert.deepEqual(parsed.data.memory.descriptor, { description: "JSON descriptor" })
+  })
+})
 
 function freshnessFixtureRecords(projectScope: string): MemoryRecord[] {
   return [

@@ -644,6 +644,36 @@ test("session-start selective policy uses configured item budget", () => {
   })
 })
 
+test("session-start descriptor fallback diagnostics reflect final budget trim", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "selective", maxChars: { sessionStart: 420 } } })
+  engine.save({
+    text: "Older fallback descriptor body that is safe to summarize after the structured record.",
+    status: "approved",
+    category: "project",
+    scopeType: "project",
+  })
+  waitForNextMillisecond()
+  engine.save({
+    text: "Structured descriptor body should not be rendered when descriptor metadata exists.",
+    status: "approved",
+    category: "project",
+    scopeType: "project",
+    descriptor: {
+      description: "Structured descriptor summary",
+      fetchHint: "when descriptor persistence diagnostics are inspected",
+    },
+  })
+
+  const result = handleSessionStart(engine, { cwd: project })
+  const context = result.additionalContext ?? ""
+
+  assert.match(context, /Structured descriptor summary/u)
+  assert.doesNotMatch(context, /Older fallback descriptor body/u)
+  assert.equal(result.contextDecision?.descriptorIndex?.selected, 1)
+  assert.equal(result.contextDecision?.descriptorIndex?.generatedFallbackCount, 0)
+})
+
 test("stop captures checkpoint progress as pending project checkpoint", () => {
   const project = tempDir()
   const engine = engineInTemp(project)

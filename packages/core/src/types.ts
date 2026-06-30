@@ -37,6 +37,15 @@ export interface MemoryFreshness {
   capturedAt?: string
 }
 
+export interface MemoryDescriptorMetadata {
+  /** Compact SessionStart descriptor summary. Trimmed and capped at 240 characters. */
+  description?: string
+  /** Optional guidance for when an agent should fetch the full memory body. Trimmed and capped at 240 characters. */
+  fetchHint?: string
+  /** Lowercase, deduplicated lookup terms. Final normalized list is capped at 12 items of 40 characters each. */
+  keywords?: string[]
+}
+
 export type MemoryKind =
   | "preference"
   | "personal_context"
@@ -74,6 +83,8 @@ export interface MemoryRecord {
   provenance?: MemoryProvenance
   revision?: MemoryRevision
   freshness?: MemoryFreshness
+  /** Optional bounded metadata used for SessionStart Memory Index cards and exact inspection. */
+  descriptor?: MemoryDescriptorMetadata
 }
 
 export type FreshnessClassification = "none" | "current" | "stale" | "expired"
@@ -419,6 +430,8 @@ export interface SaveInput {
   provenance?: MemoryProvenance
   revision?: MemoryRevision
   freshness?: MemoryFreshness
+  /** Optional bounded descriptor metadata for Memory Index cards. */
+  descriptor?: MemoryDescriptorMetadata
 }
 
 export interface UpdateInput {
