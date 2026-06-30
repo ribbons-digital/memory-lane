@@ -689,6 +689,48 @@ describe("MemoryEngine", () => {
     assert.ok(embeddingLog.some((entry) => entry.memoryId === saved.memory.id && entry.memoryUpdatedAt === updated?.updatedAt))
   })
 
+  it("approve invalidates embeddings and auto-embeds newly approved safe memories", async () => {
+    fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "test-profile",
+        embeddings: {
+          profiles: {
+            "test-profile": {
+              provider: "openai-compatible-embeddings",
+              baseUrl: "http://localhost:11434",
+              model: "test-model",
+            },
+          },
+        },
+      },
+    }), "utf8")
+    const embeddedInputs: string[] = []
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem.jsonl"),
+      embeddingsPath: path.join(dir, "emb.jsonl"),
+      configPath: path.join(dir, "cfg.json"),
+      embeddingProvider: {
+        async embed(inputs: string[]) {
+          embeddedInputs.push(...inputs)
+          return inputs.map(() => [1, 0, 0])
+        },
+      },
+    })
+    const saved = e.save({ text: "Pending semantic memory", status: "pending" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    const approved = e.approve(saved.memory.id)
+    await new Promise((resolve) => setImmediate(resolve))
+
+    assert.equal(approved?.status, "approved")
+    assert.ok(embeddedInputs.includes("Pending semantic memory"))
+    const embeddingLog = readJsonl(path.join(dir, "emb.jsonl"))
+    assert.ok(embeddingLog.some((entry) => entry.type === "invalidation" && entry.memoryId === saved.memory.id && entry.reason === "updated"))
+    assert.ok(embeddingLog.some((entry) => entry.memoryId === saved.memory.id && entry.memoryUpdatedAt === approved?.updatedAt))
+  })
+
   it("update returns Obsidian mirror warnings without preventing JSONL update", () => {
     const missingVault = path.join(dir, "missing-vault")
     fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({

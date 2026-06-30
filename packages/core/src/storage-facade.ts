@@ -1,6 +1,6 @@
 import { compact as compactStores, shouldCompact } from "./compact.js"
 import { defaultContinuityBaselinePath } from "./continuity-baseline.js"
-import { createEmbeddingStore, type EmbeddingLine } from "./embedding-store.js"
+import { createEmbeddingStore, type EmbeddingLine, type EmbeddingStore } from "./embedding-store.js"
 import { createMemoryStore, type MemoryStore, type MemoryStoreDiagnostics } from "./storage.js"
 import type { CompactReport, EmbeddingInvalidationRecord, EmbeddingRecord, MemoryRecord } from "./types.js"
 
@@ -31,9 +31,14 @@ export interface MemoryEngineStorage {
 /** Create the backward-compatible single JSONL store facade for MemoryEngine. */
 export function createSingleStoreEngineStorage(memoryPath: string, embeddingsPath: string): MemoryEngineStorage {
   let memoryStore: MemoryStore = createMemoryStore(memoryPath)
+  let embeddingStore: EmbeddingStore = createEmbeddingStore(embeddingsPath)
 
   function refreshMemoryStore(): void {
     memoryStore = createMemoryStore(memoryPath)
+  }
+
+  function refreshEmbeddingStore(): void {
+    embeddingStore = createEmbeddingStore(embeddingsPath)
   }
 
   return {
@@ -56,13 +61,13 @@ export function createSingleStoreEngineStorage(memoryPath: string, embeddingsPat
       return memoryStore.diagnostics()
     },
     appendEmbedding(record) {
-      createEmbeddingStore(embeddingsPath).append(record)
+      embeddingStore.append(record)
     },
     listEmbeddings() {
-      return createEmbeddingStore(embeddingsPath).listEmbeddings()
+      return embeddingStore.listEmbeddings()
     },
     listEmbeddingInvalidations() {
-      return createEmbeddingStore(embeddingsPath).listInvalidations()
+      return embeddingStore.listInvalidations()
     },
     shouldCompact() {
       return shouldCompact(memoryPath)
@@ -70,6 +75,7 @@ export function createSingleStoreEngineStorage(memoryPath: string, embeddingsPat
     compact() {
       const report = compactStores(memoryPath, embeddingsPath)
       refreshMemoryStore()
+      refreshEmbeddingStore()
       return report
     },
   }

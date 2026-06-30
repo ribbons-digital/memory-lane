@@ -322,6 +322,9 @@ export class MemoryEngine {
     const updated = clone(mem, { status: "approved" })
     this.storage.appendMemory(updated)
     this.invalidateEmbedding(id, "updated")
+    if (shouldAutoEmbed(updated, this.config.semantic, this.embProvider)) {
+      this._embedMemory(updated).catch(() => { /* swallowed */ })
+    }
     return this.mutationResultWithMirrorWarnings(updated)
   }
 

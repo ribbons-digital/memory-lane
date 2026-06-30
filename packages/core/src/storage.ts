@@ -90,12 +90,46 @@ export function createMemoryStore(filePath: string): MemoryStore {
     return existing + "\n"
   }
 
+  function withAppendLock(write: () => void): void {
+    const lockDir = filePath + ".lock"
+    const startedAt = Date.now()
+    while (true) {
+      try {
+        fs.mkdirSync(lockDir)
+        break
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (code !== "EEXIST") throw error
+        try {
+          const ageMs = Date.now() - fs.statSync(lockDir).mtimeMs
+          if (ageMs > 30_000) fs.rmSync(lockDir, { recursive: true, force: true })
+        } catch {
+          // The lock disappeared between mkdir attempts; retry immediately.
+        }
+        if (Date.now() - startedAt > 5_000) throw new Error(`Timed out waiting for memory store lock: ${filePath}`)
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25)
+      }
+    }
+
+    try {
+      write()
+    } finally {
+      fs.rmSync(lockDir, { recursive: true, force: true })
+    }
+  }
+
   function appendMany(records: MemoryRecord[]): void {
     const rows = records.map((record) => JSON.stringify(record)).join("\n")
     if (!rows) return
-    const tmpFile = filePath + ".tmp." + crypto.randomBytes(4).toString("hex")
-    fs.writeFileSync(tmpFile, existingFilePrefix() + rows + "\n", "utf8")
-    fs.renameSync(tmpFile, filePath)
+    withAppendLock(() => {
+      const tmpFile = filePath + ".tmp." + crypto.randomBytes(4).toString("hex")
+      try {
+        fs.writeFileSync(tmpFile, existingFilePrefix() + rows + "\n", "utf8")
+        fs.renameSync(tmpFile, filePath)
+      } finally {
+        if (fs.existsSync(tmpFile)) fs.rmSync(tmpFile, { force: true })
+      }
+    })
     cache = null
   }
 
