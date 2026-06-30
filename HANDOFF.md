@@ -27,7 +27,7 @@ Merged Slice B first vertical scope:
 
 Deferred by design: CLI descriptor authoring flags, descriptor update/clear, Obsidian/YAML frontmatter, token policy changes, embeddings/retrieval changes, and LLM-generated descriptors.
 
-Recommended next decision: decide between Slice C Obsidian/YAML frontmatter, Slice D token-aware policy refinement, pausing this track, or returning to Retrieval Quality / Continuity Evaluation. Do not start the next item until the user approves the direction.
+Recommended next decision: decide between Slice C Obsidian/YAML frontmatter, Slice D token-aware policy refinement, or pausing this track. Do not start the next item until the user approves the direction.
 
 ## Load-bearing constraints
 
