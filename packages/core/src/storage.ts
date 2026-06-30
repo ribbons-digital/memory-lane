@@ -83,12 +83,18 @@ export function createMemoryStore(filePath: string): MemoryStore {
     }
   }
 
+  function existingFilePrefix(): string {
+    if (!fs.existsSync(filePath)) return ""
+    const existing = fs.readFileSync(filePath, "utf8")
+    if (!existing || existing.endsWith("\n")) return existing
+    return existing + "\n"
+  }
+
   function appendMany(records: MemoryRecord[]): void {
-    if (!records.length) return
-    const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : ""
-    const prefix = existing && !existing.endsWith("\n") ? existing + "\n" : existing
+    const rows = records.map((record) => JSON.stringify(record)).join("\n")
+    if (!rows) return
     const tmpFile = filePath + ".tmp." + crypto.randomBytes(4).toString("hex")
-    fs.writeFileSync(tmpFile, prefix + records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
+    fs.writeFileSync(tmpFile, existingFilePrefix() + rows + "\n", "utf8")
     fs.renameSync(tmpFile, filePath)
     cache = null
   }

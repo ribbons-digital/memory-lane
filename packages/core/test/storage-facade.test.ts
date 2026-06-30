@@ -10,15 +10,16 @@ import { tempDir } from "./helpers.js"
 function rec(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
   const now = new Date().toISOString()
   return {
-    id: overrides.id ?? createMemoryId(),
-    status: overrides.status ?? "approved",
-    text: overrides.text ?? "test",
-    category: overrides.category ?? "project",
-    scope: overrides.scope ?? { type: "project", key: "/p" },
-    source: overrides.source ?? "manual",
-    createdAt: overrides.createdAt ?? now,
-    updatedAt: overrides.updatedAt ?? now,
-    project: overrides.project ?? { cwd: "/p", root: "/p", key: "/p" },
+    id: createMemoryId(),
+    status: "approved",
+    text: "test",
+    category: "project",
+    scope: { type: "project", key: "/p" },
+    source: "manual",
+    createdAt: now,
+    updatedAt: now,
+    project: { cwd: "/p", root: "/p", key: "/p" },
+    ...overrides,
   }
 }
 
