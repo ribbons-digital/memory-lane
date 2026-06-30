@@ -386,11 +386,12 @@ Nine packages in a monorepo:
 
 ## Storage
 
-By default, memories are stored as append-only JSONL at `~/.memory-lane/memory.jsonl`. Each write appends a record; reads fold duplicates by id (last write wins). Atomic writes use `.tmp` + `rename`.
+By default, memories are stored as append-only JSONL at `~/.memory-lane/memory.jsonl`. Each write appends a record; reads fold duplicates by id (last write wins). Atomic memory writes use a short lock plus `.tmp` + `rename`, and batch writes are atomic per underlying store.
 
-Embeddings (when configured) default to `~/.memory-lane/embeddings.jsonl` with mixed embedding records and invalidation records.
+Embeddings (when configured) default to `~/.memory-lane/embeddings.jsonl` with mixed embedding records and invalidation records. When a memory changes, recall ignores only embeddings created before that memory's latest invalidation; newer embeddings for the same memory id can be used without a full reindex.
 
 For sandboxed harnesses, Memory Lane first tries global storage at `~/.memory-lane`. If that home storage is not writable and no explicit `MEMORY_LANE_*` paths are set, commands and hooks automatically initialize project-local storage at `.memory-lane/` and continue there.
+Project-scoped memories still write to the active storage location; `--scope project` does not by itself create or select project-local storage when home storage is writable.
 
 You can also initialize project-local storage explicitly:
 
@@ -767,12 +768,20 @@ Explicit environment paths always win and never auto-fallback. If no explicit pa
 ## Programmatic Use
 
 ```typescript
-import { MemoryEngine } from "@memory-lane/core"
+import {
+  MemoryEngine,
+  createSingleStoreEngineStorage,
+  type MemoryEngineStorage,
+} from "@memory-lane/core"
 
 const engine = new MemoryEngine()
 
+// Existing memoryPath and embeddingsPath options build the legacy single-store facade.
+const testEngine = new MemoryEngine({ memoryPath: "/tmp/memory.jsonl", embeddingsPath: "/tmp/embeddings.jsonl" })
+
 // Advanced tests or integrations can inject a MemoryEngineStorage facade.
-// Existing memoryPath and embeddingsPath options still build the legacy single-store facade.
+const storage: MemoryEngineStorage = createSingleStoreEngineStorage("/tmp/memory.jsonl", "/tmp/embeddings.jsonl")
+const engineWithStorage = new MemoryEngine({ storage })
 
 // Save
 engine.save({ text: "use pnpm for all installs", status: "approved" })
