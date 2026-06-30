@@ -43,7 +43,8 @@ Regression coverage also confirms:
 
 - PR-description recall still ranks `eval-pr-body-rule` first.
 - Docs context-budget release recall still retrieves `eval-release-v038`.
-- Currentness query detection matches `current` / `latest` / exact `release status` phrasing and does not match topic-specific release or PR-body queries.
+- Currentness query detection matches the tested `current` / `latest` / exact `release status` examples when paired with release/status/progress/checkpoint phrasing.
+- The tested non-current release query `what release shipped docs context-budget?` does not match currentness detection, and PR-description recall still ranks `eval-pr-body-rule` first.
 
 ## Verification
 

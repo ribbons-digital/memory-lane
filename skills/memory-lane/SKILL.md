@@ -11,10 +11,11 @@ Local-first, review-governed persistent memory for coding agents.
 
 Use this bounded path for prompts like “what were we working on?”, “where are we?”, “resume this thread”, “what should we work on next?”, “project status”, or “next slice”.
 
-1. Call `memory_continuity({ query })` when MCP is available, or run:
+1. For broad status/next-work prompts, call `memory_continuity({})` when MCP is available, or run:
    ```bash
-   memory-lane continuity --query "<user question>" --json
+   memory-lane continuity --json
    ```
+   Use `memory_continuity({ query })` / `memory-lane continuity --query "<topic>" --json` only for topic-specific workstream discovery prompts such as “resume building X”.
 2. Prefer `latestProgress` for current progress. Treat `latestApproved.project` as a legacy compatibility slot that may contain corrections/procedures.
 3. Verify against compact repo state with bounded reads:
    - `HANDOFF.md` → status card: current state, next work, constraints.
@@ -52,7 +53,8 @@ memory-lane suggest "Consider adding CI pipeline for linting" --category project
 memory-lane suggest "User prefers pnpm" --category preference --status approved
 
 # Broad continuity / targeted lookup
-memory-lane continuity --query "what were we last working on?" --json
+memory-lane continuity --json
+memory-lane continuity --query "resume building package manager" --json
 memory-lane recall "package manager"
 memory-lane show <id>
 memory-lane get <id>

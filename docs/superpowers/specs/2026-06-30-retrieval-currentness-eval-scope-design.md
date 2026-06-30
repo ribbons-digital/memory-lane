@@ -2,12 +2,12 @@
 
 ## Status
 
-Draft for Opus review and user approval.
+Approved by the user after Opus review and implemented on `docs/retrieval-quality-currentness-scope`.
 
 ## Entry gate
 
-Planning/spec only.
-Do not implement until the user approves this spec.
+Implementation complete for the approved equality-only currentness tie-break slice.
+Future broadening, such as threshold recency boosts, filtering, RRF/reranking, embedding changes, or lifecycle budget changes, requires a new approval gate.
 
 ## Background
 
@@ -214,10 +214,10 @@ For lexical fallback recall only:
 1. Compute lexical scores exactly as today.
 2. Filter remains unchanged.
 3. Sort primarily by lexical score descending.
-4. If lexical scores are equal and the query is currentness-like:
-   - checkpoint-like records sort before non-checkpoint-like records only when both are project progress/status-like candidates;
-   - among checkpoint-like records, newer `updatedAt` sorts first.
-5. Preserve existing stable behavior otherwise.
+4. If lexical scores are equal and the query is currentness-like, use the retrieval comparator's currentness tie-break:
+   - only reorder when both candidates are checkpoint-like;
+   - among those checkpoint-like candidates, newer `updatedAt` sorts first.
+5. Preserve existing stable ordering otherwise, including checkpoint-vs-non-checkpoint ties and non-currentness ties.
 
 The current final tie-break before this slice is `foldMemoryRecords()` order plus V8 stable `Array.sort` behavior.
 `foldMemoryRecords()` sorts by `createdAt` ascending, so exact lexical ties currently keep oldest-created records first.
