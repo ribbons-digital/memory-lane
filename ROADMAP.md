@@ -32,6 +32,7 @@ Recent completion evidence:
 - PR #68 (`5707c6c`) completed continuity selection/ranking hygiene: generic broad next/status queries no longer surface stale workstream candidates, release/checkpoint project facts classify as progress rather than operating guidance, and topic-specific workstream discovery is preserved.
 - Release `v0.2.38` (`3576417`) passed workflow `28276304985` and published 8 assets, shipping the docs/context-budget slice.
 - Release `v0.2.39` (`9021435`) passed workflow `28410566489` and published 8 assets, shipping the SessionStart descriptor index Slice A.
+- Release `v0.2.40` (`7578bb5`) passed workflow `28419273491` and published 8 assets, shipping SessionStart descriptor metadata Slice B.
 - Installed-artifact dogfood after `memory-lane upgrade --yes` passed: broad next-work continuity has empty workstream candidates plus `no-topic`, stale release/checkpoint ids are absent from operating guidance, and topic-specific queries still return candidates.
 - Phase-completion docs sync landed in `309021e docs: declare phase 21 complete`.
 - PR #69 (`4ebf447`) completed the docs/context-budget slice: root `ROADMAP.md` is compact, historical roadmap detail through Phase 20.5 is archived, and skill guidance uses bounded reads.
@@ -52,9 +53,11 @@ Slice A merged in PR #71 as `e0deba1` and released in `v0.2.39` (`9021435`). It 
 
 Dogfood passed: real-project installed SessionStart output used `## Always-on Memory` plus `## Memory Index` within the 1600-char budget, an isolated fixture proved descriptor breadth beyond the old body-oriented cap, policy-only/off smokes passed, and fetch-by-id worked. Validation: `docs/superpowers/validation/2026-06-30-session-start-descriptor-index-dogfood.md`.
 
-Slice B merged in PR #72 as `bc02d04`. The first vertical slice adds optional bounded descriptor metadata to core records, uses it in SessionStart descriptor cards, and surfaces it on exact show/get inspection. It defers CLI authoring flags, descriptor update/clear, Obsidian/YAML frontmatter, token policy changes, and embeddings/retrieval changes. Spec: `docs/superpowers/specs/2026-06-30-session-start-descriptor-metadata-design.md`.
+Slice B merged in PR #72 as `bc02d04` and released in `v0.2.40` (`7578bb5`). The first vertical slice adds optional bounded descriptor metadata to core records, uses it in SessionStart descriptor cards, and surfaces it on exact show/get inspection. It defers CLI authoring flags, descriptor update/clear, Obsidian/YAML frontmatter, token policy changes, and embeddings/retrieval changes. Spec: `docs/superpowers/specs/2026-06-30-session-start-descriptor-metadata-design.md`.
 
-Next decision for this track: decide whether to release/dogfood Slice B, proceed to Slice C Obsidian/YAML frontmatter, proceed to Slice D token-aware policy refinement, or pause this track.
+Dogfood passed after installed `memory-lane upgrade --yes`: exact human and JSON `show` exposed descriptor metadata, released `codex session-start` rendered structured descriptor summaries plus fetch hints, full descriptor-card bodies stayed out of SessionStart, and generated fallback descriptors still worked. Validation: `docs/superpowers/validation/2026-06-30-session-start-descriptor-metadata-dogfood.md`.
+
+Next decision for this track: decide whether to proceed to Slice C Obsidian/YAML frontmatter, proceed to Slice D token-aware policy refinement, or pause this track.
 
 ## Active track — Retrieval Quality / Continuity Evaluation
 
