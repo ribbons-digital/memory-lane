@@ -3,7 +3,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { EmbeddingRecord, EmbeddingInvalidationRecord } from "./types.js"
 
-type EmbeddingLine = EmbeddingRecord | EmbeddingInvalidationRecord
+export type EmbeddingLine = EmbeddingRecord | EmbeddingInvalidationRecord
 
 function isEmbeddingRecord(v: unknown): v is EmbeddingRecord {
   if (!v || typeof v !== "object") return false

@@ -60,23 +60,21 @@ Dogfood passed after installed `memory-lane upgrade --yes`: exact human and JSON
 
 Next decision for this track: decide whether to proceed to Slice C Obsidian/YAML frontmatter, proceed to Slice D token-aware policy refinement, or pause this track.
 
-## Active track — Retrieval Quality / Continuity Evaluation
+## Active track — Project-local Storage Defaults
 
-Before adding heavier retrieval, consolidation, RRF, reranking, embeddings changes, or viewer work, Memory Lane should establish an eval-first retrieval/continuity quality track.
+The user raised that project-scoped memories stored in the home JSONL can still feel risky even with scope filtering. Directionally, project-scoped memories should live under the project `.memory-lane/` by default, while global preferences/personal memories remain home-scoped.
 
-Slice status: the internal/test-only eval baseline merged in PR #70 as `7d5a8a6`. It adds a sanitized six-scenario corpus, test-only core eval helpers, structural tests, and baseline findings without changing retrieval/ranking or adding a public eval command.
+Approved design: `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`.
 
-Baseline findings: `docs/superpowers/validation/2026-06-27-retrieval-continuity-eval-baseline.md` reports mean recall@k 1.00 and mean precision@k 0.54 across four ranked evals. Continuity slotting behaved well on the small corpus. Explicit recall retrieved required records, but the current release-status query exposed one expected default lexical-fallback weakness: stale release status can rank at or above current release status when lexical overlap is similar. Topic-specific recall/workstream queries also showed a lower-ranked docs/release checkpoint entering via generic PR token/reference overlap.
+Slice plan:
 
-Currentness tie-break slice merged in PR #75 as `6e5f67a`. It adds an equality-only currentness tie-break for lexical fallback recall. For currentness-like queries, exact lexical-score ties between `project_checkpoint` records sort by newer `updatedAt`; lexical score remains primary. Spec: `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md`. Validation: `docs/superpowers/validation/2026-06-30-retrieval-currentness-tie-break-validation.md`.
+1. **Slice 0 — storage facade proof, no default-location flip.** Preserve current storage behavior while routing `MemoryEngine` through an injectable storage facade with memory append/list/diagnostics, batch append, embedding append/read/invalidation, compaction, path metadata, and continuity-baseline seams.
+2. **Slice 1 — project-local default for new project-scoped writes.** Requires a fresh approval gate. Derive the project-local root from existing project scope resolution, keep explicit `MEMORY_LANE_*` paths authoritative and single-store, and keep global preferences/personal memories home-side.
+3. **Slice 2 — migration/compatibility diagnostics.** Requires a fresh approval gate. Detect legacy home-stored project memories and provide bounded warnings plus explicit dry-run migration; do not silently move/delete/approve/consolidate.
 
-Release `v0.2.41` passed workflow `28423317038` and installed-artifact dogfood verified that explicit current release-status recall prefers the newer checkpoint when lexical scores tie. Validation: `docs/superpowers/validation/2026-06-30-v0.2.41-release-dogfood.md`.
+Current implementation branch: Slice 0 is in progress on `feat/storage-facade-proof`. It adds the single-store facade and preserves existing default write locations. Before PR, run full validation and Opus 4.8 implementation review.
 
-Next decision: decide whether the remaining lower-ranked precision findings need a separate eval-backed proposal. Current recommendation is to pause retrieval-ranking work unless dogfood or later eval evidence shows clear user value. Do not broaden this slice into threshold recency boosts, filtering, RRF, reranking, or embedding changes without a new approval gate.
-
-Why this next: Phase 21 made continuity usable and cleaner. The next product risk is changing retrieval based on vibes rather than evidence.
-
-Prior art for this track: `docs/superpowers/specs/2026-06-25-continuity-typing-ranking-eval-design.md`, `docs/superpowers/plans/2026-06-25-continuity-typing-ranking-eval.md`, and `MEMORY_AS_TOOL_REVIEW.md`.
+Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in `v0.2.41`; pause retrieval-ranking work unless new dogfood/eval evidence justifies another proposal.
 
 ## Other viable future tracks
 

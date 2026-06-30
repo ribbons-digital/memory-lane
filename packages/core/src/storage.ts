@@ -25,6 +25,7 @@ export interface MemoryStoreDiagnostics {
 export interface MemoryStore {
   readonly file: string
   append(record: MemoryRecord): void
+  appendMany(records: MemoryRecord[]): void
   readLog(): MemoryRecord[]
   list(): MemoryRecord[]
   diagnostics(): MemoryStoreDiagnostics
@@ -81,15 +82,22 @@ export function createMemoryStore(filePath: string): MemoryStore {
     }
   }
 
+  function appendMany(records: MemoryRecord[]): void {
+    if (!records.length) return
+    const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : ""
+    const prefix = existing && !existing.endsWith("\n") ? existing + "\n" : existing
+    const tmpFile = filePath + ".tmp." + crypto.randomBytes(4).toString("hex")
+    fs.writeFileSync(tmpFile, prefix + records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
+    fs.renameSync(tmpFile, filePath)
+    cache = null
+  }
+
   return {
     file: filePath,
     append(record) {
-      const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : ""
-      const tmpFile = filePath + ".tmp." + crypto.randomBytes(4).toString("hex")
-      fs.writeFileSync(tmpFile, existing + JSON.stringify(record) + "\n", "utf8")
-      fs.renameSync(tmpFile, filePath)
-      cache = null
+      appendMany([record])
     },
+    appendMany,
     readLog: parseLines,
     list: readAll,
     diagnostics() {

@@ -5,6 +5,7 @@ import assert from "node:assert/strict"
 import { MemoryEngine } from "../src/engine.js"
 import { normalizeMemoryRecord } from "../src/storage-validation.js"
 import { contentHash } from "../src/engine-helpers.js"
+import { createSingleStoreEngineStorage } from "../src/storage-facade.js"
 import {
   selectOperatingAgreements,
   summarizeOperatingAgreements,
@@ -802,6 +803,37 @@ describe("MemoryEngine", () => {
     assert.equal(result.superseded[0].revision?.supersededBy, result.successor.id)
   })
 
+  it("supersede and replace approved write revisions through storage facade batch append", () => {
+    const storage = createSingleStoreEngineStorage(path.join(dir, "mem.jsonl"), path.join(dir, "emb.jsonl"))
+    const batchSizes: number[] = []
+    const originalAppendMemories = storage.appendMemories.bind(storage)
+    storage.appendMemories = (records) => {
+      batchSizes.push(records.length)
+      originalAppendMemories(records)
+    }
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "ignored-mem.jsonl"),
+      embeddingsPath: path.join(dir, "ignored-emb.jsonl"),
+      configPath: path.join(dir, "cfg.json"),
+      storage,
+    })
+    const oldForSupersede = e.save({ text: "Old facade supersede", status: "approved" })
+    const successor = e.save({ text: "New facade supersede", status: "approved" })
+    const oldForReplace = e.save({ text: "Old facade replace", status: "approved" })
+    assert.equal(oldForSupersede.status, "saved")
+    assert.equal(successor.status, "saved")
+    assert.equal(oldForReplace.status, "saved")
+    if (oldForSupersede.status !== "saved" || successor.status !== "saved" || oldForReplace.status !== "saved") return
+    batchSizes.length = 0
+
+    e.supersede(successor.memory.id, [oldForSupersede.memory.id])
+    e.replace([oldForReplace.memory.id], { text: "New facade replace", status: "approved" })
+
+    assert.deepEqual(batchSizes, [2, 2])
+    assert.equal(readJsonl(path.join(dir, "ignored-mem.jsonl")).length, 0)
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, 7)
+  })
+
   it("replace does not auto-copy descriptor metadata from old memory", () => {
     const e = engine()
     const old = e.save({
@@ -1040,7 +1072,7 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(e.reviewPending().length, 0)
   })
 
-  it("doctor returns stats", () => {
+  it("doctor returns stats and preserves storage path fields", () => {
     const e = engine()
     e.save({ text: "approved text", status: "approved" })
     e.save({ text: "pending text" })
@@ -1048,6 +1080,8 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(d.approvedMemories, 1)
     assert.equal(d.pendingMemories, 1)
     assert.equal(d.totalMemories, 2)
+    assert.equal(d.memoryFile, path.join(dir, "mem.jsonl"))
+    assert.equal(d.embeddingFile, path.join(dir, "emb.jsonl"))
   })
 
   it("accepts correction and procedure memory kinds", () => {

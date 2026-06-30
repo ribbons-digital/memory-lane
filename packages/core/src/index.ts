@@ -14,6 +14,7 @@ export {
 } from "./operating-agreements.js"
 export { MemoryEngine } from "./engine.js"
 export { createMemoryStore, createMemoryId, foldMemoryRecords } from "./storage.js"
+export { createSingleStoreEngineStorage, type MemoryEngineStorage } from "./storage-facade.js"
 export { containsLikelySecret } from "./secret-detection.js"
 export { isMetaTaskPromptText } from "./meta-task-filter.js"
 export {

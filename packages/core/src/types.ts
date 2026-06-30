@@ -1,4 +1,5 @@
 import type { IntegrationDiagnosticPaths } from "./integration-diagnostics.js"
+import type { MemoryEngineStorage } from "./storage-facade.js"
 
 export type MemoryStatus = "pending" | "approved" | "rejected" | "deleted"
 export type MemoryCategory = "preference" | "personal" | "project"
@@ -638,6 +639,7 @@ export interface SemanticMemoryConfig {
 export interface MemoryEngineConfig {
   memoryPath?: string
   embeddingsPath?: string
+  storage?: MemoryEngineStorage
   configPath?: string
   embeddingProvider?: EmbeddingProvider
   hookDebugLogPath?: string

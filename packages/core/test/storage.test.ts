@@ -163,4 +163,30 @@ describe("MemoryStore", () => {
     const second = store.list()
     assert.equal(first, second) // same array ref from cache
   })
+
+  it("appendMany inserts a separator when the existing file lacks a trailing newline", () => {
+    fs.writeFileSync(file, JSON.stringify(rec({ id: "a", text: "first" })), "utf8")
+    const store = createMemoryStore(file)
+
+    store.appendMany([rec({ id: "b", text: "second" })])
+
+    assert.equal(store.readLog().length, 2)
+    assert.match(fs.readFileSync(file, "utf8"), /first.*\n.*second/su)
+  })
+
+  it("appendMany appends records and refreshes cached folded reads", () => {
+    const store = createMemoryStore(file)
+    store.append(rec({ id: "a", text: "old", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }))
+    const first = store.list()
+
+    store.appendMany([
+      rec({ id: "a", text: "new", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z" }),
+      rec({ id: "b", text: "second", createdAt: "2026-01-03T00:00:00.000Z", updatedAt: "2026-01-03T00:00:00.000Z" }),
+    ])
+
+    const second = store.list()
+    assert.notEqual(second, first)
+    assert.deepEqual(second.map((memory) => [memory.id, memory.text]), [["a", "new"], ["b", "second"]])
+    assert.equal(store.readLog().length, 3)
+  })
 })

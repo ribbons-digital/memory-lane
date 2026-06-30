@@ -2,7 +2,7 @@
 
 ## Current state
 
-- Branch context: `origin/main` is synced through `9f9cdde docs: sync post-pr-75 status (#76)`. Local and remote `docs/post-pr-75-status` branches were cleaned up after merge; current branch records the `v0.2.41` release dogfood.
+- Branch context: working branch `feat/storage-facade-proof` is based on main after `ab580f3 docs: record v0.2.41 release dogfood validation (#77)`. Current work implements approved project-local storage Slice 0 without changing default storage locations.
 - Latest release: `v0.2.41` at tag `v0.2.41` / commit `9f9cdde`; release workflow `28423317038` passed and published 8 assets.
 - Phase 21 `Handoff-Free Sessions` is complete and dogfooded. Fresh-thread prompt `where are we in the project and what should we work on next?` used about 11.8% context, improved from the previous 14.x% range.
 - Docs/context-budget slice is merged: root `ROADMAP.md` is now a compact active index, historical roadmap detail through Phase 20.5 is archived, `HANDOFF.md` is a status card, and Memory Lane skill guidance emphasizes bounded reads.
@@ -13,24 +13,21 @@
 
 ## Current decision / next work
 
-Active product track: **Retrieval Quality / Continuity Evaluation**.
+Active product track: **Project-local Storage Defaults**.
 
-The user approved the Opus-reviewed recommendation to implement a narrow equality-only currentness tie-break for lexical fallback recall.
-The slice merged in PR #75 as `6e5f67a`.
+Approved design: `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`.
 
-Merged slice scope:
+Slice 0 scope now being implemented:
 
-1. characterize the old lexical-only stale-over-current failure for `recall-current-release-status`;
-2. add a narrow `isCurrentnessRecallQuery()` helper beside checkpoint query detection;
-3. apply a shared lexical fallback comparator in `packages/core/src/retrieval.ts` so exact lexical-score ties between `project_checkpoint` records on currentness-like queries sort by newer `updatedAt`;
-4. preserve lexical score as primary and keep broad project-status guidance continuity-first;
-5. document the follow-up validation.
+1. preserve current storage behavior and default write locations;
+2. add an injectable `MemoryEngineStorage` facade with memory append/list/read-log/diagnostics, batch append, embedding append/read/invalidation, compaction, storage path metadata, and continuity-baseline path seam;
+3. keep existing `{ memoryPath, embeddingsPath, configPath }` engine construction backward-compatible by building a single-store facade;
+4. retire the direct `appendMemoryRecords()` raw `fs` rewrite path in favor of facade batch append;
+5. route embedding append/invalidation/recall/reindex, compaction, doctor/status storage fields, and continuity baseline paths through the facade while preserving single-store behavior.
 
-Explicitly out of scope: threshold recency boosts, filtering stale records out of top-k, RRF/reranking, embedding-default changes, public eval commands, schema changes, lifecycle budget changes, and any broad retrieval rewrite.
+Explicitly out of scope for Slice 0: default-location flip, automatic project-local creation for project-scoped saves, migration of existing home-stored project memories, config merging, retrieval/ranking changes, schema changes, or user-facing storage-default docs beyond internal prep.
 
-Release and dogfood complete for `v0.2.41`. Installed-artifact dogfood verified that explicit current release-status recall prefers the newer checkpoint when lexical scores tie. Validation: `docs/superpowers/validation/2026-06-30-v0.2.41-release-dogfood.md`.
-
-Recommended next step: pause retrieval-ranking work unless dogfood or later eval evidence shows clear user value. If continuing this track, start with an Opus-reviewed eval-backed proposal for remaining lower-ranked precision findings rather than broadening the currentness tie-break.
+Next step before PR: finish full local validation (`pnpm --filter @memory-lane/core test`, `pnpm --filter @memory-lane/cli test`, `pnpm --filter @memory-lane/lifecycle test`, `pnpm test`, `pnpm build`, `git diff --check`), run Opus 4.8 implementation review, then use no-mistakes for PR creation.
 
 ## Load-bearing constraints
 
@@ -78,6 +75,7 @@ Recommended next step: pause retrieval-ranking work unless dogfood or later eval
 - Docs/context-budget design: `docs/superpowers/specs/2026-06-27-docs-context-budget-design.md`
 - Retrieval/continuity eval baseline design: `docs/superpowers/specs/2026-06-27-retrieval-continuity-eval-baseline-design.md`
 - Retrieval/continuity eval baseline findings: `docs/superpowers/validation/2026-06-27-retrieval-continuity-eval-baseline.md`
+- Project-local storage default design: `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`
 - Retrieval currentness tie-break design: `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md`
 - Retrieval currentness tie-break validation: `docs/superpowers/validation/2026-06-30-retrieval-currentness-tie-break-validation.md`
 - v0.2.41 release/dogfood validation: `docs/superpowers/validation/2026-06-30-v0.2.41-release-dogfood.md`
