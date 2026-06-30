@@ -2,7 +2,7 @@
 
 ## Current state
 
-- Branch context: `main` is synced through `6e5f67a feat(core): prefer current checkpoints on recall ties (#75)`. Local and remote `docs/retrieval-quality-currentness-scope` branches were cleaned up after merge.
+- Branch context: `origin/main` is synced through `9f9cdde docs: sync post-pr-75 status (#76)`. Local and remote `docs/post-pr-75-status` branches were cleaned up after merge; current branch records the `v0.2.41` release dogfood.
 - Latest release: `v0.2.41` at tag `v0.2.41` / commit `9f9cdde`; release workflow `28423317038` passed and published 8 assets.
 - Phase 21 `Handoff-Free Sessions` is complete and dogfooded. Fresh-thread prompt `where are we in the project and what should we work on next?` used about 11.8% context, improved from the previous 14.x% range.
 - Docs/context-budget slice is merged: root `ROADMAP.md` is now a compact active index, historical roadmap detail through Phase 20.5 is archived, `HANDOFF.md` is a status card, and Memory Lane skill guidance emphasizes bounded reads.
@@ -78,6 +78,9 @@ Recommended next step: pause retrieval-ranking work unless dogfood or later eval
 - Docs/context-budget design: `docs/superpowers/specs/2026-06-27-docs-context-budget-design.md`
 - Retrieval/continuity eval baseline design: `docs/superpowers/specs/2026-06-27-retrieval-continuity-eval-baseline-design.md`
 - Retrieval/continuity eval baseline findings: `docs/superpowers/validation/2026-06-27-retrieval-continuity-eval-baseline.md`
+- Retrieval currentness tie-break design: `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md`
+- Retrieval currentness tie-break validation: `docs/superpowers/validation/2026-06-30-retrieval-currentness-tie-break-validation.md`
+- v0.2.41 release/dogfood validation: `docs/superpowers/validation/2026-06-30-v0.2.41-release-dogfood.md`
 - SessionStart descriptor index design: `docs/superpowers/specs/2026-06-30-session-start-descriptor-index-design.md`
 - SessionStart descriptor metadata Slice B design: `docs/superpowers/specs/2026-06-30-session-start-descriptor-metadata-design.md`
 - SessionStart descriptor index release/dogfood validation: `docs/superpowers/validation/2026-06-30-session-start-descriptor-index-dogfood.md`
