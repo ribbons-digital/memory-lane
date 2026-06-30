@@ -138,7 +138,6 @@ function assertDescriptorText(field: "description" | "fetchHint", value: unknown
 function normalizeDescriptorKeywords(value: unknown): string[] | undefined {
   if (value === undefined) return undefined
   if (!Array.isArray(value)) throw new Error("Invalid descriptor.keywords. Expected an array of strings")
-  if (value.length > DESCRIPTOR_KEYWORD_MAX_ITEMS) throw new Error(`Invalid descriptor.keywords. Expected at most ${DESCRIPTOR_KEYWORD_MAX_ITEMS} items`)
   const seen = new Set<string>()
   const keywords: string[] = []
   for (const item of value) {
@@ -153,6 +152,7 @@ function normalizeDescriptorKeywords(value: unknown): string[] | undefined {
       keywords.push(keyword)
     }
   }
+  if (keywords.length > DESCRIPTOR_KEYWORD_MAX_ITEMS) throw new Error(`Invalid descriptor.keywords. Expected at most ${DESCRIPTOR_KEYWORD_MAX_ITEMS} items`)
   return keywords.length ? keywords : undefined
 }
 

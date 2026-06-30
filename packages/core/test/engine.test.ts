@@ -233,6 +233,19 @@ describe("MemoryEngine", () => {
     assert.deepEqual(e.list()[0].descriptor, result.memory.descriptor)
   })
 
+  it("descriptor keyword limit applies after normalization and deduplication", () => {
+    const e = engine()
+    const result = e.save({
+      text: "Descriptor keyword duplicate source",
+      status: "approved",
+      descriptor: { keywords: ["One", "one", "TWO", "two", "three", "THREE", "four", "FOUR", "five", "FIVE", "six", "SIX", "seven"] },
+    })
+
+    assert.equal(result.status, "saved")
+    if (result.status !== "saved") throw new Error("expected saved")
+    assert.deepEqual(result.memory.descriptor?.keywords, ["one", "two", "three", "four", "five", "six", "seven"])
+  })
+
   it("save rejects invalid descriptor metadata", () => {
     const e = engine()
 
