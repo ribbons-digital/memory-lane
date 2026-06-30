@@ -52,7 +52,9 @@ Slice A merged in PR #71 as `e0deba1` and released in `v0.2.39` (`9021435`). It 
 
 Dogfood passed: real-project installed SessionStart output used `## Always-on Memory` plus `## Memory Index` within the 1600-char budget, an isolated fixture proved descriptor breadth beyond the old body-oriented cap, policy-only/off smokes passed, and fetch-by-id worked. Validation: `docs/superpowers/validation/2026-06-30-session-start-descriptor-index-dogfood.md`.
 
-Slice B is now in implementation on branch `docs/session-start-descriptor-slice-b`. The approved first vertical slice adds optional bounded descriptor metadata to core records, uses it in SessionStart descriptor cards, and surfaces it on exact show/get inspection. It defers CLI authoring flags, descriptor update/clear, Obsidian/YAML frontmatter, token policy changes, and embeddings/retrieval changes. Spec: `docs/superpowers/specs/2026-06-30-session-start-descriptor-metadata-design.md`.
+Slice B merged in PR #72 as `bc02d04`. The first vertical slice adds optional bounded descriptor metadata to core records, uses it in SessionStart descriptor cards, and surfaces it on exact show/get inspection. It defers CLI authoring flags, descriptor update/clear, Obsidian/YAML frontmatter, token policy changes, and embeddings/retrieval changes. Spec: `docs/superpowers/specs/2026-06-30-session-start-descriptor-metadata-design.md`.
+
+Next decision for this track: decide whether to release/dogfood Slice B, proceed to Slice C Obsidian/YAML frontmatter, proceed to Slice D token-aware policy refinement, or pause this track.
 
 ## Active track — Retrieval Quality / Continuity Evaluation
 
