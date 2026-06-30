@@ -164,6 +164,18 @@ describe("MemoryStore", () => {
     assert.equal(first, second) // same array ref from cache
   })
 
+  it("appendMany recovers a stale lock from a dead owner process", () => {
+    const lockDir = file + ".lock"
+    fs.mkdirSync(lockDir)
+    fs.writeFileSync(path.join(lockDir, "owner.json"), JSON.stringify({ pid: 9_999_999, createdAt: Date.now() }), "utf8")
+    const store = createMemoryStore(file)
+
+    store.appendMany([rec({ id: "a", text: "after stale lock" })])
+
+    assert.equal(store.list().length, 1)
+    assert.equal(fs.existsSync(lockDir), false)
+  })
+
   it("appendMany inserts a separator when the existing file lacks a trailing newline", () => {
     fs.writeFileSync(file, JSON.stringify(rec({ id: "a", text: "first" })), "utf8")
     const store = createMemoryStore(file)

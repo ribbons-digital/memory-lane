@@ -90,17 +90,50 @@ export function createMemoryStore(filePath: string): MemoryStore {
     return existing + "\n"
   }
 
+  function processIsAlive(pid: number): boolean {
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  function removeStaleAppendLock(lockDir: string): boolean {
+    try {
+      const ownerFile = path.join(lockDir, "owner.json")
+      if (fs.existsSync(ownerFile)) {
+        const owner = JSON.parse(fs.readFileSync(ownerFile, "utf8")) as { pid?: unknown; createdAt?: unknown }
+        const pid = typeof owner.pid === "number" ? owner.pid : undefined
+        const createdAt = typeof owner.createdAt === "number" ? owner.createdAt : fs.statSync(lockDir).mtimeMs
+        if ((pid !== undefined && !processIsAlive(pid)) || Date.now() - createdAt > 5 * 60_000) {
+          fs.rmSync(lockDir, { recursive: true, force: true })
+          return true
+        }
+        return false
+      }
+      if (Date.now() - fs.statSync(lockDir).mtimeMs > 30_000) {
+        fs.rmSync(lockDir, { recursive: true, force: true })
+        return true
+      }
+    } catch {
+      return false
+    }
+    return false
+  }
+
   function withAppendLock(write: () => void): void {
     const lockDir = filePath + ".lock"
     const startedAt = Date.now()
     while (true) {
       try {
         fs.mkdirSync(lockDir)
+        fs.writeFileSync(path.join(lockDir, "owner.json"), JSON.stringify({ pid: process.pid, createdAt: Date.now() }), "utf8")
         break
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code
         if (code !== "EEXIST") throw error
-        if (!fs.existsSync(lockDir)) continue
+        if (!fs.existsSync(lockDir) || removeStaleAppendLock(lockDir)) continue
         if (Date.now() - startedAt > 5_000) throw new Error(`Timed out waiting for memory store lock: ${filePath}`)
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25)
       }
