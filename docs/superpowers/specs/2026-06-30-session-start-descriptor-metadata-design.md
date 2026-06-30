@@ -74,7 +74,7 @@ Validation rules:
 - Apply modest bounds to prevent descriptor metadata from becoming another memory dump:
   - `description`: max 240 chars.
   - `fetchHint`: max 240 chars.
-  - `keywords`: max 12 keywords, each max 40 chars.
+  - `keywords`: max 12 final normalized/deduplicated keywords, each raw trimmed keyword max 40 chars.
 - Run secret detection independently on `description`, `fetchHint`, and each keyword. On save/suggest input, invalid or secret-looking descriptor metadata should throw/reject the save rather than silently persisting a partial descriptor. In storage normalization, malformed descriptor metadata should make that stored record invalid/hidden consistently with existing invalid-row handling rather than passing raw descriptor data through. At render time, defensively omit a descriptor card if descriptor metadata or memory text is secret-looking.
 - Omit `descriptor` entirely if all fields normalize away.
 

@@ -783,6 +783,9 @@ engine.save({
   },
 })
 
+// Descriptor strings are trimmed and bounded; keywords are lowercased and
+// deduplicated before enforcing the 12-keyword limit.
+
 // Recall (semantic or lexical)
 const result = await engine.recall("package manager")
 

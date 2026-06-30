@@ -42,7 +42,7 @@ export interface MemoryDescriptorMetadata {
   description?: string
   /** Optional guidance for when an agent should fetch the full memory body. Trimmed and capped at 240 characters. */
   fetchHint?: string
-  /** Lowercase, deduplicated lookup terms. Capped at 12 items of 40 characters each. */
+  /** Lowercase, deduplicated lookup terms. Final normalized list is capped at 12 items of 40 characters each. */
   keywords?: string[]
 }
 
