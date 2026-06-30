@@ -100,12 +100,7 @@ export function createMemoryStore(filePath: string): MemoryStore {
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code
         if (code !== "EEXIST") throw error
-        try {
-          const ageMs = Date.now() - fs.statSync(lockDir).mtimeMs
-          if (ageMs > 30_000) fs.rmSync(lockDir, { recursive: true, force: true })
-        } catch {
-          // The lock disappeared between mkdir attempts; retry immediately.
-        }
+        if (!fs.existsSync(lockDir)) continue
         if (Date.now() - startedAt > 5_000) throw new Error(`Timed out waiting for memory store lock: ${filePath}`)
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25)
       }

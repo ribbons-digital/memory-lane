@@ -40,7 +40,10 @@ export async function retrieveSemanticMemories(
         const latestInvalidations = latestInvalidationTimes(invalidations)
         const folded = new Map<string, EmbeddingRecord>()
         for (const e of embeddings) {
-          if (isEmbeddingAfterLatestInvalidation(e, latestInvalidations.get(e.memoryId))) folded.set(e.memoryId, e)
+          if (!isEmbeddingAfterLatestInvalidation(e, latestInvalidations.get(e.memoryId))) continue
+          const key = embeddingVariantKey(e)
+          const existing = folded.get(key)
+          if (!existing || existing.createdAt <= e.createdAt) folded.set(key, e)
         }
 
         const profileName = config.activeEmbeddingProfile
@@ -113,6 +116,10 @@ export async function retrieveSemanticMemories(
     memories: lexScored.map((s) => s.memory),
     semantic: { enabled: config.enabled, used: false },
   }
+}
+
+function embeddingVariantKey(embedding: EmbeddingRecord): string {
+  return [embedding.memoryId, embedding.contentHash, embedding.profileName, embedding.model].join("\0")
 }
 
 function latestInvalidationTimes(invalidations: EmbeddingInvalidationRecord[]): Map<string, number> {
