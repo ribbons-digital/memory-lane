@@ -7,6 +7,8 @@ import {
   MemoryEngine,
   buildContinuityReadModel,
   containsLikelySecret,
+  foldMemoryRecords,
+  isCurrentnessRecallQuery,
   lexicalScore,
   type ContinuityReadModel,
   type MemoryRecord,
@@ -418,6 +420,33 @@ test("retrieval/continuity eval corpus is structurally valid and sanitized", () 
   }
 })
 
+test("currentness recall query detection stays narrow", () => {
+  assert.equal(isCurrentnessRecallQuery("what is the current Memory Lane release status?"), true)
+  assert.equal(isCurrentnessRecallQuery("latest release status"), true)
+  assert.equal(isCurrentnessRecallQuery("current project checkpoint"), true)
+  assert.equal(isCurrentnessRecallQuery("how should I create GitHub PR descriptions?"), false)
+  assert.equal(isCurrentnessRecallQuery("what release shipped docs context-budget?"), false)
+  assert.equal(isCurrentnessRecallQuery("where did we fix PR body formatting?"), false)
+})
+
+test("current release status baseline has equal lexical scores with oldest-created checkpoint first", () => {
+  const query = corpus.queries.find((item) => item.id === "recall-current-release-status")
+  assert.ok(query)
+  const folded = foldMemoryRecords(corpus.records)
+  const lexicalOnlyIds = folded
+    .map((record) => ({ record, score: lexicalScore(query.query, record.text) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((item) => item.record.id)
+
+  const staleScore = lexicalScore(query.query, corpus.records.find((record) => record.id === "eval-stale-v037")?.text ?? "")
+  const currentScore = lexicalScore(query.query, corpus.records.find((record) => record.id === "eval-release-v038")?.text ?? "")
+  assert.equal(staleScore, 1)
+  assert.equal(currentScore, 1)
+  assert.deepEqual(lexicalOnlyIds.slice(0, 2), ["eval-stale-v037", "eval-release-v038"])
+  assert.deepEqual(failureTagsForRanked(query, lexicalOnlyIds.slice(0, query.k)), ["forbidden-returned", "stale-over-current", "topic-mismatch"])
+})
+
 test("retrieval/continuity eval report has deterministic structural shape", async () => {
   const report = await buildEvalReport(corpus)
 
@@ -452,6 +481,63 @@ test("retrieval/continuity eval report has deterministic structural shape", asyn
       assert.equal(typeof result.precisionAtK, "number")
     }
   }
+})
+
+test("currentness recall tie-break ranks newest release checkpoint ahead of stale checkpoint", async () => {
+  const report = await buildEvalReport(corpus)
+  const currentReleaseStatus = report.queryResults.find((result) => result.id === "recall-current-release-status")
+  assert.ok(currentReleaseStatus)
+  assert.deepEqual(currentReleaseStatus.actualIds.slice(0, 2), ["eval-release-v038", "eval-stale-v037"])
+  assert.equal(currentReleaseStatus.failureTags.includes("stale-over-current"), false)
+  assert.equal(currentReleaseStatus.failureTags.includes("forbidden-returned"), true)
+
+  const prDescription = report.queryResults.find((result) => result.id === "recall-pr-description-rule")
+  assert.ok(prDescription)
+  assert.equal(prDescription.actualIds[0], "eval-pr-body-rule")
+
+  const docsRelease = report.queryResults.find((result) => result.id === "recall-docs-context-budget-release")
+  assert.ok(docsRelease)
+  assert.equal(docsRelease.actualIds.includes("eval-release-v038"), true)
+})
+
+test("currentness tie-break preserves folded order outside checkpoint updatedAt ties", async () => {
+  const currentnessQuery: EvalQuery = {
+    id: "currentness-negative-gate",
+    lane: "recall",
+    query: "current release status",
+    k: 2,
+    labels: {
+      "old-fact": "acceptable",
+      "new-fact": "acceptable",
+    },
+  }
+  const nonCheckpointResult = await evaluateRecall(currentnessQuery, [
+    memory({ id: "old-fact", kind: "project_fact", createdAt: "2026-06-26T08:00:00.000Z", updatedAt: "2026-06-26T08:00:00.000Z", text: "Current release status note for the project." }),
+    memory({ id: "new-fact", kind: "project_fact", createdAt: "2026-06-27T08:00:00.000Z", updatedAt: "2026-06-27T08:00:00.000Z", text: "Current release status note for the project." }),
+  ])
+  assert.deepEqual(nonCheckpointResult.actualIds, ["old-fact", "new-fact"])
+
+  const nonCurrentnessQuery: EvalQuery = {
+    id: "non-currentness-checkpoint-gate",
+    lane: "recall",
+    query: "release shipped docs context-budget",
+    k: 2,
+    labels: {
+      "old-checkpoint": "acceptable",
+      "new-checkpoint": "acceptable",
+    },
+  }
+  const nonCurrentnessResult = await evaluateRecall(nonCurrentnessQuery, [
+    memory({ id: "old-checkpoint", kind: "project_checkpoint", createdAt: "2026-06-26T08:00:00.000Z", updatedAt: "2026-06-26T08:00:00.000Z", text: "Release shipped docs context-budget." }),
+    memory({ id: "new-checkpoint", kind: "project_checkpoint", createdAt: "2026-06-27T08:00:00.000Z", updatedAt: "2026-06-27T08:00:00.000Z", text: "Release shipped docs context-budget." }),
+  ])
+  assert.deepEqual(nonCurrentnessResult.actualIds, ["old-checkpoint", "new-checkpoint"])
+
+  const allTiedResult = await evaluateRecall(currentnessQuery, [
+    memory({ id: "old-checkpoint-tied", kind: "project_checkpoint", createdAt: "2026-06-26T08:00:00.000Z", updatedAt: "2026-06-28T08:00:00.000Z", text: "Current release status note for the project." }),
+    memory({ id: "new-checkpoint-tied", kind: "project_checkpoint", createdAt: "2026-06-27T08:00:00.000Z", updatedAt: "2026-06-28T08:00:00.000Z", text: "Current release status note for the project." }),
+  ])
+  assert.deepEqual(allTiedResult.actualIds, ["old-checkpoint-tied", "new-checkpoint-tied"])
 })
 
 test("retrieval/continuity eval fixtures exercise intended continuity slots", () => {

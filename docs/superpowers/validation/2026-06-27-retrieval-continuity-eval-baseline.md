@@ -4,6 +4,8 @@
 
 Baseline captured for the approved retrieval/continuity eval slice.
 
+Follow-up: the narrow currentness tie-break slice is tracked in `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md` and validated in `docs/superpowers/validation/2026-06-30-retrieval-currentness-tie-break-validation.md`.
+
 Implementation file: `packages/core/test/retrieval-continuity-eval.test.ts`
 
 Design reference: `docs/superpowers/specs/2026-06-27-retrieval-continuity-eval-baseline-design.md`
@@ -74,7 +76,9 @@ Observed failure tags:
 - `stale-over-current`: 1
 - `topic-mismatch`: 1
 
-The `stale-over-current` and `topic-mismatch` tags come from the explicit recall stale-vs-current release-status query. One `forbidden-returned` tag also comes from the topic-specific continuity workstream query because `eval-release-v038` has a PR reference and therefore appears as a lower-ranked candidate even though it is not the intended PR-body-formatting memory.
+The `stale-over-current` and `topic-mismatch` tags came from the explicit recall stale-vs-current release-status query in the baseline. One `forbidden-returned` tag also came from the topic-specific continuity workstream query because `eval-release-v038` has a PR reference and therefore appears as a lower-ranked candidate even though it is not the intended PR-body-formatting memory.
+
+The currentness follow-up intentionally removes the `stale-over-current` ordering failure for exact lexical-score ties, while leaving top-k filtering and broader precision findings unchanged.
 
 The release-status recall failure is expected baseline behavior for the current no-embedding recall path: fallback ranking is lexical-only and does not apply recency or checkpoint-currentness logic. The PR-description and workstream precision findings are also useful baseline evidence: reference-bearing status checkpoints can appear in topic-specific recall/workstream results through generic `PR` token/reference overlap even when the topical correction is correctly ranked first.
 

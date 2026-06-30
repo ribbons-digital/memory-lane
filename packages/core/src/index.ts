@@ -27,7 +27,7 @@ export { groupReviewMemories, reviewProjectScope, reviewProvenance, type ReviewG
 export {
   inferCategory, inferMemoryKind, effectiveMemoryKind,
   memoryMatchesContext, filterMemoriesForContext, searchMemories, findDuplicateMemory,
-  isCheckpointRecallQuery, normalizeMemoryText,
+  isCheckpointRecallQuery, isCurrentnessRecallQuery, normalizeMemoryText,
   parseExplicitMemoryRequest, detectUserMemorySuggestion, isCheckpointMemorySaveRequest,
 } from "./search.js"
 export { resolveProjectScope } from "./project-scope.js"

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { isCheckpointRecallQuery, filterMemoriesForContext } from "./search.js"
+import { isCheckpointRecallQuery, isCurrentnessRecallQuery, filterMemoriesForContext } from "./search.js"
 import { cosineSimilarity, lexicalScore, recencyScore, findMatchingEmbedding } from "./scoring.js"
 import type {
   MemoryRecord, EmbeddingRecord, EmbeddingInvalidationRecord,
@@ -90,7 +90,7 @@ export async function retrieveSemanticMemories(
         if (config.retrieval.fallbackToAllVisibleOnMiss) {
           const lexScored = visible
             .map((m) => ({ memory: m, score: lexicalScore(q, m.text) }))
-            .sort((a, b) => b.score - a.score)
+            .sort((a, b) => compareLexicalFallbackResults(q, a, b))
             .slice(0, topK)
           return {
             memories: lexScored.map((s) => s.memory),
@@ -106,7 +106,7 @@ export async function retrieveSemanticMemories(
   // ── Lexical fallback ─────────────────────────────────────
   const lexScored = visible
     .map((m) => ({ memory: m, score: lexicalScore(q, m.text) }))
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => compareLexicalFallbackResults(q, a, b))
     .slice(0, config.retrieval.topK)
 
   return {
@@ -117,6 +117,25 @@ export async function retrieveSemanticMemories(
 
 function hashText(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex")
+}
+
+function compareLexicalFallbackResults(
+  query: string,
+  a: { memory: MemoryRecord; score: number },
+  b: { memory: MemoryRecord; score: number },
+): number {
+  const lexicalDifference = b.score - a.score
+  if (lexicalDifference !== 0) return lexicalDifference
+  if (!isCurrentnessRecallQuery(query)) return 0
+  if (!isCheckpointLike(a.memory) || !isCheckpointLike(b.memory)) return 0
+  const aUpdatedAt = Date.parse(a.memory.updatedAt)
+  const bUpdatedAt = Date.parse(b.memory.updatedAt)
+  if (!Number.isFinite(aUpdatedAt) || !Number.isFinite(bUpdatedAt)) return 0
+  return bUpdatedAt - aUpdatedAt
+}
+
+function isCheckpointLike(m: MemoryRecord): boolean {
+  return effectiveKind(m) === "project_checkpoint"
 }
 
 function effectiveKind(m: MemoryRecord): string {
