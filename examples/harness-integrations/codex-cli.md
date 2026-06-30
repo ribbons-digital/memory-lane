@@ -30,7 +30,7 @@ Start with project-level `.codex/hooks.json` while testing Memory Lane in one re
             "type": "command",
             "command": "memory-lane codex session-start",
             "timeoutSec": 10,
-            "statusMessage": "Loading baseline memory"
+            "statusMessage": "Loading memory context"
           }
         ]
       }
@@ -78,7 +78,7 @@ Start with project-level `.codex/hooks.json` while testing Memory Lane in one re
 
 Codex tool matcher names can vary by version. If `PostToolUse` does not fire, adjust the matcher to the shell tool name shown by your Codex installation.
 
-`SessionStart` injects a small baseline of recent, approved project memories when a new Codex session begins. It uses a stricter budget than `UserPromptSubmit` and does not dump the full project history. It is safe to leave enabled alongside `UserPromptSubmit`.
+`SessionStart` injects compact session-opening context when a new Codex session begins. In `selective` mode, it can include tiny always-on memory bodies plus `Memory Index` descriptor cards that point to exact `memory-lane show|get <id>` inspection; descriptor cards use stored metadata when present and generated previews otherwise. It uses a stricter budget than `UserPromptSubmit` and does not dump the full project history. It is safe to leave enabled alongside `UserPromptSubmit`.
 
 ## Context budget
 

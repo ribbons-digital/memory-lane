@@ -108,7 +108,7 @@ memory-lane search "pnpm"         # lexical search within project scope
 memory-lane review                # list pending for review
 memory-lane review --suspect-meta # list likely old pending operational prompt pollution only
 memory-lane review --suspect-meta --include-approved # include approved suspect pollution that may affect recall
-memory-lane show <id>             # inspect one exact active memory id in current scope
+memory-lane show <id>             # inspect one exact active memory id in current scope, including descriptor metadata when present
 memory-lane get <id>              # alias for show
 memory-lane rescope <id> --scope project --project <path> --dry-run # preview same-id scope correction
 memory-lane move <id> --scope global --yes # alias for rescope; apply with confirmation
@@ -198,7 +198,7 @@ Import note rules/gotchas for agents:
 - Generated mirror files with `memory_lane_mirror: true` are skipped, including generated indexes with `memory_lane_index: true`.
 - Notes without `memory_lane: true` are ignored.
 - Dotfiles, dotfolders, symlinks, and non-`.md` files are skipped.
-- Body text after frontmatter becomes the memory text; frontmatter is metadata only.
+- Body text after frontmatter becomes the memory text; frontmatter is metadata only. Descriptor metadata is not imported from frontmatter yet.
 - Defaults: `category: personal`, `scope: global`, `status: pending`.
 - Allowed import statuses: `pending` and `approved`. `rejected`/`deleted` are invalid.
 - `scope: project` requires project identity; otherwise the note is skipped with a warning.
@@ -226,7 +226,7 @@ memory-lane codex stop
 memory-lane codex post-tool-use
 ```
 
-`session-start` performs baseline memory injection for new sessions only when `memory.contextPolicy.mode` allows lifecycle context; `policy-only` emits guidance without memory bodies and `off` disables lifecycle context. `user-prompt-submit` recalls relevant approved memories for ordinary/topic-specific prompts in `selective` mode, while broad project-position/next-work continuity prompts receive inspection-first continuity guidance without ordinary recall bodies. `stop` and `post-tool-use` save useful memories externally and are silent by default. Current Codex CLI hooks do not expose a `SessionEnd` event; use manual `memory-lane session-end --confirm` or the Codex `Stop` explicit-intent path for session summaries.
+`session-start` performs compact baseline injection for new sessions only when `memory.contextPolicy.mode` allows lifecycle context; `selective` can render tiny always-on memories plus `Memory Index` descriptor cards, `policy-only` emits guidance without memory bodies, and `off` disables lifecycle context. Descriptor cards use stored `description` and `fetchHint` metadata when present, otherwise generated previews. `user-prompt-submit` recalls relevant approved memories for ordinary/topic-specific prompts in `selective` mode, while broad project-position/next-work continuity prompts receive inspection-first continuity guidance without ordinary recall bodies. `stop` and `post-tool-use` save useful memories externally and are silent by default. Current Codex CLI hooks do not expose a `SessionEnd` event; use manual `memory-lane session-end --confirm` or the Codex `Stop` explicit-intent path for session summaries.
 
 `UserPromptSubmit` follows `memory.contextPolicy.mode`: `off` suppresses lifecycle context, `policy-only` emits guidance without memory bodies, and `selective` injects a small context block for ordinary/topic-specific prompts; for broad continuity prompts such as “what were we last working on?” or “what should we work on next?”, it injects guidance to inspect canonical continuity instead of injecting recall-selected memory bodies. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
 

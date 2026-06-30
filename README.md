@@ -194,7 +194,7 @@ For local development, paste hooks into `~/.claude/settings.json` or a project-l
             "type": "command",
             "command": "memory-lane claude session-start",
             "timeout": 10,
-            "statusMessage": "Loading baseline memory"
+            "statusMessage": "Loading memory context"
           }
         ]
       }
@@ -268,7 +268,7 @@ For Codex CLI, paste hooks into a project-level `.codex/hooks.json` while testin
             "type": "command",
             "command": "memory-lane codex session-start",
             "timeoutSec": 10,
-            "statusMessage": "Loading baseline memory"
+            "statusMessage": "Loading memory context"
           }
         ]
       }
@@ -420,7 +420,7 @@ Existing memories saved under old worktree path keys are not migrated automatica
 memory-lane save <text>           Save an approved memory
 memory-lane suggest <text>        Queue a pending suggestion for review
 memory-lane recall [query]        Recall memories (semantic or lexical)
-memory-lane show|get <id> [--all] Show one memory by exact id
+memory-lane show|get <id> [--all] Show one memory by exact id, including descriptor metadata when present
 memory-lane list [--status ...]   List memories
 memory-lane search <query>        Lexical text search
 memory-lane approve <id>          Approve a pending memory
@@ -644,7 +644,7 @@ status: pending
 Use pnpm for package installs.
 ```
 
-The Markdown body after frontmatter, trimmed, becomes the memory text. Frontmatter is metadata only. Unknown frontmatter fields are ignored. Defaults are:
+The Markdown body after frontmatter, trimmed, becomes the memory text. Frontmatter is metadata only. Unknown frontmatter fields are ignored. Descriptor metadata is not imported from frontmatter yet. Defaults are:
 
 ```yaml
 category: personal
@@ -773,6 +773,15 @@ const engine = new MemoryEngine()
 
 // Save
 engine.save({ text: "use pnpm for all installs", status: "approved" })
+engine.save({
+  text: "Use pnpm for package management in this repo.",
+  status: "approved",
+  descriptor: {
+    description: "Package manager convention for this project.",
+    fetchHint: "working on installs, scripts, or dependency changes",
+    keywords: ["pnpm", "dependencies"],
+  },
+})
 
 // Recall (semantic or lexical)
 const result = await engine.recall("package manager")
@@ -891,7 +900,7 @@ Prompt-time automatic injection skips low-signal greetings and acknowledgements 
 
 Global preferences (`category: "preference"`, `kind: "preference"`, or `kind: "workflow_rule"` with `scope: "global"`) are selected in a bounded preference layer so user-wide guidance can travel across projects without crowding out current-project facts, checkpoints, or decisions. Project-scoped preferences render before global preferences for the same project, which lets narrower project guidance take precedence in context without creating an automatic supersede, cleanup, or override relationship.
 
-For `SessionStart`, baseline memory selection is layered when a project scope is available: current-project preferences, then current-project content, then bounded global preferences, then other global memory and other visible project memory if budget remains. If `memory.handoffMode` is `automatic` and context policy is `selective`, one latest approved current-project handoff pointer can be prioritized before generic baseline layers while still consuming the same `sessionStart` item/character budget; expired or superseded handoff pointers are omitted. Prompt-time `UserPromptSubmit` recall remains relevance-based; global preferences are not injected merely because they are global, but relevant global preferences can appear within the `preferenceMaxItems` and `preferenceMaxChars` caps.
+For `SessionStart`, baseline memory selection is layered when a project scope is available: current-project preferences, then current-project content, then bounded global preferences, then other global memory and other visible project memory if budget remains. In `selective` mode, SessionStart renders tiny always-on preference/workflow-rule bodies first, then fills remaining budget with `Memory Index` descriptor cards that point to exact `memory-lane show|get <id>` inspection. Descriptor cards prefer structured `description` and `fetchHint` metadata when present, otherwise they use generated text previews. If `memory.handoffMode` is `automatic`, one latest approved current-project handoff pointer can be prioritized before generic baseline layers while still consuming the same `sessionStart` character budget; expired or superseded handoff pointers are omitted. Prompt-time `UserPromptSubmit` recall remains relevance-based; global preferences are not injected merely because they are global, but relevant global preferences can appear within the `preferenceMaxItems` and `preferenceMaxChars` caps.
 
 To save a user-wide preference from the CLI:
 
@@ -947,7 +956,7 @@ memory-lane claude post-tool-use
 memory-lane claude session-end
 ```
 
-`SessionStart` injects a small baseline memory block when allowed by `memory.contextPolicy.mode`. `UserPromptSubmit` follows the same context policy: `off` suppresses injection, `policy-only` emits guidance without memory bodies, and `selective` injects a small relevant-memory block for ordinary or topic-specific prompts while suppressing ordinary recall bodies for broad `project-position` and `next-work` continuity prompts. `Stop` and `PostToolUse` save useful memories externally and remain quiet when nothing pending was suggested. When a write hook saves pending memories, Memory Lane may emit a compact count-only system message such as `Memory Lane: suggested 1 pending memory for review. Run memory-lane review to approve or reject it.` The notice does not include memory text, prompts, transcripts, or tool output. Claude Code's documented `SessionEnd` hook can run `memory-lane claude session-end` to generate pending `session_summary` memories when `memory.sessionEndSummary.enabled` is configured. By default, Memory Lane still requires confirmation; a bare hook will not save unless `memory.sessionEndSummary.requireConfirmation` is set to `false` or the payload is invoked with `confirmed: true` for manual testing. A real Claude Code CLI smoke test in Sitewright confirmed `SessionEnd` fires with the project cwd and saves a pending `session_summary` with Claude `session_end` provenance when enabled and configured. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
+`SessionStart` injects a compact session-opening context when allowed by `memory.contextPolicy.mode`: tiny always-on bodies plus `Memory Index` descriptor cards in `selective` mode, and guidance without memory bodies in `policy-only` mode. `UserPromptSubmit` follows the same context policy: `off` suppresses injection, `policy-only` emits guidance without memory bodies, and `selective` injects a small relevant-memory block for ordinary or topic-specific prompts while suppressing ordinary recall bodies for broad `project-position` and `next-work` continuity prompts. `Stop` and `PostToolUse` save useful memories externally and remain quiet when nothing pending was suggested. When a write hook saves pending memories, Memory Lane may emit a compact count-only system message such as `Memory Lane: suggested 1 pending memory for review. Run memory-lane review to approve or reject it.` The notice does not include memory text, prompts, transcripts, or tool output. Claude Code's documented `SessionEnd` hook can run `memory-lane claude session-end` to generate pending `session_summary` memories when `memory.sessionEndSummary.enabled` is configured. By default, Memory Lane still requires confirmation; a bare hook will not save unless `memory.sessionEndSummary.requireConfirmation` is set to `false` or the payload is invoked with `confirmed: true` for manual testing. A real Claude Code CLI smoke test in Sitewright confirmed `SessionEnd` fires with the project cwd and saves a pending `session_summary` with Claude `session_end` provenance when enabled and configured. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
 
 These commands are for Claude Code CLI hooks, not the Claude Desktop app. Use the MCP Server setup above for Claude Desktop.
 
@@ -962,6 +971,6 @@ memory-lane codex stop
 memory-lane codex post-tool-use
 ```
 
-`SessionStart` baseline injection is available for a small session-opening memory block when allowed by `memory.contextPolicy.mode`. `UserPromptSubmit` follows the same context policy: `off` suppresses injection, `policy-only` emits guidance without memory bodies, and `selective` injects a small relevant-memory block for ordinary or topic-specific prompts while suppressing ordinary recall bodies for broad `project-position` and `next-work` continuity prompts. `Stop` and `PostToolUse` save useful memories externally and remain quiet when nothing pending was suggested. When a write hook saves pending memories, Memory Lane may emit a compact count-only system message such as `Memory Lane: suggested 1 pending memory for review. Run memory-lane review to approve or reject it.` The notice does not include memory text, prompts, transcripts, or tool output. If the latest user message explicitly asks to summarize the session (for example, "remember this session"), the supported `Stop` hook path uses `memory.sessionEndSummary` to save a pending session summary for review with `memory-lane review`; do not configure an unsupported Codex `SessionEnd` hook. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
+`SessionStart` baseline injection is available for compact session-opening context when allowed by `memory.contextPolicy.mode`: tiny always-on bodies plus `Memory Index` descriptor cards in `selective` mode, and guidance without memory bodies in `policy-only` mode. `UserPromptSubmit` follows the same context policy: `off` suppresses injection, `policy-only` emits guidance without memory bodies, and `selective` injects a small relevant-memory block for ordinary or topic-specific prompts while suppressing ordinary recall bodies for broad `project-position` and `next-work` continuity prompts. `Stop` and `PostToolUse` save useful memories externally and remain quiet when nothing pending was suggested. When a write hook saves pending memories, Memory Lane may emit a compact count-only system message such as `Memory Lane: suggested 1 pending memory for review. Run memory-lane review to approve or reject it.` The notice does not include memory text, prompts, transcripts, or tool output. If the latest user message explicitly asks to summarize the session (for example, "remember this session"), the supported `Stop` hook path uses `memory.sessionEndSummary` to save a pending session summary for review with `memory-lane review`; do not configure an unsupported Codex `SessionEnd` hook. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
 
 See `examples/harness-integrations/codex-cli.md` for setup details.
