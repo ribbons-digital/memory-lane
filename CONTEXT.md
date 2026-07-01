@@ -66,7 +66,7 @@ Memory Lane has **several deterministic consolidation surfaces**:
 | Surface | File | What it does |
 |---|---|---|
 | Continuity role classification | `packages/core/src/continuity-roles.ts` | Classifies approved memories as `progress`, `correction`, `procedure`, `operating_agreement`, `global_workflow`, `other` |
-| Continuity read model | `packages/core/src/continuity-read-model.ts` | Builds `latestProgress`, `operatingGuidance`, `latestApproved`, `pendingContinuity`, `workstreamDiscovery` — the canonical consolidated view |
+| Continuity read model | `packages/core/src/continuity-read-model.ts` | Builds `latestProgress`, `operatingGuidance`, `latestApproved`, `pendingContinuity`, `workstreamDiscovery` - the canonical consolidated view; selected slots omit superseded memories and prefer safe descriptor previews |
 | Operating agreements | `packages/core/src/operating-agreements.ts` | Selects workflow-like approved memories by area (`project-loop`, `review-gate`, `pr-process`, etc.) with primary/related structure |
 | Continuity hints | `packages/core/src/continuity-hints.ts` | Detects superseded-visible, operating-agreement overlaps, scope hygiene candidates, freshness advisories |
 | Freshness classification | `packages/core/src/freshness.ts` | Classifies memories as `current`, `stale`, `expired`, or `none` based on advisory freshness metadata |
@@ -99,8 +99,9 @@ read models from approved/pending memories. The only LLM-driven consolidation is
    pitfall sections exist for corrections (though `tool-outcomes.ts` procedures do have
    a `Procedure`/`When`/`Steps`/`Pitfall`/`Verify` template).
 
-4. **`operatingGuidance` is bounded to 5 items.** The read model caps guidance, so if
-   many operating rules accumulate, older ones are silently dropped from the surface.
+4. **`operatingGuidance` is bounded by workflow area.** The read model caps guidance to
+   one preview per workflow area, so additional same-area rules require explicit agreement
+   or exact-memory inspection.
 
 ---
 
@@ -117,7 +118,7 @@ Memory Lane has **multiple recall pathways** for different use cases:
 | Workstream discovery | `packages/core/src/workstream-discovery.ts` | Query-specific topic discovery across approved continuity memories with scoring/references |
 | Continuity read model | `packages/core/src/continuity-read-model.ts` | The full continuity surface (latest progress, operating guidance, pending items) |
 | Lifecycle injection | `packages/lifecycle/src/injection.ts` (`selectMemoriesForInjection`, `selectBaselineMemories`) | Layered memory selection for lifecycle context (current-project, global preferences, etc.) |
-| Continuity intent routing | `packages/lifecycle/src/injection.ts` (`detectContinuityIntent`) | Classifies prompt as resume/lookup/project-position/next-work → routes to continuity before recall |
+| Continuity prompt routing | `packages/lifecycle/src/injection.ts` (`classifyPromptRoute`) | Classifies prompt as continuity/ordinary/low-signal/memory-management, with resume/lookup/project-position/next-work intent details for continuity routes |
 | CLI recall tool | `packages/cli/src/index.ts` | `memory-lane recall <query> --json` |
 | MCP recall tool | `packages/mcp-server/src/handlers.ts` | `memory_recall({ query })` |
 | Pi recall | `packages/pi-adapter/src/index.ts` | `memory_recall` tool, `/memory use <query>` |
@@ -221,7 +222,7 @@ Memory Lane already has several mechanisms that work **harness-neutrally**:
 | `harnessGuidance` | Same file | Per-harness CLI/MCP command suggestions from shared core |
 | `answerGuidance` | Same file | Generic guidance that works regardless of harness |
 | SKILL.md | `skills/memory-lane/SKILL.md` | Agent-facing instructions, harness-agnostic |
-| Generated bridge template | `packages/cli/src/installer/config.ts` | Same continuity rendering for all native-binary installs |
+| Generated bridge template | `packages/cli/src/installer/config.ts` | Same continuity rendering for all native-binary installs; uses `memory-lane route --prompt <text> --json` for shared route-decision parity |
 | Core exports | `packages/core/src/index.ts` | All continuity/retrieval/classification functions available to any adapter |
 
 **Steering directions** (what Memory Lane tells harnesses):

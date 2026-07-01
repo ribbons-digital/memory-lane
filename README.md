@@ -48,7 +48,7 @@ memory-lane init
 # Start using
 memory-lane save "always use pnpm for package installation"
 memory-lane list
-memory-lane recall "where did we leave off"
+memory-lane continuity --json
 memory-lane doctor
 ```
 
@@ -450,6 +450,7 @@ memory-lane review --suspect-meta --include-approved Show pending+approved suspe
 memory-lane dashboard [--all]     Compact continuity/review overview without long memory bodies
 memory-lane continuity [--json] [--query <text>]
                                   Canonical continuity read model, with optional workstream discovery
+memory-lane route --prompt <text> Internal prompt routing decision for harness adapters
 memory-lane agreements            Show approved operating agreements for the current project/global scope
 memory-lane update <id>           Revise an active memory with the same id
 memory-lane rescope|move <id> --scope global|project [--dry-run|--yes]
@@ -514,7 +515,7 @@ memory-lane replace <old-id> --text "new successor memory" --kind workflow_rule
 cat replacement.md | memory-lane replace <old1> <old2> --stdin --yes
 ```
 
-`update` keeps the same memory id and can change text, category, kind, or approved/pending status. `replace` creates a new successor memory. `supersede` links an existing approved successor to approved older memories. Superseded memories remain approved historical records; Memory Lane does not delete or hide them automatically in this slice.
+`update` keeps the same memory id and can change text, category, kind, or approved/pending status. `replace` creates a new successor memory. `supersede` links an existing approved successor to approved older memories. Superseded memories remain approved historical records; Memory Lane does not delete them automatically. Active continuity slots and workstream discovery omit superseded records, while list/show/recall and continuity hints can still expose them for explicit inspection.
 
 Use `--dry-run` to preview any revision command. Multi-old `replace` and `supersede` require `--yes` unless `--dry-run` is used. MCP mutation tools are not added for these operations yet.
 
@@ -537,9 +538,9 @@ memory-lane agreements --all
 
 ### Continuity read model
 
-Use `memory-lane continuity --json` as the canonical CLI surface for continuity questions such as “what were we last working on?”, “what changed?”, “what did we accomplish?”, “what should we do next?”, and project status/resumption checks. The read model combines latest progress (`latestProgress`), legacy latest approved project/global continuity (`latestApproved`), bounded operating guidance (`operatingGuidance`), pending continuity review candidates, freshness, operating-agreement metadata, continuity hints, warnings, suggested actions, and harness guidance in one bounded response.
+Use `memory-lane continuity --json` as the canonical CLI surface for continuity questions such as “what were we last working on?”, “what changed?”, “what did we accomplish?”, “what should we do next?”, and project status/resumption checks. The read model combines latest progress (`latestProgress`), legacy latest approved project/global continuity (`latestApproved`), bounded operating guidance (`operatingGuidance`), pending continuity review candidates, freshness, operating-agreement metadata, continuity hints, warnings, suggested actions, and harness guidance in one bounded response. Active selected slots use non-superseded approved memories, collapse operating guidance to one preview per workflow area, and prefer safe descriptor metadata for previews when available.
 
-For topic-specific workstream questions such as “resume building X” or “where was X implemented?”, pass a query: `memory-lane continuity --query "resume building X" --json`. This adds a bounded `workstreamDiscovery` block derived from approved current-project continuity memories, with compact previews, match reasons, provenance/revision metadata, and derived PR/branch/commit/release references when present. Human output includes the same section compactly.
+For topic-specific workstream questions such as “resume building X” or “where was X implemented?”, pass a query: `memory-lane continuity --query "resume building X" --json`. This adds a bounded `workstreamDiscovery` block derived from non-superseded approved current-project continuity memories, with compact previews, match reasons, provenance/revision metadata, and derived PR/branch/commit/release references when present. Human output includes the same section compactly.
 
 For MCP clients, call `memory_continuity({ projectPath })` first for general continuity questions, or `memory_continuity({ projectPath, query: "resume building X" })` for the workstream discovery variant. Pass `projectPath` when the desktop/client process is not already scoped to the project. Do not answer continuity questions from `memory_recall` alone. Use recall only as a topic-specific follow-up after continuity inspection, for example when the continuity read model points to an area that needs more detail. Lexical fallback recall keeps lexical score primary; for currentness-like release/status/checkpoint queries, exact lexical-score ties between project checkpoints prefer newer `updatedAt` so older status checkpoints do not outrank equally relevant current checkpoints.
 
@@ -562,7 +563,7 @@ Current hints report:
 
 Scope hygiene hints are text-free inspection signals only. Memory Lane does not automatically rescope or clean up those memories; use `memory-lane show <id>` or `memory-lane list --json` to inspect them before deciding whether to rescope, update, supersede, or leave them alone. Use `memory-lane rescope <id> --scope project --project <path> --dry-run` to preview a same-id scope correction, then rerun with `--yes` only after review.
 
-Hints invite inspection with commands such as `memory-lane dashboard`, `memory-lane show <id>`, `memory-lane agreements --area <area>`, `memory-lane agreements --all`, and `memory-lane list --json`. Freshness advisory hints may also include per-id dry-run revision commands already available in the CLI; human `continuity` groups those commands separately as manual dry-run freshness actions. They do not perform cleanup, hide superseded memories, change recall ranking, or suggest destructive reject/delete commands.
+Hints invite inspection with commands such as `memory-lane dashboard`, `memory-lane show <id>`, `memory-lane agreements --area <area>`, `memory-lane agreements --all`, and `memory-lane list --json`. Freshness advisory hints may also include per-id dry-run revision commands already available in the CLI; human `continuity` groups those commands separately as manual dry-run freshness actions. They do not perform cleanup, remove superseded memories from explicit inspection surfaces, change recall ranking, or suggest destructive reject/delete commands.
 
 ### Session-end summarization
 
@@ -789,6 +790,8 @@ import {
   MemoryEngine,
   createSingleStoreEngineStorage,
   createTwoTierEngineStorage,
+  memoryDescriptorPreview,
+  classifyWorkflowArea,
   resolveEngineStoragePaths,
   type MemoryEngineStorage,
 } from "@memory-lane/core"
@@ -832,7 +835,11 @@ engine.suggest(
 
 // Descriptor strings are trimmed and bounded; keywords are lowercased and
 // deduplicated before enforcing the 12-keyword limit. Secret-looking
-// descriptor fields are rejected.
+// descriptor fields are rejected. Use memoryDescriptorPreview() when rendering
+// bounded continuity-style previews that should prefer safe descriptor text.
+const firstMemory = engine.list()[0]
+const descriptorPreview = firstMemory ? memoryDescriptorPreview(firstMemory, 160) : undefined
+const workflowArea = classifyWorkflowArea("Project workflow loop: review before merge.")
 
 // Recall (semantic or lexical)
 const result = await engine.recall("package manager")
@@ -853,8 +860,8 @@ The MCP server exposes explicit tools only:
 
 - `memory_save` — save an approved memory
 - `memory_suggest` — queue a pending suggestion, or save approved when `status: "approved"`
-- `memory_recall` — recall relevant memories for a query
-- `memory_continuity` — canonical continuity read model for project resumption, last-worked-on, accomplished, next-action, and project-status questions; accepts optional `query` for read-only workstream discovery
+- `memory_recall` — recall relevant memories for a specific topic or fact query
+- `memory_continuity` — canonical continuity read model for broad prior-work, project resumption, last-worked-on, accomplished, next-action, project-status, resume, and handoff-style questions; accepts optional `query` for read-only workstream discovery
 - `memory_status` — read Memory Lane counts, config paths, project scope, and integration diagnostics
 - `memory_list` — list memories visible to the current project scope by default
 - `memory_review` — list pending memories for review; supports `kind`, `source`, and `provenance` filters such as `kind: "session_summary"`, `source: "session-summary"`, and `provenance: "pi/session_end"`
@@ -907,7 +914,7 @@ Shared lifecycle handlers can also queue compact `project_checkpoint` candidates
 
 ### pi adapter
 
-The pi adapter supports manual Memory Lane tools and commands (`memory_save`, `memory_suggest`, `memory_recall`, and `/memory ...`). It performs read-only lifecycle context injection through pi's documented `before_agent_start` event: broad continuity prompts route to canonical Memory Lane continuity, and other relevant approved memories may be injected as hidden `memory-lane` context before the agent starts.
+The pi adapter supports manual Memory Lane tools and commands (`memory_save`, `memory_suggest`, `memory_continuity`, `memory_recall`, and `/memory ...`). It performs read-only lifecycle context injection through pi's documented `before_agent_start` event: broad continuity prompts route to canonical Memory Lane continuity, memory-management prompts route to list/status/review guidance, and other relevant approved memories may be injected as hidden `memory-lane` context before the agent starts.
 
 pi also writes memories through higher-signal lifecycle events:
 
@@ -947,7 +954,7 @@ Modes:
 
 When `selective` mode injects memory bodies, the `Relevant Memory` block is grouped for readability. Current-project memories are separated from global preferences/workflow rules and other visible project memories, and each memory shows a plain-language type label such as `Project checkpoint`, `Workflow rule`, `Preference`, or `Project fact`. These labels explain applicability only; they do not change recall ranking or memory status.
 
-Prompt-time automatic injection skips low-signal greetings and acknowledgements such as `hi`, `hello`, `ok`, and `thanks`, while preserving meaningful technical prompts such as `pnpm`, `docker`, `wrangler`, `how do I run tests`, and continuity prompts. Broad project-position/next-work continuity prompts receive inspection-first continuity guidance without ordinary recall bodies; topic-specific continuity prompts can still use bounded recall. Release-style generated pi bridges also cap automatic prompt recall context using `contextPolicyPromptMaxChars` with a safe fallback, while explicit recall/get tools remain full-fidelity for deliberate inspection.
+Prompt-time automatic injection skips low-signal greetings and acknowledgements such as `hi`, `hello`, `ok`, and `thanks`, while preserving meaningful technical prompts such as `pnpm`, `docker`, `wrangler`, `how do I run tests`, and continuity prompts. Broad project-position/next-work continuity prompts receive inspection-first continuity guidance without ordinary recall bodies; topic-specific continuity prompts can still use bounded recall. The internal `memory-lane route --prompt <text> --json` command exposes the shared deterministic routing decision used by generated bridge adapters. Release-style generated pi bridges also cap automatic prompt recall context using `contextPolicyPromptMaxChars` with a safe fallback, while explicit recall/get tools remain full-fidelity for deliberate inspection.
 
 Global preferences (`category: "preference"`, `kind: "preference"`, or `kind: "workflow_rule"` with `scope: "global"`) are selected in a bounded preference layer so user-wide guidance can travel across projects without crowding out current-project facts, checkpoints, or decisions. Project-scoped preferences render before global preferences for the same project, which lets narrower project guidance take precedence in context without creating an automatic supersede, cleanup, or override relationship.
 
@@ -983,7 +990,7 @@ The optional `preferenceMaxItems` and `preferenceMaxChars` fields are caps, not 
 
 ### Prompt-time continuity guidance
 
-When lifecycle prompt hooks receive natural continuity questions such as “resume building X,” “where was X implemented,” “what were we last working on,” or “what should we work on next,” Memory Lane may add a compact inspection-first guidance block. The guidance leads CLI-capable harnesses to `memory-lane continuity --json` and MCP clients to `memory_continuity({ projectPath })`, then keeps existing status/dashboard and targeted `memory-lane recall "X"` follow-up when a topic is detected.
+When lifecycle prompt hooks receive natural continuity questions such as “resume building X,” “where was X implemented,” “where are we in the project,” “what is the next item's scope,” “what were we last working on,” or “what should we work on next,” Memory Lane may add a compact inspection-first guidance block. The guidance leads CLI-capable harnesses to `memory-lane continuity --json` and MCP clients to `memory_continuity({ projectPath })`, then keeps existing status/dashboard and targeted `memory-lane recall "X"` follow-up when a topic is detected. The routing is deterministic and shared by Claude/Codex lifecycle hooks, repo-local Pi, and generated Pi bridges through the CLI route decision.
 
 Do not answer continuity questions from `memory_recall` alone. Recall is useful for topic-specific follow-up after continuity inspection, but canonical continuity state comes from `memory-lane continuity --json` or MCP `memory_continuity({ projectPath })`.
 

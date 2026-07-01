@@ -98,11 +98,12 @@ memory-lane replace <old-id...> --text "new successor memory" --yes
 memory-lane supersede <new-id> <old-id...> --reason "newer version" --yes
 ```
 
-Use `--dry-run` where available before changing scope or relationships. Do not assume superseded memories are hidden from recall/context unless a later slice explicitly implements that behavior. Avoid silent deletion/rejection/cleanup without explicit user approval.
+Use `--dry-run` where available before changing scope or relationships. Active continuity slots and workstream discovery omit superseded records, but list/show/recall can still expose them for explicit inspection. Avoid silent deletion/rejection/cleanup without explicit user approval.
 
 ## Continuity and operating agreements
 
-- Use `memory-lane continuity --query "..." --json` / `memory_continuity({ query })` for broad workstream state.
+- Use `memory-lane continuity --json` / `memory_continuity({})` for broad workstream state.
+- Use `memory-lane continuity --query "..." --json` / `memory_continuity({ query })` for topic-specific workstream discovery.
 - Use `memory-lane agreements` for project workflow, review gates, PR process, release process, or tooling workflow rules.
 - Use `memory-lane status --json`, `memory-lane doctor --json`, or MCP `memory_status` for text-free continuity/staleness metadata. Use `memory-lane dashboard` only when a compact human-facing overview is appropriate.
 - Treat pending continuity as review candidates, not approved facts.
@@ -116,7 +117,7 @@ Automatic lifecycle context is controlled by `memory.contextPolicy`:
 - `policy-only` injects guidance to use Memory Lane tools without memory bodies.
 - `off` disables automatic lifecycle context while preserving explicit CLI/MCP tools and save hooks.
 
-Prompt-time broad continuity guidance is not a memory body. It is a cue to inspect continuity/status/dashboard/roadmap before answering from chat context alone. Broad project-position/next-work prompts should receive guidance without ordinary recall bodies; topic-specific prompts can still include bounded relevant memory.
+Prompt-time broad continuity guidance is not a memory body. It is a cue to inspect continuity/status/dashboard/roadmap before answering from chat context alone. Broad project-position/next-work prompts should receive guidance without ordinary recall bodies; topic-specific prompts can still include bounded relevant memory. Generated Pi bridges use the shared `memory-lane route --prompt <text> --json` CLI decision so they stay in parity with repo-local adapters.
 
 At `SessionStart`, Memory Lane may inject a compact `Continuity notice` in `policy-only` or `selective` modes. In `selective` mode, it can also render tiny always-on memories plus a `Memory Index` of descriptor cards; structured descriptors use stored `description` and `fetchHint` metadata when present, otherwise generated previews. The notice shares the existing SessionStart budget and omits memory ids, memory text, transcripts, and tool outputs.
 

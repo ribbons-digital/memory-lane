@@ -61,14 +61,14 @@ Claude Code and Codex can continue using Memory Lane lifecycle hooks for automat
 In clients such as Claude Desktop and Codex Desktop, the model may try the `memory-lane` CLI first. If the CLI runs inside a sandboxed environment without write access to `~/.memory-lane`, the model will usually fall back to the MCP tools automatically, but only after a visible error turn. To avoid that detour, explicitly ask the model to use the Memory Lane MCP, e.g.:
 
 > "Use the Memory Lane MCP to save that I prefer pnpm."
-> "Using the Memory Lane MCP, recall what we were working on."
+> "Using the Memory Lane MCP, check continuity for what we were working on."
 
 ## Tools
 
 - `memory_save`
 - `memory_suggest`
-- `memory_recall`
-- `memory_continuity`
+- `memory_recall` for specific topic or fact queries
+- `memory_continuity` for broad prior-work, next-action, project-status, resume, and handoff-style prompts
 - `memory_status`
 - `memory_list`
 - `memory_review`
@@ -76,7 +76,7 @@ In clients such as Claude Desktop and Codex Desktop, the model may try the `memo
 - `memory_reject`
 - `memory_delete`
 
-Ask your MCP client: "Use Memory Lane to check my status." The client can call `memory_status` to inspect counts, project scope, semantic status, storage/config paths, and integration diagnostics without modifying memory.
+Ask your MCP client: "Use Memory Lane to check my status." The client should call `memory_continuity` before `memory_recall` for broad prior-work, next-action, project-status, resume, and handoff-style prompts. It can call `memory_status` to inspect counts, project scope, semantic status, storage/config paths, and integration diagnostics without modifying memory.
 
 Use `memory_review` to list pending memories, then `memory_approve` or `memory_reject` with a memory `id` to finish the review loop. Use `memory_delete` with a memory `id` to soft-delete an existing memory.
 
