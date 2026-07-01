@@ -419,6 +419,7 @@ export interface ProjectScope {
   cwd: string
   root: string
   key: string
+  source?: "scope-file" | "git" | "cwd"
 }
 
 export interface SaveInput {

@@ -175,7 +175,7 @@ export function resolveEngineStoragePaths(options?: ResolveMemoryPathsOptions): 
   const home = homePaths(env)
   const cwd = options?.cwd ? path.resolve(options.cwd) : process.cwd()
   const scope = resolveProjectScope(cwd)
-  const projectRoot = scope?.root
+  const projectRoot = scope?.source === "git" && path.isAbsolute(scope.key) ? scope.key : scope?.root
   return {
     kind: "default-two-tier",
     home,

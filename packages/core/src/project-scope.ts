@@ -52,7 +52,7 @@ function resolveGitScope(cwd: string): ProjectScope | null {
   const gitCommonDirRaw = runGit(cwd, ["rev-parse", "--git-common-dir"])
   const key = gitCommonDirRaw ? canonicalKeyFromGitCommonDir(root, gitCommonDirRaw) : root
 
-  return { cwd, root, key }
+  return { cwd, root, key, source: "git" }
 }
 
 /** Resolve project scope: scope file → git root → null. Never auto-creates scope files. */
@@ -60,10 +60,10 @@ export function resolveProjectScope(cwd?: string): ProjectScope | null {
   const hasExplicitCwd = cwd !== undefined
   const resolvedCwd = path.resolve(cwd ?? process.cwd())
   const scope = findScopeFile(resolvedCwd)
-  if (scope) return { cwd: resolvedCwd, root: scope.root, key: scope.id }
+  if (scope) return { cwd: resolvedCwd, root: scope.root, key: scope.id, source: "scope-file" }
   const gitScope = resolveGitScope(resolvedCwd)
   if (gitScope) return gitScope
   if (!hasExplicitCwd) return null
   const canonical = realpathOrResolved(resolvedCwd)
-  return { cwd: resolvedCwd, root: canonical, key: canonical }
+  return { cwd: resolvedCwd, root: canonical, key: canonical, source: "cwd" }
 }
