@@ -2,7 +2,7 @@
 
 ## Status
 
-Slice 0 implemented on `feat/storage-facade-proof`; Slice 1 and Slice 2 remain gated follow-ups.
+Slice 0 shipped in `v0.2.42` from PR #78 as the storage facade proof with no default-location change; Slice 1 and Slice 2 remain gated follow-ups.
 
 ## Entry gate
 
@@ -48,8 +48,10 @@ But project-local storage is not a complete replacement for Memory Lane scope fi
 
 Adopt a two-tier storage model as the next design direction, but ship it in two approved slices:
 
-1. **Slice 0: storage facade proof, no default-location change.** Extend the core storage abstraction so `MemoryEngine` can operate through a store facade instead of assuming one scalar `memPath`/`embPath`. Keep current default storage behavior during this slice.
-2. **Slice 1: project-local default for project-scoped writes.** After the facade proof is merged and dogfooded, route new project-scoped memories to `<project-root>/.memory-lane/memory.jsonl` when project scope exists and no explicit storage env vars override it. Global preferences and personal memories remain home-scoped in `~/.memory-lane/memory.jsonl`.
+1. **Slice 0: storage facade proof, no default-location change.** Shipped in `v0.2.42` from PR #78.
+   The core storage abstraction lets `MemoryEngine` operate through a store facade instead of assuming one scalar `memPath`/`embPath`, while current default storage behavior remains unchanged.
+2. **Slice 1: project-local default for project-scoped writes.** Now that the facade proof is merged and dogfooded, route new project-scoped memories to `<project-root>/.memory-lane/memory.jsonl` when project scope exists and no explicit storage env vars override it.
+   Global preferences and personal memories remain home-scoped in `~/.memory-lane/memory.jsonl`.
 
 This two-step path preserves the product direction while de-risking the single-store engine assumption before changing user-visible write locations.
 
@@ -304,4 +306,5 @@ Do not treat rescope as a simple origin-store re-append when project/global stor
 User feedback agreed with Slice 0 as the implementation target: an internal storage facade proof that preserves current storage behavior while removing the single-store assumptions that would make project-local-by-default risky.
 
 Slice 0 implementation preserves current storage behavior through `MemoryEngineStorage` and `createSingleStoreEngineStorage`.
+It shipped in `v0.2.42` after local build/test validation, release workflow `28484161404`, and installed-artifact smoke testing documented in `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
 Slice 1 and Slice 2 remain planned follow-ups requiring their own approval gates.

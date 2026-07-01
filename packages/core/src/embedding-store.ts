@@ -3,6 +3,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { EmbeddingRecord, EmbeddingInvalidationRecord } from "./types.js"
 
+/** One JSONL row in the embeddings store: either an embedding vector or an invalidation marker. */
 export type EmbeddingLine = EmbeddingRecord | EmbeddingInvalidationRecord
 
 function isEmbeddingRecord(v: unknown): v is EmbeddingRecord {

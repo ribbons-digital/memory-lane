@@ -34,7 +34,9 @@ Recent completion evidence:
 - Release `v0.2.39` (`9021435`) passed workflow `28410566489` and published 8 assets, shipping the SessionStart descriptor index Slice A.
 - Release `v0.2.40` (`7578bb5`) passed workflow `28419273491` and published 8 assets, shipping SessionStart descriptor metadata Slice B.
 - Release `v0.2.41` (`9f9cdde`) passed workflow `28423317038` and published 8 assets, shipping the retrieval currentness tie-break from PR #75.
-- Installed-artifact dogfood after `memory-lane upgrade --yes` passed: broad next-work continuity has empty workstream candidates plus `no-topic`, stale release/checkpoint ids are absent from operating guidance, and topic-specific queries still return candidates.
+- Release `v0.2.42` (`cd1a839`) passed workflow `28484161404` and published 8 assets, shipping the project-local storage Slice 0 facade proof from PR #78.
+- Installed-artifact `v0.2.42` dogfood after `memory-lane upgrade --yes` passed `memory-lane --smoke-test`; validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
+- Installed-artifact `v0.2.41` continuity dogfood after `memory-lane upgrade --yes` passed: broad next-work continuity has empty workstream candidates plus `no-topic`, stale release/checkpoint ids are absent from operating guidance, and topic-specific queries still return candidates.
 - Phase-completion docs sync landed in `309021e docs: declare phase 21 complete`.
 - PR #69 (`4ebf447`) completed the docs/context-budget slice: root `ROADMAP.md` is compact, historical roadmap detail through Phase 20.5 is archived, and skill guidance uses bounded reads.
 - PR #71 (`e0deba1`) completed SessionStart descriptor index Slice A: selective SessionStart context now uses tiny always-on memories plus compact descriptor cards with fetch-by-id guidance, without adding memory schema or YAML/frontmatter persistence.
@@ -68,11 +70,19 @@ Approved design: `docs/superpowers/specs/2026-06-30-project-local-storage-defaul
 
 Slice plan:
 
-1. **Slice 0 — storage facade proof, no default-location flip.** Preserve current storage behavior while routing `MemoryEngine` through an injectable storage facade with memory append/list/diagnostics, batch append, embedding append/read/invalidation, compaction, path metadata, and continuity-baseline seams.
-2. **Slice 1 — project-local default for new project-scoped writes.** Requires a fresh approval gate. Derive the project-local root from existing project scope resolution, keep explicit `MEMORY_LANE_*` paths authoritative and single-store, and keep global preferences/personal memories home-side.
-3. **Slice 2 — migration/compatibility diagnostics.** Requires a fresh approval gate. Detect legacy home-stored project memories and provide bounded warnings plus explicit dry-run migration; do not silently move/delete/approve/consolidate.
+1. **Slice 0 - storage facade proof, no default-location flip.** Shipped in `v0.2.42` / PR #78.
+   Current storage behavior is preserved while `MemoryEngine` routes through an injectable storage facade with memory append/list/diagnostics, batch append, embedding append/read/invalidation, compaction, path metadata, and continuity-baseline seams.
+2. **Slice 1 - project-local default for new project-scoped writes.** Requires a fresh approval gate.
+   Derive the project-local root from existing project scope resolution, keep explicit `MEMORY_LANE_*` paths authoritative and single-store, and keep global preferences/personal memories home-side.
+3. **Slice 2 - migration/compatibility diagnostics.** Requires a fresh approval gate.
+   Detect legacy home-stored project memories and provide bounded warnings plus explicit dry-run migration; do not silently move/delete/approve/consolidate.
 
-Current implementation branch: Slice 0 is implemented on `feat/storage-facade-proof`. It adds the single-store facade and preserves existing default write locations. Before PR, run full validation and Opus 4.8 implementation review.
+Current release state: Slice 0 is merged and released in `v0.2.42`; installed-artifact dogfood passed via `memory-lane upgrade --yes` and `memory-lane --smoke-test`.
+Validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
+
+Next step: if continuing this track, draft the Slice 1 project-local default-write design for user approval.
+Per project workflow, get Opus 4.8's second opinion and converge before presenting the spec.
+Do not implement Slice 1 until approved.
 
 Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in `v0.2.41`; pause retrieval-ranking work unless new dogfood/eval evidence justifies another proposal.
 
