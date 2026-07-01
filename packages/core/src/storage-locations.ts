@@ -83,11 +83,17 @@ function hasExplicitStorageEnv(env: NodeJS.ProcessEnv | Record<string, string | 
 }
 
 export interface EngineStoragePaths {
+  /** Storage construction mode for engine callers. */
   kind: "environment" | "default-two-tier" | "project-local-fallback"
+  /** Primary home-side paths, or the active single-store paths for environment and fallback modes. */
   home: MemoryPaths
+  /** Project-local paths used only by default two-tier mode when a project scope is known. */
   project?: MemoryPaths
+  /** Resolved project scope key that must match new project-scoped records before they route to project. */
   projectScopeKey?: string
+  /** Config path used for engine configuration loading. */
   configPath: string
+  /** True when any MEMORY_LANE_* storage override forced single-store behavior. */
   explicitEnv: boolean
 }
 
@@ -165,6 +171,7 @@ export function resolveWritableMemoryPaths(options?: ResolveWritableMemoryPathsO
   }
 }
 
+/** Resolve engine storage without write probes or auto-initialization. */
 export function resolveEngineStoragePaths(options?: ResolveMemoryPathsOptions): EngineStoragePaths {
   const env = options?.env ?? process.env
   if (hasExplicitStorageEnv(env)) {
@@ -186,6 +193,7 @@ export function resolveEngineStoragePaths(options?: ResolveMemoryPathsOptions): 
   }
 }
 
+/** Resolve engine storage for writable commands and optionally fall back to project-local single-store storage when home is not writable. */
 export function resolveWritableEngineStoragePaths(options?: ResolveWritableMemoryPathsOptions): EngineStoragePaths {
   const plan = resolveEngineStoragePaths(options)
   if (plan.explicitEnv) {

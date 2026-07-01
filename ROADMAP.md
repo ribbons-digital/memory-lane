@@ -64,7 +64,7 @@ Next decision for this track: decide whether to proceed to Slice C Obsidian/YAML
 
 ## Active track — Project-local Storage Defaults
 
-The user raised that project-scoped memories stored in the home JSONL can still feel risky even with scope filtering. Directionally, project-scoped memories should live under the project `.memory-lane/` by default, while global preferences/personal memories remain home-scoped.
+The user raised that project-scoped memories stored in the home JSONL can still feel risky even with scope filtering. Directionally, project-scoped memories should live under the project `.memory-lane/` by default, while global-scope preferences/personal memories remain home-scoped.
 
 Approved design: `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`.
 
@@ -72,17 +72,17 @@ Slice plan:
 
 1. **Slice 0 - storage facade proof, no default-location flip.** Shipped in `v0.2.42` / PR #78.
    Current storage behavior is preserved while `MemoryEngine` routes through an injectable storage facade with memory append/list/diagnostics, batch append, embedding append/read/invalidation, compaction, path metadata, and continuity-baseline seams.
-2. **Slice 1 - project-local default for new project-scoped writes.** Requires a fresh approval gate.
-   Derive the project-local root from existing project scope resolution, keep explicit `MEMORY_LANE_*` paths authoritative and single-store, and keep global preferences/personal memories home-side.
+2. **Slice 1 - project-local default for new project-scoped writes.** Approved and implemented on `docs/project-local-slice-1-design`, pending final review/PR.
+   Derive the project-local root from existing project scope resolution, keep explicit `MEMORY_LANE_*` paths authoritative and single-store, and keep global-scope preferences/personal memories home-side.
 3. **Slice 2 - migration/compatibility diagnostics.** Requires a fresh approval gate.
    Detect legacy home-stored project memories and provide bounded warnings plus explicit dry-run migration; do not silently move/delete/approve/consolidate.
 
 Current release state: Slice 0 is merged and released in `v0.2.42`; installed-artifact dogfood passed via `memory-lane upgrade --yes` and `memory-lane --smoke-test`.
 Validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
 
-Current implementation slice: Slice 1 project-local default writes is approved and in implementation on `docs/project-local-slice-1-design`.
+Current implementation slice: Slice 1 project-local default writes is approved and implemented on `docs/project-local-slice-1-design`, pending final review/PR.
 Approved spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
-The slice routes new project-scoped writes project-side by default, keeps global/preference/personal writes home-side, merges project/home reads, routes existing ids by origin store, pairs embeddings with owning stores, and compacts active project stores.
+The slice routes new project-scoped writes project-side by default, keeps global-scope preference/personal writes home-side, merges project/home reads, routes existing ids by origin store, pairs embeddings with owning stores, compacts active project stores, and keeps read-only inspection paths from creating fallback storage.
 Migration diagnostics and cross-store rescope moves remain deferred.
 
 Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in `v0.2.41`; pause retrieval-ranking work unless new dogfood/eval evidence justifies another proposal.

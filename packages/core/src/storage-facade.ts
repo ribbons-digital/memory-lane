@@ -10,7 +10,7 @@ import type { CompactReport, EmbeddingInvalidationRecord, EmbeddingRecord, Memor
 
 /**
  * Storage facade used by MemoryEngine.
- * The single-store implementation preserves legacy JSONL paths, while future implementations can merge multiple stores and route writes by memory origin or scope.
+ * The single-store implementation preserves legacy JSONL paths, while the two-tier implementation merges home and project stores and routes writes by memory origin or scope.
  */
 export interface MemoryEngineStorage {
   /** Primary memory JSONL path reported by diagnostics for the active facade. */
@@ -191,6 +191,11 @@ export function createSingleStoreEngineStorage(memoryPath: string, embeddingsPat
   }
 }
 
+/**
+ * Create the default home-plus-project storage facade.
+ * New records route to projectPaths when their final project scope key matches projectScopeKey; global-scope and mismatched-project records route to homePaths.
+ * Existing ids continue appending to the store that owns the newest active revision, and merged reads fold duplicate ids by updatedAt, createdAt, same-store log order, then project-store precedence.
+ */
 export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?: MemoryPaths, projectScopeKey?: string): MemoryEngineStorage {
   const home = createStoreEntry("home", homePaths)
   const project = projectPaths ? createStoreEntry("project", projectPaths, { scopeKey: projectScopeKey }) : undefined

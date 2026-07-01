@@ -2,7 +2,7 @@
 
 ## Status
 
-Approved by the user through Plannotator and in implementation on `docs/project-local-slice-1-design`.
+Approved by the user through Plannotator and implemented on `docs/project-local-slice-1-design`, pending final review/PR.
 Opus 4.8 second-opinion review completed before presentation.
 Implementation should remain within this design gate.
 
@@ -11,7 +11,7 @@ Implementation should remain within this design gate.
 Slice 0 shipped in `v0.2.42` as the storage facade proof.
 It added `MemoryEngineStorage` and `createSingleStoreEngineStorage` while preserving all default storage behavior.
 The next product goal is to make new project-scoped writes land under the project by default when Memory Lane can resolve a project scope.
-Global preferences and personal memories should remain in the home store.
+Global-scope preferences and personal memories should remain in the home store.
 
 The active approved umbrella design is `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`.
 This document narrows Slice 1 so it can be approved, implemented, reviewed, and dogfooded without migration or retrieval changes.
@@ -31,7 +31,7 @@ Slice 1 must make origin ownership and merged folding explicit.
 ## Goals
 
 - Route new project-scoped memories to a project-local store when project scope is known and no explicit storage environment override is active.
-- Keep new global, preference, and personal memories in the home store by default.
+- Keep new global-scope preference and personal memories in the home store by default.
 - Read from a merged view of the relevant project store plus the home store.
 - Preserve explicit `MEMORY_LANE_FILE`, `MEMORY_LANE_EMBEDDINGS_FILE`, and `MEMORY_LANE_CONFIG` as authoritative single-store overrides.
 - Preserve current behavior when no project scope is known.
@@ -282,9 +282,8 @@ Manual dogfood checks:
 - The resolver interaction with auto-created `.memory-lane/` is load-bearing and must be handled directly.
 - User review clarified that enabled embeddings and compaction should cover new project-local memories in Slice 1 rather than being deferred, so paired project embeddings and active project-store compaction are now in scope.
 
-## Approval question
+## Approval record
 
-Approve Slice 1 as scoped here?
-
-If approved, implementation should start from a feature branch and remain limited to project-local default writes, merged two-store reads, origin-store routing, and compatible docs/tests.
+The user approved Slice 1 as scoped here.
+Implementation remains limited to project-local default writes, merged two-store reads, origin-store routing, and compatible docs/tests.
 Migration diagnostics and explicit cross-store moves remain deferred follow-ups.

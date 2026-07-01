@@ -39,7 +39,7 @@ The assumption is directionally correct:
 
 But project-local storage is not a complete replacement for Memory Lane scope filtering:
 
-- global preferences and personal memories still need a user-level store;
+- global-scope preferences and personal memories still need a user-level store;
 - worktrees, monorepos, symlinks, and harness cwd choices can blur boundaries;
 - users may want one project memory store shared by all worktrees of the same repository;
 - MCP servers and lifecycle hooks still need deterministic path resolution.
@@ -51,14 +51,14 @@ Adopt a two-tier storage model as the next design direction, but ship it in two 
 1. **Slice 0: storage facade proof, no default-location change.** Shipped in `v0.2.42` from PR #78.
    The core storage abstraction lets `MemoryEngine` operate through a store facade instead of assuming one scalar `memPath`/`embPath`, while current default storage behavior remains unchanged.
 2. **Slice 1: project-local default for project-scoped writes.** Now that the facade proof is merged and dogfooded, route new project-scoped memories to `<project-root>/.memory-lane/memory.jsonl` when project scope exists and no explicit storage env vars override it.
-   Global preferences and personal memories remain home-scoped in `~/.memory-lane/memory.jsonl`.
+   Global-scope preferences and personal memories remain home-scoped in `~/.memory-lane/memory.jsonl`.
 
 This two-step path preserves the product direction while de-risking the single-store engine assumption before changing user-visible write locations.
 
 Long-term target:
 
 - Project-scoped memories default to project-local storage.
-- Global preferences and personal memories remain in home storage.
+- Global-scope preferences and personal memories remain in home storage.
 - The engine sees a storage facade that can read from multiple underlying stores and route writes by final record scope or record origin.
 - Explicit `MEMORY_LANE_FILE`, `MEMORY_LANE_EMBEDDINGS_FILE`, and `MEMORY_LANE_CONFIG` continue to win exactly as today and keep single-store behavior.
 
@@ -200,7 +200,7 @@ Definition of done for later Slice 1:
 
 1. Derive project-local storage root from existing project scope resolution, not arbitrary cwd upward discovery.
 2. Route new project-scoped writes to project-local `.memory-lane/` by default when project scope is known and no explicit env paths override storage.
-3. Keep new global preference/personal writes in home storage.
+3. Keep new global-scope preference/personal writes in home storage.
 4. Make project reads combine project-local project memories with home global memories through the facade.
 5. Track origin stores so re-appends of existing records stay in the store where that record currently lives.
 6. Route embeddings and invalidation tombstones to the same store side as their owning memory.
@@ -295,16 +295,17 @@ Manual/dogfood checks for later Slice 1:
 5. Project-local storage may auto-create on first project write when project scope is known, but only in Slice 1.
 6. Legacy home-project migration diagnostics and migration commands are deferred to a later slice.
 
-## Known Slice 1 design question
+## Slice 1 rescope decision
 
 Rescope/move is different from ordinary re-append operations: it intentionally changes a record's scope.
-Slice 1 must decide whether rescope should write the new revision to the destination store and leave a tombstone/revision in the origin store, or use another explicit move protocol.
-Do not treat rescope as a simple origin-store re-append when project/global stores are split.
+The approved Slice 1 design keeps rescope revisions in the existing origin store and defers explicit cross-store move semantics to a later migration/move slice.
+Do not silently move records between stores in Slice 1.
 
 ## Approval status
 
-User feedback agreed with Slice 0 as the implementation target: an internal storage facade proof that preserves current storage behavior while removing the single-store assumptions that would make project-local-by-default risky.
+User feedback agreed with Slice 0 as the first implementation target: an internal storage facade proof that preserves current storage behavior while removing the single-store assumptions that would make project-local-by-default risky.
 
 Slice 0 implementation preserves current storage behavior through `MemoryEngineStorage` and `createSingleStoreEngineStorage`.
 It shipped in `v0.2.42` after local build/test validation, release workflow `28484161404`, and installed-artifact smoke testing documented in `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
-Slice 1 and Slice 2 remain planned follow-ups requiring their own approval gates.
+Slice 1 was later approved in `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md` and implemented on `docs/project-local-slice-1-design`, pending final review/PR.
+Slice 2 migration diagnostics remains a planned follow-up requiring its own approval gate.
