@@ -388,17 +388,23 @@ Eleven packages in a monorepo:
 
 ## Storage
 
-By default, memories are stored as append-only JSONL at `~/.memory-lane/memory.jsonl`.
-Each write appends a record; reads fold duplicates by id (last write wins).
+By default, Memory Lane uses two storage tiers when no explicit `MEMORY_LANE_*` paths are set:
+
+- global-scope memories, including default preferences and personal memories, live in `~/.memory-lane/memory.jsonl`;
+- new memories whose final scope is the current project live in `<project-root>/.memory-lane/memory.jsonl` when a project scope is known.
+
+Each write appends a record; reads fold duplicates by id with the newest revision winning.
 Atomic memory writes use a short lock plus `.tmp` + `rename`, and batch writes are atomic per underlying store.
-In `v0.2.42+`, this behavior is routed through an internal storage facade so future project-local defaults can be added without changing today's write locations.
-Advanced `@memory-lane/core` consumers can import `MemoryEngineStorage` and `createSingleStoreEngineStorage` when they need to inject storage that owns memory, embedding, compaction, diagnostics, and continuity-baseline paths.
+The internal storage facade merges the active project store with the home store for recall, list, review, continuity, and status surfaces.
+Existing records keep their origin store for normal edits/review actions so one logical memory id is not split across files.
+Advanced `@memory-lane/core` consumers can import `MemoryEngineStorage`, `createSingleStoreEngineStorage`, and `createTwoTierEngineStorage` when they need to inject storage that owns memory, embedding, compaction, diagnostics, and continuity-baseline paths.
 Custom facade implementations can also import `EmbeddingLine` for `appendEmbedding()` inputs.
 
-Embeddings (when configured) default to `~/.memory-lane/embeddings.jsonl` with mixed embedding records and invalidation records. When a memory changes, recall ignores only embeddings created before that memory's latest invalidation; newer embeddings for the same memory id can be used without a full reindex.
+Embeddings (when configured) are paired with the owning memory store: home memories use `~/.memory-lane/embeddings.jsonl`, and project-local memories use `<project-root>/.memory-lane/embeddings.jsonl`. When a memory changes, recall ignores only embeddings created before that memory's latest invalidation; newer embeddings for the same memory id can be used without a full reindex.
 
-For sandboxed harnesses, Memory Lane first tries global storage at `~/.memory-lane`. If that home storage is not writable and no explicit `MEMORY_LANE_*` paths are set, commands and hooks automatically initialize project-local storage at `.memory-lane/` and continue there.
-Project-scoped memories still write to the active storage location; `--scope project` does not by itself create or select project-local storage when home storage is writable.
+For sandboxed harnesses, writable Memory Lane commands and hooks first try global storage at `~/.memory-lane`.
+If that home storage is not writable and no explicit `MEMORY_LANE_*` paths are set, writable commands/hooks automatically initialize project-local single-store fallback storage at `.memory-lane/` and continue there.
+Read-only inspection commands use read-only storage resolution and should not create fallback storage just to inspect memory state.
 
 You can also initialize project-local storage explicitly:
 
@@ -406,7 +412,8 @@ You can also initialize project-local storage explicitly:
 memory-lane init --project-local --project /path/to/project
 ```
 
-Project-local initialization creates `.memory-lane/` in the project, adds `.memory-lane/` to `.gitignore`, and creates `.memory-lane-scope`. Commands and hooks run with `--project /path/to/project` automatically prefer this project-local store unless explicit `MEMORY_LANE_*` paths are set.
+Project-local initialization creates `.memory-lane/` in the project, adds `.memory-lane/` to `.gitignore`, and creates `.memory-lane-scope`.
+In the default two-tier model, commands and hooks run with `--project /path/to/project` use this project store for project-scoped writes while keeping global-scope preferences home-side unless explicit `MEMORY_LANE_*` paths are set.
 
 ## Project Scoping
 
@@ -770,7 +777,10 @@ When `MEMORY_LANE_HOOK_DEBUG=1`, Claude/Codex hook debug records include privacy
 | `MEMORY_LANE_FILE` | `~/.memory-lane/memory.jsonl` | Memory store path |
 | `MEMORY_LANE_EMBEDDINGS_FILE` | `~/.memory-lane/embeddings.jsonl` | Embeddings store path |
 
-Explicit environment paths always win and never auto-fallback. If no explicit paths are set and a parent directory contains `.memory-lane/`, Memory Lane uses that project-local store. If home storage is not writable, Memory Lane auto-initializes `.memory-lane/` in the current project path.
+Explicit environment paths always win, keep Memory Lane in single-store mode, and never auto-fallback.
+When no explicit paths are set, the default engine uses home storage plus the resolved project store when a project scope is known; an existing parent `.memory-lane/` does not make every memory category project-local.
+If home storage is not writable, writable commands and hooks may auto-initialize fallback storage at the resolved project root.
+Read-only inspection commands do not create fallback storage just to inspect memory state.
 
 ## Programmatic Use
 
@@ -778,6 +788,8 @@ Explicit environment paths always win and never auto-fallback. If no explicit pa
 import {
   MemoryEngine,
   createSingleStoreEngineStorage,
+  createTwoTierEngineStorage,
+  resolveEngineStoragePaths,
   type MemoryEngineStorage,
 } from "@memory-lane/core"
 
@@ -789,6 +801,13 @@ const testEngine = new MemoryEngine({ memoryPath: "/tmp/memory.jsonl", embedding
 // Advanced tests or integrations can inject a MemoryEngineStorage facade.
 const storage: MemoryEngineStorage = createSingleStoreEngineStorage("/tmp/memory.jsonl", "/tmp/embeddings.jsonl")
 const engineWithStorage = new MemoryEngine({ storage })
+
+// Programmatic integrations that want CLI-style default two-tier storage should wire the resolver and facade explicitly.
+const paths = resolveEngineStoragePaths({ cwd: process.cwd(), env: process.env })
+const tieredStorage = paths.kind === "default-two-tier"
+  ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey)
+  : createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath)
+const tieredEngine = new MemoryEngine({ storage: tieredStorage, autoCompact: false, configPath: paths.configPath })
 
 // Save
 engine.save({ text: "use pnpm for all installs", status: "approved" })

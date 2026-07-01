@@ -45,6 +45,41 @@ test("loadPlugins calls plugin default export and collects registrations", async
   assert.equal(plugins[0].cliCommands.length, 0) // ignored in mcp context
 })
 
+test("MCP plugin engineResolver defaults to active tool projectPath", async () => {
+  const calls: Array<string | undefined> = []
+  const plugins = await loadPlugins({
+    pluginNames: ["fake-bundled"],
+    engine: createFakeEngine(),
+    engineResolver(projectPath) {
+      calls.push(projectPath)
+      return createFakeEngine()
+    },
+    config: createFakeConfig(),
+    context: "mcp",
+    bundledPlugins: [{
+      name: "fake-bundled",
+      default(api) {
+        api.registerMcpTool({
+          name: "fake_tool",
+          title: "Fake",
+          description: "...",
+          inputSchema: {},
+          async handler() {
+            api.engineResolver()
+            api.engineResolver("explicit-project")
+            void api.engine
+            return { content: [] }
+          },
+        })
+      },
+    }],
+  })
+
+  await plugins[0].mcpTools[0].handler({ projectPath: "request-project" })
+
+  assert.deepEqual(calls, ["request-project", "explicit-project", "request-project"])
+})
+
 test("loadPlugins collects CLI commands in cli context", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ml-plugin-api-test-"))
   cleanup = () => fs.rmSync(dir, { recursive: true, force: true })

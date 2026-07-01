@@ -2,7 +2,7 @@ import { Type } from "typebox"
 import { createOpenAICompatibleProvider, detectContinuityIntent, handlePostToolUse, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy } from "@memory-lane/lifecycle"
 import type { PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
 import {
-  MemoryEngine, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableMemoryPaths, type SaveResult,
+  MemoryEngine, createSingleStoreEngineStorage, createTwoTierEngineStorage, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableEngineStoragePaths, type SaveResult,
 } from "@memory-lane/core"
 import { isPiDebugEnabled, piDebugPath, writePiDebugLog } from "./debug.js"
 
@@ -86,12 +86,16 @@ function memoryEnv(): NodeJS.ProcessEnv {
 }
 
 function getEngine(cwd: string): MemoryEngine {
-  const paths = resolveWritableMemoryPaths({ cwd, env: memoryEnv(), autoInitProjectLocalOnHomeFailure: true })
-  const key = `${paths.memoryPath}\n${paths.embeddingsPath}\n${paths.configPath}`
+  const paths = resolveWritableEngineStoragePaths({ cwd, env: memoryEnv(), autoInitProjectLocalOnHomeFailure: true })
+  const key = `${paths.kind}\n${paths.home.memoryPath}\n${paths.home.embeddingsPath}\n${paths.configPath}\n${paths.project?.memoryPath ?? ""}`
   if (!engine || engineKey !== key) {
+    const storage = paths.kind === "default-two-tier"
+      ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey)
+      : createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath)
     engine = new MemoryEngine({
-      memoryPath: paths.memoryPath,
-      embeddingsPath: paths.embeddingsPath,
+      memoryPath: paths.home.memoryPath,
+      embeddingsPath: paths.home.embeddingsPath,
+      storage,
       configPath: paths.configPath,
     })
     engineKey = key

@@ -177,7 +177,7 @@ Do not imply automatic sync, bidirectional sync, or Obsidian-backed storage. Do 
 
 ## Storage and semantic search
 
-Default storage is `~/.memory-lane/`. If home storage is not writable and no explicit `MEMORY_LANE_*` paths are set, Memory Lane auto-initializes project-local `.memory-lane/`. Explicit `MEMORY_LANE_FILE`, `MEMORY_LANE_EMBEDDINGS_FILE`, and `MEMORY_LANE_CONFIG` always win.
+Default storage is two-tier when no explicit `MEMORY_LANE_*` paths are set: global-scope memories, including default preferences and personal memories, stay in `~/.memory-lane/`, while new current-project-scoped memories write to the resolved project `<root>/.memory-lane/`. If home storage is not writable, writable commands/hooks auto-initialize project-local single-store fallback; read-only inspection commands should not create fallback storage. Explicit `MEMORY_LANE_FILE`, `MEMORY_LANE_EMBEDDINGS_FILE`, and `MEMORY_LANE_CONFIG` always win and keep single-store behavior.
 
 Semantic search is disabled by default. Enable and build embeddings when needed:
 

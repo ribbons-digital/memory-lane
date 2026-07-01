@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks"
 import type { MemoryEngine, SemanticMemoryConfig } from "@memory-lane/core"
 import type { z } from "zod"
 
@@ -41,10 +42,17 @@ export interface CliCommandDefinition {
   handler: (ctx: CliCommandContext) => Promise<void> | void
 }
 
+export interface EngineResolverOptions {
+  writable?: boolean
+}
+
+export type EngineResolver = (projectPath?: string, options?: EngineResolverOptions) => MemoryEngine
+
 export interface MemoryLanePluginAPI {
   readonly name: string
   readonly version: string
   readonly engine: MemoryEngine
+  readonly engineResolver: EngineResolver
   readonly config: SemanticMemoryConfig
   registerMcpTool(tool: McpToolDefinition): void
   registerMcpResource(resource: McpResourceDefinition): void
@@ -66,6 +74,7 @@ export interface BundledPluginModule {
 export interface LoadPluginsOptions {
   pluginNames: string[]
   engine: MemoryEngine
+  engineResolver?: EngineResolver
   config: SemanticMemoryConfig
   context: "cli" | "mcp"
   bundledPlugins?: BundledPluginModule[]
@@ -77,19 +86,29 @@ export function createPluginAPI(
   engine: MemoryEngine,
   config: SemanticMemoryConfig,
   context: "cli" | "mcp",
+  engineResolver: EngineResolver = () => engine,
 ): MemoryLanePluginAPI & { getMcpTools(): McpToolDefinition[]; getMcpResources(): McpResourceDefinition[]; getCliCommands(): CliCommandDefinition[] } {
   const mcpTools: McpToolDefinition[] = []
   const mcpResources: McpResourceDefinition[] = []
   const cliCommands: CliCommandDefinition[] = []
+  const mcpProjectContext = new AsyncLocalStorage<string | undefined>()
+  const resolveEngine: EngineResolver = (projectPath, options) => engineResolver(projectPath ?? mcpProjectContext.getStore(), options)
 
   return {
     name,
     version,
-    engine,
+    get engine() { return resolveEngine() },
+    engineResolver: resolveEngine,
     config,
     registerMcpTool(tool) {
       if (context !== "mcp") return
-      mcpTools.push(tool)
+      mcpTools.push({
+        ...tool,
+        async handler(input) {
+          const projectPath = typeof input.projectPath === "string" ? input.projectPath : undefined
+          return await mcpProjectContext.run(projectPath, () => tool.handler(input))
+        },
+      })
     },
     registerMcpResource(resource) {
       if (context !== "mcp") return
@@ -130,7 +149,7 @@ export async function loadPlugins(options: LoadPluginsOptions): Promise<LoadedPl
       throw new Error(`Plugin "${name}" does not export a default function`)
     }
 
-    const api = createPluginAPI(name, "0.0.0", options.engine, options.config, options.context)
+    const api = createPluginAPI(name, "0.0.0", options.engine, options.config, options.context, options.engineResolver)
     module.default(api)
 
     plugins.push({

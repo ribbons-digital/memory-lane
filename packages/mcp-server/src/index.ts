@@ -21,8 +21,8 @@ async function waitForStdinClose(): Promise<void> {
 }
 
 export async function main(options: MainOptions = {}): Promise<void> {
-  const { engine, plugins } = await createMemoryLaneEngine({ bundledPlugins: options.bundledPlugins })
-  const server = createMemoryLaneMcpServer({ engine, plugins })
+  const { engine, engineForProjectPath, plugins } = await createMemoryLaneEngine({ bundledPlugins: options.bundledPlugins })
+  const server = createMemoryLaneMcpServer({ engine, engineForProjectPath, plugins })
   const transport = new StdioServerTransport()
   await server.connect(transport)
   await waitForStdinClose()

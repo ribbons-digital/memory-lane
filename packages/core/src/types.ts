@@ -419,6 +419,8 @@ export interface ProjectScope {
   cwd: string
   root: string
   key: string
+  /** Source used to derive the stable project key and storage root. */
+  source?: "scope-file" | "git" | "cwd"
 }
 
 export interface SaveInput {
@@ -641,6 +643,8 @@ export interface MemoryEngineConfig {
   embeddingsPath?: string
   /** Optional storage facade. When provided, it owns memory, embedding, compaction, diagnostics, and continuity-baseline storage paths. */
   storage?: MemoryEngineStorage
+  /** Set false for read-only engine construction so startup does not compact or rewrite stores. */
+  autoCompact?: boolean
   configPath?: string
   embeddingProvider?: EmbeddingProvider
   hookDebugLogPath?: string

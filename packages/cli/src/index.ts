@@ -3,7 +3,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { readFile } from "node:fs/promises"
-import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, isMetaTaskPromptText, resolveMemoryPaths, resolveWritableMemoryPaths, isWorkflowArea, type MemoryPaths, type WorkflowArea } from "@memory-lane/core"
+import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type WorkflowArea } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import { handleSessionEnd, createOpenAICompatibleProvider } from "@memory-lane/lifecycle"
@@ -178,12 +178,20 @@ function createEmbeddingProvider(configPath: string): EmbeddingProvider | undefi
   }
 }
 
-function createEngine(paths: MemoryPaths, projPath?: string): MemoryEngine {
+function createEngine(paths: MemoryPaths | EngineStoragePaths, projPath?: string, opts: { autoCompact?: boolean } = {}): MemoryEngine {
+  const storage = "explicitEnv" in paths
+    ? paths.kind === "default-two-tier"
+      ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey)
+      : createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath)
+    : createSingleStoreEngineStorage(paths.memoryPath, paths.embeddingsPath)
+  const configPath = paths.configPath
   const engine = new MemoryEngine({
-    memoryPath: paths.memoryPath,
-    embeddingsPath: paths.embeddingsPath,
-    configPath: paths.configPath,
-    embeddingProvider: createEmbeddingProvider(paths.configPath),
+    memoryPath: "explicitEnv" in paths ? paths.home.memoryPath : paths.memoryPath,
+    embeddingsPath: "explicitEnv" in paths ? paths.home.embeddingsPath : paths.embeddingsPath,
+    storage,
+    autoCompact: opts.autoCompact,
+    configPath,
+    embeddingProvider: createEmbeddingProvider(configPath),
   })
   engine.refreshScope(projPath ?? process.cwd())
   return engine
@@ -922,7 +930,18 @@ async function handleClaude(ctx: CliContext): Promise<void> {
 type CommandHandler = (ctx: CliContext) => void | Promise<void>
 
 // These inspection commands must work in read-only desktop/client sandboxes without home-storage write probes.
-const readOnlyStorageCommands = new Set(["status", "continuity", "dashboard", "show", "get"])
+const readOnlyStorageCommands = new Set(["recall", "list", "search", "review", "dashboard", "agreements", "continuity", "doctor", "status", "show", "get", "mcp"])
+const readOnlyStorageSubcommands: Record<string, Set<string | undefined>> = {
+  config: new Set([undefined, "show"]),
+  obsidian: new Set([undefined, "status"]),
+}
+
+function usesReadOnlyStorageResolution(command: string, argv: string[]): boolean {
+  if (readOnlyStorageCommands.has(command)) return true
+  const subcommands = readOnlyStorageSubcommands[command]
+  if (!subcommands) return false
+  return subcommands.has(positionals(argv.slice(1))[0]?.toLowerCase())
+}
 
 const commandHandlers: Record<string, CommandHandler> = {
   save: handleSave,
@@ -1022,13 +1041,14 @@ async function main(): Promise<void> {
 
   const projPath = flag(argv, "project")
   const pathOptions = { cwd: projPath ?? process.cwd(), env: process.env }
-  const paths = readOnlyStorageCommands.has(command)
-    ? resolveMemoryPaths(pathOptions)
-    : resolveWritableMemoryPaths({ ...pathOptions, autoInitProjectLocalOnHomeFailure: true })
+  const readOnlyStorage = usesReadOnlyStorageResolution(command, argv)
+  const paths = readOnlyStorage
+    ? resolveEngineStoragePaths(pathOptions)
+    : resolveWritableEngineStoragePaths({ ...pathOptions, autoInitProjectLocalOnHomeFailure: true })
   const configPath = paths.configPath || resolveConfigPath()
   let engine: MemoryEngine
   try {
-    engine = createEngine(paths, projPath)
+    engine = createEngine(paths, projPath, { autoCompact: !readOnlyStorage })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     console.log(formatError(`Failed to initialize engine: ${msg}`, json))

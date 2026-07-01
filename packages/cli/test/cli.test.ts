@@ -367,7 +367,7 @@ describe("CLI integration", () => {
     assert.equal(payload.data.memories[0].text, "project plain folder rule")
   })
 
-  it("init --project-local creates project storage and save uses it", () => {
+  it("init --project-local creates project storage and project saves use it", () => {
     const project = tempDir()
     const home = tempDir()
     const init = runProcess(["init", "--project-local", "--project", project], { env: { HOME: home } })
@@ -379,11 +379,31 @@ describe("CLI integration", () => {
     assert.ok(fs.existsSync(path.join(project, ".memory-lane", "embeddings.jsonl")))
     assert.ok(fs.existsSync(path.join(project, ".memory-lane", "config.json")))
 
-    const saved = runProcess(["save", "project-local memory", "--project", project], { env: { HOME: home } })
+    const saved = runProcess(["save", "project-local memory", "--project", project, "--category", "project"], { env: { HOME: home } })
 
     assert.equal(saved.status, 0)
     assert.ok(fs.readFileSync(path.join(project, ".memory-lane", "memory.jsonl"), "utf8").includes("project-local memory"))
     assert.equal(fs.existsSync(path.join(home, ".memory-lane", "memory.jsonl")), false)
+  })
+
+  it("defaults new project scoped writes project-local and preferences home-side", () => {
+    const project = tempDir()
+    const home = tempDir()
+
+    const projectSaved = runProcess(["save", "project default local memory", "--project", project, "--category", "project", "--status", "approved"], { env: { HOME: home } })
+    const preferenceSaved = runProcess(["save", "always answer crisply", "--project", project, "--category", "preference", "--status", "approved"], { env: { HOME: home } })
+
+    assert.equal(projectSaved.status, 0, projectSaved.stderr)
+    assert.equal(preferenceSaved.status, 0, preferenceSaved.stderr)
+    assert.ok(fs.readFileSync(path.join(project, ".memory-lane", "memory.jsonl"), "utf8").includes("project default local memory"))
+    assert.ok(fs.readFileSync(path.join(project, ".gitignore"), "utf8").includes(".memory-lane/"))
+    assert.ok(fs.readFileSync(path.join(home, ".memory-lane", "memory.jsonl"), "utf8").includes("always answer crisply"))
+    assert.equal(fs.readFileSync(path.join(home, ".memory-lane", "memory.jsonl"), "utf8").includes("project default local memory"), false)
+
+    const listed = runProcess(["list", "--json", "--project", project], { env: { HOME: home } })
+    assert.equal(listed.status, 0, listed.stderr)
+    const payload = JSON.parse(listed.stdout)
+    assert.deepEqual(payload.data.memories.map((memory: MemoryRecord) => memory.text).sort(), ["always answer crisply", "project default local memory"])
   })
 
   it("save auto-falls back to project-local storage when home storage is blocked", () => {
@@ -1615,6 +1635,51 @@ describe("CLI integration", () => {
     } finally {
       fs.chmodSync(storage, 0o755)
     }
+  })
+
+  it("read-only inspection commands do not auto-compact storage", () => {
+    const dir = tempDir()
+    const memoryFile = path.join(dir, "memory.jsonl")
+    const records = [
+      ...Array.from({ length: 70 }, (_, i) => ({ id: `approved-${i}`, text: `Approved ${i}`, category: "project", scope: { type: "global" }, status: "approved", source: "manual", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" })),
+      ...Array.from({ length: 40 }, (_, i) => ({ id: `deleted-${i}`, text: `Deleted ${i}`, category: "project", scope: { type: "global" }, status: "deleted", source: "manual", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" })),
+    ] as MemoryRecord[]
+    writeMemoryRecords(memoryFile, records)
+    const before = fs.readFileSync(memoryFile, "utf8")
+    const env = { MEMORY_LANE_FILE: memoryFile, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json") }
+
+    const status = runProcess(["status", "--json"], { env })
+
+    assert.equal(status.status, 0, `status stderr=${status.stderr} stdout=${status.stdout}`)
+    assert.equal(JSON.parse(status.stdout).data.approvedMemories, 70)
+    assert.equal(fs.readFileSync(memoryFile, "utf8"), before)
+  })
+
+  it("read-only inspection commands do not auto-init project storage", () => {
+    const dir = tempDir()
+    const blockedHome = path.join(dir, "home-file")
+    const project = path.join(dir, "project")
+    fs.writeFileSync(blockedHome, "not a directory", "utf8")
+    fs.mkdirSync(project)
+    const env = { HOME: blockedHome, MEMORY_LANE_FILE: undefined, MEMORY_LANE_EMBEDDINGS_FILE: undefined, MEMORY_LANE_CONFIG: undefined }
+    const commands = [
+      ["recall", "nothing", "--json"],
+      ["list", "--json"],
+      ["search", "nothing", "--json"],
+      ["review", "--json"],
+      ["config", "show", "--json"],
+      ["obsidian", "status", "--json"],
+      ["mcp"],
+    ]
+
+    for (const args of commands) {
+      const result = runProcess([...args, "--project", project], { env })
+      assert.equal(result.status, 0, `${args[0]} stderr=${result.stderr} stdout=${result.stdout}`)
+    }
+
+    assert.equal(fs.existsSync(path.join(project, ".memory-lane")), false)
+    assert.equal(fs.existsSync(path.join(project, ".gitignore")), false)
+    assert.equal(fs.existsSync(path.join(project, ".memory-lane-scope")), false)
   })
 
   it("status and doctor json include text-free continuity hints", () => {

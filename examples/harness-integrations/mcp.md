@@ -68,6 +68,7 @@ In clients such as Claude Desktop and Codex Desktop, the model may try the `memo
 - `memory_save`
 - `memory_suggest`
 - `memory_recall`
+- `memory_continuity`
 - `memory_status`
 - `memory_list`
 - `memory_review`
@@ -79,4 +80,6 @@ Ask your MCP client: "Use Memory Lane to check my status." The client can call `
 
 Use `memory_review` to list pending memories, then `memory_approve` or `memory_reject` with a memory `id` to finish the review loop. Use `memory_delete` with a memory `id` to soft-delete an existing memory.
 
-Each tool accepts optional `projectPath` where project-scoped behavior should be resolved from a specific directory. If omitted, Memory Lane uses the MCP server process current working directory.
+Each tool accepts optional `projectPath` where project-scoped behavior should be resolved from a specific directory.
+If omitted, Memory Lane uses the MCP server process current working directory.
+With default storage, write tools use `projectPath` to route new project-scoped memories to that project's `.memory-lane/`, while read tools use it to merge that project store with the home store without creating fallback storage.

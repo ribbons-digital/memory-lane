@@ -104,7 +104,7 @@ export class MemoryEngine {
     this.refreshScope()
 
     // Auto-compact on startup if dead weight exceeds threshold
-    if (this.storage.shouldCompact()) {
+    if (opts?.autoCompact !== false && this.storage.shouldCompact()) {
       this.storage.compact()
     }
   }

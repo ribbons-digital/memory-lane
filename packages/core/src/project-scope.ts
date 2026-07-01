@@ -52,18 +52,25 @@ function resolveGitScope(cwd: string): ProjectScope | null {
   const gitCommonDirRaw = runGit(cwd, ["rev-parse", "--git-common-dir"])
   const key = gitCommonDirRaw ? canonicalKeyFromGitCommonDir(root, gitCommonDirRaw) : root
 
-  return { cwd, root, key }
+  return { cwd, root, key, source: "git" }
 }
 
-/** Resolve project scope: scope file → git root → null. Never auto-creates scope files. */
+/**
+ * Resolve project scope without creating scope files.
+ * Resolution order is:
+ * 1. nearest parent `.memory-lane-scope` file (`source: "scope-file"`);
+ * 2. git checkout root, using the shared common-dir identity for linked worktrees (`source: "git"`);
+ * 3. when `cwd` is explicitly supplied, a canonical cwd scope (`source: "cwd"`).
+ * Without an explicit `cwd`, returns null when no scope file or git scope is found.
+ */
 export function resolveProjectScope(cwd?: string): ProjectScope | null {
   const hasExplicitCwd = cwd !== undefined
   const resolvedCwd = path.resolve(cwd ?? process.cwd())
   const scope = findScopeFile(resolvedCwd)
-  if (scope) return { cwd: resolvedCwd, root: scope.root, key: scope.id }
+  if (scope) return { cwd: resolvedCwd, root: scope.root, key: scope.id, source: "scope-file" }
   const gitScope = resolveGitScope(resolvedCwd)
   if (gitScope) return gitScope
   if (!hasExplicitCwd) return null
   const canonical = realpathOrResolved(resolvedCwd)
-  return { cwd: resolvedCwd, root: canonical, key: canonical }
+  return { cwd: resolvedCwd, root: canonical, key: canonical, source: "cwd" }
 }
