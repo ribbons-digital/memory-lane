@@ -59,12 +59,14 @@ const continuityQuery = z.string().optional().describe("Optional query for read-
 
 export interface CreateMemoryLaneMcpServerOptions {
   engine: MemoryEngine
+  engineForProjectPath?: (projectPath?: string) => MemoryEngine
   plugins?: LoadedPlugin[]
 }
 
 export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOptions): McpServer {
   const server = new McpServer({ name: "memory-lane", version: "0.1.0" })
   const engine = options.engine
+  const engineForProjectPath = options.engineForProjectPath ?? (() => engine)
 
   server.registerTool(
     "memory_save",
@@ -82,7 +84,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         projectPath,
       },
     },
-    async (input) => handleMemorySave(engine, input),
+    async (input) => handleMemorySave(engineForProjectPath(input.projectPath), input),
   )
 
   server.registerTool(
@@ -102,7 +104,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         projectPath,
       },
     },
-    async (input) => handleMemorySuggest(engine, input),
+    async (input) => handleMemorySuggest(engineForProjectPath(input.projectPath), input),
   )
 
   server.registerTool(
@@ -115,7 +117,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         projectPath,
       },
     },
-    async (input) => handleMemoryRecall(engine, input),
+    async (input) => handleMemoryRecall(engineForProjectPath(input.projectPath), input),
   )
 
   server.registerTool(
@@ -128,7 +130,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         since,
       },
     },
-    async (input) => handleMemoryStatus(engine, input),
+    async (input) => handleMemoryStatus(engineForProjectPath(input.projectPath), input),
   )
 
   server.registerTool(
@@ -142,7 +144,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         projectPath,
       },
     },
-    async (input) => handleMemoryList(engine, input),
+    async (input) => handleMemoryList(engineForProjectPath(input.projectPath), input),
   )
 
   server.registerTool(
@@ -156,7 +158,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         projectPath,
       },
     },
-    async (input) => handleMemoryGet(engine, input),
+    async (input) => handleMemoryGet(engineForProjectPath(input.projectPath), input),
   )
 
   server.registerTool(
@@ -171,7 +173,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         projectPath,
       },
     },
-    async (input) => handleMemoryReview(engine, input),
+    async (input) => handleMemoryReview(engineForProjectPath(input.projectPath), input),
   )
 
   server.registerTool(
@@ -181,7 +183,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
       description: "Canonical continuity read model for project resumption, last-worked-on, accomplished, next-action, and project-status questions. Prefer this over memory_recall for continuity questions. Pass projectPath for project-scoped results in desktop MCP clients. Pass query for read-only workstream discovery pointers.",
       inputSchema: { projectPath, query: continuityQuery },
     },
-    async (input) => handleMemoryContinuity(engine, input),
+    async (input) => handleMemoryContinuity(engineForProjectPath(input.projectPath), input),
   )
 
   server.registerTool(
@@ -194,7 +196,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         projectPath,
       },
     },
-    async (input) => handleMemoryApprove(engine, input),
+    async (input) => handleMemoryApprove(engineForProjectPath(input.projectPath), input),
   )
 
   server.registerTool(
@@ -207,7 +209,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         projectPath,
       },
     },
-    async (input) => handleMemoryReject(engine, input),
+    async (input) => handleMemoryReject(engineForProjectPath(input.projectPath), input),
   )
 
   server.registerTool(
@@ -220,7 +222,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         projectPath,
       },
     },
-    async (input) => handleMemoryDelete(engine, input),
+    async (input) => handleMemoryDelete(engineForProjectPath(input.projectPath), input),
   )
 
   for (const plugin of options.plugins ?? []) {

@@ -26,30 +26,49 @@ function createEmbeddingProvider(
 
 export interface MemoryLaneEngineResult {
   engine: MemoryEngine
+  engineForProjectPath: (projectPath?: string) => MemoryEngine
   plugins: LoadedPlugin[]
 }
 
 export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOptions = {}): Promise<MemoryLaneEngineResult> {
   const env = options.env ?? process.env
   const cwd = options.cwd ?? process.cwd()
-  const paths = resolveWritableEngineStoragePaths({ cwd, env, autoInitProjectLocalOnHomeFailure: true })
-  const config = loadConfig(paths.configPath)
-  const storage = paths.kind === "default-two-tier"
-    ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey)
-    : createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath)
-  const engine = new MemoryEngine({
-    memoryPath: paths.home.memoryPath,
-    embeddingsPath: paths.home.embeddingsPath,
-    storage,
-    configPath: paths.configPath,
-    embeddingProvider: createEmbeddingProvider(paths.configPath, env),
-    env,
-  })
-  engine.refreshScope(cwd)
+  const engineCache = new Map<string, MemoryEngine>()
 
+  function buildEngine(engineCwd: string): MemoryEngine {
+    const paths = resolveWritableEngineStoragePaths({ cwd: engineCwd, env, autoInitProjectLocalOnHomeFailure: true })
+    const storage = paths.kind === "default-two-tier"
+      ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey)
+      : createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath)
+    const engine = new MemoryEngine({
+      memoryPath: paths.home.memoryPath,
+      embeddingsPath: paths.home.embeddingsPath,
+      storage,
+      configPath: paths.configPath,
+      embeddingProvider: createEmbeddingProvider(paths.configPath, env),
+      env,
+    })
+    engine.refreshScope(engineCwd)
+    return engine
+  }
+
+  function engineForProjectPath(projectPath?: string): MemoryEngine {
+    const engineCwd = projectPath ?? cwd
+    const cached = engineCache.get(engineCwd)
+    if (cached) {
+      cached.refreshScope(engineCwd)
+      return cached
+    }
+    const engine = buildEngine(engineCwd)
+    engineCache.set(engineCwd, engine)
+    return engine
+  }
+
+  const engine = engineForProjectPath()
+  const config = loadConfig(resolveWritableEngineStoragePaths({ cwd, env, autoInitProjectLocalOnHomeFailure: true }).configPath)
   const plugins = config.plugins?.length
     ? await loadPlugins({ pluginNames: config.plugins, engine, config, context: "mcp", bundledPlugins: options.bundledPlugins })
     : []
 
-  return { engine, plugins }
+  return { engine, engineForProjectPath, plugins }
 }

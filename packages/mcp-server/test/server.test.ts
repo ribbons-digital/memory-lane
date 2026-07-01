@@ -185,6 +185,24 @@ test("registers status review-complete and continuity tools on the MCP server", 
   assert.match(continuityTool.description, /Pass projectPath/u)
 })
 
+test("createMemoryLaneEngine retargets storage for per-call project paths", async () => {
+  const dir = tempDir("memory-lane-mcp-engine-project-path-")
+  const home = path.join(dir, "home")
+  const startupProject = path.join(dir, "startup-project")
+  const callProject = path.join(dir, "call-project")
+  fs.mkdirSync(startupProject, { recursive: true })
+  fs.mkdirSync(callProject, { recursive: true })
+
+  const { engineForProjectPath } = await createMemoryLaneEngine({ cwd: startupProject, env: { HOME: home } })
+  const engine = engineForProjectPath(callProject)
+  const result = engine.save({ text: "MCP projectPath storage", category: "project", status: "approved" })
+
+  assert.equal(result.status, "saved")
+  assert.equal(fs.existsSync(path.join(callProject, ".memory-lane", "memory.jsonl")), true)
+  assert.ok(fs.readFileSync(path.join(callProject, ".memory-lane", "memory.jsonl"), "utf8").includes("MCP projectPath storage"))
+  assert.equal(fs.existsSync(path.join(startupProject, ".memory-lane", "memory.jsonl")), false)
+})
+
 test("createMemoryLaneEngine uses explicit environment paths", async () => {
   const dir = tempDir("memory-lane-mcp-engine-")
   const { engine } = await createMemoryLaneEngine({
