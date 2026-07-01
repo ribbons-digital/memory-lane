@@ -219,7 +219,7 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
   }
 
   function routeForNew(record: MemoryRecord): StoreEntry {
-    return project && record.scope.type === "project" && record.scope.key === project.scopeKey ? project : home
+    return project && record.scope.type === "project" && Boolean(project.scopeKey) && record.scope.key === project.scopeKey ? project : home
   }
 
   function routeForRecord(record: MemoryRecord): StoreEntry {
@@ -248,6 +248,7 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
   }
 
   function compactMemoryLogs(compactedEntries: StoreEntry[]): { report: CompactReport; aliveById: Map<string, LocatedMemoryRecord> } {
+    const totalBefore = compactedEntries.reduce((sum, entry) => sum + readLog(entry).length, 0)
     const latest = new Map<string, LocatedMemoryRecord>()
     for (const located of allLocatedMemoryLogs()) {
       const existing = latest.get(located.record.id)
@@ -263,13 +264,14 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
     for (const located of Array.from(aliveById.values()).sort((a, b) => a.record.createdAt.localeCompare(b.record.createdAt))) {
       grouped.set(located.entry, [...(grouped.get(located.entry) ?? []), located.record])
     }
+    const totalPreserved = Array.from(grouped.values()).reduce((sum, group) => sum + group.length, 0)
     for (const entry of compactedEntries) {
       const group = grouped.get(entry) ?? []
       if (existingFile(entry.paths.memoryPath) || group.length) writeJsonl(entry.paths.memoryPath, group)
     }
 
     return {
-      report: { removedMemories: latest.size - aliveById.size, removedEmbeddings: 0, removedInvalidations: 0 },
+      report: { removedMemories: totalBefore - totalPreserved, removedEmbeddings: 0, removedInvalidations: 0 },
       aliveById,
     }
   }
@@ -312,7 +314,7 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
 
     return {
       removedMemories: 0,
-      removedEmbeddings: totalBefore - validEmbeddings.length,
+      removedEmbeddings: totalBefore - invalidationCount - validEmbeddings.length,
       removedInvalidations: invalidationCount,
     }
   }
@@ -345,7 +347,7 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
       embeddingStore(routeForEmbedding(record), true)!.append(record)
     },
     listEmbeddings() {
-      return entries.flatMap((entry) => embeddingStore(entry)?.listEmbeddings() ?? [])
+      return foldEmbeddings(entries.flatMap((entry) => embeddingStore(entry)?.listEmbeddings() ?? []))
     },
     listEmbeddingInvalidations() {
       return entries.flatMap((entry) => embeddingStore(entry)?.listInvalidations() ?? [])

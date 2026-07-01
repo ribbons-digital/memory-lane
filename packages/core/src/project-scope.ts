@@ -55,7 +55,14 @@ function resolveGitScope(cwd: string): ProjectScope | null {
   return { cwd, root, key, source: "git" }
 }
 
-/** Resolve project scope: scope file → git root → null. Never auto-creates scope files. */
+/**
+ * Resolve project scope without creating scope files.
+ * Resolution order is:
+ * 1. nearest parent `.memory-lane-scope` file (`source: "scope-file"`);
+ * 2. git checkout root, using the shared common-dir identity for linked worktrees (`source: "git"`);
+ * 3. when `cwd` is explicitly supplied, a canonical cwd scope (`source: "cwd"`).
+ * Without an explicit `cwd`, returns null when no scope file or git scope is found.
+ */
 export function resolveProjectScope(cwd?: string): ProjectScope | null {
   const hasExplicitCwd = cwd !== undefined
   const resolvedCwd = path.resolve(cwd ?? process.cwd())

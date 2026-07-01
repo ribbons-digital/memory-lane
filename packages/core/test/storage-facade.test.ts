@@ -237,7 +237,7 @@ describe("MemoryEngineStorage two-tier facade", () => {
 
     const report = storage.compact()
 
-    assert.equal(report.removedMemories, 1)
+    assert.equal(report.removedMemories, 2)
     assert.deepEqual(storage.listMemories(), [])
     assert.equal(fs.readFileSync(home.memoryPath, "utf8"), "")
     assert.equal(fs.readFileSync(project.memoryPath, "utf8"), "")
