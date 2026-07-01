@@ -97,6 +97,27 @@ describe("storage locations", () => {
     assert.equal(paths.configPath, path.join(home, ".memory-lane", "config.json"))
   })
 
+  it("uses resolved project root for engine project-local fallback when home is blocked", () => {
+    const root = tempDir()
+    const nested = path.join(root, "packages", "app")
+    fs.mkdirSync(nested, { recursive: true })
+    fs.writeFileSync(path.join(root, ".memory-lane-scope"), JSON.stringify({ id: "stable-root-scope" }), "utf8")
+    const fakeHomeFile = path.join(tempDir(), "not-a-directory")
+    fs.writeFileSync(fakeHomeFile, "file blocks ~/.memory-lane", "utf8")
+
+    const paths = resolveWritableEngineStoragePaths({
+      cwd: nested,
+      env: { HOME: fakeHomeFile },
+      autoInitProjectLocalOnHomeFailure: true,
+    })
+
+    assert.equal(paths.kind, "project-local-fallback")
+    assert.equal(paths.home.memoryPath, path.join(root, ".memory-lane", "memory.jsonl"))
+    assert.equal(fs.existsSync(path.join(nested, ".memory-lane")), false)
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, ".memory-lane-scope"), "utf8")), { id: "stable-root-scope" })
+    assert.ok(fs.readFileSync(path.join(root, ".gitignore"), "utf8").includes(".memory-lane/"))
+  })
+
   it("keeps explicit engine storage overrides single-store", () => {
     const dir = tempDir()
     const explicit = tempDir()

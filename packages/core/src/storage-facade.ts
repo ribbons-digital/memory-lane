@@ -38,21 +38,32 @@ interface StoreEntry {
   embeddingStore?: EmbeddingStore
 }
 
-function compareUpdatedAt(a: MemoryRecord, b: MemoryRecord): number {
-  const updated = a.updatedAt.localeCompare(b.updatedAt)
-  if (updated !== 0) return updated
-  const created = a.createdAt.localeCompare(b.createdAt)
-  if (created !== 0) return created
-  return a.id.localeCompare(b.id)
+interface LocatedMemoryRecord {
+  entry: StoreEntry
+  record: MemoryRecord
 }
 
-function foldMergedMemoryRecords(records: MemoryRecord[]): MemoryRecord[] {
-  const latest = new Map<string, MemoryRecord>()
+function storePrecedence(entry: StoreEntry): number {
+  return entry.name === "project" ? 1 : 0
+}
+
+function compareLocatedMemory(a: LocatedMemoryRecord, b: LocatedMemoryRecord): number {
+  const updated = a.record.updatedAt.localeCompare(b.record.updatedAt)
+  if (updated !== 0) return updated
+  const created = a.record.createdAt.localeCompare(b.record.createdAt)
+  if (created !== 0) return created
+  const store = storePrecedence(a.entry) - storePrecedence(b.entry)
+  if (store !== 0) return store
+  return a.record.id.localeCompare(b.record.id)
+}
+
+function foldMergedMemoryRecords(records: LocatedMemoryRecord[]): MemoryRecord[] {
+  const latest = new Map<string, LocatedMemoryRecord>()
   for (const record of records) {
-    const existing = latest.get(record.id)
-    if (!existing || compareUpdatedAt(existing, record) <= 0) latest.set(record.id, record)
+    const existing = latest.get(record.record.id)
+    if (!existing || compareLocatedMemory(existing, record) < 0) latest.set(record.record.id, record)
   }
-  return Array.from(latest.values()).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  return Array.from(latest.values()).map((entry) => entry.record).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 }
 
 function emptyDiagnostics(): MemoryStoreDiagnostics {
@@ -168,17 +179,18 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
 
   function ownerEntry(memoryId: string): StoreEntry | undefined {
     // JSONL stores are small today; if multi-store batches become large, cache this owner index per appendMany call.
-    let owner: { entry: StoreEntry; record: MemoryRecord } | undefined
+    let owner: LocatedMemoryRecord | undefined
     for (const entry of entries) {
       for (const record of readLog(entry).filter((candidate) => candidate.id === memoryId)) {
-        if (!owner || compareUpdatedAt(owner.record, record) <= 0) owner = { entry, record }
+        const candidate = { entry, record }
+        if (!owner || compareLocatedMemory(owner, candidate) < 0) owner = candidate
       }
     }
     return owner?.entry
   }
 
   function routeForNew(record: MemoryRecord): StoreEntry {
-    return project && record.scope.type === "project" && Boolean(record.scope.key) ? project : home
+    return project && record.scope.type === "project" && record.scope.key === project.scopeKey ? project : home
   }
 
   function routeForRecord(record: MemoryRecord): StoreEntry {
@@ -192,6 +204,10 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
 
   function allMemoryLogs(): MemoryRecord[] {
     return entries.flatMap((entry) => readLog(entry))
+  }
+
+  function allLocatedMemoryLogs(): LocatedMemoryRecord[] {
+    return entries.flatMap((entry) => readLog(entry).map((record) => ({ entry, record })))
   }
 
   function routeForEmbedding(record: EmbeddingLine): StoreEntry {
@@ -221,7 +237,7 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
       return allMemoryLogs()
     },
     listMemories() {
-      return foldMergedMemoryRecords(allMemoryLogs())
+      return foldMergedMemoryRecords(allLocatedMemoryLogs())
     },
     memoryDiagnostics() {
       return entries.reduce((sum, entry) => addDiagnostics(sum, memoryStore(entry)?.diagnostics() ?? emptyDiagnostics()), emptyDiagnostics())

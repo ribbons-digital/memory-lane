@@ -135,6 +135,36 @@ describe("MemoryEngineStorage two-tier facade", () => {
     assert.deepEqual(storage.listMemories().map((memory) => [memory.id, memory.text]), [["same", "new"]])
   })
 
+  it("uses stable project-store precedence for same-timestamp cross-store duplicate ids", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const sameTime = "2026-01-01T00:00:00.000Z"
+
+    const projectRecord = rec({ id: "same-time", text: "project wins", createdAt: sameTime, updatedAt: sameTime, scope: { type: "project", key: "scope-key" }, project: { cwd: project.root, root: project.root, key: "scope-key" } })
+    const homeRecord = rec({ id: "same-time", text: "home loses", createdAt: sameTime, updatedAt: sameTime, scope: { type: "global" }, project: undefined })
+
+    createSingleStoreEngineStorage(project.memoryPath, project.embeddingsPath).appendMemory(projectRecord)
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemory(homeRecord)
+
+    assert.deepEqual(storage.listMemories().map((memory) => [memory.id, memory.text]), [["same-time", "project wins"]])
+    storage.appendMemory(rec({ ...homeRecord, text: "same-time update" }))
+    assert.equal(fs.readFileSync(project.memoryPath, "utf8").includes("same-time update"), true)
+  })
+
+  it("does not route another project's new memory into the active project store", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project-a"))
+    const storage = createTwoTierEngineStorage(home, project, "project-a")
+
+    storage.appendMemory(rec({ id: "project-b", scope: { type: "project", key: "project-b" }, project: { cwd: "/b", root: "/b", key: "project-b" } }))
+
+    assert.ok(fs.readFileSync(home.memoryPath, "utf8").includes('"id":"project-b"'))
+    assert.equal(fs.existsSync(project.memoryPath), false)
+  })
+
   it("routes existing ids to their origin store and embeddings to the owning side", () => {
     const dir = tempDir()
     const home = homePathsFor(path.join(dir, "home", ".memory-lane"))

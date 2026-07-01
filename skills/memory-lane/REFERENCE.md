@@ -250,7 +250,7 @@ In pi, Memory Lane provides manual tools/commands, explicit `memory_continuity`,
 
 ### Sandboxed storage
 
-Default storage is two-tier when no explicit `MEMORY_LANE_*` paths are set: global/preference/personal memories stay in `~/.memory-lane/`, while new project-scoped memories write to resolved project-local `.memory-lane/`. If home storage is not writable, Memory Lane auto-initializes project-local single-store fallback and continues there. Explicit `MEMORY_LANE_FILE`, `MEMORY_LANE_EMBEDDINGS_FILE`, and `MEMORY_LANE_CONFIG` always win and do not auto-fallback.
+Default storage is two-tier when no explicit `MEMORY_LANE_*` paths are set: global/preference/personal memories stay in `~/.memory-lane/`, while new project-scoped memories write to resolved project-local `.memory-lane/`. If home storage is not writable, writable commands/hooks auto-initialize project-local single-store fallback and continue there; read-only continuity/status commands should not create fallback storage. Explicit `MEMORY_LANE_FILE`, `MEMORY_LANE_EMBEDDINGS_FILE`, and `MEMORY_LANE_CONFIG` always win and do not auto-fallback.
 
 ```bash
 memory-lane init --project-local --project /path/to/project

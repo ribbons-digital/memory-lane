@@ -402,7 +402,7 @@ Custom facade implementations can also import `EmbeddingLine` for `appendEmbeddi
 
 Embeddings (when configured) are paired with the owning memory store: home memories use `~/.memory-lane/embeddings.jsonl`, and project-local memories use `<project-root>/.memory-lane/embeddings.jsonl`. When a memory changes, recall ignores only embeddings created before that memory's latest invalidation; newer embeddings for the same memory id can be used without a full reindex.
 
-For sandboxed harnesses, Memory Lane first tries global storage at `~/.memory-lane`. If that home storage is not writable and no explicit `MEMORY_LANE_*` paths are set, commands and hooks automatically initialize project-local single-store fallback storage at `.memory-lane/` and continue there.
+For sandboxed harnesses, writable Memory Lane commands and hooks first try global storage at `~/.memory-lane`. If that home storage is not writable and no explicit `MEMORY_LANE_*` paths are set, writable commands/hooks automatically initialize project-local single-store fallback storage at `.memory-lane/` and continue there. Read-only commands use read-only storage resolution and should not create fallback storage just to inspect continuity/status.
 
 You can also initialize project-local storage explicitly:
 

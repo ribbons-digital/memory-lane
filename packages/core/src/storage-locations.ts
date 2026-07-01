@@ -200,7 +200,9 @@ export function resolveWritableEngineStoragePaths(options?: ResolveWritableMemor
     return plan
   } catch (err) {
     if (options?.autoInitProjectLocalOnHomeFailure) {
-      const paths = initProjectLocalStorage(options.cwd ?? process.cwd()).paths
+      const paths = plan.project
+        ? ensureProjectLocalStorageFiles(plan.project.root, plan.projectScopeKey)
+        : initProjectLocalStorage(options.cwd ?? process.cwd()).paths
       return { kind: "project-local-fallback", home: paths, configPath: paths.configPath, explicitEnv: false }
     }
     throw err
