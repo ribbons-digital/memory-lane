@@ -388,17 +388,21 @@ Eleven packages in a monorepo:
 
 ## Storage
 
-By default, memories are stored as append-only JSONL at `~/.memory-lane/memory.jsonl`.
-Each write appends a record; reads fold duplicates by id (last write wins).
+By default, Memory Lane uses two storage tiers when no explicit `MEMORY_LANE_*` paths are set:
+
+- global, preference, and personal memories live in `~/.memory-lane/memory.jsonl`;
+- new project-scoped memories live in `<project-root>/.memory-lane/memory.jsonl` when a project scope is known.
+
+Each write appends a record; reads fold duplicates by id with the newest revision winning.
 Atomic memory writes use a short lock plus `.tmp` + `rename`, and batch writes are atomic per underlying store.
-In `v0.2.42+`, this behavior is routed through an internal storage facade so future project-local defaults can be added without changing today's write locations.
-Advanced `@memory-lane/core` consumers can import `MemoryEngineStorage` and `createSingleStoreEngineStorage` when they need to inject storage that owns memory, embedding, compaction, diagnostics, and continuity-baseline paths.
+The internal storage facade merges the active project store with the home store for recall, list, review, continuity, and status surfaces.
+Existing records keep their origin store for normal edits/review actions so one logical memory id is not split across files.
+Advanced `@memory-lane/core` consumers can import `MemoryEngineStorage`, `createSingleStoreEngineStorage`, and `createTwoTierEngineStorage` when they need to inject storage that owns memory, embedding, compaction, diagnostics, and continuity-baseline paths.
 Custom facade implementations can also import `EmbeddingLine` for `appendEmbedding()` inputs.
 
-Embeddings (when configured) default to `~/.memory-lane/embeddings.jsonl` with mixed embedding records and invalidation records. When a memory changes, recall ignores only embeddings created before that memory's latest invalidation; newer embeddings for the same memory id can be used without a full reindex.
+Embeddings (when configured) are paired with the owning memory store: home memories use `~/.memory-lane/embeddings.jsonl`, and project-local memories use `<project-root>/.memory-lane/embeddings.jsonl`. When a memory changes, recall ignores only embeddings created before that memory's latest invalidation; newer embeddings for the same memory id can be used without a full reindex.
 
-For sandboxed harnesses, Memory Lane first tries global storage at `~/.memory-lane`. If that home storage is not writable and no explicit `MEMORY_LANE_*` paths are set, commands and hooks automatically initialize project-local storage at `.memory-lane/` and continue there.
-Project-scoped memories still write to the active storage location; `--scope project` does not by itself create or select project-local storage when home storage is writable.
+For sandboxed harnesses, Memory Lane first tries global storage at `~/.memory-lane`. If that home storage is not writable and no explicit `MEMORY_LANE_*` paths are set, commands and hooks automatically initialize project-local single-store fallback storage at `.memory-lane/` and continue there.
 
 You can also initialize project-local storage explicitly:
 
@@ -406,7 +410,7 @@ You can also initialize project-local storage explicitly:
 memory-lane init --project-local --project /path/to/project
 ```
 
-Project-local initialization creates `.memory-lane/` in the project, adds `.memory-lane/` to `.gitignore`, and creates `.memory-lane-scope`. Commands and hooks run with `--project /path/to/project` automatically prefer this project-local store unless explicit `MEMORY_LANE_*` paths are set.
+Project-local initialization creates `.memory-lane/` in the project, adds `.memory-lane/` to `.gitignore`, and creates `.memory-lane-scope`. In the default two-tier model, commands and hooks run with `--project /path/to/project` use this project store for project-scoped writes while keeping global preferences home-side unless explicit `MEMORY_LANE_*` paths are set.
 
 ## Project Scoping
 

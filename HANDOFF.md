@@ -28,9 +28,10 @@ Slice 0 shipped in `v0.2.42`:
 Explicitly out of scope for Slice 0: default-location flip, automatic project-local creation for project-scoped saves, migration of existing home-stored project memories, config merging, schema changes, or user-facing storage-default docs beyond internal prep.
 A narrow semantic embedding invalidation correctness fix shipped with Slice 0 after review feedback so freshly embedded approved memories remain usable after invalidation.
 
-Recommended next step: draft the approval-gated Slice 1 design for project-local default writes.
-Before presenting it, get Opus 4.8's second opinion and converge on the proposal.
-Slice 1 should route new project-scoped writes to project-local storage when project scope is known and no explicit `MEMORY_LANE_*` paths override storage, while keeping global preferences/personal memories home-side.
+Current implementation slice: Slice 1 project-local default writes is approved and in implementation on `docs/project-local-slice-1-design`.
+Spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
+Implemented so far: default two-tier engine storage, new project-scoped writes route to project-local storage when project scope is known and no explicit `MEMORY_LANE_*` paths override storage, global/preference/personal writes stay home-side, reads merge home plus active project stores, existing ids route by origin store, embeddings route to owning store, active project stores compact, CLI/MCP/pi engine construction use the two-tier resolver, and storage/CLI tests cover the main behavior.
+Still required before PR: full verification, Opus 4.8 implementation review, final docs/status sync, PR creation.
 
 ## Load-bearing constraints
 
@@ -81,6 +82,7 @@ Slice 1 should route new project-scoped writes to project-local storage when pro
 - Retrieval/continuity eval baseline design: `docs/superpowers/specs/2026-06-27-retrieval-continuity-eval-baseline-design.md`
 - Retrieval/continuity eval baseline findings: `docs/superpowers/validation/2026-06-27-retrieval-continuity-eval-baseline.md`
 - Project-local storage default design: `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`
+- Project-local storage Slice 1 approval draft: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`
 - Retrieval currentness tie-break design: `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md`
 - Retrieval currentness tie-break validation: `docs/superpowers/validation/2026-06-30-retrieval-currentness-tie-break-validation.md`
 - v0.2.42 release/dogfood validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`

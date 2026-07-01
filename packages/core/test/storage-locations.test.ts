@@ -3,7 +3,7 @@ import * as path from "node:path"
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { tempDir } from "./helpers.js"
-import { initProjectLocalStorage, resolveMemoryPaths, resolveWritableMemoryPaths } from "../src/storage-locations.js"
+import { initProjectLocalStorage, resolveEngineStoragePaths, resolveMemoryPaths, resolveWritableEngineStoragePaths, resolveWritableMemoryPaths } from "../src/storage-locations.js"
 
 describe("storage locations", () => {
   it("initializes project-local storage and prints env exports", () => {
@@ -82,5 +82,36 @@ describe("storage locations", () => {
       /ENOTDIR|not a directory|EEXIST|file already exists/i,
     )
     assert.equal(fs.existsSync(path.join(dir, ".memory-lane")), false)
+  })
+
+  it("resolves default engine storage as home-primary two-tier even when project-local exists", () => {
+    const dir = tempDir()
+    const home = tempDir()
+    initProjectLocalStorage(dir)
+
+    const paths = resolveEngineStoragePaths({ cwd: path.join(dir, "nested"), env: { HOME: home } })
+
+    assert.equal(paths.kind, "default-two-tier")
+    assert.equal(paths.home.memoryPath, path.join(home, ".memory-lane", "memory.jsonl"))
+    assert.equal(paths.project?.memoryPath, path.join(dir, ".memory-lane", "memory.jsonl"))
+    assert.equal(paths.configPath, path.join(home, ".memory-lane", "config.json"))
+  })
+
+  it("keeps explicit engine storage overrides single-store", () => {
+    const dir = tempDir()
+    const explicit = tempDir()
+
+    const paths = resolveWritableEngineStoragePaths({
+      cwd: dir,
+      env: {
+        MEMORY_LANE_FILE: path.join(explicit, "mem.jsonl"),
+        MEMORY_LANE_EMBEDDINGS_FILE: path.join(explicit, "emb.jsonl"),
+        MEMORY_LANE_CONFIG: path.join(explicit, "cfg.json"),
+      },
+    })
+
+    assert.equal(paths.kind, "environment")
+    assert.equal(paths.home.memoryPath, path.join(explicit, "mem.jsonl"))
+    assert.equal(paths.project, undefined)
   })
 })

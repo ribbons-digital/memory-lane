@@ -367,7 +367,7 @@ describe("CLI integration", () => {
     assert.equal(payload.data.memories[0].text, "project plain folder rule")
   })
 
-  it("init --project-local creates project storage and save uses it", () => {
+  it("init --project-local creates project storage and project saves use it", () => {
     const project = tempDir()
     const home = tempDir()
     const init = runProcess(["init", "--project-local", "--project", project], { env: { HOME: home } })
@@ -379,11 +379,31 @@ describe("CLI integration", () => {
     assert.ok(fs.existsSync(path.join(project, ".memory-lane", "embeddings.jsonl")))
     assert.ok(fs.existsSync(path.join(project, ".memory-lane", "config.json")))
 
-    const saved = runProcess(["save", "project-local memory", "--project", project], { env: { HOME: home } })
+    const saved = runProcess(["save", "project-local memory", "--project", project, "--category", "project"], { env: { HOME: home } })
 
     assert.equal(saved.status, 0)
     assert.ok(fs.readFileSync(path.join(project, ".memory-lane", "memory.jsonl"), "utf8").includes("project-local memory"))
     assert.equal(fs.existsSync(path.join(home, ".memory-lane", "memory.jsonl")), false)
+  })
+
+  it("defaults new project scoped writes project-local and preferences home-side", () => {
+    const project = tempDir()
+    const home = tempDir()
+
+    const projectSaved = runProcess(["save", "project default local memory", "--project", project, "--category", "project", "--status", "approved"], { env: { HOME: home } })
+    const preferenceSaved = runProcess(["save", "always answer crisply", "--project", project, "--category", "preference", "--status", "approved"], { env: { HOME: home } })
+
+    assert.equal(projectSaved.status, 0, projectSaved.stderr)
+    assert.equal(preferenceSaved.status, 0, preferenceSaved.stderr)
+    assert.ok(fs.readFileSync(path.join(project, ".memory-lane", "memory.jsonl"), "utf8").includes("project default local memory"))
+    assert.ok(fs.readFileSync(path.join(project, ".gitignore"), "utf8").includes(".memory-lane/"))
+    assert.ok(fs.readFileSync(path.join(home, ".memory-lane", "memory.jsonl"), "utf8").includes("always answer crisply"))
+    assert.equal(fs.readFileSync(path.join(home, ".memory-lane", "memory.jsonl"), "utf8").includes("project default local memory"), false)
+
+    const listed = runProcess(["list", "--json", "--project", project], { env: { HOME: home } })
+    assert.equal(listed.status, 0, listed.stderr)
+    const payload = JSON.parse(listed.stdout)
+    assert.deepEqual(payload.data.memories.map((memory: MemoryRecord) => memory.text).sort(), ["always answer crisply", "project default local memory"])
   })
 
   it("save auto-falls back to project-local storage when home storage is blocked", () => {

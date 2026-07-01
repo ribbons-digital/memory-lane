@@ -2,6 +2,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { DEFAULT_CONFIG, writeConfig } from "./config.js"
+import { resolveProjectScope } from "./project-scope.js"
 
 export type MemoryStorageKind = "environment" | "project-local" | "home"
 
@@ -36,7 +37,7 @@ function projectLocalRoot(root: string): string {
   return path.join(root, ".memory-lane")
 }
 
-function projectLocalPaths(root: string): MemoryPaths {
+export function projectLocalPaths(root: string): MemoryPaths {
   const localRoot = projectLocalRoot(root)
   return {
     kind: "project-local",
@@ -47,7 +48,7 @@ function projectLocalPaths(root: string): MemoryPaths {
   }
 }
 
-function homePaths(env: NodeJS.ProcessEnv | Record<string, string | undefined>): MemoryPaths {
+export function homePaths(env: NodeJS.ProcessEnv | Record<string, string | undefined>): MemoryPaths {
   const root = path.join(env.HOME ?? os.homedir(), ".memory-lane")
   return {
     kind: "home",
@@ -68,13 +69,26 @@ function findProjectLocalRoot(cwd: string): string | undefined {
   }
 }
 
-function appendGitignore(root: string): void {
+export function appendGitignore(root: string): void {
   const gitignore = path.join(root, ".gitignore")
   const line = ".memory-lane/"
   const existing = fs.existsSync(gitignore) ? fs.readFileSync(gitignore, "utf8") : ""
   if (existing.split(/\r?\n/u).includes(line)) return
   const prefix = existing && !existing.endsWith("\n") ? "\n" : ""
   fs.writeFileSync(gitignore, existing + prefix + line + "\n", "utf8")
+}
+
+function hasExplicitStorageEnv(env: NodeJS.ProcessEnv | Record<string, string | undefined>): boolean {
+  return Boolean(env.MEMORY_LANE_FILE || env.MEMORY_LANE_EMBEDDINGS_FILE || env.MEMORY_LANE_CONFIG)
+}
+
+export interface EngineStoragePaths {
+  kind: "environment" | "default-two-tier" | "project-local-fallback"
+  home: MemoryPaths
+  project?: MemoryPaths
+  projectScopeKey?: string
+  configPath: string
+  explicitEnv: boolean
 }
 
 export function resolveMemoryPaths(options?: ResolveMemoryPathsOptions): MemoryPaths {
@@ -99,19 +113,24 @@ export function resolveMemoryPaths(options?: ResolveMemoryPathsOptions): MemoryP
   return homePaths(env)
 }
 
-export function initProjectLocalStorage(cwd = process.cwd()): InitProjectLocalStorageResult {
-  const root = path.resolve(cwd)
-  const paths = projectLocalPaths(root)
+export function ensureProjectLocalStorageFiles(root: string, scopeId?: string): MemoryPaths {
+  const resolvedRoot = path.resolve(root)
+  const paths = projectLocalPaths(resolvedRoot)
   fs.mkdirSync(paths.root, { recursive: true })
   fs.mkdirSync(path.dirname(paths.memoryPath), { recursive: true })
   for (const file of [paths.memoryPath, paths.embeddingsPath]) {
     if (!fs.existsSync(file)) fs.writeFileSync(file, "", "utf8")
   }
-  if (!fs.existsSync(paths.configPath)) writeConfig(paths.configPath, DEFAULT_CONFIG)
+  appendGitignore(resolvedRoot)
+  const scopePath = path.join(resolvedRoot, ".memory-lane-scope")
+  if (!fs.existsSync(scopePath)) fs.writeFileSync(scopePath, JSON.stringify({ id: scopeId ?? resolvedRoot }, null, 2) + "\n", "utf8")
+  return paths
+}
 
-  const scopePath = path.join(root, ".memory-lane-scope")
-  if (!fs.existsSync(scopePath)) fs.writeFileSync(scopePath, JSON.stringify({ id: root }, null, 2) + "\n", "utf8")
-  appendGitignore(root)
+export function initProjectLocalStorage(cwd = process.cwd()): InitProjectLocalStorageResult {
+  const root = path.resolve(cwd)
+  const paths = ensureProjectLocalStorageFiles(root, root)
+  if (!fs.existsSync(paths.configPath)) writeConfig(paths.configPath, DEFAULT_CONFIG)
 
   return {
     root,
@@ -141,6 +160,48 @@ export function resolveWritableMemoryPaths(options?: ResolveWritableMemoryPathsO
   } catch (err) {
     if (paths.kind === "home" && options?.autoInitProjectLocalOnHomeFailure) {
       return initProjectLocalStorage(options.cwd ?? process.cwd()).paths
+    }
+    throw err
+  }
+}
+
+export function resolveEngineStoragePaths(options?: ResolveMemoryPathsOptions): EngineStoragePaths {
+  const env = options?.env ?? process.env
+  if (hasExplicitStorageEnv(env)) {
+    const paths = resolveMemoryPaths(options)
+    return { kind: "environment", home: paths, configPath: paths.configPath, explicitEnv: true }
+  }
+
+  const home = homePaths(env)
+  const cwd = options?.cwd ? path.resolve(options.cwd) : process.cwd()
+  const scope = resolveProjectScope(cwd)
+  const projectRoot = scope ? (path.isAbsolute(scope.key) ? scope.key : scope.root) : undefined
+  return {
+    kind: "default-two-tier",
+    home,
+    project: projectRoot ? projectLocalPaths(projectRoot) : undefined,
+    projectScopeKey: scope?.key,
+    configPath: home.configPath,
+    explicitEnv: false,
+  }
+}
+
+export function resolveWritableEngineStoragePaths(options?: ResolveWritableMemoryPathsOptions): EngineStoragePaths {
+  const plan = resolveEngineStoragePaths(options)
+  if (plan.explicitEnv) {
+    const paths = resolveWritableMemoryPaths(options)
+    return { kind: "environment", home: paths, configPath: paths.configPath, explicitEnv: true }
+  }
+
+  try {
+    assertWritableMemoryPath(plan.home.memoryPath)
+    assertWritableMemoryPath(plan.home.embeddingsPath)
+    assertWritableMemoryPath(plan.home.configPath)
+    return plan
+  } catch (err) {
+    if (options?.autoInitProjectLocalOnHomeFailure) {
+      const paths = initProjectLocalStorage(options.cwd ?? process.cwd()).paths
+      return { kind: "project-local-fallback", home: paths, configPath: paths.configPath, explicitEnv: false }
     }
     throw err
   }

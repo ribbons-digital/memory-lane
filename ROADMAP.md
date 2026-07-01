@@ -80,9 +80,10 @@ Slice plan:
 Current release state: Slice 0 is merged and released in `v0.2.42`; installed-artifact dogfood passed via `memory-lane upgrade --yes` and `memory-lane --smoke-test`.
 Validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
 
-Next step: if continuing this track, draft the Slice 1 project-local default-write design for user approval.
-Per project workflow, get Opus 4.8's second opinion and converge before presenting the spec.
-Do not implement Slice 1 until approved.
+Current implementation slice: Slice 1 project-local default writes is approved and in implementation on `docs/project-local-slice-1-design`.
+Approved spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
+The slice routes new project-scoped writes project-side by default, keeps global/preference/personal writes home-side, merges project/home reads, routes existing ids by origin store, pairs embeddings with owning stores, and compacts active project stores.
+Migration diagnostics and cross-store rescope moves remain deferred.
 
 Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in `v0.2.41`; pause retrieval-ranking work unless new dogfood/eval evidence justifies another proposal.
 

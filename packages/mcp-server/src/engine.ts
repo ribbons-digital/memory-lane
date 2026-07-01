@@ -1,5 +1,5 @@
 import {
-  MemoryEngine, createOpenAIEmbeddingProvider, loadConfig, resolveWritableMemoryPaths,
+  MemoryEngine, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, loadConfig, resolveWritableEngineStoragePaths,
   type MemoryEngineConfig,
 } from "@memory-lane/core"
 import { loadPlugins, type BundledPluginModule, type LoadedPlugin } from "@memory-lane/plugin-api"
@@ -32,11 +32,15 @@ export interface MemoryLaneEngineResult {
 export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOptions = {}): Promise<MemoryLaneEngineResult> {
   const env = options.env ?? process.env
   const cwd = options.cwd ?? process.cwd()
-  const paths = resolveWritableMemoryPaths({ cwd, env, autoInitProjectLocalOnHomeFailure: true })
+  const paths = resolveWritableEngineStoragePaths({ cwd, env, autoInitProjectLocalOnHomeFailure: true })
   const config = loadConfig(paths.configPath)
+  const storage = paths.kind === "default-two-tier"
+    ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey)
+    : createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath)
   const engine = new MemoryEngine({
-    memoryPath: paths.memoryPath,
-    embeddingsPath: paths.embeddingsPath,
+    memoryPath: paths.home.memoryPath,
+    embeddingsPath: paths.home.embeddingsPath,
+    storage,
     configPath: paths.configPath,
     embeddingProvider: createEmbeddingProvider(paths.configPath, env),
     env,

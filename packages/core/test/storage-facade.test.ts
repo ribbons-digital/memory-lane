@@ -1,9 +1,11 @@
+import * as fs from "node:fs"
 import * as path from "node:path"
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { contentHash } from "../src/engine-helpers.js"
-import { createSingleStoreEngineStorage } from "../src/storage-facade.js"
+import { createSingleStoreEngineStorage, createTwoTierEngineStorage } from "../src/storage-facade.js"
 import { createMemoryId } from "../src/storage.js"
+import { projectLocalPaths, type MemoryPaths } from "../src/storage-locations.js"
 import type { MemoryRecord } from "../src/types.js"
 import { tempDir } from "./helpers.js"
 
@@ -85,5 +87,94 @@ describe("MemoryEngineStorage single-store facade", () => {
     assert.equal(storage.listMemories()[0].text, "new")
     assert.notEqual(storage.listMemories(), cached)
     assert.equal(storage.readMemoryLog().length, 1)
+  })
+})
+
+function homePathsFor(root: string): MemoryPaths {
+  return {
+    kind: "home",
+    root,
+    memoryPath: path.join(root, "memory.jsonl"),
+    embeddingsPath: path.join(root, "embeddings.jsonl"),
+    configPath: path.join(root, "config.json"),
+  }
+}
+
+describe("MemoryEngineStorage two-tier facade", () => {
+  it("routes new project memories project-side and global memories home-side", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const projectRoot = path.join(dir, "project")
+    const project = projectLocalPaths(projectRoot)
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+
+    const projectMemory = rec({ id: "project", scope: { type: "project", key: "scope-key" }, project: { cwd: projectRoot, root: projectRoot, key: "scope-key" } })
+    const globalMemory = rec({ id: "global", category: "preference", scope: { type: "global" }, project: undefined })
+
+    storage.appendMemory(projectMemory)
+    storage.appendMemory(globalMemory)
+
+    assert.ok(fs.readFileSync(project.memoryPath, "utf8").includes('"id":"project"'))
+    assert.ok(fs.readFileSync(home.memoryPath, "utf8").includes('"id":"global"'))
+    assert.equal(fs.existsSync(path.join(projectRoot, ".gitignore")), true)
+    assert.ok(fs.readFileSync(path.join(projectRoot, ".gitignore"), "utf8").includes(".memory-lane/"))
+  })
+
+  it("folds duplicate ids across stores by updatedAt rather than store order", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+
+    const oldHome = rec({ id: "same", text: "old", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", scope: { type: "global" }, project: undefined })
+    const newProject = rec({ id: "same", text: "new", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z", scope: { type: "project", key: "scope-key" }, project: { cwd: project.root, root: project.root, key: "scope-key" } })
+
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemory(oldHome)
+    createSingleStoreEngineStorage(project.memoryPath, project.embeddingsPath).appendMemory(newProject)
+
+    assert.deepEqual(storage.listMemories().map((memory) => [memory.id, memory.text]), [["same", "new"]])
+  })
+
+  it("routes existing ids to their origin store and embeddings to the owning side", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+
+    const homeOrigin = rec({ id: "home-origin", text: "home old", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", scope: { type: "global" }, project: undefined })
+    storage.appendMemory(homeOrigin)
+    storage.appendMemory(rec({ ...homeOrigin, text: "home updated", updatedAt: "2026-01-02T00:00:00.000Z", scope: { type: "project", key: "scope-key" }, project: { cwd: project.root, root: project.root, key: "scope-key" } }))
+    storage.appendEmbedding({
+      memoryId: "home-origin",
+      memoryUpdatedAt: "2026-01-02T00:00:00.000Z",
+      contentHash: contentHash("home updated"),
+      profileName: "default",
+      model: "test-model",
+      dimensions: 1,
+      vector: [1],
+      createdAt: "2026-01-02T00:00:00.000Z",
+    })
+
+    assert.equal(fs.readFileSync(home.memoryPath, "utf8").match(/home-origin/g)?.length, 2)
+    assert.equal(fs.existsSync(project.memoryPath), false)
+    assert.ok(fs.readFileSync(home.embeddingsPath, "utf8").includes("home-origin"))
+    assert.equal(fs.existsSync(project.embeddingsPath), false)
+  })
+
+  it("compacts active home and project stores", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+
+    storage.appendMemory(rec({ id: "home-live", scope: { type: "global" }, project: undefined }))
+    storage.appendMemory(rec({ id: "project-live", scope: { type: "project", key: "scope-key" }, project: { cwd: project.root, root: project.root, key: "scope-key" } }))
+    storage.appendMemory(rec({ id: "project-deleted", status: "deleted", scope: { type: "project", key: "scope-key" }, project: { cwd: project.root, root: project.root, key: "scope-key" } }))
+
+    const report = storage.compact()
+
+    assert.equal(report.removedMemories, 1)
+    assert.equal(storage.listMemories().some((memory) => memory.id === "project-deleted"), false)
+    assert.ok(fs.readFileSync(project.memoryPath, "utf8").includes("project-live"))
   })
 })

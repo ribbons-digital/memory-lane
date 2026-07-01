@@ -3,7 +3,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { readFile } from "node:fs/promises"
-import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, initProjectLocalStorage, isMetaTaskPromptText, resolveMemoryPaths, resolveWritableMemoryPaths, isWorkflowArea, type MemoryPaths, type WorkflowArea } from "@memory-lane/core"
+import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type WorkflowArea } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import { handleSessionEnd, createOpenAICompatibleProvider } from "@memory-lane/lifecycle"
@@ -178,12 +178,19 @@ function createEmbeddingProvider(configPath: string): EmbeddingProvider | undefi
   }
 }
 
-function createEngine(paths: MemoryPaths, projPath?: string): MemoryEngine {
+function createEngine(paths: MemoryPaths | EngineStoragePaths, projPath?: string): MemoryEngine {
+  const storage = "explicitEnv" in paths
+    ? paths.kind === "default-two-tier"
+      ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey)
+      : createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath)
+    : createSingleStoreEngineStorage(paths.memoryPath, paths.embeddingsPath)
+  const configPath = paths.configPath
   const engine = new MemoryEngine({
-    memoryPath: paths.memoryPath,
-    embeddingsPath: paths.embeddingsPath,
-    configPath: paths.configPath,
-    embeddingProvider: createEmbeddingProvider(paths.configPath),
+    memoryPath: "explicitEnv" in paths ? paths.home.memoryPath : paths.memoryPath,
+    embeddingsPath: "explicitEnv" in paths ? paths.home.embeddingsPath : paths.embeddingsPath,
+    storage,
+    configPath,
+    embeddingProvider: createEmbeddingProvider(configPath),
   })
   engine.refreshScope(projPath ?? process.cwd())
   return engine
@@ -1023,8 +1030,8 @@ async function main(): Promise<void> {
   const projPath = flag(argv, "project")
   const pathOptions = { cwd: projPath ?? process.cwd(), env: process.env }
   const paths = readOnlyStorageCommands.has(command)
-    ? resolveMemoryPaths(pathOptions)
-    : resolveWritableMemoryPaths({ ...pathOptions, autoInitProjectLocalOnHomeFailure: true })
+    ? resolveEngineStoragePaths(pathOptions)
+    : resolveWritableEngineStoragePaths({ ...pathOptions, autoInitProjectLocalOnHomeFailure: true })
   const configPath = paths.configPath || resolveConfigPath()
   let engine: MemoryEngine
   try {
