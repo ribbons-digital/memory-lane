@@ -188,6 +188,17 @@ test("continuity read model excludes superseded memories from selected slots", (
 })
 
 
+test("continuity read model excludes superseded memories from workstream discovery", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "old-checkpoint", text: "Workstream discovery implementation plan", kind: "project_checkpoint", updatedAt: "2026-06-20T10:00:00.000Z", revision: { supersededBy: "new-checkpoint", revisedAt: "2026-06-20T12:00:00.000Z", revisedBy: "manual" } }),
+    memory({ id: "new-checkpoint", text: "Workstream discovery implementation completed", kind: "project_checkpoint", updatedAt: "2026-06-19T10:00:00.000Z" }),
+  ], { projectScopeKey: "project-a", query: "resume workstream discovery implementation" })
+
+  assert.deepEqual(result.workstreamDiscovery?.candidates.map((item) => item.id), ["new-checkpoint"])
+  assert.doesNotMatch(JSON.stringify(result.workstreamDiscovery), /old-checkpoint/u)
+})
+
+
 test("continuity read model uses safe descriptor metadata for previews", () => {
   const result = buildContinuityReadModel([
     memory({

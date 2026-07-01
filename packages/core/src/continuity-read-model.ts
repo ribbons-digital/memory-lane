@@ -255,7 +255,7 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
   const warnings = buildWarnings({ projectScope, latestProject, pendingContinuityCandidates, hintCodes, caller: options.caller })
   const discoveryQuery = options.query?.trim()
   const workstreamDiscovery = discoveryQuery
-    ? discoverWorkstreams(memories, { projectScopeKey: projectScope, query: discoveryQuery, previewMaxChars })
+    ? discoverWorkstreams(activeVisibleApproved, { projectScopeKey: projectScope, query: discoveryQuery, previewMaxChars })
     : undefined
 
   const suggestedActions = unique([
