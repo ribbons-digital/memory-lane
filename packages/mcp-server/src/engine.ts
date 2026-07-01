@@ -72,8 +72,8 @@ export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOpti
     return engine
   }
 
-  const engine = engineForProjectPath()
-  const config = loadConfig(resolveWritableEngineStoragePaths({ cwd, env, autoInitProjectLocalOnHomeFailure: true }).configPath)
+  const engine = engineForProjectPath(undefined, { writable: false })
+  const config = loadConfig(resolveEngineStoragePaths({ cwd, env }).configPath)
   const plugins = config.plugins?.length
     ? await loadPlugins({ pluginNames: config.plugins, engine, config, context: "mcp", bundledPlugins: options.bundledPlugins })
     : []

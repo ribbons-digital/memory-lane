@@ -228,6 +228,19 @@ test("createMemoryLaneEngine retargets storage for per-call project paths", asyn
   assert.equal(fs.existsSync(path.join(startupProject, ".memory-lane", "memory.jsonl")), false)
 })
 
+test("MCP startup does not initialize project-local fallback", async () => {
+  const dir = tempDir("memory-lane-mcp-engine-readonly-startup-")
+  const blockedHome = path.join(dir, "blocked-home")
+  const startupProject = path.join(dir, "startup-project")
+  fs.writeFileSync(blockedHome, "not a directory")
+  fs.mkdirSync(startupProject, { recursive: true })
+
+  await createMemoryLaneEngine({ cwd: startupProject, env: { HOME: blockedHome } })
+
+  assert.equal(fs.existsSync(path.join(startupProject, ".memory-lane")), false)
+  assert.equal(fs.existsSync(path.join(startupProject, ".memory-lane-scope")), false)
+})
+
 test("read-only per-call project paths do not initialize project-local fallback", async () => {
   const dir = tempDir("memory-lane-mcp-engine-readonly-project-path-")
   const blockedHome = path.join(dir, "blocked-home")
