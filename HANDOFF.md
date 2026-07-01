@@ -2,8 +2,8 @@
 
 ## Current state
 
-- Branch context: `main` is synced through `cd1a839 feat(core): add storage facade for project-local memories (#78)`. Current docs branch records the `v0.2.42` release dogfood.
-- Latest release: `v0.2.42` at tag `v0.2.42` / commit `cd1a839`; release workflow `28484161404` passed and published 8 assets.
+- Branch context: `main` is synced through `a87eff5 feat(core): default project memories to local storage (#80)`.
+- Latest release: `v0.2.42` at tag `v0.2.42` / commit `cd1a839`; release workflow `28484161404` passed and published 8 assets. PR #80 is merged on `main` but not yet released.
 - Phase 21 `Handoff-Free Sessions` is complete and dogfooded. Fresh-thread prompt `where are we in the project and what should we work on next?` used about 11.8% context, improved from the previous 14.x% range.
 - Docs/context-budget slice is merged: root `ROADMAP.md` is now a compact active index, historical roadmap detail through Phase 20.5 is archived, `HANDOFF.md` is a status card, and Memory Lane skill guidance emphasizes bounded reads.
 - Retrieval/continuity eval baseline PR #70 merged as `7d5a8a6`; local/remote `feat/retrieval-continuity-eval-baseline` branches are cleaned up. The slice added a sanitized six-scenario corpus, test-only core eval helpers, structural tests, and baseline findings doc.
@@ -28,10 +28,11 @@ Slice 0 shipped in `v0.2.42`:
 Explicitly out of scope for Slice 0: default-location flip, automatic project-local creation for project-scoped saves, migration of existing home-stored project memories, config merging, schema changes, or user-facing storage-default docs beyond internal prep.
 A narrow semantic embedding invalidation correctness fix shipped with Slice 0 after review feedback so freshly embedded approved memories remain usable after invalidation.
 
-Current implementation slice: Slice 1 project-local default writes is approved and implemented on `docs/project-local-slice-1-design`, pending final review/PR.
+Slice 1 project-local default writes merged in PR #80 as `a87eff5` and is on `main` but not yet released.
 Spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
-Implemented: default two-tier engine storage, new project-scoped writes route to project-local storage when project scope is known and no explicit `MEMORY_LANE_*` paths override storage, global-scope preference/personal writes stay home-side, reads merge home plus active project stores, existing ids route by origin store, embeddings route to owning store, active project stores compact, CLI/MCP/pi engine construction use the two-tier resolver, read-only inspection paths avoid fallback creation, and storage/CLI/MCP tests cover the main behavior.
-Still required before PR: full verification, Opus 4.8 implementation review, PR creation.
+Shipped on main: default two-tier engine storage, new project-scoped writes route to project-local storage when project scope is known and no explicit `MEMORY_LANE_*` paths override storage, global-scope preference/personal writes stay home-side, reads merge home plus active project stores, existing ids route by origin store, embeddings route to owning store, active project stores compact, CLI/MCP/pi engine construction use the two-tier resolver, read-only inspection paths avoid fallback creation, MCP per-call `projectPath` retargets storage, plugin engine resolution uses active MCP project context, and storage/CLI/MCP/plugin tests cover the behavior.
+
+Next recommended slice: Slice 2 migration/compatibility diagnostics. It needs a fresh design and approval gate before implementation. Target behavior: detect legacy home-stored project memories, surface bounded diagnostics/warnings, and provide explicit dry-run migration without silent moves/deletes/approvals/consolidation.
 
 ## Load-bearing constraints
 
@@ -69,6 +70,7 @@ Still required before PR: full verification, Opus 4.8 implementation review, PR 
 - Installed `v0.2.41` dogfood passed: `memory-lane --smoke-test` returned `memory-lane ok`, and an isolated lexical fallback recall fixture ranked the newer `current-release` checkpoint before the stale checkpoint for `what is the current Memory Lane release status?`.
 - PR #78 merged as `cd1a839`; post-merge cleanup synced `main` and deleted local/remote `feat/storage-facade-proof` branches.
 - `v0.2.42` release workflow `28484161404` passed and published 8 assets; installed `memory-lane upgrade --yes` passed, reconfigured Pi, and `memory-lane --smoke-test` returned `memory-lane ok`. Validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
+- PR #80 merged as `a87eff5`; post-merge cleanup synced `main`, deleted local/remote `docs/project-local-slice-1-design`, and saved checkpoint memory `a3cf55ce`. Before merge, validation included targeted core/CLI/MCP/plugin checks, `pnpm build`, `git diff --check`, Opus 4.8 review, no-mistakes gates, GitHub CI, and CodeRabbit.
 - Slice B no-mistakes/PR validation before merge: Opus 4.8 implementation review found no blockers; no-mistakes review found and fixed secret-like keyword pre-normalization and fallback-count-after-trim issues; CodeRabbit inline keyword-limit feedback was fixed by applying the keyword item cap after normalization/deduplication; GitHub PR checks passed (`test` and CodeRabbit). PR #72 merged as `bc02d04`.
 - `v0.2.40` release workflow `28419273491` passed and published 8 assets; installed `memory-lane upgrade --yes` passed and reconfigured Pi.
 - Installed Slice B dogfood passed: exact human and JSON `show` exposed descriptor metadata, released `memory-lane codex session-start` rendered structured descriptor summaries plus fetch hints, full descriptor-card bodies stayed out of SessionStart, and generated fallback descriptors still worked. Validation: `docs/superpowers/validation/2026-06-30-session-start-descriptor-metadata-dogfood.md`.
