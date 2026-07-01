@@ -43,6 +43,7 @@ interface StoreEntry {
 interface LocatedMemoryRecord {
   entry: StoreEntry
   record: MemoryRecord
+  logIndex: number
 }
 
 interface LocatedEmbeddingRecord {
@@ -59,6 +60,10 @@ function compareLocatedMemory(a: LocatedMemoryRecord, b: LocatedMemoryRecord): n
   if (updated !== 0) return updated
   const created = a.record.createdAt.localeCompare(b.record.createdAt)
   if (created !== 0) return created
+  if (a.entry === b.entry) {
+    const log = a.logIndex - b.logIndex
+    if (log !== 0) return log
+  }
   const store = storePrecedence(a.entry) - storePrecedence(b.entry)
   if (store !== 0) return store
   return a.record.id.localeCompare(b.record.id)
@@ -199,10 +204,11 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
     // JSONL stores are small today; if multi-store batches become large, cache this owner index per appendMany call.
     let owner: LocatedMemoryRecord | undefined
     for (const entry of entries) {
-      for (const record of readLog(entry).filter((candidate) => candidate.id === memoryId)) {
-        const candidate = { entry, record }
+      readLog(entry).forEach((record, logIndex) => {
+        if (record.id !== memoryId) return
+        const candidate = { entry, record, logIndex }
         if (!owner || compareLocatedMemory(owner, candidate) < 0) owner = candidate
-      }
+      })
     }
     return owner?.entry
   }
@@ -225,7 +231,7 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
   }
 
   function allLocatedMemoryLogs(): LocatedMemoryRecord[] {
-    return entries.flatMap((entry) => readLog(entry).map((record) => ({ entry, record })))
+    return entries.flatMap((entry) => readLog(entry).map((record, logIndex) => ({ entry, record, logIndex })))
   }
 
   function routeForEmbedding(record: EmbeddingLine): StoreEntry {

@@ -135,6 +135,22 @@ describe("MemoryEngineStorage two-tier facade", () => {
     assert.deepEqual(storage.listMemories().map((memory) => [memory.id, memory.text]), [["same", "new"]])
   })
 
+  it("preserves append-order last-write-wins within a store for same-timestamp duplicate ids", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const sameTime = "2026-01-01T00:00:00.000Z"
+    const original = rec({ id: "same-store", text: "old", createdAt: sameTime, updatedAt: sameTime, scope: { type: "global" }, project: undefined })
+    const updated = rec({ ...original, text: "new" })
+
+    storage.appendMemories([original, updated])
+
+    assert.deepEqual(storage.listMemories().map((memory) => [memory.id, memory.text]), [["same-store", "new"]])
+    storage.compact()
+    assert.deepEqual(storage.listMemories().map((memory) => [memory.id, memory.text]), [["same-store", "new"]])
+  })
+
   it("uses stable project-store precedence for same-timestamp cross-store duplicate ids", () => {
     const dir = tempDir()
     const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
