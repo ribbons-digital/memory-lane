@@ -370,7 +370,7 @@ Promotion of wiki-derived facts into Memory Lane remains explicit through the ex
 
 ## Architecture
 
-Nine packages in a monorepo:
+Eleven packages in a monorepo:
 
 | Package | Purpose |
 |---|---|
@@ -380,6 +380,8 @@ Nine packages in a monorepo:
 | `@memory-lane/mcp-server` | Local stdio MCP server exposing explicit Memory Lane tools. |
 | `@memory-lane/obsidian-mirror` | Optional one-way JSONL → Obsidian Markdown mirror. |
 | `@memory-lane/obsidian-import` | Standalone parser/planner for explicit Obsidian Markdown → JSONL imports. |
+| `@memory-lane/plugin-api` | Lightweight plugin API for first-party and custom extensions. |
+| `@memory-lane/plugin-obsidian-wiki` | Optional Obsidian/Garden knowledge-base search and read plugin. |
 | `@memory-lane/claude-adapter` | Claude Code hook adapter exposed through `memory-lane claude ...`. |
 | `@memory-lane/codex-adapter` | Codex hook adapter exposed through `memory-lane codex ...`. |
 | `@memory-lane/pi-adapter` | pi extension adapter. |
@@ -391,6 +393,7 @@ Each write appends a record; reads fold duplicates by id (last write wins).
 Atomic memory writes use a short lock plus `.tmp` + `rename`, and batch writes are atomic per underlying store.
 In `v0.2.42+`, this behavior is routed through an internal storage facade so future project-local defaults can be added without changing today's write locations.
 Advanced `@memory-lane/core` consumers can import `MemoryEngineStorage` and `createSingleStoreEngineStorage` when they need to inject storage that owns memory, embedding, compaction, diagnostics, and continuity-baseline paths.
+Custom facade implementations can also import `EmbeddingLine` for `appendEmbedding()` inputs.
 
 Embeddings (when configured) default to `~/.memory-lane/embeddings.jsonl` with mixed embedding records and invalidation records. When a memory changes, recall ignores only embeddings created before that memory's latest invalidation; newer embeddings for the same memory id can be used without a full reindex.
 

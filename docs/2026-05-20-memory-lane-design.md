@@ -279,10 +279,28 @@ class MemoryEngine {
   constructor(config?: MemoryEngineConfig)
 }
 
+interface MemoryEngineStorage {
+  readonly memoryFile: string
+  readonly embeddingFile: string
+  readonly continuityBaselinePath: string
+  appendMemory(record: MemoryRecord): void
+  appendMemories(records: MemoryRecord[]): void
+  readMemoryLog(): MemoryRecord[]
+  listMemories(): MemoryRecord[]
+  memoryDiagnostics(): MemoryStoreDiagnostics
+  appendEmbedding(record: EmbeddingLine): void
+  listEmbeddings(): EmbeddingRecord[]
+  listEmbeddingInvalidations(): EmbeddingInvalidationRecord[]
+  shouldCompact(): boolean
+  compact(): CompactReport
+}
+
 function createSingleStoreEngineStorage(memoryPath: string, embeddingsPath: string): MemoryEngineStorage
 ```
 
-`memoryPath` and `embeddingsPath` still build the backward-compatible single-store facade. Advanced tests and integrations can pass a custom `MemoryEngineStorage` when they need to own memory, embedding, compaction, diagnostic, or continuity-baseline paths.
+`memoryPath` and `embeddingsPath` still build the backward-compatible single-store facade.
+Advanced tests and integrations can pass a custom `MemoryEngineStorage` when they need to own memory, embedding, compaction, diagnostic, or continuity-baseline paths.
+`EmbeddingLine` is the exported union accepted by `appendEmbedding()` for embedding records and embedding invalidation records.
 
 **Instance lifecycle recommendation:** Create one `MemoryEngine` per process and reuse it. The in-memory cache makes this significantly faster than per-operation construction. The pi adapter uses a singleton; the CLI creates one per invocation (naturally isolated processes).
 
