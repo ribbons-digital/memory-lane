@@ -1637,6 +1637,30 @@ describe("CLI integration", () => {
     }
   })
 
+  it("read-only inspection commands do not auto-init project storage", () => {
+    const dir = tempDir()
+    const blockedHome = path.join(dir, "home-file")
+    const project = path.join(dir, "project")
+    fs.writeFileSync(blockedHome, "not a directory", "utf8")
+    fs.mkdirSync(project)
+    const env = { HOME: blockedHome, MEMORY_LANE_FILE: undefined, MEMORY_LANE_EMBEDDINGS_FILE: undefined, MEMORY_LANE_CONFIG: undefined }
+    const commands = [
+      ["recall", "nothing", "--json"],
+      ["list", "--json"],
+      ["search", "nothing", "--json"],
+      ["review", "--json"],
+    ]
+
+    for (const args of commands) {
+      const result = runProcess([...args, "--project", project], { env })
+      assert.equal(result.status, 0, `${args[0]} stderr=${result.stderr} stdout=${result.stdout}`)
+    }
+
+    assert.equal(fs.existsSync(path.join(project, ".memory-lane")), false)
+    assert.equal(fs.existsSync(path.join(project, ".gitignore")), false)
+    assert.equal(fs.existsSync(path.join(project, ".memory-lane-scope")), false)
+  })
+
   it("status and doctor json include text-free continuity hints", () => {
     const dir = tempDir()
     const project = tempDir()

@@ -929,7 +929,7 @@ async function handleClaude(ctx: CliContext): Promise<void> {
 type CommandHandler = (ctx: CliContext) => void | Promise<void>
 
 // These inspection commands must work in read-only desktop/client sandboxes without home-storage write probes.
-const readOnlyStorageCommands = new Set(["status", "continuity", "dashboard", "show", "get"])
+const readOnlyStorageCommands = new Set(["recall", "list", "search", "review", "dashboard", "agreements", "continuity", "doctor", "status", "show", "get"])
 
 const commandHandlers: Record<string, CommandHandler> = {
   save: handleSave,
