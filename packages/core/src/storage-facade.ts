@@ -1,7 +1,9 @@
+import { createHash, randomBytes } from "node:crypto"
 import * as fs from "node:fs"
+import * as path from "node:path"
 import { compact as compactStores, shouldCompact } from "./compact.js"
 import { defaultContinuityBaselinePath } from "./continuity-baseline.js"
-import { createEmbeddingStore, type EmbeddingLine, type EmbeddingStore } from "./embedding-store.js"
+import { createEmbeddingStore, foldEmbeddings, type EmbeddingLine, type EmbeddingStore } from "./embedding-store.js"
 import { ensureProjectLocalStorageFiles, type MemoryPaths } from "./storage-locations.js"
 import { createMemoryStore, type MemoryStore, type MemoryStoreDiagnostics } from "./storage.js"
 import type { CompactReport, EmbeddingInvalidationRecord, EmbeddingRecord, MemoryRecord } from "./types.js"
@@ -41,6 +43,11 @@ interface StoreEntry {
 interface LocatedMemoryRecord {
   entry: StoreEntry
   record: MemoryRecord
+}
+
+interface LocatedEmbeddingRecord {
+  entry: StoreEntry
+  record: EmbeddingRecord
 }
 
 function storePrecedence(entry: StoreEntry): number {
@@ -90,6 +97,17 @@ function addReports(a: CompactReport, b: CompactReport): CompactReport {
 
 function existingFile(path: string): boolean {
   try { return fs.existsSync(path) } catch { return false }
+}
+
+function writeJsonl(pathname: string, records: unknown[]): void {
+  fs.mkdirSync(path.dirname(pathname), { recursive: true })
+  const tmp = pathname + ".tmp." + randomBytes(4).toString("hex")
+  fs.writeFileSync(tmp, records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : ""), "utf8")
+  fs.renameSync(tmp, pathname)
+}
+
+function embeddingKey(record: EmbeddingRecord): string {
+  return [record.memoryId, record.contentHash, record.profileName, record.model].join("\0")
 }
 
 function createStoreEntry(name: StoreEntry["name"], paths: MemoryPaths, opts?: { scopeKey?: string }): StoreEntry {
@@ -218,6 +236,76 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
     return entries.filter((entry) => existingFile(entry.paths.memoryPath) || existingFile(entry.paths.embeddingsPath))
   }
 
+  function compactMemoryLogs(compactedEntries: StoreEntry[]): { report: CompactReport; aliveById: Map<string, LocatedMemoryRecord> } {
+    const latest = new Map<string, LocatedMemoryRecord>()
+    for (const located of allLocatedMemoryLogs()) {
+      const existing = latest.get(located.record.id)
+      if (!existing || compareLocatedMemory(existing, located) < 0) latest.set(located.record.id, located)
+    }
+
+    const aliveById = new Map<string, LocatedMemoryRecord>()
+    for (const [id, located] of latest) {
+      if (located.record.status !== "deleted" && located.record.status !== "rejected") aliveById.set(id, located)
+    }
+
+    const grouped = new Map<StoreEntry, MemoryRecord[]>()
+    for (const located of Array.from(aliveById.values()).sort((a, b) => a.record.createdAt.localeCompare(b.record.createdAt))) {
+      grouped.set(located.entry, [...(grouped.get(located.entry) ?? []), located.record])
+    }
+    for (const entry of compactedEntries) {
+      const group = grouped.get(entry) ?? []
+      if (existingFile(entry.paths.memoryPath) || group.length) writeJsonl(entry.paths.memoryPath, group)
+    }
+
+    return {
+      report: { removedMemories: latest.size - aliveById.size, removedEmbeddings: 0, removedInvalidations: 0 },
+      aliveById,
+    }
+  }
+
+  function compactEmbeddingLogs(compactedEntries: StoreEntry[], aliveById: Map<string, LocatedMemoryRecord>): CompactReport {
+    const aliveHashes = new Map<string, string>()
+    for (const [id, located] of aliveById) aliveHashes.set(id, createHash("sha256").update(located.record.text, "utf8").digest("hex"))
+
+    const latest = new Map<string, LocatedEmbeddingRecord>()
+    let invalidationCount = 0
+    let totalBefore = 0
+    for (const entry of compactedEntries) {
+      for (const line of embeddingStore(entry)?.readLog() ?? []) {
+        totalBefore += 1
+        if ((line as EmbeddingInvalidationRecord).type === "invalidation") {
+          invalidationCount += 1
+          continue
+        }
+        const record = line as EmbeddingRecord
+        if (!Array.isArray(record.vector)) continue
+        const key = embeddingKey(record)
+        const existing = latest.get(key)
+        if (!existing || existing.record.createdAt <= record.createdAt) latest.set(key, { entry, record })
+      }
+    }
+
+    const validByEntry = new Map<StoreEntry, EmbeddingRecord[]>()
+    const validEmbeddings = foldEmbeddings(Array.from(latest.values()).map((located) => located.record)).filter((record) => {
+      const owner = aliveById.get(record.memoryId)
+      return Boolean(owner) && aliveHashes.get(record.memoryId) === record.contentHash
+    })
+    for (const record of validEmbeddings) {
+      const entry = aliveById.get(record.memoryId)!.entry
+      validByEntry.set(entry, [...(validByEntry.get(entry) ?? []), record])
+    }
+    for (const entry of compactedEntries) {
+      const group = validByEntry.get(entry) ?? []
+      if (existingFile(entry.paths.embeddingsPath) || group.length) writeJsonl(entry.paths.embeddingsPath, group)
+    }
+
+    return {
+      removedMemories: 0,
+      removedEmbeddings: totalBefore - validEmbeddings.length,
+      removedInvalidations: invalidationCount,
+    }
+  }
+
   return {
     memoryFile: homePaths.memoryPath,
     embeddingFile: homePaths.embeddingsPath,
@@ -255,11 +343,10 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
       return existingEntries().some((entry) => shouldCompact(entry.paths.memoryPath))
     },
     compact() {
-      let report: CompactReport = { removedMemories: 0, removedEmbeddings: 0, removedInvalidations: 0 }
-      for (const entry of existingEntries()) {
-        report = addReports(report, compactStores(entry.paths.memoryPath, entry.paths.embeddingsPath))
-        refresh(entry)
-      }
+      const compactedEntries = existingEntries()
+      const memoryResult = compactMemoryLogs(compactedEntries)
+      const report = addReports(memoryResult.report, compactEmbeddingLogs(compactedEntries, memoryResult.aliveById))
+      for (const entry of compactedEntries) refresh(entry)
       return report
     },
   }

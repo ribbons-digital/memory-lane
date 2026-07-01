@@ -207,4 +207,23 @@ describe("MemoryEngineStorage two-tier facade", () => {
     assert.equal(storage.listMemories().some((memory) => memory.id === "project-deleted"), false)
     assert.ok(fs.readFileSync(project.memoryPath, "utf8").includes("project-live"))
   })
+
+  it("does not resurrect older cross-store records after compacting a newer tombstone", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const oldHome = rec({ id: "same", text: "old", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", scope: { type: "global" }, project: undefined })
+    const deletedProject = rec({ id: "same", text: "deleted", status: "deleted", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z", scope: { type: "project", key: "scope-key" }, project: { cwd: project.root, root: project.root, key: "scope-key" } })
+
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemory(oldHome)
+    createSingleStoreEngineStorage(project.memoryPath, project.embeddingsPath).appendMemory(deletedProject)
+
+    const report = storage.compact()
+
+    assert.equal(report.removedMemories, 1)
+    assert.deepEqual(storage.listMemories(), [])
+    assert.equal(fs.readFileSync(home.memoryPath, "utf8"), "")
+    assert.equal(fs.readFileSync(project.memoryPath, "utf8"), "")
+  })
 })
