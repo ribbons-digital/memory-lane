@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { MemoryEngine } from "@memory-lane/core"
 import type { LoadedPlugin, McpResourceDefinition, McpToolDefinition } from "@memory-lane/plugin-api"
+import type { EngineForProjectPathOptions } from "./engine.js"
 import {
   handleMemoryApprove,
   handleMemoryContinuity,
@@ -59,7 +60,7 @@ const continuityQuery = z.string().optional().describe("Optional query for read-
 
 export interface CreateMemoryLaneMcpServerOptions {
   engine: MemoryEngine
-  engineForProjectPath?: (projectPath?: string) => MemoryEngine
+  engineForProjectPath?: (projectPath?: string, options?: EngineForProjectPathOptions) => MemoryEngine
   plugins?: LoadedPlugin[]
 }
 
@@ -117,7 +118,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         projectPath,
       },
     },
-    async (input) => handleMemoryRecall(engineForProjectPath(input.projectPath), input),
+    async (input) => handleMemoryRecall(engineForProjectPath(input.projectPath, { writable: false }), input),
   )
 
   server.registerTool(
@@ -130,7 +131,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         since,
       },
     },
-    async (input) => handleMemoryStatus(engineForProjectPath(input.projectPath), input),
+    async (input) => handleMemoryStatus(engineForProjectPath(input.projectPath, { writable: false }), input),
   )
 
   server.registerTool(
@@ -144,7 +145,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         projectPath,
       },
     },
-    async (input) => handleMemoryList(engineForProjectPath(input.projectPath), input),
+    async (input) => handleMemoryList(engineForProjectPath(input.projectPath, { writable: false }), input),
   )
 
   server.registerTool(
@@ -158,7 +159,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         projectPath,
       },
     },
-    async (input) => handleMemoryGet(engineForProjectPath(input.projectPath), input),
+    async (input) => handleMemoryGet(engineForProjectPath(input.projectPath, { writable: false }), input),
   )
 
   server.registerTool(
@@ -173,7 +174,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
         projectPath,
       },
     },
-    async (input) => handleMemoryReview(engineForProjectPath(input.projectPath), input),
+    async (input) => handleMemoryReview(engineForProjectPath(input.projectPath, { writable: false }), input),
   )
 
   server.registerTool(
@@ -183,7 +184,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
       description: "Canonical continuity read model for project resumption, last-worked-on, accomplished, next-action, and project-status questions. Prefer this over memory_recall for continuity questions. Pass projectPath for project-scoped results in desktop MCP clients. Pass query for read-only workstream discovery pointers.",
       inputSchema: { projectPath, query: continuityQuery },
     },
-    async (input) => handleMemoryContinuity(engineForProjectPath(input.projectPath), input),
+    async (input) => handleMemoryContinuity(engineForProjectPath(input.projectPath, { writable: false }), input),
   )
 
   server.registerTool(

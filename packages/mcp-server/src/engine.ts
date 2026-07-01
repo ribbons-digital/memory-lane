@@ -1,5 +1,5 @@
 import {
-  MemoryEngine, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, loadConfig, resolveWritableEngineStoragePaths,
+  MemoryEngine, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, loadConfig, resolveEngineStoragePaths, resolveWritableEngineStoragePaths,
   type MemoryEngineConfig,
 } from "@memory-lane/core"
 import { loadPlugins, type BundledPluginModule, type LoadedPlugin } from "@memory-lane/plugin-api"
@@ -24,9 +24,13 @@ function createEmbeddingProvider(
   }
 }
 
+export interface EngineForProjectPathOptions {
+  writable?: boolean
+}
+
 export interface MemoryLaneEngineResult {
   engine: MemoryEngine
-  engineForProjectPath: (projectPath?: string) => MemoryEngine
+  engineForProjectPath: (projectPath?: string, options?: EngineForProjectPathOptions) => MemoryEngine
   plugins: LoadedPlugin[]
 }
 
@@ -35,8 +39,10 @@ export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOpti
   const cwd = options.cwd ?? process.cwd()
   const engineCache = new Map<string, MemoryEngine>()
 
-  function buildEngine(engineCwd: string): MemoryEngine {
-    const paths = resolveWritableEngineStoragePaths({ cwd: engineCwd, env, autoInitProjectLocalOnHomeFailure: true })
+  function buildEngine(engineCwd: string, writable: boolean): MemoryEngine {
+    const paths = writable
+      ? resolveWritableEngineStoragePaths({ cwd: engineCwd, env, autoInitProjectLocalOnHomeFailure: true })
+      : resolveEngineStoragePaths({ cwd: engineCwd, env })
     const storage = paths.kind === "default-two-tier"
       ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey)
       : createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath)
@@ -52,15 +58,17 @@ export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOpti
     return engine
   }
 
-  function engineForProjectPath(projectPath?: string): MemoryEngine {
+  function engineForProjectPath(projectPath?: string, options: EngineForProjectPathOptions = {}): MemoryEngine {
     const engineCwd = projectPath ?? cwd
-    const cached = engineCache.get(engineCwd)
+    const writable = options.writable ?? true
+    const cacheKey = `${writable ? "write" : "read"}\0${engineCwd}`
+    const cached = engineCache.get(cacheKey)
     if (cached) {
       cached.refreshScope(engineCwd)
       return cached
     }
-    const engine = buildEngine(engineCwd)
-    engineCache.set(engineCwd, engine)
+    const engine = buildEngine(engineCwd, writable)
+    engineCache.set(cacheKey, engine)
     return engine
   }
 

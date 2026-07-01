@@ -185,6 +185,31 @@ test("registers status review-complete and continuity tools on the MCP server", 
   assert.match(continuityTool.description, /Pass projectPath/u)
 })
 
+test("read-only MCP tools request non-writable project-path engines", async () => {
+  const engine = engineInTemp()
+  const projectPath = path.join(tempDir("memory-lane-mcp-readonly-routing-"), "project")
+  const calls: Array<{ projectPath?: string; options?: { writable?: boolean } }> = []
+  const server = createMemoryLaneMcpServer({
+    engine,
+    engineForProjectPath(inputProjectPath, options) {
+      calls.push({ projectPath: inputProjectPath, options })
+      return engine
+    },
+  })
+
+  const cases: Array<[string, Record<string, unknown>]> = [
+    ["memory_recall", { query: "nothing", projectPath }],
+    ["memory_status", { projectPath }],
+    ["memory_list", { projectPath }],
+    ["memory_get", { id: "missing", projectPath }],
+    ["memory_review", { projectPath }],
+    ["memory_continuity", { projectPath }],
+  ]
+  for (const [name, input] of cases) await registeredTool(server, name).handler(input)
+
+  assert.deepEqual(calls, cases.map(() => ({ projectPath, options: { writable: false } })))
+})
+
 test("createMemoryLaneEngine retargets storage for per-call project paths", async () => {
   const dir = tempDir("memory-lane-mcp-engine-project-path-")
   const home = path.join(dir, "home")
@@ -201,6 +226,24 @@ test("createMemoryLaneEngine retargets storage for per-call project paths", asyn
   assert.equal(fs.existsSync(path.join(callProject, ".memory-lane", "memory.jsonl")), true)
   assert.ok(fs.readFileSync(path.join(callProject, ".memory-lane", "memory.jsonl"), "utf8").includes("MCP projectPath storage"))
   assert.equal(fs.existsSync(path.join(startupProject, ".memory-lane", "memory.jsonl")), false)
+})
+
+test("read-only per-call project paths do not initialize project-local fallback", async () => {
+  const dir = tempDir("memory-lane-mcp-engine-readonly-project-path-")
+  const blockedHome = path.join(dir, "blocked-home")
+  const startupProject = path.join(dir, "startup-project")
+  const callProject = path.join(dir, "call-project")
+  fs.writeFileSync(blockedHome, "not a directory")
+  fs.mkdirSync(startupProject, { recursive: true })
+  fs.mkdirSync(callProject, { recursive: true })
+
+  const { engineForProjectPath } = await createMemoryLaneEngine({ cwd: startupProject, env: { HOME: blockedHome } })
+  const engine = engineForProjectPath(callProject, { writable: false })
+  const result = await engine.recall("nothing")
+
+  assert.equal(result.memories.length, 0)
+  assert.equal(fs.existsSync(path.join(callProject, ".memory-lane")), false)
+  assert.equal(fs.existsSync(path.join(callProject, ".memory-lane-scope")), false)
 })
 
 test("createMemoryLaneEngine uses explicit environment paths", async () => {
