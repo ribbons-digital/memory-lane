@@ -386,7 +386,11 @@ Nine packages in a monorepo:
 
 ## Storage
 
-By default, memories are stored as append-only JSONL at `~/.memory-lane/memory.jsonl`. Each write appends a record; reads fold duplicates by id (last write wins). Atomic memory writes use a short lock plus `.tmp` + `rename`, and batch writes are atomic per underlying store. In `v0.2.42+`, this behavior is routed through an internal storage facade so future project-local defaults can be added without changing today's write locations. Advanced `@memory-lane/core` consumers can import `MemoryEngineStorage` and `createSingleStoreEngineStorage` when they need to inject storage that owns memory, embedding, compaction, diagnostics, and continuity-baseline paths.
+By default, memories are stored as append-only JSONL at `~/.memory-lane/memory.jsonl`.
+Each write appends a record; reads fold duplicates by id (last write wins).
+Atomic memory writes use a short lock plus `.tmp` + `rename`, and batch writes are atomic per underlying store.
+In `v0.2.42+`, this behavior is routed through an internal storage facade so future project-local defaults can be added without changing today's write locations.
+Advanced `@memory-lane/core` consumers can import `MemoryEngineStorage` and `createSingleStoreEngineStorage` when they need to inject storage that owns memory, embedding, compaction, diagnostics, and continuity-baseline paths.
 
 Embeddings (when configured) default to `~/.memory-lane/embeddings.jsonl` with mixed embedding records and invalidation records. When a memory changes, recall ignores only embeddings created before that memory's latest invalidation; newer embeddings for the same memory id can be used without a full reindex.
 

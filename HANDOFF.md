@@ -25,9 +25,12 @@ Slice 0 shipped in `v0.2.42`:
 4. retire the direct `appendMemoryRecords()` raw `fs` rewrite path in favor of facade batch append;
 5. route embedding append/invalidation/recall/reindex, compaction, doctor/status storage fields, and continuity baseline paths through the facade while preserving single-store behavior.
 
-Explicitly out of scope for Slice 0: default-location flip, automatic project-local creation for project-scoped saves, migration of existing home-stored project memories, config merging, schema changes, or user-facing storage-default docs beyond internal prep. A narrow semantic embedding invalidation correctness fix shipped with Slice 0 after review feedback so freshly embedded approved memories remain usable after invalidation.
+Explicitly out of scope for Slice 0: default-location flip, automatic project-local creation for project-scoped saves, migration of existing home-stored project memories, config merging, schema changes, or user-facing storage-default docs beyond internal prep.
+A narrow semantic embedding invalidation correctness fix shipped with Slice 0 after review feedback so freshly embedded approved memories remain usable after invalidation.
 
-Recommended next step: draft the approval-gated Slice 1 design for project-local default writes. Before presenting it, get Opus 4.8's second opinion and converge on the proposal. Slice 1 should route new project-scoped writes to project-local storage when project scope is known and no explicit `MEMORY_LANE_*` paths override storage, while keeping global preferences/personal memories home-side.
+Recommended next step: draft the approval-gated Slice 1 design for project-local default writes.
+Before presenting it, get Opus 4.8's second opinion and converge on the proposal.
+Slice 1 should route new project-scoped writes to project-local storage when project scope is known and no explicit `MEMORY_LANE_*` paths override storage, while keeping global preferences/personal memories home-side.
 
 ## Load-bearing constraints
 

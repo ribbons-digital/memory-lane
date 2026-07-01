@@ -69,13 +69,19 @@ Approved design: `docs/superpowers/specs/2026-06-30-project-local-storage-defaul
 
 Slice plan:
 
-1. **Slice 0 — storage facade proof, no default-location flip.** Shipped in `v0.2.42` / PR #78. Current storage behavior is preserved while `MemoryEngine` routes through an injectable storage facade with memory append/list/diagnostics, batch append, embedding append/read/invalidation, compaction, path metadata, and continuity-baseline seams.
-2. **Slice 1 — project-local default for new project-scoped writes.** Requires a fresh approval gate. Derive the project-local root from existing project scope resolution, keep explicit `MEMORY_LANE_*` paths authoritative and single-store, and keep global preferences/personal memories home-side.
-3. **Slice 2 — migration/compatibility diagnostics.** Requires a fresh approval gate. Detect legacy home-stored project memories and provide bounded warnings plus explicit dry-run migration; do not silently move/delete/approve/consolidate.
+1. **Slice 0 - storage facade proof, no default-location flip.** Shipped in `v0.2.42` / PR #78.
+   Current storage behavior is preserved while `MemoryEngine` routes through an injectable storage facade with memory append/list/diagnostics, batch append, embedding append/read/invalidation, compaction, path metadata, and continuity-baseline seams.
+2. **Slice 1 - project-local default for new project-scoped writes.** Requires a fresh approval gate.
+   Derive the project-local root from existing project scope resolution, keep explicit `MEMORY_LANE_*` paths authoritative and single-store, and keep global preferences/personal memories home-side.
+3. **Slice 2 - migration/compatibility diagnostics.** Requires a fresh approval gate.
+   Detect legacy home-stored project memories and provide bounded warnings plus explicit dry-run migration; do not silently move/delete/approve/consolidate.
 
-Current release state: Slice 0 is merged and released in `v0.2.42`; installed-artifact dogfood passed via `memory-lane upgrade --yes` and `memory-lane --smoke-test`. Validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
+Current release state: Slice 0 is merged and released in `v0.2.42`; installed-artifact dogfood passed via `memory-lane upgrade --yes` and `memory-lane --smoke-test`.
+Validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
 
-Next step: if continuing this track, draft the Slice 1 project-local default-write design for user approval. Per project workflow, get Opus 4.8's second opinion and converge before presenting the spec. Do not implement Slice 1 until approved.
+Next step: if continuing this track, draft the Slice 1 project-local default-write design for user approval.
+Per project workflow, get Opus 4.8's second opinion and converge before presenting the spec.
+Do not implement Slice 1 until approved.
 
 Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in `v0.2.41`; pause retrieval-ranking work unless new dogfood/eval evidence justifies another proposal.
 
