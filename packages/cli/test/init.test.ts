@@ -190,6 +190,54 @@ if (args[0] === "status") {
     assert.equal(calls.some((args) => args[0] === "recall"), false)
   })
 
+  it("routes pi memory-management prompts to command guidance without recall", () => {
+    const nativeBinary = path.join(home, ".local/bin/memory-lane")
+    const logPath = path.join(home, "memory-management-calls.jsonl")
+    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
+    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
+if (args[0] === "status") {
+  console.log(JSON.stringify({ data: { contextPolicyMode: "selective", contextPolicyPromptMaxItems: 2 } }));
+} else if (args[0] === "route") {
+  console.log(JSON.stringify({ data: { route: { route: "memory-management", confidence: 1, reasons: ["memory-management"] } } }));
+} else if (args[0] === "recall") {
+  console.log(JSON.stringify({ data: { memories: [{ id: "wrong", text: "Memory bodies should not be injected." }] } }));
+} else {
+  console.log(JSON.stringify({ data: {} }));
+}
+`, "utf8")
+    fs.chmodSync(nativeBinary, 0o755)
+
+    run(["init", "--yes", "--only", "pi"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: nativeBinary,
+    })
+
+    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
+    const smoke = `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const result = await handlers.before_agent_start({ prompt: "show current memories" }, { cwd: process.cwd() });
+      if (!result?.message || result.message.customType !== "memory-lane") throw new Error("expected memory-lane message");
+      if (!result.message.content.includes("Memory Lane command guidance")) throw new Error("expected command guidance");
+      if (!result.message.content.includes("memory-lane list --json")) throw new Error("expected list command guidance");
+      if (result.message.content.includes("Memory bodies should not be injected")) throw new Error("memory-management route leaked recall body");
+    `
+    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
+      encoding: "utf8",
+      env: { ...process.env, PI_EXTENSION_FILE: piExt },
+    })
+
+    const calls = fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    assert.ok(calls.some((args) => args[0] === "route" && args.includes("--prompt") && args.includes("show current memories")))
+    assert.equal(calls.some((args) => args[0] === "recall"), false)
+  })
+
   it("emits pi CLI bridge policy-only guidance without memory body lookup", () => {
     const nativeBinary = path.join(home, ".local/bin/memory-lane")
     const logPath = path.join(home, "policy-only-calls.jsonl")

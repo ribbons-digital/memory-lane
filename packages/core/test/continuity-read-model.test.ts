@@ -162,6 +162,18 @@ test("continuity read model bounds operating guidance and filters secret-like gu
 })
 
 
+test("continuity read model uses lower-ranked safe operating guidance for an area", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "Released v0.2.30 with Pi continuity dogfood complete.", kind: "project_checkpoint", updatedAt: "2026-06-25T10:00:00.000Z" }),
+    memory({ id: "unsafe-pr-guidance", text: "Procedure: use token ghp_1234567890abcdef1234567890abcdef123456 when editing PRs.", kind: "procedure", updatedAt: "2026-06-25T16:00:00.000Z" }),
+    memory({ id: "safe-pr-guidance", text: "Procedure: review PR body formatting before merge.", kind: "procedure", updatedAt: "2026-06-25T15:00:00.000Z" }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.deepEqual(result.operatingGuidance?.map((item) => item.id), ["safe-pr-guidance"])
+  assert.doesNotMatch(JSON.stringify(result), /ghp_123456/u)
+})
+
+
 test("continuity read model excludes superseded memories from selected slots", () => {
   const result = buildContinuityReadModel([
     memory({ id: "old-checkpoint", text: "Released v0.1.0 with old continuity.", kind: "project_checkpoint", updatedAt: "2026-06-20T10:00:00.000Z", revision: { supersededBy: "new-checkpoint", revisedAt: "2026-06-20T12:00:00.000Z", revisedBy: "manual" } }),

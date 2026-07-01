@@ -108,14 +108,15 @@ function compareOperatingGuidance(a: MemoryRecord, b: MemoryRecord, projectScope
     || a.id.localeCompare(b.id)
 }
 
-function collapseOperatingGuidanceByArea(memories: MemoryRecord[], projectScopeKey?: string): MemoryRecord[] {
-  const byArea = new Map<WorkflowArea, MemoryRecord>()
-  for (const memory of memories) {
+function selectOperatingGuidancePreviews(memories: MemoryRecord[], projectScopeKey: string | undefined, maxChars: number): ContinuityMemoryPreview[] {
+  const byArea = new Map<WorkflowArea, ContinuityMemoryPreview>()
+  for (const memory of [...memories].sort((a, b) => compareOperatingGuidance(a, b, projectScopeKey))) {
     const area = classifyWorkflowArea(memory.text)
-    const current = byArea.get(area)
-    if (!current || compareOperatingGuidance(memory, current, projectScopeKey) < 0) byArea.set(area, memory)
+    if (byArea.has(area)) continue
+    const item = preview(memory, maxChars)
+    if (item) byArea.set(area, item)
   }
-  return [...byArea.values()].sort((a, b) => compareOperatingGuidance(a, b, projectScopeKey))
+  return [...byArea.values()].slice(0, DEFAULT_MAX_OPERATING_GUIDANCE)
 }
 
 function isWorkflowRelevantGlobal(memory: MemoryRecord): boolean {
@@ -222,11 +223,11 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
   const latestProgressCandidates = approvedProject
     .filter((memory) => classifyContinuityRole(memory) === "progress")
     .sort(compareApprovedProject)
-  const operatingGuidanceCandidates = collapseOperatingGuidanceByArea(activeVisibleApproved
+  const operatingGuidanceCandidates = activeVisibleApproved
     .filter((memory) => {
       const role = classifyContinuityRole(memory)
       return role === "correction" || role === "procedure" || role === "operating_agreement" || role === "global_workflow"
-    }), projectScope)
+    })
   const pendingReview = memories.filter((memory) => memory.status === "pending" && visibleInProject(memory, projectScope))
   const pendingContinuityCandidates = pendingReview
     .filter((memory) => projectScoped(memory, projectScope) && isPendingContinuity(memory))
@@ -247,10 +248,7 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
   const operatingAgreements = summarizeOperatingAgreements(selectOperatingAgreements(memories, { projectScopeKey: projectScope }))
   const latestProject = approvedProject.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
   const latestProgress = latestProgressCandidates.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
-  const operatingGuidance = operatingGuidanceCandidates
-    .map((memory) => preview(memory, previewMaxChars))
-    .filter((item): item is ContinuityMemoryPreview => Boolean(item))
-    .slice(0, DEFAULT_MAX_OPERATING_GUIDANCE)
+  const operatingGuidance = selectOperatingGuidancePreviews(operatingGuidanceCandidates, projectScope, previewMaxChars)
   const truncatedOperatingGuidanceIds = operatingGuidance.filter((item) => item.truncated).map((item) => item.id)
   const latestGlobal = approvedGlobal.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
   const hintCodes = new Set(continuityHints.hints.map((hint) => hint.code))
