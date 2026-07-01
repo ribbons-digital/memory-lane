@@ -774,7 +774,10 @@ When `MEMORY_LANE_HOOK_DEBUG=1`, Claude/Codex hook debug records include privacy
 | `MEMORY_LANE_FILE` | `~/.memory-lane/memory.jsonl` | Memory store path |
 | `MEMORY_LANE_EMBEDDINGS_FILE` | `~/.memory-lane/embeddings.jsonl` | Embeddings store path |
 
-Explicit environment paths always win and never auto-fallback. If no explicit paths are set and a parent directory contains `.memory-lane/`, Memory Lane uses that project-local store. If home storage is not writable, Memory Lane auto-initializes `.memory-lane/` in the current project path.
+Explicit environment paths always win, keep Memory Lane in single-store mode, and never auto-fallback.
+When no explicit paths are set, the default engine uses home storage plus the resolved project store when a project scope is known; an existing parent `.memory-lane/` does not make every memory category project-local.
+If home storage is not writable, writable commands and hooks may auto-initialize fallback storage at the resolved project root.
+Read-only commands do not create fallback storage just to inspect continuity or status.
 
 ## Programmatic Use
 
