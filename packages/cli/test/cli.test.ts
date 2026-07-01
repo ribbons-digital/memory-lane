@@ -1637,6 +1637,24 @@ describe("CLI integration", () => {
     }
   })
 
+  it("read-only inspection commands do not auto-compact storage", () => {
+    const dir = tempDir()
+    const memoryFile = path.join(dir, "memory.jsonl")
+    const records = [
+      ...Array.from({ length: 70 }, (_, i) => ({ id: `approved-${i}`, text: `Approved ${i}`, category: "project", scope: { type: "global" }, status: "approved", source: "manual", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" })),
+      ...Array.from({ length: 40 }, (_, i) => ({ id: `deleted-${i}`, text: `Deleted ${i}`, category: "project", scope: { type: "global" }, status: "deleted", source: "manual", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" })),
+    ] as MemoryRecord[]
+    writeMemoryRecords(memoryFile, records)
+    const before = fs.readFileSync(memoryFile, "utf8")
+    const env = { MEMORY_LANE_FILE: memoryFile, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json") }
+
+    const status = runProcess(["status", "--json"], { env })
+
+    assert.equal(status.status, 0, `status stderr=${status.stderr} stdout=${status.stdout}`)
+    assert.equal(JSON.parse(status.stdout).data.approvedMemories, 70)
+    assert.equal(fs.readFileSync(memoryFile, "utf8"), before)
+  })
+
   it("read-only inspection commands do not auto-init project storage", () => {
     const dir = tempDir()
     const blockedHome = path.join(dir, "home-file")

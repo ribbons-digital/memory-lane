@@ -642,6 +642,7 @@ export interface MemoryEngineConfig {
   embeddingsPath?: string
   /** Optional storage facade. When provided, it owns memory, embedding, compaction, diagnostics, and continuity-baseline storage paths. */
   storage?: MemoryEngineStorage
+  autoCompact?: boolean
   configPath?: string
   embeddingProvider?: EmbeddingProvider
   hookDebugLogPath?: string

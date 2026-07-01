@@ -50,6 +50,7 @@ export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOpti
       memoryPath: paths.home.memoryPath,
       embeddingsPath: paths.home.embeddingsPath,
       storage,
+      autoCompact: writable,
       configPath: paths.configPath,
       embeddingProvider: createEmbeddingProvider(paths.configPath, env),
       env,

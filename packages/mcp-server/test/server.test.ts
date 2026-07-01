@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { MemoryEngine } from "@memory-lane/core"
+import { MemoryEngine, type MemoryRecord } from "@memory-lane/core"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -239,6 +239,28 @@ test("MCP startup does not initialize project-local fallback", async () => {
 
   assert.equal(fs.existsSync(path.join(startupProject, ".memory-lane")), false)
   assert.equal(fs.existsSync(path.join(startupProject, ".memory-lane-scope")), false)
+})
+
+test("MCP startup does not auto-compact read-only storage", async () => {
+  const dir = tempDir("memory-lane-mcp-engine-readonly-compact-")
+  const home = path.join(dir, "home")
+  const storage = path.join(home, ".memory-lane")
+  fs.mkdirSync(storage, { recursive: true })
+  fs.writeFileSync(path.join(storage, "config.json"), JSON.stringify({}), "utf8")
+  fs.writeFileSync(path.join(storage, "embeddings.jsonl"), "", "utf8")
+  const memoryFile = path.join(storage, "memory.jsonl")
+  const records = [
+    ...Array.from({ length: 70 }, (_, i) => ({ id: `approved-${i}`, text: `Approved ${i}`, category: "project", scope: { type: "global" }, status: "approved", source: "manual", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" })),
+    ...Array.from({ length: 40 }, (_, i) => ({ id: `deleted-${i}`, text: `Deleted ${i}`, category: "project", scope: { type: "global" }, status: "deleted", source: "manual", createdAt: "2026-06-18T08:00:00.000Z", updatedAt: "2026-06-18T08:00:00.000Z" })),
+  ] as MemoryRecord[]
+  fs.writeFileSync(memoryFile, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
+  const before = fs.readFileSync(memoryFile, "utf8")
+
+  const { engine } = await createMemoryLaneEngine({ cwd: dir, env: { HOME: home } })
+  const result = await engine.recall("Approved")
+
+  assert.equal(result.memories.length > 0, true)
+  assert.equal(fs.readFileSync(memoryFile, "utf8"), before)
 })
 
 test("read-only per-call project paths do not initialize project-local fallback", async () => {

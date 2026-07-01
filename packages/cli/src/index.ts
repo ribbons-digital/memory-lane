@@ -178,7 +178,7 @@ function createEmbeddingProvider(configPath: string): EmbeddingProvider | undefi
   }
 }
 
-function createEngine(paths: MemoryPaths | EngineStoragePaths, projPath?: string): MemoryEngine {
+function createEngine(paths: MemoryPaths | EngineStoragePaths, projPath?: string, opts: { autoCompact?: boolean } = {}): MemoryEngine {
   const storage = "explicitEnv" in paths
     ? paths.kind === "default-two-tier"
       ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey)
@@ -189,6 +189,7 @@ function createEngine(paths: MemoryPaths | EngineStoragePaths, projPath?: string
     memoryPath: "explicitEnv" in paths ? paths.home.memoryPath : paths.memoryPath,
     embeddingsPath: "explicitEnv" in paths ? paths.home.embeddingsPath : paths.embeddingsPath,
     storage,
+    autoCompact: opts.autoCompact,
     configPath,
     embeddingProvider: createEmbeddingProvider(configPath),
   })
@@ -1040,13 +1041,14 @@ async function main(): Promise<void> {
 
   const projPath = flag(argv, "project")
   const pathOptions = { cwd: projPath ?? process.cwd(), env: process.env }
-  const paths = usesReadOnlyStorageResolution(command, argv)
+  const readOnlyStorage = usesReadOnlyStorageResolution(command, argv)
+  const paths = readOnlyStorage
     ? resolveEngineStoragePaths(pathOptions)
     : resolveWritableEngineStoragePaths({ ...pathOptions, autoInitProjectLocalOnHomeFailure: true })
   const configPath = paths.configPath || resolveConfigPath()
   let engine: MemoryEngine
   try {
-    engine = createEngine(paths, projPath)
+    engine = createEngine(paths, projPath, { autoCompact: !readOnlyStorage })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     console.log(formatError(`Failed to initialize engine: ${msg}`, json))
