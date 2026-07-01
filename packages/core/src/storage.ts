@@ -25,6 +25,8 @@ export interface MemoryStoreDiagnostics {
 export interface MemoryStore {
   readonly file: string
   append(record: MemoryRecord): void
+  /** Append records in one atomic file rewrite and refresh the folded-read cache. */
+  appendMany(records: MemoryRecord[]): void
   readLog(): MemoryRecord[]
   list(): MemoryRecord[]
   diagnostics(): MemoryStoreDiagnostics
@@ -81,15 +83,113 @@ export function createMemoryStore(filePath: string): MemoryStore {
     }
   }
 
+  function existingFilePrefix(): string {
+    if (!fs.existsSync(filePath)) return ""
+    const existing = fs.readFileSync(filePath, "utf8")
+    if (!existing || existing.endsWith("\n")) return existing
+    return existing + "\n"
+  }
+
+  function processIsAlive(pid: number): boolean {
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  function removeStaleAppendLock(lockDir: string): boolean {
+    try {
+      const ownerFile = path.join(lockDir, "owner.json")
+      if (fs.existsSync(ownerFile)) {
+        const owner = JSON.parse(fs.readFileSync(ownerFile, "utf8")) as { pid?: unknown; createdAt?: unknown }
+        const pid = typeof owner.pid === "number" ? owner.pid : undefined
+        const createdAt = typeof owner.createdAt === "number" ? owner.createdAt : fs.statSync(lockDir).mtimeMs
+        if (pid !== undefined) {
+          if (!processIsAlive(pid)) {
+            fs.rmSync(lockDir, { recursive: true, force: true })
+            return true
+          }
+          return false
+        }
+        if (Date.now() - createdAt > 30_000) {
+          fs.rmSync(lockDir, { recursive: true, force: true })
+          return true
+        }
+        return false
+      }
+      if (Date.now() - fs.statSync(lockDir).mtimeMs > 30_000) {
+        fs.rmSync(lockDir, { recursive: true, force: true })
+        return true
+      }
+    } catch {
+      return false
+    }
+    return false
+  }
+
+  function releaseAppendLock(lockDir: string, token: string): void {
+    try {
+      const ownerFile = path.join(lockDir, "owner.json")
+      const owner = JSON.parse(fs.readFileSync(ownerFile, "utf8")) as { token?: unknown }
+      if (owner.token === token) fs.rmSync(lockDir, { recursive: true, force: true })
+    } catch {
+      return
+    }
+  }
+
+  function withAppendLock(write: () => void): void {
+    const lockDir = filePath + ".lock"
+    const startedAt = Date.now()
+    const token = crypto.randomBytes(16).toString("hex")
+    while (true) {
+      try {
+        fs.mkdirSync(lockDir)
+        try {
+          fs.writeFileSync(path.join(lockDir, "owner.json"), JSON.stringify({ pid: process.pid, createdAt: Date.now(), token }), "utf8")
+        } catch (error) {
+          fs.rmSync(lockDir, { recursive: true, force: true })
+          throw error
+        }
+        break
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (code !== "EEXIST") throw error
+        if (!fs.existsSync(lockDir) || removeStaleAppendLock(lockDir)) continue
+        if (Date.now() - startedAt > 5_000) throw new Error(`Timed out waiting for memory store lock: ${filePath}`)
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25)
+      }
+    }
+
+    try {
+      write()
+    } finally {
+      releaseAppendLock(lockDir, token)
+    }
+  }
+
+  function appendMany(records: MemoryRecord[]): void {
+    const rows = records.map((record) => JSON.stringify(record)).join("\n")
+    if (!rows) return
+    withAppendLock(() => {
+      const tmpFile = filePath + ".tmp." + crypto.randomBytes(4).toString("hex")
+      try {
+        fs.writeFileSync(tmpFile, existingFilePrefix() + rows + "\n", "utf8")
+        fs.renameSync(tmpFile, filePath)
+      } finally {
+        if (fs.existsSync(tmpFile)) fs.rmSync(tmpFile, { force: true })
+      }
+    })
+    cache = null
+  }
+
   return {
     file: filePath,
     append(record) {
-      const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : ""
-      const tmpFile = filePath + ".tmp." + crypto.randomBytes(4).toString("hex")
-      fs.writeFileSync(tmpFile, existing + JSON.stringify(record) + "\n", "utf8")
-      fs.renameSync(tmpFile, filePath)
-      cache = null
+      appendMany([record])
     },
+    appendMany,
     readLog: parseLines,
     list: readAll,
     diagnostics() {

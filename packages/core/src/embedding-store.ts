@@ -3,7 +3,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { EmbeddingRecord, EmbeddingInvalidationRecord } from "./types.js"
 
-type EmbeddingLine = EmbeddingRecord | EmbeddingInvalidationRecord
+export type EmbeddingLine = EmbeddingRecord | EmbeddingInvalidationRecord
 
 function isEmbeddingRecord(v: unknown): v is EmbeddingRecord {
   if (!v || typeof v !== "object") return false
@@ -28,7 +28,7 @@ function isInvalidation(v: unknown): v is EmbeddingInvalidationRecord {
 export function foldEmbeddings(records: EmbeddingRecord[]): EmbeddingRecord[] {
   const latest = new Map<string, EmbeddingRecord>()
   for (const r of records) {
-    const key = [r.memoryId, r.profileName, r.model].join("\0")
+    const key = [r.memoryId, r.contentHash, r.profileName, r.model].join("\0")
     const existing = latest.get(key)
     if (!existing || existing.createdAt <= r.createdAt) latest.set(key, r)
   }

@@ -43,7 +43,8 @@ memory-lane/
 │   │   │   ├── index.ts          # Public export barrel
 │   │   │   ├── types.ts          # Data model types
 │   │   │   ├── engine.ts         # MemoryEngine class (main API)
-│   │   │   ├── storage.ts        # JSONL store with cache + compaction
+│   │   │   ├── storage.ts        # JSONL store with cache and batch append
+│   │   │   ├── storage-facade.ts # Engine storage facade for memories, embeddings, compaction, and baselines
 │   │   │   ├── search.ts         # Lexical search, secret detection, dedup
 │   │   │   ├── project-scope.ts  # Project identity (scope file + git fallback)
 │   │   │   ├── embedding-store.ts # Embedding JSONL sidecar
@@ -205,7 +206,7 @@ The proven approach from persistent-memory: every record line is an independent 
 
 | Feature | persistent-memory | Memory Lane |
 |---|---|---|
-| Write safety | `appendFileSync` (race-prone) | Atomic write via temp file + `renameSync` |
+| Write safety | `appendFileSync` (race-prone) | Lock-protected atomic write via temp file + `renameSync`; batch append is atomic per store |
 | Read performance | Re-parses entire file every time | In-memory cache keyed by file mtime |
 | Compaction | None | Triggered on engine startup at 30%+ dead weight + manual command |
 | Embedding cleanup | None | Removed during compaction |
@@ -215,15 +216,16 @@ The proven approach from persistent-memory: every record line is an independent 
 
 ```typescript
 // Pseudocode for atomic write
-function atomicAppend(filePath: string, line: string): void {
-  const tmpFile = filePath + ".tmp." + randomBytes(4).toString("hex")
-  fs.writeFileSync(tmpFile, line + "\n", { flag: "as" })
-  fs.renameSync(tmpFile, filePath)  // Only if appending to a new file
-  // For actual append: write to a temp copy, then rename over original
+function appendMany(filePath: string, records: MemoryRecord[]): void {
+  withAppendLock(filePath, () => {
+    const tmpFile = filePath + ".tmp." + randomBytes(4).toString("hex")
+    fs.writeFileSync(tmpFile, existingFilePrefix(filePath) + records.map(JSON.stringify).join("\n") + "\n")
+    fs.renameSync(tmpFile, filePath)
+  })
 }
 ```
 
-For true atomic appends: the store writes to a temp file with the original file's current contents plus the new line, then atomically `renameSync`s the temp file over the original. This ensures no partial writes even if the process is interrupted.
+For true atomic appends: the store writes to a temp file with the original file's current contents plus the new line or batch, then atomically `renameSync`s the temp file over the original. A short lock directory serializes concurrent writers for the same memory file, and batch append preserves order atomically per underlying store.
 
 ### Cache Invalidation
 
@@ -268,6 +270,7 @@ Triggered on engine construction (if dead weight / total records > 0.3 and total
 interface MemoryEngineConfig {
   memoryPath?: string           // default: ~/.memory-lane/memory.jsonl
   embeddingsPath?: string       // default: ~/.memory-lane/embeddings.jsonl
+  storage?: MemoryEngineStorage // optional facade for memory, embeddings, compaction, diagnostics, and continuity baselines
   configPath?: string           // default: ~/.memory-lane/config.json (pi adapter overrides to ~/.pi/agent/memory.config.json for backward compat)
   embeddingProvider?: EmbeddingProvider  // optional; lexical-only without it
 }
@@ -275,10 +278,13 @@ interface MemoryEngineConfig {
 class MemoryEngine {
   constructor(config?: MemoryEngineConfig)
 }
+
+function createSingleStoreEngineStorage(memoryPath: string, embeddingsPath: string): MemoryEngineStorage
 ```
 
+`memoryPath` and `embeddingsPath` still build the backward-compatible single-store facade. Advanced tests and integrations can pass a custom `MemoryEngineStorage` when they need to own memory, embedding, compaction, diagnostic, or continuity-baseline paths.
+
 **Instance lifecycle recommendation:** Create one `MemoryEngine` per process and reuse it. The in-memory cache makes this significantly faster than per-operation construction. The pi adapter uses a singleton; the CLI creates one per invocation (naturally isolated processes).
-```
 
 ### Save & Suggest
 
@@ -375,7 +381,7 @@ If the query matches patterns like "where did we leave off", "resume work", etc.
 
 ### Auto-Stale Detection
 
-When a memory is updated (status change, text edit), an `EmbeddingInvalidationRecord` is appended. During recall, embeddings matching an invalidation record for that memoryId are skipped. This prevents recall from silently using vectors that no longer reflect the memory content.
+When a memory is updated (status change, text edit), an `EmbeddingInvalidationRecord` is appended. During recall, Memory Lane compares each embedding with the latest invalidation timestamp for that memory id and skips embeddings created before that invalidation. Newer embeddings for the same memory id can be used immediately, which prevents recall from silently using vectors that no longer reflect the memory content without requiring a full reindex after every update.
 
 ---
 

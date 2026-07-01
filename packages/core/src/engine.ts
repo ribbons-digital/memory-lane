@@ -4,17 +4,16 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import * as os from "node:os"
 import { isSafeMirrorFolder, syncObsidianMirror } from "@memory-lane/obsidian-mirror"
-import { createMemoryId, createMemoryStore, type MemoryStore } from "./storage.js"
+import { createMemoryId } from "./storage.js"
 import {
   effectiveMemoryKind, searchMemories, findDuplicateMemory,
 } from "./search.js"
 import { containsLikelySecret } from "./secret-detection.js"
 import { resolveProjectScope } from "./project-scope.js"
 import { loadConfig, getDefaultConfigPath } from "./config.js"
-import { createEmbeddingStore } from "./embedding-store.js"
+import { createSingleStoreEngineStorage, type MemoryEngineStorage } from "./storage-facade.js"
 import { defaultHookDebugLogPath, hookDebugEnabled } from "./hook-debug-log.js"
 import { retrieveSemanticMemories } from "./retrieval.js"
-import { compact as compactStores, shouldCompact } from "./compact.js"
 import { diagnoseIntegrations, type IntegrationDiagnosticPaths } from "./integration-diagnostics.js"
 import { VALID_REVISION_ACTORS, validateSaveInput } from "./storage-validation.js"
 import {
@@ -25,7 +24,6 @@ import { buildFreshnessStatus, classifyFreshness, isStrictIsoTimestamp } from ".
 import { buildContinuityHints } from "./continuity-hints.js"
 import {
   continuityBaselineDiagnostic,
-  defaultContinuityBaselinePath,
   readContinuityBaseline,
   writeContinuityBaseline,
 } from "./continuity-baseline.js"
@@ -84,39 +82,35 @@ const DEFAULT_DIR = path.join(os.homedir(), ".memory-lane")
 
 
 export class MemoryEngine {
-  private store: MemoryStore
+  private readonly storage: MemoryEngineStorage
   private readonly config: ReturnType<typeof loadConfig>
   private scope: ProjectScope | null = null
   private readonly embProvider?: EmbeddingProvider
-  private readonly embPath: string
-  private readonly memPath: string
   private readonly configPath?: string
   private readonly hookDebugLogPath: string
-  private readonly continuityBaselinePath: string
   private readonly integrationPaths?: Partial<IntegrationDiagnosticPaths>
   private readonly env: NodeJS.ProcessEnv | Record<string, string | undefined>
 
   constructor(opts?: MemoryEngineConfig) {
-    this.memPath = opts?.memoryPath ?? path.join(DEFAULT_DIR, "memory.jsonl")
-    this.embPath = opts?.embeddingsPath ?? path.join(DEFAULT_DIR, "embeddings.jsonl")
+    const memoryPath = opts?.memoryPath ?? path.join(DEFAULT_DIR, "memory.jsonl")
+    const embeddingsPath = opts?.embeddingsPath ?? path.join(DEFAULT_DIR, "embeddings.jsonl")
+    this.storage = opts?.storage ?? createSingleStoreEngineStorage(memoryPath, embeddingsPath)
     this.configPath = opts?.configPath ?? getDefaultConfigPath()
-    this.store = createMemoryStore(this.memPath)
     this.config = loadConfig(this.configPath)
     this.embProvider = opts?.embeddingProvider
     this.hookDebugLogPath = opts?.hookDebugLogPath ?? defaultHookDebugLogPath()
-    this.continuityBaselinePath = defaultContinuityBaselinePath(this.memPath)
     this.integrationPaths = opts?.integrationPaths
     this.env = opts?.env ?? process.env
     this.refreshScope()
 
     // Auto-compact on startup if dead weight exceeds threshold
-    if (shouldCompact(this.memPath)) {
-      compactStores(this.memPath, this.embPath)
+    if (this.storage.shouldCompact()) {
+      this.storage.compact()
     }
   }
 
   private appendEmbedding(memory: MemoryRecord, vector: number[], profileName: string, model: string): void {
-    createEmbeddingStore(this.embPath).append({
+    this.storage.appendEmbedding({
       memoryId: memory.id,
       memoryUpdatedAt: memory.updatedAt,
       contentHash: contentHash(memory.text),
@@ -166,7 +160,7 @@ export class MemoryEngine {
   resolveContinuityBaseline(inputSince?: string): ResolvedContinuityBaseline {
     const projectScope = this.scope?.key
     if (projectScope) {
-      const read = readContinuityBaseline(this.continuityBaselinePath, projectScope)
+      const read = readContinuityBaseline(this.storage.continuityBaselinePath, projectScope)
       if (read.marker?.lastSeenAt) return { source: "marker", since: read.marker.lastSeenAt }
     }
     if (isStrictIsoTimestamp(inputSince)) return { source: "payload", since: inputSince }
@@ -178,11 +172,11 @@ export class MemoryEngine {
     const projectScope = this.scope?.key
     if (!projectScope) return
     const lastSeenAt = isStrictIsoTimestamp(observedAt) ? observedAt : new Date().toISOString()
-    writeContinuityBaseline(this.continuityBaselinePath, projectScope, lastSeenAt)
+    writeContinuityBaseline(this.storage.continuityBaselinePath, projectScope, lastSeenAt)
   }
 
   continuityBaselineDoctor(): ContinuityBaselineDiagnostic {
-    return continuityBaselineDiagnostic(this.continuityBaselinePath, this.scope?.key)
+    return continuityBaselineDiagnostic(this.storage.continuityBaselinePath, this.scope?.key)
   }
 
   private syncMirrorAndCollectWarnings(): string[] {
@@ -193,7 +187,7 @@ export class MemoryEngine {
       // optimize with targeted per-record mirroring later if needed.
       const result = syncObsidianMirror(
         { vaultPath: obsidian.vaultPath, folder: obsidian.folder },
-        this.store.list(),
+        this.storage.listMemories(),
       )
       return result.ok ? result.warnings : result.warnings.length ? result.warnings : ["Obsidian mirror update failed"]
     } catch (error: unknown) {
@@ -218,7 +212,7 @@ export class MemoryEngine {
   }
 
   getById(id: string, opts?: { all?: boolean }): MemoryRecord | undefined {
-    return this.store.list().find((memory) => {
+    return this.storage.listMemories().find((memory) => {
       if (memory.id !== id) return false
       if (opts?.all) return true
       return this.activeVisibleByDefault(memory)
@@ -226,7 +220,7 @@ export class MemoryEngine {
   }
 
   private requireActiveMemory(id: string): MemoryRecord {
-    const memory = this.store.list().find((m) => m.id === id)
+    const memory = this.storage.listMemories().find((m) => m.id === id)
     if (!memory || memory.status === "deleted" || memory.status === "rejected") {
       throw new Error(`Cannot rescope memory: active memory not found: ${id}`)
     }
@@ -260,7 +254,7 @@ export class MemoryEngine {
 
   rescope(id: string, input: RescopeInput): RescopeResult | undefined {
     const result = this.buildRescopePreview(id, { ...input, dryRun: false })
-    this.store.append(result.proposed)
+    this.storage.appendMemory(result.proposed)
     this.invalidateEmbedding(id, "updated")
     const mirrorWarnings = this.syncMirrorAndCollectWarnings()
     return mirrorWarnings.length ? { ...result, mirrorWarnings } : result
@@ -280,24 +274,18 @@ export class MemoryEngine {
       freshness: input.freshness ?? dup.freshness,
       descriptor: ctx.descriptor ?? dup.descriptor,
     })
-    this.store.append(upgraded)
+    this.storage.appendMemory(upgraded)
     this.invalidateEmbedding(dup.id, "updated")
     return { status: "saved", memory: upgraded }
   }
 
   private appendMemoryRecords(records: MemoryRecord[]): void {
-    if (!records.length) return
-    const existing = fs.existsSync(this.memPath) ? fs.readFileSync(this.memPath, "utf8") : ""
-    const prefix = existing && !existing.endsWith("\n") ? existing + "\n" : existing
-    const tmpFile = `${this.memPath}.tmp.${createMemoryId()}`
-    fs.writeFileSync(tmpFile, prefix + records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
-    fs.renameSync(tmpFile, this.memPath)
-    this.store = createMemoryStore(this.memPath)
+    this.storage.appendMemories(records)
   }
 
   private persistMemory(input: SaveInput, ctx: SaveContext): SaveResult {
     const memory = createNewMemory(input, ctx, this.scope)
-    this.store.append(memory)
+    this.storage.appendMemory(memory)
     if (shouldAutoEmbed(memory, this.config.semantic, this.embProvider)) {
       this._embedMemory(memory).catch(() => { /* swallowed */ })
     }
@@ -312,7 +300,7 @@ export class MemoryEngine {
     validateSaveInput(input)
 
     const ctx = saveContext(input, text, this.scope)
-    const dup = findDuplicateMemory(this.store.list(), ctx.text, ctx.category, ctx.scopeType, this.scope?.key)
+    const dup = findDuplicateMemory(this.storage.listMemories(), ctx.text, ctx.category, ctx.scopeType, this.scope?.key)
     return this.withMirrorWarnings(dup ? this.upgradePendingDuplicate(dup, input, ctx) : this.persistMemory(input, ctx))
   }
 
@@ -329,16 +317,19 @@ export class MemoryEngine {
 
   /** Approve a pending memory by id. Returns the updated memory plus mirror warnings, or undefined. */
   approve(id: string): MemoryMutationResult | undefined {
-    const mem = this.store.list().find((m) => m.id === id && m.status !== "deleted")
+    const mem = this.storage.listMemories().find((m) => m.id === id && m.status !== "deleted")
     if (!mem) return undefined
     const updated = clone(mem, { status: "approved" })
-    this.store.append(updated)
+    this.storage.appendMemory(updated)
     this.invalidateEmbedding(id, "updated")
+    if (shouldAutoEmbed(updated, this.config.semantic, this.embProvider)) {
+      this._embedMemory(updated).catch(() => { /* swallowed */ })
+    }
     return this.mutationResultWithMirrorWarnings(updated)
   }
 
   private buildUpdatePreview(id: string, patch: UpdateInput): UpdatePreview | undefined {
-    const mem = this.store.list().find((m) => m.id === id && (m.status === "approved" || m.status === "pending"))
+    const mem = this.storage.listMemories().find((m) => m.id === id && (m.status === "approved" || m.status === "pending"))
     if (!mem) return undefined
     validateUpdateInput(patch)
 
@@ -367,7 +358,7 @@ export class MemoryEngine {
     const preview = this.buildUpdatePreview(id, patch)
     if (!preview) return undefined
     const updated = preview.proposed
-    this.store.append(updated)
+    this.storage.appendMemory(updated)
     this.invalidateEmbedding(id, "updated")
     if (shouldAutoEmbed(updated, this.config.semantic, this.embProvider)) {
       this._embedMemory(updated).catch(() => { /* swallowed */ })
@@ -376,7 +367,7 @@ export class MemoryEngine {
   }
 
   private requireApprovedMemory(id: string, label: "Successor" | "Old"): MemoryRecord {
-    const memory = this.store.list().find((m) => m.id === id && m.status !== "deleted" && m.status !== "rejected")
+    const memory = this.storage.listMemories().find((m) => m.id === id && m.status !== "deleted" && m.status !== "rejected")
     if (!memory) throw new Error(`${label} memory not found: ${id}`)
     if (memory.status !== "approved") throw new Error(`${label} must be approved: ${id}`)
     return memory
@@ -507,20 +498,20 @@ export class MemoryEngine {
 
   /** Reject a memory by id. Returns the updated memory plus mirror warnings, or undefined. */
   reject(id: string): MemoryMutationResult | undefined {
-    const mem = this.store.list().find((m) => m.id === id && m.status !== "deleted")
+    const mem = this.storage.listMemories().find((m) => m.id === id && m.status !== "deleted")
     if (!mem) return undefined
     const updated = clone(mem, { status: "rejected" })
-    this.store.append(updated)
+    this.storage.appendMemory(updated)
     this.invalidateEmbedding(id, "deleted")
     return this.mutationResultWithMirrorWarnings(updated)
   }
 
   /** Soft-delete a memory by id. Returns the deleted memory plus mirror warnings, or undefined. */
   delete(id: string): MemoryMutationResult | undefined {
-    const mem = this.store.list().find((m) => m.id === id && m.status !== "deleted")
+    const mem = this.storage.listMemories().find((m) => m.id === id && m.status !== "deleted")
     if (!mem) return undefined
     const updated = clone(mem, { status: "deleted" })
-    this.store.append(updated)
+    this.storage.appendMemory(updated)
     this.invalidateEmbedding(id, "deleted")
     return this.mutationResultWithMirrorWarnings(updated)
   }
@@ -536,7 +527,7 @@ export class MemoryEngine {
   list(status?: MemoryStatus): MemoryRecord[]
   list(opts?: { status?: MemoryStatus; all?: boolean }): MemoryRecord[]
   list(arg?: MemoryStatus | { status?: MemoryStatus; all?: boolean }): MemoryRecord[] {
-    const all = this.store.list()
+    const all = this.storage.listMemories()
     const scopeKey = this.scope?.key ?? ""
     const opts = typeof arg === "object" ? arg : { status: arg }
     const visible = opts?.all ? all : all.filter((m) => visibleInScope(m, scopeKey))
@@ -546,23 +537,22 @@ export class MemoryEngine {
 
   /** Search memories by text query within the current project scope. */
   search(query: string): MemoryRecord[] {
-    return searchMemories(this.store.list(), query, this.scope?.key ?? "")
+    return searchMemories(this.storage.listMemories(), query, this.scope?.key ?? "")
   }
 
   /** List pending memories for review. */
   reviewPending(): MemoryRecord[] {
-    return this.store.list().filter((m) => m.status === "pending")
+    return this.storage.listMemories().filter((m) => m.status === "pending")
   }
 
   private invalidateEmbedding(memoryId: string, reason: "updated" | "deleted" | "stale"): void {
-    const embStore = createEmbeddingStore(this.embPath)
     const invalidation: import("./types.js").EmbeddingInvalidationRecord = {
       type: "invalidation",
       memoryId,
       invalidatedAt: new Date().toISOString(),
       reason,
     }
-    embStore.append(invalidation)
+    this.storage.appendEmbedding(invalidation)
   }
 
   // ── Phase 2: Semantic Retrieval ────────────────────────────
@@ -572,11 +562,10 @@ export class MemoryEngine {
     const scope = options?.projectScope ?? this.scope
     const projectKey = scope?.key ?? ""
 
-    const embStore = createEmbeddingStore(this.embPath)
     return retrieveSemanticMemories(
-      this.store.list(),
-      embStore.listEmbeddings(),
-      embStore.listInvalidations(),
+      this.storage.listMemories(),
+      this.storage.listEmbeddings(),
+      this.storage.listEmbeddingInvalidations(),
       query,
       projectKey,
       config,
@@ -585,7 +574,7 @@ export class MemoryEngine {
   }
 
   compact(): CompactReport {
-    return compactStores(this.memPath, this.embPath)
+    return this.storage.compact()
   }
 
   /** Rebuild embeddings for all approved memories. */
@@ -594,17 +583,16 @@ export class MemoryEngine {
       return { embedded: 0, skippedExisting: 0, skippedSecrets: 0 }
     }
 
-    const embStore = createEmbeddingStore(this.embPath)
     const config = this.config.semantic
     const profile = config.embeddings.profiles[config.activeEmbeddingProfile]
     if (!profile) throw new Error("No active embedding profile configured")
 
-    const approved = this.store.list().filter((m) => m.status === "approved")
+    const approved = this.storage.listMemories().filter((m) => m.status === "approved")
     const safe = approved.filter((m) => !containsLikelySecret(m.text))
     const safeIds = new Set(safe.map((m) => m.id))
 
     // Count existing embeddings
-    const existing = embStore.listEmbeddings()
+    const existing = this.storage.listEmbeddings()
     const skippedExisting = existing.filter((e) => safeIds.has(e.memoryId)).length
 
     const profileName = config.activeEmbeddingProfile
@@ -617,7 +605,7 @@ export class MemoryEngine {
       const batch = safe.slice(i, i + batchSize)
       const vectors = await this.embProvider.embed(batch.map((m) => m.text), opts?.signal)
       batch.forEach((memory, index) => {
-        embStore.append({
+        this.storage.appendEmbedding({
           memoryId: memory.id,
           memoryUpdatedAt: memory.updatedAt,
           contentHash: contentHash(memory.text),
@@ -655,7 +643,7 @@ export class MemoryEngine {
 
     let semanticEmbeddedApprovedMemories = 0
     if (model) {
-      const embeddings = createEmbeddingStore(this.embPath).listEmbeddings()
+      const embeddings = this.storage.listEmbeddings()
       const currentKeys = new Set(
         embeddings
           .filter((embedding) => embedding.profileName === profileName && embedding.model === model)
@@ -755,7 +743,7 @@ export class MemoryEngine {
   }
 
   private memoryFileDoctor(): Record<string, unknown> {
-    const diagnostics = this.store.diagnostics()
+    const diagnostics = this.storage.memoryDiagnostics()
     const warnings = diagnostics.skippedRows > 0
       ? [`Memory file has ${diagnostics.skippedRows} skipped JSONL row(s): ${diagnostics.malformedRows} malformed JSON, ${diagnostics.invalidRows} schema-invalid.`]
       : []
@@ -845,7 +833,7 @@ export class MemoryEngine {
   }
 
   operatingAgreements(opts?: Omit<OperatingAgreementOptions, "projectScopeKey">): OperatingAgreementList {
-    return selectOperatingAgreements(this.store.list(), {
+    return selectOperatingAgreements(this.storage.listMemories(), {
       ...opts,
       projectScopeKey: this.scope?.key,
     })
@@ -856,21 +844,21 @@ export class MemoryEngine {
   }
 
   freshnessStatus(opts?: { since?: string }): FreshnessStatus {
-    return buildFreshnessStatus(this.store.list(), {
+    return buildFreshnessStatus(this.storage.listMemories(), {
       projectScopeKey: this.scope?.key,
       since: opts?.since,
     })
   }
 
   continuityHints(opts?: { since?: string }): ContinuityHintSummary {
-    return buildContinuityHints(this.store.list(), {
+    return buildContinuityHints(this.storage.listMemories(), {
       projectScopeKey: this.scope?.key,
       since: opts?.since,
     })
   }
 
   continuity(opts?: { caller?: "cli" | "mcp" | "lifecycle" | "core"; query?: string }): ContinuityReadModel {
-    return buildContinuityReadModel(this.store.list(), {
+    return buildContinuityReadModel(this.storage.listMemories(), {
       projectScopeKey: this.scope?.key,
       caller: opts?.caller,
       handoffMode: this.getHandoffMode(),
@@ -880,9 +868,8 @@ export class MemoryEngine {
 
   /** Generate a diagnostic report. */
   doctor(opts?: { freshnessSince?: string }): Record<string, unknown> {
-    const mems = this.store.list()
-    const embStore = createEmbeddingStore(this.embPath)
-    const embs = embStore.listEmbeddings()
+    const mems = this.storage.listMemories()
+    const embs = this.storage.listEmbeddings()
     const total = mems.length
     const config = this.config.semantic
     const operatingAgreements = this.operatingAgreements()
@@ -896,8 +883,8 @@ export class MemoryEngine {
       configFile: this.configPath,
       configExists: true,
       semanticEnabled: config.enabled,
-      memoryFile: this.memPath,
-      embeddingFile: this.embPath,
+      memoryFile: this.storage.memoryFile,
+      embeddingFile: this.storage.embeddingFile,
       totalMemories: total,
       approvedMemories: mems.filter((m) => m.status === "approved").length,
       pendingMemories: mems.filter((m) => m.status === "pending").length,

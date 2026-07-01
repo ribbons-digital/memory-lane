@@ -1,5 +1,8 @@
 # Memory Lane — Implementation Plan
 
+> **Status note:** This file is the original build plan and includes historical task snippets.
+> Current user-facing API and storage behavior are summarized in `README.md` and `docs/2026-05-20-memory-lane-design.md`; newer core code routes engine storage through `MemoryEngineStorage` even when older task snippets below still show direct `this.store`, `this.memPath`, or `this.embPath` usage.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a cross-harness, lightweight memory system with a core TypeScript library, CLI wrapper, and pi adapter.
@@ -17,7 +20,8 @@ packages/core/src/
 ├── index.ts               # Public barrel — re-exports everything consumers need
 ├── types.ts               # All interfaces, types, and type guards
 ├── engine.ts              # MemoryEngine: facade that wires everything together
-├── storage.ts             # MemoryStore: JSONL storage for memory records
+├── storage.ts             # MemoryStore: JSONL storage for memory records, cache, and batch append
+├── storage-facade.ts      # MemoryEngineStorage seam for memories, embeddings, compaction, diagnostics, and baselines
 ├── search.ts              # Lexical search, dedup, secret detection, scope matching
 ├── project-scope.ts       # Project identity resolution (scope file → git → global)
 ├── embedding-store.ts     # EmbeddingStore: JSONL storage for embedding + invalidation records
@@ -342,6 +346,7 @@ export interface SemanticMemoryConfig {
 export interface MemoryEngineConfig {
   memoryPath?: string
   embeddingsPath?: string
+  storage?: MemoryEngineStorage
   configPath?: string
   embeddingProvider?: EmbeddingProvider
 }
@@ -1124,17 +1129,15 @@ function clone(memory: MemoryRecord, update: Partial<MemoryRecord>): MemoryRecor
 const DEFAULT_DIR = path.join(os.homedir(), ".memory-lane")
 
 export class MemoryEngine {
-  private readonly store: MemoryStore
+  private readonly storage: MemoryEngineStorage
   private readonly config: ReturnType<typeof loadConfig>
   private scope: ProjectScope | null = null
   private readonly embProvider?: EmbeddingProvider
-  private readonly embPath: string
-  private readonly memPath: string
 
-  constructor(opts?: { memoryPath?: string; embeddingsPath?: string; configPath?: string; embeddingProvider?: EmbeddingProvider }) {
-    this.memPath = opts?.memoryPath ?? path.join(DEFAULT_DIR, "memory.jsonl")
-    this.embPath = opts?.embeddingsPath ?? path.join(DEFAULT_DIR, "embeddings.jsonl")
-    this.store = createMemoryStore(this.memPath)
+  constructor(opts?: MemoryEngineConfig) {
+    const memoryPath = opts?.memoryPath ?? path.join(DEFAULT_DIR, "memory.jsonl")
+    const embeddingsPath = opts?.embeddingsPath ?? path.join(DEFAULT_DIR, "embeddings.jsonl")
+    this.storage = opts?.storage ?? createSingleStoreEngineStorage(memoryPath, embeddingsPath)
     this.config = loadConfig(opts?.configPath ?? getDefaultConfigPath())
     this.embProvider = opts?.embeddingProvider
     this.refreshScope()
@@ -1667,10 +1670,13 @@ export async function retrieveSemanticMemories(
       const vectors = await provider.embed([q], signal)
       if (vectors?.length === 1) {
         const queryVec = vectors[0]
-        const invalidedIds = new Set(invalidations.map((i) => i.memoryId))
+        const latestInvalidations = latestInvalidationTimes(invalidations)
         const folded = new Map<string, EmbeddingRecord>()
         for (const e of embeddings) {
-          if (!invalidedIds.has(e.memoryId)) folded.set(e.memoryId, e)
+          if (!isEmbeddingAfterLatestInvalidation(e, latestInvalidations.get(e.memoryId))) continue
+          const key = [e.memoryId, e.contentHash, e.profileName, e.model].join("\0")
+          const existing = folded.get(key)
+          if (!existing || existing.createdAt <= e.createdAt) folded.set(key, e)
         }
 
         const scored = visible.map((m) => {
@@ -2608,7 +2614,10 @@ Three packages:
 
 ## Storage
 
-Memories are stored as append-only JSONL at `~/.memory-lane/memory.jsonl`. Embeddings (when configured) are in `~/.memory-lane/embeddings.jsonl`. Compaction removes deleted/rejected tombstones.
+Memories are stored as append-only JSONL at `~/.memory-lane/memory.jsonl` unless explicit environment paths or initialized project-local storage select a different active store.
+Atomic memory writes use a short lock plus `.tmp` and `rename`; batch appends are atomic per underlying store.
+Embeddings (when configured) are in `~/.memory-lane/embeddings.jsonl`.
+Compaction removes deleted/rejected tombstones and absorbed embedding invalidations.
 
 ## Project Scoping
 

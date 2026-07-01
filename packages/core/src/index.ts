@@ -14,6 +14,7 @@ export {
 } from "./operating-agreements.js"
 export { MemoryEngine } from "./engine.js"
 export { createMemoryStore, createMemoryId, foldMemoryRecords } from "./storage.js"
+export { createSingleStoreEngineStorage, type MemoryEngineStorage } from "./storage-facade.js"
 export { containsLikelySecret } from "./secret-detection.js"
 export { isMetaTaskPromptText } from "./meta-task-filter.js"
 export {
@@ -35,7 +36,7 @@ export {
   loadConfig, DEFAULT_CONFIG, getDefaultConfigPath, isLocalBaseUrl, validateConfig,
   writeConfig, readRawConfig,
 } from "./config.js"
-export { createEmbeddingStore, foldEmbeddings } from "./embedding-store.js"
+export { createEmbeddingStore, foldEmbeddings, type EmbeddingLine } from "./embedding-store.js"
 export { createOpenAIEmbeddingProvider } from "./embedding-provider.js"
 export { cosineSimilarity, lexicalScore, recencyScore, findMatchingEmbedding } from "./scoring.js"
 export { retrieveSemanticMemories } from "./retrieval.js"

@@ -5,6 +5,7 @@ import assert from "node:assert/strict"
 import { MemoryEngine } from "../src/engine.js"
 import { normalizeMemoryRecord } from "../src/storage-validation.js"
 import { contentHash } from "../src/engine-helpers.js"
+import { createSingleStoreEngineStorage } from "../src/storage-facade.js"
 import {
   selectOperatingAgreements,
   summarizeOperatingAgreements,
@@ -688,6 +689,51 @@ describe("MemoryEngine", () => {
     assert.ok(embeddingLog.some((entry) => entry.memoryId === saved.memory.id && entry.memoryUpdatedAt === updated?.updatedAt))
   })
 
+  it("approve invalidates embeddings and auto-embeds newly approved safe memories", async () => {
+    fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "test-profile",
+        embeddings: {
+          profiles: {
+            "test-profile": {
+              provider: "openai-compatible-embeddings",
+              baseUrl: "http://localhost:11434",
+              model: "test-model",
+            },
+          },
+        },
+      },
+    }), "utf8")
+    const embeddedInputs: string[] = []
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem.jsonl"),
+      embeddingsPath: path.join(dir, "emb.jsonl"),
+      configPath: path.join(dir, "cfg.json"),
+      embeddingProvider: {
+        async embed(inputs: string[]) {
+          embeddedInputs.push(...inputs)
+          return inputs.map(() => [1, 0, 0])
+        },
+      },
+    })
+    const saved = e.save({ text: "Pending semantic memory", status: "pending" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    const approved = e.approve(saved.memory.id)
+    await new Promise((resolve) => setImmediate(resolve))
+
+    assert.equal(approved?.status, "approved")
+    assert.ok(embeddedInputs.includes("Pending semantic memory"))
+    const embeddingLog = readJsonl(path.join(dir, "emb.jsonl"))
+    assert.ok(embeddingLog.some((entry) => entry.type === "invalidation" && entry.memoryId === saved.memory.id && entry.reason === "updated"))
+    assert.ok(embeddingLog.some((entry) => entry.memoryId === saved.memory.id && entry.memoryUpdatedAt === approved?.updatedAt))
+    const recalled = await e.recall("semantic")
+    assert.equal(recalled.semantic.used, true)
+    assert.equal(recalled.memories[0]?.id, saved.memory.id)
+  })
+
   it("update returns Obsidian mirror warnings without preventing JSONL update", () => {
     const missingVault = path.join(dir, "missing-vault")
     fs.writeFileSync(path.join(dir, "cfg.json"), JSON.stringify({
@@ -800,6 +846,37 @@ describe("MemoryEngine", () => {
     assert.equal(result.successor.kind, "workflow_rule")
     assert.deepEqual(result.successor.revision?.supersedes, [old.memory.id])
     assert.equal(result.superseded[0].revision?.supersededBy, result.successor.id)
+  })
+
+  it("supersede and replace approved write revisions through storage facade batch append", () => {
+    const storage = createSingleStoreEngineStorage(path.join(dir, "mem.jsonl"), path.join(dir, "emb.jsonl"))
+    const batchSizes: number[] = []
+    const originalAppendMemories = storage.appendMemories.bind(storage)
+    storage.appendMemories = (records) => {
+      batchSizes.push(records.length)
+      originalAppendMemories(records)
+    }
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "ignored-mem.jsonl"),
+      embeddingsPath: path.join(dir, "ignored-emb.jsonl"),
+      configPath: path.join(dir, "cfg.json"),
+      storage,
+    })
+    const oldForSupersede = e.save({ text: "Old facade supersede", status: "approved" })
+    const successor = e.save({ text: "New facade supersede", status: "approved" })
+    const oldForReplace = e.save({ text: "Old facade replace", status: "approved" })
+    assert.equal(oldForSupersede.status, "saved")
+    assert.equal(successor.status, "saved")
+    assert.equal(oldForReplace.status, "saved")
+    if (oldForSupersede.status !== "saved" || successor.status !== "saved" || oldForReplace.status !== "saved") return
+    batchSizes.length = 0
+
+    e.supersede(successor.memory.id, [oldForSupersede.memory.id])
+    e.replace([oldForReplace.memory.id], { text: "New facade replace", status: "approved" })
+
+    assert.deepEqual(batchSizes, [2, 2])
+    assert.equal(readJsonl(path.join(dir, "ignored-mem.jsonl")).length, 0)
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, 7)
   })
 
   it("replace does not auto-copy descriptor metadata from old memory", () => {
@@ -1040,7 +1117,7 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(e.reviewPending().length, 0)
   })
 
-  it("doctor returns stats", () => {
+  it("doctor returns stats and preserves storage path fields", () => {
     const e = engine()
     e.save({ text: "approved text", status: "approved" })
     e.save({ text: "pending text" })
@@ -1048,6 +1125,8 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(d.approvedMemories, 1)
     assert.equal(d.pendingMemories, 1)
     assert.equal(d.totalMemories, 2)
+    assert.equal(d.memoryFile, path.join(dir, "mem.jsonl"))
+    assert.equal(d.embeddingFile, path.join(dir, "emb.jsonl"))
   })
 
   it("accepts correction and procedure memory kinds", () => {
