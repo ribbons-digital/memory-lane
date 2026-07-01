@@ -118,6 +118,32 @@ describe("storage locations", () => {
     assert.ok(fs.readFileSync(path.join(root, ".gitignore"), "utf8").includes(".memory-lane/"))
   })
 
+  it("keeps absolute scope ids separate from project-local storage roots", () => {
+    const root = tempDir()
+    const nested = path.join(root, "packages", "app")
+    const scopeId = path.join(tempDir(), "stable-identity")
+    fs.mkdirSync(nested, { recursive: true })
+    fs.writeFileSync(path.join(root, ".memory-lane-scope"), JSON.stringify({ id: scopeId }), "utf8")
+
+    const readOnlyPlan = resolveEngineStoragePaths({ cwd: nested, env: { HOME: tempDir() } })
+    assert.equal(readOnlyPlan.projectScopeKey, scopeId)
+    assert.equal(readOnlyPlan.project?.memoryPath, path.join(root, ".memory-lane", "memory.jsonl"))
+
+    const fakeHomeFile = path.join(tempDir(), "not-a-directory")
+    fs.writeFileSync(fakeHomeFile, "file blocks ~/.memory-lane", "utf8")
+
+    const paths = resolveWritableEngineStoragePaths({
+      cwd: nested,
+      env: { HOME: fakeHomeFile },
+      autoInitProjectLocalOnHomeFailure: true,
+    })
+
+    assert.equal(paths.kind, "project-local-fallback")
+    assert.equal(paths.home.memoryPath, path.join(root, ".memory-lane", "memory.jsonl"))
+    assert.equal(fs.existsSync(path.join(scopeId, ".memory-lane")), false)
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, ".memory-lane-scope"), "utf8")), { id: scopeId })
+  })
+
   it("keeps explicit engine storage overrides single-store", () => {
     const dir = tempDir()
     const explicit = tempDir()
