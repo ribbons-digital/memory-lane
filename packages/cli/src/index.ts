@@ -930,6 +930,17 @@ type CommandHandler = (ctx: CliContext) => void | Promise<void>
 
 // These inspection commands must work in read-only desktop/client sandboxes without home-storage write probes.
 const readOnlyStorageCommands = new Set(["recall", "list", "search", "review", "dashboard", "agreements", "continuity", "doctor", "status", "show", "get"])
+const readOnlyStorageSubcommands: Record<string, Set<string | undefined>> = {
+  config: new Set([undefined, "show"]),
+  obsidian: new Set([undefined, "status"]),
+}
+
+function usesReadOnlyStorageResolution(command: string, argv: string[]): boolean {
+  if (readOnlyStorageCommands.has(command)) return true
+  const subcommands = readOnlyStorageSubcommands[command]
+  if (!subcommands) return false
+  return subcommands.has(positionals(argv.slice(1))[0]?.toLowerCase())
+}
 
 const commandHandlers: Record<string, CommandHandler> = {
   save: handleSave,
@@ -1029,7 +1040,7 @@ async function main(): Promise<void> {
 
   const projPath = flag(argv, "project")
   const pathOptions = { cwd: projPath ?? process.cwd(), env: process.env }
-  const paths = readOnlyStorageCommands.has(command)
+  const paths = usesReadOnlyStorageResolution(command, argv)
     ? resolveEngineStoragePaths(pathOptions)
     : resolveWritableEngineStoragePaths({ ...pathOptions, autoInitProjectLocalOnHomeFailure: true })
   const configPath = paths.configPath || resolveConfigPath()

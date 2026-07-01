@@ -1649,6 +1649,8 @@ describe("CLI integration", () => {
       ["list", "--json"],
       ["search", "nothing", "--json"],
       ["review", "--json"],
+      ["config", "show", "--json"],
+      ["obsidian", "status", "--json"],
     ]
 
     for (const args of commands) {
