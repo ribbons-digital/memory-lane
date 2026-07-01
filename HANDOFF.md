@@ -2,8 +2,8 @@
 
 ## Current state
 
-- Branch context: working branch `feat/storage-facade-proof` is based on main after `ab580f3 docs: record v0.2.41 release dogfood validation (#77)`. Current work has implemented approved project-local storage Slice 0 without changing default storage locations.
-- Latest release: `v0.2.41` at tag `v0.2.41` / commit `9f9cdde`; release workflow `28423317038` passed and published 8 assets.
+- Branch context: `main` is synced through `cd1a839 feat(core): add storage facade for project-local memories (#78)`. Current docs branch records the `v0.2.42` release dogfood.
+- Latest release: `v0.2.42` at tag `v0.2.42` / commit `cd1a839`; release workflow `28484161404` passed and published 8 assets.
 - Phase 21 `Handoff-Free Sessions` is complete and dogfooded. Fresh-thread prompt `where are we in the project and what should we work on next?` used about 11.8% context, improved from the previous 14.x% range.
 - Docs/context-budget slice is merged: root `ROADMAP.md` is now a compact active index, historical roadmap detail through Phase 20.5 is archived, `HANDOFF.md` is a status card, and Memory Lane skill guidance emphasizes bounded reads.
 - Retrieval/continuity eval baseline PR #70 merged as `7d5a8a6`; local/remote `feat/retrieval-continuity-eval-baseline` branches are cleaned up. The slice added a sanitized six-scenario corpus, test-only core eval helpers, structural tests, and baseline findings doc.
@@ -17,7 +17,7 @@ Active product track: **Project-local Storage Defaults**.
 
 Approved design: `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`.
 
-Slice 0 scope implemented on this branch:
+Slice 0 shipped in `v0.2.42`:
 
 1. preserve current storage behavior and default write locations;
 2. add an injectable `MemoryEngineStorage` facade with memory append/list/read-log/diagnostics, batch append, embedding append/read/invalidation, compaction, storage path metadata, and continuity-baseline path seam;
@@ -25,9 +25,9 @@ Slice 0 scope implemented on this branch:
 4. retire the direct `appendMemoryRecords()` raw `fs` rewrite path in favor of facade batch append;
 5. route embedding append/invalidation/recall/reindex, compaction, doctor/status storage fields, and continuity baseline paths through the facade while preserving single-store behavior.
 
-Explicitly out of scope for Slice 0: default-location flip, automatic project-local creation for project-scoped saves, migration of existing home-stored project memories, config merging, retrieval/ranking changes, schema changes, or user-facing storage-default docs beyond internal prep.
+Explicitly out of scope for Slice 0: default-location flip, automatic project-local creation for project-scoped saves, migration of existing home-stored project memories, config merging, schema changes, or user-facing storage-default docs beyond internal prep. A narrow semantic embedding invalidation correctness fix shipped with Slice 0 after review feedback so freshly embedded approved memories remain usable after invalidation.
 
-Next step before PR: finish full local validation (`pnpm --filter @memory-lane/core test`, `pnpm --filter @memory-lane/cli test`, `pnpm --filter @memory-lane/lifecycle test`, `pnpm test`, `pnpm build`, `git diff --check`), run Opus 4.8 implementation review, then use no-mistakes for PR creation.
+Recommended next step: draft the approval-gated Slice 1 design for project-local default writes. Before presenting it, get Opus 4.8's second opinion and converge on the proposal. Slice 1 should route new project-scoped writes to project-local storage when project scope is known and no explicit `MEMORY_LANE_*` paths override storage, while keeping global preferences/personal memories home-side.
 
 ## Load-bearing constraints
 
@@ -63,6 +63,8 @@ Next step before PR: finish full local validation (`pnpm --filter @memory-lane/c
 - PR #76 merged as `9f9cdde`; post-merge cleanup synced `main` and deleted local/remote `docs/post-pr-75-status` branches.
 - `v0.2.41` release workflow `28423317038` passed and published 8 assets; installed `memory-lane upgrade --yes` passed and reconfigured Pi.
 - Installed `v0.2.41` dogfood passed: `memory-lane --smoke-test` returned `memory-lane ok`, and an isolated lexical fallback recall fixture ranked the newer `current-release` checkpoint before the stale checkpoint for `what is the current Memory Lane release status?`.
+- PR #78 merged as `cd1a839`; post-merge cleanup synced `main` and deleted local/remote `feat/storage-facade-proof` branches.
+- `v0.2.42` release workflow `28484161404` passed and published 8 assets; installed `memory-lane upgrade --yes` passed, reconfigured Pi, and `memory-lane --smoke-test` returned `memory-lane ok`. Validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
 - Slice B no-mistakes/PR validation before merge: Opus 4.8 implementation review found no blockers; no-mistakes review found and fixed secret-like keyword pre-normalization and fallback-count-after-trim issues; CodeRabbit inline keyword-limit feedback was fixed by applying the keyword item cap after normalization/deduplication; GitHub PR checks passed (`test` and CodeRabbit). PR #72 merged as `bc02d04`.
 - `v0.2.40` release workflow `28419273491` passed and published 8 assets; installed `memory-lane upgrade --yes` passed and reconfigured Pi.
 - Installed Slice B dogfood passed: exact human and JSON `show` exposed descriptor metadata, released `memory-lane codex session-start` rendered structured descriptor summaries plus fetch hints, full descriptor-card bodies stayed out of SessionStart, and generated fallback descriptors still worked. Validation: `docs/superpowers/validation/2026-06-30-session-start-descriptor-metadata-dogfood.md`.
@@ -78,6 +80,7 @@ Next step before PR: finish full local validation (`pnpm --filter @memory-lane/c
 - Project-local storage default design: `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`
 - Retrieval currentness tie-break design: `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md`
 - Retrieval currentness tie-break validation: `docs/superpowers/validation/2026-06-30-retrieval-currentness-tie-break-validation.md`
+- v0.2.42 release/dogfood validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`
 - v0.2.41 release/dogfood validation: `docs/superpowers/validation/2026-06-30-v0.2.41-release-dogfood.md`
 - SessionStart descriptor index design: `docs/superpowers/specs/2026-06-30-session-start-descriptor-index-design.md`
 - SessionStart descriptor metadata Slice B design: `docs/superpowers/specs/2026-06-30-session-start-descriptor-metadata-design.md`
