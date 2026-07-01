@@ -558,7 +558,7 @@ export function classifyPromptRoute(prompt: string): PromptRouteDecision {
   if (isMemoryManagementListIntent(prompt)) return { route: "memory-management", intent: { detected: false, confidence: 0, reasons: ["memory-management"] }, confidence: 1, reasons: ["memory-management"] }
   if (shouldSkipAutomaticInjection(prompt)) return { route: "low-signal", intent: { detected: false, confidence: 0, reasons: ["low-signal"] }, confidence: 1, reasons: ["low-signal"] }
   const intent = detectContinuityIntent(prompt)
-  if (intent.detected && (intent.family === "project-position" || intent.family === "next-work")) {
+  if (intent.detected) {
     return { route: "continuity", intent, confidence: intent.confidence ?? 1, reasons: intent.reasons ?? [intent.family] }
   }
   return { route: "ordinary", intent, confidence: intent.confidence ?? 0, reasons: intent.reasons ?? [] }

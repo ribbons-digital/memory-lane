@@ -214,6 +214,11 @@ test("classifyPromptRoute scores natural next-item scope prompts as continuity",
   assert.equal(route.reasons.includes("scope-next-work"), true)
 })
 
+test("classifyPromptRoute routes detected continuity intents to continuity", () => {
+  assert.equal(classifyPromptRoute("Let's resume building Pi bridge routing").route, "continuity")
+  assert.equal(classifyPromptRoute("Where was Pi bridge routing implemented?").route, "continuity")
+})
+
 test("classifyPromptRoute preserves low-signal and ordinary routing", () => {
   assert.equal(classifyPromptRoute("hi").route, "low-signal")
   assert.equal(classifyPromptRoute("How do I run tests?").route, "ordinary")
