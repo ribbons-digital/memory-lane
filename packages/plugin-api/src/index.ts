@@ -92,12 +92,13 @@ export function createPluginAPI(
   const mcpResources: McpResourceDefinition[] = []
   const cliCommands: CliCommandDefinition[] = []
   const mcpProjectContext = new AsyncLocalStorage<string | undefined>()
+  const resolveEngine: EngineResolver = (projectPath, options) => engineResolver(projectPath ?? mcpProjectContext.getStore(), options)
 
   return {
     name,
     version,
-    get engine() { return engineResolver(mcpProjectContext.getStore()) },
-    engineResolver,
+    get engine() { return resolveEngine() },
+    engineResolver: resolveEngine,
     config,
     registerMcpTool(tool) {
       if (context !== "mcp") return
