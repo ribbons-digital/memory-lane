@@ -20,6 +20,7 @@ function memory(overrides: Partial<MemoryRecord> & { id: string; text?: string }
     revision: overrides.revision,
     project: overrides.project,
     freshness: overrides.freshness,
+    descriptor: overrides.descriptor,
   }
 }
 
@@ -155,9 +156,39 @@ test("continuity read model bounds operating guidance and filters secret-like gu
     memory({ id: "guidance-1", text: "Procedure: review git status before release.", kind: "procedure", updatedAt: "2026-06-25T10:30:00.000Z" }),
   ], { projectScopeKey: "project-a" })
 
-  assert.deepEqual(result.operatingGuidance?.map((item) => item.id), ["guidance-6", "guidance-5", "guidance-4", "guidance-3", "guidance-2"])
-  assert.equal(result.operatingGuidance?.length, 5)
+  assert.deepEqual(result.operatingGuidance?.map((item) => item.id), ["guidance-6", "guidance-4"])
+  assert.equal(result.operatingGuidance?.length, 2)
   assert.doesNotMatch(JSON.stringify(result), /sk-test-secret/u)
+})
+
+
+test("continuity read model excludes superseded memories from selected slots", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "old-checkpoint", text: "Released v0.1.0 with old continuity.", kind: "project_checkpoint", updatedAt: "2026-06-20T10:00:00.000Z", revision: { supersededBy: "new-checkpoint", revisedAt: "2026-06-20T12:00:00.000Z", revisedBy: "manual" } }),
+    memory({ id: "new-checkpoint", text: "Released v0.2.0 with current continuity.", kind: "project_checkpoint", updatedAt: "2026-06-19T10:00:00.000Z" }),
+    memory({ id: "old-guidance", text: "Procedure: old PR process before merge.", kind: "procedure", updatedAt: "2026-06-20T11:00:00.000Z", revision: { supersededBy: "new-guidance", revisedAt: "2026-06-20T12:00:00.000Z", revisedBy: "manual" } }),
+    memory({ id: "new-guidance", text: "Procedure: current PR process before merge.", kind: "procedure", updatedAt: "2026-06-19T11:00:00.000Z" }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.latestProgress?.id, "new-checkpoint")
+  assert.notEqual(result.latestApproved.project?.id, "old-checkpoint")
+  assert.deepEqual(result.operatingGuidance?.map((item) => item.id), ["new-guidance"])
+})
+
+
+test("continuity read model uses safe descriptor metadata for previews", () => {
+  const result = buildContinuityReadModel([
+    memory({
+      id: "descriptor-checkpoint",
+      text: "Long body that should not be used when descriptor metadata is available for continuity previews.",
+      kind: "project_checkpoint",
+      updatedAt: "2026-06-20T10:00:00.000Z",
+      descriptor: { description: "Compact checkpoint descriptor", fetchHint: "when checking current release status" },
+    }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.equal(result.latestProgress?.preview, "Compact checkpoint descriptor Fetch when: when checking current release status")
+  assert.doesNotMatch(result.latestProgress?.preview ?? "", /Long body/u)
 })
 
 

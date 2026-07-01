@@ -89,6 +89,7 @@ Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in 
 
 ## Other viable future tracks
 
+- **Continuity routing/context hygiene:** active implementation slice on `feat/continuity-routing-hygiene`. Scope: harness-neutral deterministic routing for natural broad next-work/status prompts, generated Pi bridge route-decision parity, continuity read-model/rendering cleanup, and MCP tool-description steering. No LLM classifier behavior in this slice.
 - **Review-first consolidation proposals:** identify overlapping/superseded memories and suggest manual `update` / `replace` / `supersede` commands. Keep review-first; no auto-consolidation or auto-approval.
 - **Docs/context-budget follow-up:** consider README splitting or generated current-state docs if README becomes the next major context source.
 - **Hardening backlog:** installer/init wizard improvements, Claude Desktop MCP config path tests, import dry-run secret warnings, and broader read-only taxonomy checks.
@@ -103,3 +104,4 @@ These items are intentionally not in the active roadmap. Add them only after rea
 - **Automatic preference learning.** Infer implicit preferences from chat history beyond explicit saves and session summaries.
 - **Opt-in memory sharing.** Let teams share selected project memories across machines or collaborators.
 - **Retrieval/ranking upgrades.** Consider RRF, reranking, graph expansion, or embedding-default changes only after eval evidence.
+- **Memory-Lane-configured continuity classifier.** Future harness-agnostic design only: opt-in configured provider, deterministic-first, ambiguous-only, no harness-current-model assumption, with MCP handled through tool-description steering because MCP has no pre-turn lifecycle.

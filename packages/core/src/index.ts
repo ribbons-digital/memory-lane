@@ -8,6 +8,7 @@ export { buildPreferenceDiagnostics, isPreferenceLikeMemory } from "./preference
 export { revisionNow, sameIdRevision, revisionLabel, hasRealUpdateChange } from "./revisions.js"
 export {
   WORKFLOW_AREAS,
+  classifyWorkflowArea,
   isWorkflowArea,
   selectOperatingAgreements,
   summarizeOperatingAgreements,
@@ -16,6 +17,7 @@ export { MemoryEngine } from "./engine.js"
 export { createMemoryStore, createMemoryId, foldMemoryRecords } from "./storage.js"
 export { createSingleStoreEngineStorage, createTwoTierEngineStorage, type MemoryEngineStorage } from "./storage-facade.js"
 export { containsLikelySecret } from "./secret-detection.js"
+export { memoryDescriptorPreview, structuredDescriptorText, hasSecretDescriptorMetadata, type DescriptorPreviewResult } from "./descriptor-preview.js"
 export { isMetaTaskPromptText } from "./meta-task-filter.js"
 export {
   analyzeSummaryHygiene,

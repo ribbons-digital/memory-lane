@@ -115,6 +115,8 @@ const args = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
 if (args[0] === "status") {
   console.log(JSON.stringify({ data: { contextPolicyMode: "selective", contextPolicyPromptMaxItems: 2 } }));
+} else if (args[0] === "route") {
+  console.log(JSON.stringify({ data: { route: { route: "continuity", confidence: 1, reasons: ["test"] } } }));
 } else if (args[0] === "continuity") {
   console.log(JSON.stringify({ data: { latestApproved: { project: { id: "latest1", preview: "PR #51 merged and v0.2.28 released." } }, latestProgress: { id: "latest1", preview: "PR #51 merged and v0.2.28 released." }, operatingGuidance: [
     { id: "guide1", preview: "Operating guidance 1." },
@@ -151,6 +153,7 @@ if (args[0] === "status") {
         "Where did we leave off?",
         "Where was lifecycle continuity implemented?",
         "Let's resume building prompt continuity intents",
+        "what's the next item we should work on and what's its scope?",
       ];
       for (const prompt of prompts) {
         const result = await handlers.before_agent_start({ prompt }, { cwd: process.cwd() });
@@ -179,7 +182,9 @@ if (args[0] === "status") {
       "Where did we leave off?",
       "Where was lifecycle continuity implemented?",
       "Let's resume building prompt continuity intents",
+      "what's the next item we should work on and what's its scope?",
     ]) {
+      assert.ok(calls.some((args) => args[0] === "route" && args.includes("--prompt") && args.includes(prompt)), `expected route call for ${prompt}`)
       assert.ok(calls.some((args) => args[0] === "continuity" && args.includes("--query") && args.includes(prompt)), `expected continuity call for ${prompt}`)
     }
     assert.equal(calls.some((args) => args[0] === "recall"), false)

@@ -194,6 +194,34 @@ test("user-prompt selective next-work continuity intent suppresses ordinary reca
   })
 })
 
+test("user-prompt selective natural next-item scope prompt routes to continuity", async () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { contextPolicy: { mode: "selective" } })
+  engine.save({
+    text: "STALE NEXT ITEM BODY: ordinary recall should not answer broad next-action prompts.",
+    status: "approved",
+    category: "project",
+    scopeType: "project",
+    kind: "project_fact",
+  })
+  engine.recall = async () => {
+    throw new Error("natural next-item prompts should not run ordinary recall")
+  }
+
+  const result = await handleUserPromptSubmit(engine, {
+    cwd: project,
+    prompt: "what's the next item we should work on and what's its scope?",
+  })
+  const context = result.additionalContext ?? ""
+
+  assert.match(context, /Memory Lane continuity guidance/u)
+  assert.match(context, /memory-lane continuity --json/u)
+  assert.doesNotMatch(context, /## Relevant Memory/u)
+  assert.doesNotMatch(context, /STALE NEXT ITEM BODY/u)
+  assert.equal(result.contextDecision?.continuityIntent?.family, "next-work")
+  assert.equal(result.contextDecision?.continuityIntent?.guidanceInjected, true)
+})
+
 test("user-prompt selective project-position continuity intent suppresses ordinary recall bodies", async () => {
   const project = tempDir()
   const engine = engineInTemp(project, { contextPolicy: { mode: "selective" } })

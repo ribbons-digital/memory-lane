@@ -155,6 +155,24 @@ test("user-prompt-submit emits Claude additionalContext output", async () => {
   assert.match(parsed.hookSpecificOutput.additionalContext, /User likes concise replies/u)
 })
 
+test("user-prompt-submit routes natural next-item scope prompt to continuity guidance", async () => {
+  const engine = engineInTemp()
+  engine.save({ text: "STALE NEXT ITEM BODY should not be recalled", category: "project", scopeType: "project", status: "approved", kind: "project_fact" })
+  engine.recall = async () => {
+    throw new Error("Claude broad next-action prompts should not run ordinary recall")
+  }
+
+  const output = await runClaudeHookCommand("user-prompt-submit", {
+    engine,
+    payloadText: userPromptPayload("what's the next item we should work on and what's its scope?"),
+  })
+
+  const parsed = JSON.parse(output)
+  assert.match(parsed.hookSpecificOutput.additionalContext, /Memory Lane continuity guidance/u)
+  assert.match(parsed.hookSpecificOutput.additionalContext, /memory-lane continuity --json/u)
+  assert.doesNotMatch(parsed.hookSpecificOutput.additionalContext, /## Relevant Memory/u)
+})
+
 test("stop saves with claude provenance", async () => {
   const engine = engineInTemp()
 

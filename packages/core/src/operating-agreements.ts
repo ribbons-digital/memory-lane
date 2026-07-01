@@ -56,7 +56,7 @@ function matchReason(memory: MemoryRecord): "explicit-kind" | "heuristic" | unde
   return OPERATING_AGREEMENT_PATTERN.test(memory.text) ? "heuristic" : undefined
 }
 
-function classifyWorkflowArea(text: string): WorkflowArea {
+export function classifyWorkflowArea(text: string): WorkflowArea {
   for (const { area, pattern } of AREA_PATTERNS) {
     if (pattern.test(text)) return area
   }

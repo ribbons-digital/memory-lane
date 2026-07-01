@@ -13,6 +13,7 @@ import {
   renderSessionStartMemoryContext,
   renderContinuityNotice,
   detectContinuityIntent,
+  classifyPromptRoute,
   renderContinuityIntentGuidance,
   limitsFromContextPolicy,
   CODEX_MEMORY_INJECTION_LIMITS,
@@ -204,6 +205,18 @@ test("detects project-position and next-work continuity intents", () => {
 test("does not detect ordinary prompts as continuity intents", () => {
   assert.deepEqual(detectContinuityIntent("How do I run tests?"), { detected: false })
   assert.deepEqual(detectContinuityIntent("Use pnpm for installs"), { detected: false })
+})
+
+test("classifyPromptRoute scores natural next-item scope prompts as continuity", () => {
+  const route = classifyPromptRoute("what's the next item we should work on and what's its scope?")
+  assert.equal(route.route, "continuity")
+  assert.equal(route.intent.detected && route.intent.family, "next-work")
+  assert.equal(route.reasons.includes("scope-next-work"), true)
+})
+
+test("classifyPromptRoute preserves low-signal and ordinary routing", () => {
+  assert.equal(classifyPromptRoute("hi").route, "low-signal")
+  assert.equal(classifyPromptRoute("How do I run tests?").route, "ordinary")
 })
 
 test("renders text-free continuity intent guidance", () => {

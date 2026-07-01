@@ -3,6 +3,8 @@ import {
   containsLikelySecret,
   isPreferenceLikeMemory,
   lexicalScore,
+  structuredDescriptorText,
+  hasSecretDescriptorMetadata,
   normalizeMemoryText,
   type ContinuityHintCode,
   type ContinuityHintSummary,
@@ -451,8 +453,17 @@ export function renderMemoryManagementListGuidance(): string {
 export type ContinuityIntentFamily = "resume" | "lookup" | "project-position" | "next-work"
 
 export type ContinuityIntent =
-  | { detected: false }
-  | { detected: true; family: ContinuityIntentFamily; topic?: string }
+  | { detected: false; confidence?: number; reasons?: string[] }
+  | { detected: true; family: ContinuityIntentFamily; topic?: string; confidence?: number; reasons?: string[] }
+
+export type PromptRoute = "continuity" | "ordinary" | "low-signal" | "memory-management"
+
+export interface PromptRouteDecision {
+  route: PromptRoute
+  intent: ContinuityIntent
+  confidence: number
+  reasons: string[]
+}
 
 function cleanContinuityTopic(topic: string | undefined): string | undefined {
   const cleaned = (topic ?? "")
@@ -464,10 +475,44 @@ function cleanContinuityTopic(topic: string | undefined): string | undefined {
   return cleaned.length > 0 ? cleaned : undefined
 }
 
+function tokenSet(prompt: string): Set<string> {
+  return new Set(normalizedPrompt(prompt).split(" ").filter(Boolean))
+}
+
+function hasAny(tokens: Set<string>, values: string[]): boolean {
+  return values.some((value) => tokens.has(value))
+}
+
+function scoredBroadIntent(prompt: string): ContinuityIntent {
+  const normalized = normalizedPrompt(prompt)
+  const tokens = tokenSet(prompt)
+  const reasons: string[] = []
+  let nextWorkScore = 0
+  let projectPositionScore = 0
+
+  if (hasAny(tokens, ["next", "upcoming"])) { nextWorkScore += 2; reasons.push("next-token") }
+  if (hasAny(tokens, ["work", "working", "task", "item", "slice", "scope", "plan"])) { nextWorkScore += 1; reasons.push("work-item-token") }
+  if (/\bshould\s+we\b/iu.test(normalized)) { nextWorkScore += 1; reasons.push("should-we") }
+  if (/\bwhat\s+(?:is|s)\s+(?:the\s+)?(?:next|scope)\b/iu.test(normalized)) { nextWorkScore += 1; reasons.push("next-question") }
+  if (hasAny(tokens, ["scope"]) && hasAny(tokens, ["next", "item", "task", "work"])) { nextWorkScore += 1; reasons.push("scope-next-work") }
+
+  if (hasAny(tokens, ["status", "progress", "latest", "current", "where"])) { projectPositionScore += 2; reasons.push("status-token") }
+  if (/\bleave\s+off\b|\bleft\s+off\b|\blast\s+working\b/iu.test(normalized)) { projectPositionScore += 3; reasons.push("leave-off") }
+  if (/\bwhere\s+are\s+we\b/iu.test(normalized)) { projectPositionScore += 3; reasons.push("where-are-we") }
+
+  if (nextWorkScore >= 4 && nextWorkScore >= projectPositionScore) {
+    return { detected: true, family: "next-work", confidence: Math.min(1, nextWorkScore / 6), reasons }
+  }
+  if (projectPositionScore >= 4) {
+    return { detected: true, family: "project-position", confidence: Math.min(1, projectPositionScore / 6), reasons }
+  }
+  return reasons.length ? { detected: false, confidence: Math.max(nextWorkScore, projectPositionScore) / 6, reasons } : { detected: false }
+}
+
 export function detectContinuityIntent(prompt: string): ContinuityIntent {
   const input = prompt.trim()
   const normalized = normalizedPrompt(prompt)
-  if (!normalized) return { detected: false }
+  if (!normalized) return { detected: false, confidence: 0, reasons: ["empty"] }
 
   const resumePatterns = [
     /^(?:let'?s\s+)?resume\s+(?:building|working\s+on|work\s+on)\s+(.+?)\s*$/iu,
@@ -506,7 +551,17 @@ export function detectContinuityIntent(prompt: string): ContinuityIntent {
     return { detected: true, family: "next-work" }
   }
 
-  return { detected: false }
+  return scoredBroadIntent(prompt)
+}
+
+export function classifyPromptRoute(prompt: string): PromptRouteDecision {
+  if (isMemoryManagementListIntent(prompt)) return { route: "memory-management", intent: { detected: false, confidence: 0, reasons: ["memory-management"] }, confidence: 1, reasons: ["memory-management"] }
+  if (shouldSkipAutomaticInjection(prompt)) return { route: "low-signal", intent: { detected: false, confidence: 0, reasons: ["low-signal"] }, confidence: 1, reasons: ["low-signal"] }
+  const intent = detectContinuityIntent(prompt)
+  if (intent.detected && (intent.family === "project-position" || intent.family === "next-work")) {
+    return { route: "continuity", intent, confidence: intent.confidence ?? 1, reasons: intent.reasons ?? [intent.family] }
+  }
+  return { route: "ordinary", intent, confidence: intent.confidence ?? 0, reasons: intent.reasons ?? [] }
 }
 
 function shellQuoteRecallTopic(topic: string): string {
@@ -668,23 +723,6 @@ function descriptorPreview(memory: MemoryRecord, maxChars = SESSION_START_DESCRI
   if (containsLikelySecret(memory.text)) return undefined
   const normalized = memory.text.trim().replace(/\s+/gu, " ")
   return truncateAtBoundary(normalized, maxChars) ?? normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd() + "…"
-}
-
-function hasSecretDescriptorMetadata(memory: MemoryRecord): boolean {
-  const descriptor = memory.descriptor
-  if (!descriptor) return false
-  return [descriptor.description, descriptor.fetchHint, ...(descriptor.keywords ?? [])]
-    .filter((value): value is string => typeof value === "string")
-    .some((value) => containsLikelySecret(value))
-}
-
-function structuredDescriptorText(memory: MemoryRecord): string | undefined {
-  const descriptor = memory.descriptor
-  if (!descriptor?.description) return undefined
-  if (hasSecretDescriptorMetadata(memory)) return undefined
-  return descriptor.fetchHint
-    ? `${descriptor.description} Fetch when: ${descriptor.fetchHint}`
-    : descriptor.description
 }
 
 function usesGeneratedDescriptorFallback(memory: MemoryRecord): boolean {

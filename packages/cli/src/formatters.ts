@@ -901,6 +901,8 @@ Commands:
   agreements [--area <area>] [--limit <n>] [--related-limit <n>] [--all]
                   Show approved operating agreements for the current project and global scope
   continuity [--json]    Canonical continuity read model for resumption/status questions
+  route --prompt <prompt> [--json]
+                  Internal prompt routing decision for harness adapters
   compact
   doctor [--since <ISO timestamp>]
   reindex [--force]
