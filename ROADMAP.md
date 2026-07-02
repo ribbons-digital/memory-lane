@@ -83,6 +83,7 @@ Slice plan:
 Current release state: Slice 0 is merged and released in `v0.2.42`; Slice 1 is merged and released in `v0.2.43` alongside continuity routing/context hygiene PR #82 (`a808231`).
 Installed-artifact `v0.2.43` dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, route classification, and generated Pi bridge continuity smoke.
 Validation: `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
+Active hardening branch `feat/fable-5-hardening` addresses storage/config resilience before the next product slice: config merge/backups, hook fail-safe initialization, bounded background embedding shutdown, invalid-row preserving compaction, stale embedding invalidation checks, and provider timeout validation.
 
 Current next candidate: Slice 2 migration/compatibility diagnostics.
 Start with a fresh design/approval gate before implementation.
@@ -98,6 +99,7 @@ Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in 
 - **Review-first consolidation proposals:** identify overlapping/superseded memories and suggest manual `update` / `replace` / `supersede` commands. Keep review-first; no auto-consolidation or auto-approval.
 - **Docs/context-budget follow-up:** consider README splitting or generated current-state docs if README becomes the next major context source.
 - **Hardening backlog:** installer/init wizard improvements, Claude Desktop MCP config path tests, import dry-run secret warnings, and broader read-only taxonomy checks.
+  The active `feat/fable-5-hardening` branch covers the current storage/config reliability subset; leave import warnings and broader read-only taxonomy as future work unless separately approved.
 - **Outcome-informed learning:** use approval/rejection/delete/rescope/replace/supersede decisions as reviewable signals for future suggesters, without silent self-training or durable policy mutation.
 
 ## Deferred improvements

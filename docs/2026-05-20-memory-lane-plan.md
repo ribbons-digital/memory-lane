@@ -459,7 +459,7 @@ export function createMemoryStore(filePath: string): MemoryStore {
       try {
         const parsed = JSON.parse(line)
         if (isMemoryRecord(parsed)) records.push(parsed)
-      } catch { /* skip malformed lines */ }
+      } catch { /* omit malformed lines from reads; diagnostics/compaction preserve source rows */ }
     }
     return records
   }
@@ -1756,7 +1756,7 @@ import { foldEmbeddings } from "./embedding-store.js"
 import type { MemoryRecord, EmbeddingRecord, EmbeddingInvalidationRecord, CompactReport } from "./types.js"
 
 export function compact(memFile: string, embFile: string): CompactReport {
-  // Compact memories: remove deleted/rejected tombstones
+  // Compact memories: remove deleted/rejected tombstones while preserving invalid rows
   let removedMemories = 0
   const memExists = fs.existsSync(memFile)
   if (memExists) {
@@ -1895,7 +1895,7 @@ compact(): CompactReport {
   return compact(this.memPath, this.embPath)
 }
 
-/** Rebuild embeddings for all approved memories. */
+/** Rebuild embeddings for approved memories missing current vectors; pass force to recompute existing current vectors. */
 async reindexEmbeddings(opts?: { force?: boolean; signal?: AbortSignal }): Promise<{ embedded: number; skippedExisting: number; skippedSecrets: number }> {
   if (!this.embProvider || !this.config.semantic.enabled) {
     return { embedded: 0, skippedExisting: 0, skippedSecrets: 0 }

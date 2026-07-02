@@ -2,3 +2,5 @@ dist/
 dist-binaries/
 node_modules/
 .worktrees/
+.memory-lane/
+.pi-subagents/artifacts/

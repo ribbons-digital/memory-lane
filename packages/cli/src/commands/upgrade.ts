@@ -24,10 +24,6 @@ export interface ReapplyInstallManifestResult {
   manifest: InstallManifest
 }
 
-function commandExists(cmd: string): boolean {
-  return spawnSync(os.platform() === "win32" ? "where" : "command", ["-v", cmd], { stdio: "ignore" }).status === 0
-}
-
 function runInstaller(scriptPath: string): boolean {
   const isWindows = os.platform() === "win32"
   const result = isWindows
@@ -46,9 +42,13 @@ function downloadWithWget(url: string, dest: string): boolean {
   return result.status === 0
 }
 
+function canRun(cmd: string): boolean {
+  return spawnSync(cmd, ["--version"], { stdio: "ignore" }).status === 0
+}
+
 function download(url: string, dest: string): boolean {
-  if (commandExists("curl")) return downloadWithCurl(url, dest)
-  if (commandExists("wget")) return downloadWithWget(url, dest)
+  if (canRun("curl")) return downloadWithCurl(url, dest)
+  if (canRun("wget")) return downloadWithWget(url, dest)
   return false
 }
 

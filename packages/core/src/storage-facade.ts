@@ -4,8 +4,9 @@ import * as path from "node:path"
 import { compact as compactStores, shouldCompact } from "./compact.js"
 import { defaultContinuityBaselinePath } from "./continuity-baseline.js"
 import { createEmbeddingStore, foldEmbeddings, type EmbeddingLine, type EmbeddingStore } from "./embedding-store.js"
+import { normalizeMemoryRecord } from "./storage-validation.js"
 import { ensureProjectLocalStorageFiles, type MemoryPaths } from "./storage-locations.js"
-import { createMemoryStore, type MemoryStore, type MemoryStoreDiagnostics } from "./storage.js"
+import { createMemoryStore, withFileLocks, type MemoryStore, type MemoryStoreDiagnostics } from "./storage.js"
 import type { CompactReport, EmbeddingInvalidationRecord, EmbeddingRecord, MemoryRecord } from "./types.js"
 
 /**
@@ -104,11 +105,52 @@ function existingFile(path: string): boolean {
   try { return fs.existsSync(path) } catch { return false }
 }
 
-function writeJsonl(pathname: string, records: unknown[]): void {
+function writeJsonl(pathname: string, records: unknown[], preservedLines: string[] = []): void {
   fs.mkdirSync(path.dirname(pathname), { recursive: true })
   const tmp = pathname + ".tmp." + randomBytes(4).toString("hex")
-  fs.writeFileSync(tmp, records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : ""), "utf8")
+  const lines = [...records.map((record) => JSON.stringify(record)), ...preservedLines]
+  fs.writeFileSync(tmp, lines.join("\n") + (lines.length ? "\n" : ""), "utf8")
   fs.renameSync(tmp, pathname)
+}
+
+function preservedInvalidMemoryLines(pathname: string): string[] {
+  if (!existingFile(pathname)) return []
+  const preserved: string[] = []
+  for (const line of fs.readFileSync(pathname, "utf8").split(/\r?\n/u)) {
+    if (!line.trim()) continue
+    try {
+      if (!normalizeMemoryRecord(JSON.parse(line))) preserved.push(line)
+    } catch {
+      preserved.push(line)
+    }
+  }
+  return preserved
+}
+
+function isValidEmbeddingCompactionLine(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false
+  const record = value as Record<string, unknown>
+  if (record.type === "invalidation") return typeof record.memoryId === "string"
+  return typeof record.memoryId === "string"
+    && typeof record.contentHash === "string"
+    && typeof record.profileName === "string"
+    && typeof record.model === "string"
+    && typeof record.createdAt === "string"
+    && Array.isArray(record.vector)
+}
+
+function preservedInvalidEmbeddingLines(pathname: string): string[] {
+  if (!existingFile(pathname)) return []
+  const preserved: string[] = []
+  for (const line of fs.readFileSync(pathname, "utf8").split(/\r?\n/u)) {
+    if (!line.trim()) continue
+    try {
+      if (!isValidEmbeddingCompactionLine(JSON.parse(line))) preserved.push(line)
+    } catch {
+      preserved.push(line)
+    }
+  }
+  return preserved
 }
 
 function embeddingKey(record: EmbeddingRecord): string {
@@ -267,7 +309,8 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
     const totalPreserved = Array.from(grouped.values()).reduce((sum, group) => sum + group.length, 0)
     for (const entry of compactedEntries) {
       const group = grouped.get(entry) ?? []
-      if (existingFile(entry.paths.memoryPath) || group.length) writeJsonl(entry.paths.memoryPath, group)
+      const preservedLines = preservedInvalidMemoryLines(entry.paths.memoryPath)
+      if (existingFile(entry.paths.memoryPath) || group.length) writeJsonl(entry.paths.memoryPath, group, preservedLines)
     }
 
     return {
@@ -309,7 +352,8 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
     }
     for (const entry of compactedEntries) {
       const group = validByEntry.get(entry) ?? []
-      if (existingFile(entry.paths.embeddingsPath) || group.length) writeJsonl(entry.paths.embeddingsPath, group)
+      const preservedLines = preservedInvalidEmbeddingLines(entry.paths.embeddingsPath)
+      if (existingFile(entry.paths.embeddingsPath) || group.length) writeJsonl(entry.paths.embeddingsPath, group, preservedLines)
     }
 
     return {
@@ -357,8 +401,12 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
     },
     compact() {
       const compactedEntries = existingEntries()
-      const memoryResult = compactMemoryLogs(compactedEntries)
-      const report = addReports(memoryResult.report, compactEmbeddingLogs(compactedEntries, memoryResult.aliveById))
+      const paths = compactedEntries.flatMap((entry) => [entry.paths.memoryPath, entry.paths.embeddingsPath])
+      let report: CompactReport = { removedMemories: 0, removedEmbeddings: 0, removedInvalidations: 0 }
+      withFileLocks(paths, () => {
+        const memoryResult = compactMemoryLogs(compactedEntries)
+        report = addReports(memoryResult.report, compactEmbeddingLogs(compactedEntries, memoryResult.aliveById))
+      })
       for (const entry of compactedEntries) refresh(entry)
       return report
     },

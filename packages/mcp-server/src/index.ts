@@ -11,6 +11,8 @@ export interface MainOptions {
   bundledPlugins?: BundledPluginModule[]
 }
 
+const MCP_SHUTDOWN_SETTLE_TIMEOUT_MS = 5_000
+
 async function waitForStdinClose(): Promise<void> {
   if (process.stdin.readableEnded || process.stdin.destroyed) return
   await new Promise<void>((resolve) => {
@@ -20,12 +22,31 @@ async function waitForStdinClose(): Promise<void> {
   })
 }
 
+async function settleEnginesWithTimeout(settleEngines: () => Promise<void>, cancelPendingEmbeddings: () => void): Promise<void> {
+  let timer: NodeJS.Timeout | undefined
+  await Promise.race([
+    settleEngines(),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        cancelPendingEmbeddings()
+        resolve()
+      }, MCP_SHUTDOWN_SETTLE_TIMEOUT_MS)
+      timer.unref?.()
+    }),
+  ])
+  if (timer) clearTimeout(timer)
+}
+
 export async function main(options: MainOptions = {}): Promise<void> {
-  const { engine, engineForProjectPath, plugins } = await createMemoryLaneEngine({ bundledPlugins: options.bundledPlugins })
+  const { engine, engineForProjectPath, settleEngines, cancelPendingEmbeddings, plugins } = await createMemoryLaneEngine({ bundledPlugins: options.bundledPlugins })
   const server = createMemoryLaneMcpServer({ engine, engineForProjectPath, plugins })
   const transport = new StdioServerTransport()
   await server.connect(transport)
-  await waitForStdinClose()
+  try {
+    await waitForStdinClose()
+  } finally {
+    await settleEnginesWithTimeout(settleEngines, cancelPendingEmbeddings)
+  }
 }
 
 export function isDirectExecution(metaUrl = import.meta.url, argv1 = process.argv[1]): boolean {

@@ -15,6 +15,7 @@ This detects Claude Code CLI and installs:
 - A personal skill at `~/.claude/skills/memory-lane/SKILL.md` so `/memory-lane` is available as a slash command
 
 Use `memory-lane init --yes` to auto-accept all detected harnesses.
+When `init` writes JSON config, it preserves unrelated settings and hooks, replaces older Memory Lane hook entries, creates a one-time `<config>.memory-lane.bak` backup before the first successful write, and leaves malformed JSON untouched with an error.
 
 ## Manual setup: Claude Code hooks
 
@@ -97,13 +98,13 @@ A real Claude Code CLI smoke test in Sitewright confirmed that `SessionEnd` fire
 {
   "adapter": "claude",
   "event": "session-end",
-  "cwd": "/Users/shiang/projects/ribbons-digital/sitewright",
+  "cwd": "/path/to/example-project",
   "status": "ok",
   "saved": 1
 }
 ```
 
-The saved memory was pending, scoped to the Sitewright project, and included:
+The saved memory was pending, scoped to the example project, and included:
 
 ```json
 {
@@ -116,7 +117,7 @@ The saved memory was pending, scoped to the Sitewright project, and included:
 }
 ```
 
-For isolated testing, prefer absolute temp paths in hook commands, for example `MEMORY_LANE_FILE=/tmp/ml-claude-sitewright.xxxxxx/memory.jsonl`. Do not use shell variables such as `$tmp` inside `settings.local.json`; Claude runs hook commands in its own shell and will not inherit your interactive variable.
+For isolated testing, prefer absolute temp paths in hook commands, for example `MEMORY_LANE_FILE=/tmp/ml-claude-example.xxxxxx/memory.jsonl`. Do not use shell variables such as `$tmp` inside `settings.local.json`; Claude runs hook commands in its own shell and will not inherit your interactive variable.
 
 ## What each hook does
 
@@ -129,6 +130,7 @@ For isolated testing, prefer absolute temp paths in hook commands, for example `
 `SessionEnd` is supported by Claude Code and can generate pending `session_summary` memories when `memory.sessionEndSummary.enabled` is configured. By default, Memory Lane still requires confirmation; a bare hook will not save unless `memory.sessionEndSummary.requireConfirmation` is set to `false` or the payload is invoked with `confirmed: true` for manual testing.
 
 `PostToolUse` does not inject context. It can save durable tool-outcome memories, such as successful test commands or package-manager workflow rules.
+If hook initialization fails because storage, config, or plugins cannot be loaded, Memory Lane returns `{}` and exits successfully so Claude Code is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr.
 
 ## Sandboxed storage
 

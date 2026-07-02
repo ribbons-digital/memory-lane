@@ -33,6 +33,10 @@ export interface EngineForProjectPathOptions {
 export interface MemoryLaneEngineResult {
   engine: MemoryEngine
   engineForProjectPath: (projectPath?: string, options?: EngineForProjectPathOptions) => MemoryEngine
+  /** Wait for background embedding writes scheduled by all engines created for this server. */
+  settleEngines: () => Promise<void>
+  /** Abort outstanding background embedding writes for all engines created for this server. */
+  cancelPendingEmbeddings: () => void
   plugins: LoadedPlugin[]
 }
 
@@ -40,6 +44,7 @@ export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOpti
   const env = options.env ?? process.env
   const cwd = options.cwd ?? process.cwd()
   const engineCache = new Map<string, { engine: MemoryEngine; signature: string }>()
+  const createdEngines = new Set<MemoryEngine>()
 
   function configFingerprint(configPath: string): string {
     try {
@@ -81,6 +86,7 @@ export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOpti
       env,
     })
     engine.refreshScope(engineCwd)
+    createdEngines.add(engine)
     return engine
   }
 
@@ -100,11 +106,19 @@ export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOpti
     return engine
   }
 
+  async function settleEngines(): Promise<void> {
+    await Promise.allSettled(Array.from(createdEngines, (engine) => engine.settle()))
+  }
+
+  function cancelPendingEmbeddings(): void {
+    for (const engine of createdEngines) engine.cancelPendingEmbeddings()
+  }
+
   const engine = engineForProjectPath(undefined, { writable: false })
   const config = loadConfig(resolveEngineStoragePaths({ cwd, env }).configPath)
   const plugins = config.plugins?.length
     ? await loadPlugins({ pluginNames: config.plugins, engine, engineResolver: engineForProjectPath, config, context: "mcp", bundledPlugins: options.bundledPlugins })
     : []
 
-  return { engine, engineForProjectPath, plugins }
+  return { engine, engineForProjectPath, settleEngines, cancelPendingEmbeddings, plugins }
 }

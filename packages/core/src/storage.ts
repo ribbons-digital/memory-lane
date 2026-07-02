@@ -11,7 +11,120 @@ export function createMemoryId(): string {
 export function foldMemoryRecords(records: MemoryRecord[]): MemoryRecord[] {
   const latest = new Map<string, MemoryRecord>()
   for (const record of records) latest.set(record.id, record)
-  return Array.from(latest.values()).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  return Array.from(latest.values()).sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""))
+}
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+interface LockSnapshot {
+  ownerText?: string
+  mtimeMs: number
+  stale: boolean
+}
+
+function lockSnapshot(lockDir: string): LockSnapshot | undefined {
+  const ownerFile = path.join(lockDir, "owner.json")
+  const stat = fs.statSync(lockDir)
+  if (!fs.existsSync(ownerFile)) {
+    return { mtimeMs: stat.mtimeMs, stale: Date.now() - stat.mtimeMs > 30_000 }
+  }
+
+  const ownerText = fs.readFileSync(ownerFile, "utf8")
+  const owner = JSON.parse(ownerText) as { pid?: unknown; createdAt?: unknown }
+  const pid = typeof owner.pid === "number" ? owner.pid : undefined
+  const createdAt = typeof owner.createdAt === "number" ? owner.createdAt : stat.mtimeMs
+  const stale = pid !== undefined ? !processIsAlive(pid) : Date.now() - createdAt > 30_000
+  return { ownerText, mtimeMs: stat.mtimeMs, stale }
+}
+
+function sameLockSnapshot(a: LockSnapshot, b: LockSnapshot): boolean {
+  return a.ownerText === b.ownerText && a.mtimeMs === b.mtimeMs
+}
+
+function removeStaleLock(lockDir: string): boolean {
+  const reapLockDir = `${lockDir}.reap`
+  try {
+    const observed = lockSnapshot(lockDir)
+    if (!observed?.stale) return false
+
+    try {
+      fs.mkdirSync(reapLockDir)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") return false
+      throw error
+    }
+
+    try {
+      const current = lockSnapshot(lockDir)
+      if (!current?.stale || !sameLockSnapshot(observed, current)) return false
+      fs.rmSync(lockDir, { recursive: true, force: true })
+      return true
+    } finally {
+      fs.rmSync(reapLockDir, { recursive: true, force: true })
+    }
+  } catch {
+    return false
+  }
+}
+
+function releaseFileLock(lockDir: string, token: string): void {
+  try {
+    const ownerFile = path.join(lockDir, "owner.json")
+    const owner = JSON.parse(fs.readFileSync(ownerFile, "utf8")) as { token?: unknown }
+    if (owner.token === token) fs.rmSync(lockDir, { recursive: true, force: true })
+  } catch {
+    return
+  }
+}
+
+export function withFileLock(filePath: string, write: () => void): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true })
+  const lockDir = filePath + ".lock"
+  const startedAt = Date.now()
+  const token = crypto.randomBytes(16).toString("hex")
+  while (true) {
+    try {
+      fs.mkdirSync(lockDir)
+      try {
+        fs.writeFileSync(path.join(lockDir, "owner.json"), JSON.stringify({ pid: process.pid, createdAt: Date.now(), token }), "utf8")
+      } catch (error) {
+        fs.rmSync(lockDir, { recursive: true, force: true })
+        throw error
+      }
+      break
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code !== "EEXIST") throw error
+      if (!fs.existsSync(lockDir) || removeStaleLock(lockDir)) continue
+      if (Date.now() - startedAt > 5_000) throw new Error(`Timed out waiting for memory store lock: ${filePath}`)
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25)
+    }
+  }
+
+  try {
+    write()
+  } finally {
+    releaseFileLock(lockDir, token)
+  }
+}
+
+export function withFileLocks(filePaths: string[], write: () => void): void {
+  const uniquePaths = Array.from(new Set(filePaths)).sort()
+  const run = (index: number): void => {
+    if (index >= uniquePaths.length) {
+      write()
+      return
+    }
+    withFileLock(uniquePaths[index], () => run(index + 1))
+  }
+  run(0)
 }
 
 export interface MemoryStoreDiagnostics {
@@ -90,89 +203,10 @@ export function createMemoryStore(filePath: string): MemoryStore {
     return existing + "\n"
   }
 
-  function processIsAlive(pid: number): boolean {
-    try {
-      process.kill(pid, 0)
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  function removeStaleAppendLock(lockDir: string): boolean {
-    try {
-      const ownerFile = path.join(lockDir, "owner.json")
-      if (fs.existsSync(ownerFile)) {
-        const owner = JSON.parse(fs.readFileSync(ownerFile, "utf8")) as { pid?: unknown; createdAt?: unknown }
-        const pid = typeof owner.pid === "number" ? owner.pid : undefined
-        const createdAt = typeof owner.createdAt === "number" ? owner.createdAt : fs.statSync(lockDir).mtimeMs
-        if (pid !== undefined) {
-          if (!processIsAlive(pid)) {
-            fs.rmSync(lockDir, { recursive: true, force: true })
-            return true
-          }
-          return false
-        }
-        if (Date.now() - createdAt > 30_000) {
-          fs.rmSync(lockDir, { recursive: true, force: true })
-          return true
-        }
-        return false
-      }
-      if (Date.now() - fs.statSync(lockDir).mtimeMs > 30_000) {
-        fs.rmSync(lockDir, { recursive: true, force: true })
-        return true
-      }
-    } catch {
-      return false
-    }
-    return false
-  }
-
-  function releaseAppendLock(lockDir: string, token: string): void {
-    try {
-      const ownerFile = path.join(lockDir, "owner.json")
-      const owner = JSON.parse(fs.readFileSync(ownerFile, "utf8")) as { token?: unknown }
-      if (owner.token === token) fs.rmSync(lockDir, { recursive: true, force: true })
-    } catch {
-      return
-    }
-  }
-
-  function withAppendLock(write: () => void): void {
-    const lockDir = filePath + ".lock"
-    const startedAt = Date.now()
-    const token = crypto.randomBytes(16).toString("hex")
-    while (true) {
-      try {
-        fs.mkdirSync(lockDir)
-        try {
-          fs.writeFileSync(path.join(lockDir, "owner.json"), JSON.stringify({ pid: process.pid, createdAt: Date.now(), token }), "utf8")
-        } catch (error) {
-          fs.rmSync(lockDir, { recursive: true, force: true })
-          throw error
-        }
-        break
-      } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code
-        if (code !== "EEXIST") throw error
-        if (!fs.existsSync(lockDir) || removeStaleAppendLock(lockDir)) continue
-        if (Date.now() - startedAt > 5_000) throw new Error(`Timed out waiting for memory store lock: ${filePath}`)
-        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25)
-      }
-    }
-
-    try {
-      write()
-    } finally {
-      releaseAppendLock(lockDir, token)
-    }
-  }
-
   function appendMany(records: MemoryRecord[]): void {
     const rows = records.map((record) => JSON.stringify(record)).join("\n")
     if (!rows) return
-    withAppendLock(() => {
+    withFileLock(filePath, () => {
       const tmpFile = filePath + ".tmp." + crypto.randomBytes(4).toString("hex")
       try {
         fs.writeFileSync(tmpFile, existingFilePrefix() + rows + "\n", "utf8")

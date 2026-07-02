@@ -15,6 +15,7 @@ This detects Codex CLI and installs:
 - A user skill at `~/.agents/skills/memory-lane/SKILL.md` so `$memory-lane` is available as a skill mention/slash command in Codex CLI, IDE, and Codex app
 
 Use `memory-lane init --yes` to auto-accept all detected harnesses.
+When `init` writes JSON config, it preserves unrelated settings and hooks, replaces older Memory Lane hook entries, creates a one-time `<config>.memory-lane.bak` backup before the first successful write, and leaves malformed JSON untouched with an error.
 
 ## Manual setup: Codex hooks
 
@@ -84,7 +85,7 @@ Codex tool matcher names can vary by version. If `PostToolUse` does not fire, ad
 
 `UserPromptSubmit` uses the shared prompt route decision before Codex processes the prompt. Low-signal prompts such as `ok` or `thanks` inject nothing, memory-management prompts get list/status/review guidance, broad project-position or next-work prompts get continuity guidance without ordinary recall bodies, and eligible ordinary or topic-specific prompts can receive relevant approved memories within strict item and character limits.
 
-`Stop` and `PostToolUse` do not inject context. They save concise memories externally and are silent by default. `Stop` only runs session-summary automation when the latest user message explicitly asks for it, such as "remember this session", "save a session summary", or "summarize this session to memory".
+`Stop` and `PostToolUse` do not inject context. They save concise memories externally and are silent by default. `Stop` only runs session-summary automation when the latest user message explicitly asks for it, such as "remember this session", "save a session summary", or "summarize this session to memory". If hook initialization fails because storage, config, or plugins cannot be loaded, Memory Lane returns `{}` and exits successfully so Codex is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr.
 
 ## Session-end summarization
 
@@ -158,4 +159,4 @@ memory-lane config enable-semantic
 memory-lane reindex
 ```
 
-With an OpenAI-compatible embedding provider configured in `~/.memory-lane/config.json`, newly saved approved memories are automatically embedded on a fire-and-forget path. Run `memory-lane reindex` to rebuild embeddings if needed.
+With an OpenAI-compatible embedding provider configured in `~/.memory-lane/config.json`, newly saved approved memories queue background embedding work that hooks may wait on briefly before canceling pending work on timeout. Run `memory-lane reindex` to embed approved memories missing current vectors, or `memory-lane reindex --force` to recompute current vectors.

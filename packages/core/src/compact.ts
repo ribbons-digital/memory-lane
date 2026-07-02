@@ -1,10 +1,34 @@
 import { createHash, randomBytes } from "node:crypto"
 import * as fs from "node:fs"
-import { foldMemoryRecords } from "./storage.js"
+import { foldMemoryRecords, withFileLocks } from "./storage.js"
 import { foldEmbeddings } from "./embedding-store.js"
+import { normalizeMemoryRecord } from "./storage-validation.js"
 import type { MemoryRecord, EmbeddingRecord, EmbeddingInvalidationRecord, CompactReport } from "./types.js"
 
+function isValidEmbeddingLine(value: unknown): value is EmbeddingRecord | EmbeddingInvalidationRecord {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  if (record.type === "invalidation") {
+    return typeof record.memoryId === "string" && typeof record.invalidatedAt === "string"
+  }
+  return typeof record.memoryId === "string"
+    && typeof record.memoryUpdatedAt === "string"
+    && typeof record.contentHash === "string"
+    && typeof record.profileName === "string"
+    && typeof record.model === "string"
+    && typeof record.createdAt === "string"
+    && Array.isArray(record.vector)
+}
+
 export function compact(memFile: string, embFile: string): CompactReport {
+  let report: CompactReport = { removedMemories: 0, removedEmbeddings: 0, removedInvalidations: 0 }
+  withFileLocks([memFile, embFile], () => {
+    report = compactUnlocked(memFile, embFile)
+  })
+  return report
+}
+
+function compactUnlocked(memFile: string, embFile: string): CompactReport {
   let removedMemories = 0
   let removedEmbeddings = 0
   let removedInvalidations = 0
@@ -15,8 +39,15 @@ export function compact(memFile: string, embFile: string): CompactReport {
   if (fs.existsSync(memFile)) {
     const raw = fs.readFileSync(memFile, "utf8").split("\n").filter(Boolean)
     const records: MemoryRecord[] = []
+    const preservedInvalidLines: string[] = []
     for (const line of raw) {
-      try { records.push(JSON.parse(line) as MemoryRecord) } catch { /* skip malformed */ }
+      try {
+        const record = normalizeMemoryRecord(JSON.parse(line))
+        if (record) records.push(record)
+        else preservedInvalidLines.push(line)
+      } catch {
+        preservedInvalidLines.push(line)
+      }
     }
     const folded = foldMemoryRecords(records)
     const alive = folded.filter((m) => m.status !== "deleted" && m.status !== "rejected")
@@ -24,7 +55,8 @@ export function compact(memFile: string, embFile: string): CompactReport {
     aliveRecords.push(...alive)
 
     const tmp = memFile + ".tmp." + randomBytes(4).toString("hex")
-    fs.writeFileSync(tmp, alive.map((m) => JSON.stringify(m)).join("\n") + (alive.length ? "\n" : ""), "utf8")
+    const compactedLines = [...alive.map((m) => JSON.stringify(m)), ...preservedInvalidLines]
+    fs.writeFileSync(tmp, compactedLines.join("\n") + (compactedLines.length ? "\n" : ""), "utf8")
     fs.renameSync(tmp, memFile)
   }
 
@@ -39,12 +71,19 @@ export function compact(memFile: string, embFile: string): CompactReport {
   if (fs.existsSync(embFile)) {
     const raw = fs.readFileSync(embFile, "utf8").split("\n").filter(Boolean)
     const allLines: (EmbeddingRecord | EmbeddingInvalidationRecord)[] = []
+    const preservedInvalidLines: string[] = []
     for (const line of raw) {
-      try { allLines.push(JSON.parse(line)) } catch { /* skip */ }
+      try {
+        const parsed = JSON.parse(line)
+        if (isValidEmbeddingLine(parsed)) allLines.push(parsed)
+        else preservedInvalidLines.push(line)
+      } catch {
+        preservedInvalidLines.push(line)
+      }
     }
 
     const embeddingLines = allLines.filter((e): e is EmbeddingRecord =>
-      (e as any).type !== "invalidation" && Array.isArray((e as any).vector),
+      (e as any).type !== "invalidation",
     )
     const invalidationLines = allLines.filter((e): e is EmbeddingInvalidationRecord =>
       (e as any).type === "invalidation",
@@ -61,7 +100,8 @@ export function compact(memFile: string, embFile: string): CompactReport {
     removedEmbeddings = totalBefore - validEmbeddings.length
 
     const tmp = embFile + ".tmp." + randomBytes(4).toString("hex")
-    fs.writeFileSync(tmp, validEmbeddings.map((e) => JSON.stringify(e)).join("\n") + (validEmbeddings.length ? "\n" : ""), "utf8")
+    const compactedLines = [...validEmbeddings.map((e) => JSON.stringify(e)), ...preservedInvalidLines]
+    fs.writeFileSync(tmp, compactedLines.join("\n") + (compactedLines.length ? "\n" : ""), "utf8")
     fs.renameSync(tmp, embFile)
   }
 
@@ -79,9 +119,13 @@ export function shouldCompact(
   if (raw.length < minRecords) return false
   const records: MemoryRecord[] = []
   for (const line of raw) {
-    try { records.push(JSON.parse(line) as MemoryRecord) } catch { /* skip */ }
+    try {
+      const record = normalizeMemoryRecord(JSON.parse(line))
+      if (record) records.push(record)
+    } catch { /* skip */ }
   }
   const folded = foldMemoryRecords(records)
+  if (!folded.length) return false
   const dead = folded.filter((m) => m.status === "deleted" || m.status === "rejected").length
   return dead / folded.length > threshold
 }

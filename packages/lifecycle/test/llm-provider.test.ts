@@ -46,11 +46,24 @@ test("complete adds authorization header from env", async () => {
       text: async () => JSON.stringify({ choices: [{ message: { content: "" } }] }),
     }
   }
-  createOpenAICompatibleProvider(
+  await createOpenAICompatibleProvider(
     { provider: "openai-compatible", baseUrl: "http://localhost:1234/v1", model: "m", apiKeyEnv: "TEST_API_KEY" },
     { TEST_API_KEY: "secret123" },
     fetchImpl as any,
   ).complete("prompt")
   const call = fetchCalls[0] as { init?: { headers: Record<string, string> } }
   assert.strictEqual(call.init?.headers.Authorization, "Bearer secret123")
+})
+
+test("complete times out hung providers", async () => {
+  const provider = createOpenAICompatibleProvider(
+    { provider: "openai-compatible", baseUrl: "http://localhost:1234/v1", model: "m", timeoutMs: 1 },
+    {},
+    ((_url: string, init?: unknown) => new Promise((_resolve, reject) => {
+      const signal = (init as { signal?: AbortSignal }).signal
+      signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })))
+    })) as any,
+  )
+
+  await assert.rejects(() => provider.complete("prompt"), /timed out after 1ms/)
 })

@@ -507,14 +507,18 @@ esac
     assert.ok(config.mcpServers["memory-lane"])
   })
 
-  it("overwrites existing config in --yes mode", () => {
+  it("merges Memory Lane hooks without removing unrelated hooks", () => {
     const configPath = path.join(home, ".claude/settings.json")
     fs.mkdirSync(path.dirname(configPath), { recursive: true })
     fs.writeFileSync(
       configPath,
       JSON.stringify({
+        theme: "dark",
         hooks: {
-          SessionStart: [{ hooks: [{ type: "command", command: `${binaryPath} claude session-start` }] }],
+          Stop: [
+            { hooks: [{ type: "command", command: "echo keep-me" }] },
+            { hooks: [{ type: "command", command: `/old/path/bin/memory-lane claude stop` }] },
+          ],
         },
       }),
       "utf8",
@@ -526,7 +530,42 @@ esac
     })
 
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"))
+    assert.equal(config.theme, "dark")
     assert.ok(config.hooks.UserPromptSubmit)
+    assert.equal(config.hooks.Stop.length, 2)
+    assert.equal(config.hooks.Stop[0].hooks[0].command, "echo keep-me")
+    assert.equal(config.hooks.Stop[1].hooks[0].command, `${binaryPath} claude stop`)
+    assert.ok(fs.existsSync(`${configPath}.memory-lane.bak`))
+  })
+
+  it("leaves malformed JSON hook config untouched", () => {
+    const configPath = path.join(home, ".claude/settings.json")
+    fs.mkdirSync(path.dirname(configPath), { recursive: true })
+    fs.writeFileSync(configPath, "{bad json", "utf8")
+
+    const output = run(["init", "--yes"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    assert.equal(fs.readFileSync(configPath, "utf8"), "{bad json")
+    assert.equal(fs.existsSync(`${configPath}.memory-lane.bak`), false)
+    assert.match(output, /Claude Code CLI failed: Could not parse JSON config/u)
+  })
+
+  it("leaves non-object JSON hook config untouched", () => {
+    const configPath = path.join(home, ".claude/settings.json")
+    fs.mkdirSync(path.dirname(configPath), { recursive: true })
+    fs.writeFileSync(configPath, "null", "utf8")
+
+    const output = run(["init", "--yes"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    assert.equal(fs.readFileSync(configPath, "utf8"), "null")
+    assert.equal(fs.existsSync(`${configPath}.memory-lane.bak`), false)
+    assert.match(output, /Claude Code CLI failed: Could not parse JSON config/u)
   })
 
   it("writes project-level Claude Code hooks with --project", () => {

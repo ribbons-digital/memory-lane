@@ -224,6 +224,28 @@ describe("MemoryEngineStorage two-tier facade", () => {
     assert.ok(fs.readFileSync(project.memoryPath, "utf8").includes("project-live"))
   })
 
+  it("preserves invalid rows when compacting two-tier stores", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const projectLive = rec({ id: "project-live", scope: { type: "project", key: "scope-key" }, project: { cwd: project.root, root: project.root, key: "scope-key" } })
+    const invalidRecord = JSON.stringify({ foo: 1 })
+    const invalidJson = "{bad json"
+
+    storage.appendMemory(projectLive)
+    fs.appendFileSync(project.memoryPath, invalidRecord + "\n" + invalidJson + "\n", "utf8")
+    fs.appendFileSync(project.embeddingsPath, "{bad embedding\n", "utf8")
+
+    storage.compact()
+
+    const memoryLines = fs.readFileSync(project.memoryPath, "utf8").split("\n").filter(Boolean)
+    assert.equal(memoryLines.length, 3)
+    assert.ok(memoryLines.includes(invalidRecord))
+    assert.ok(memoryLines.includes(invalidJson))
+    assert.ok(fs.readFileSync(project.embeddingsPath, "utf8").includes("{bad embedding"))
+  })
+
   it("does not resurrect older cross-store records after compacting a newer tombstone", () => {
     const dir = tempDir()
     const home = homePathsFor(path.join(dir, "home", ".memory-lane"))

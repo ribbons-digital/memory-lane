@@ -1,6 +1,7 @@
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { execFileSync, spawnSync } from "node:child_process"
+import * as http from "node:http"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -36,6 +37,21 @@ function runProcess(args: string[], options?: { env?: NodeJS.ProcessEnv; stdin?:
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+async function withHangingServer<T>(fn: (baseUrl: string) => Promise<T>): Promise<T> {
+  const server = http.createServer((req) => {
+    req.resume()
+  })
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  assert.equal(typeof address, "object")
+  assert.ok(address)
+  try {
+    return await fn(`http://127.0.0.1:${address.port}/v1`)
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+  }
 }
 
 function writeMemoryRecords(filePath: string, records: MemoryRecord[]): void {
@@ -2308,6 +2324,53 @@ describe("CLI integration", () => {
     assert.equal(result.stdout.trim(), "{}")
   })
 
+  it("claude hooks bound embedding settlement before exit", async () => {
+    await withHangingServer(async (baseUrl) => {
+      fs.writeFileSync(cfgFile, JSON.stringify({
+        semantic: {
+          enabled: true,
+          activeEmbeddingProfile: "slow",
+          embeddings: {
+            profiles: {
+              slow: {
+                provider: "openai-compatible-embeddings",
+                baseUrl,
+                model: "slow-embedding-model",
+                apiKeyEnv: "MEMORY_LANE_TEST_EMBEDDING_KEY",
+                timeoutMs: 10_000,
+              },
+            },
+          },
+        },
+      }), "utf8")
+
+      const startedAt = Date.now()
+      const result = runProcess(["claude", "post-tool-use"], {
+        env: {
+          MEMORY_LANE_FILE: memFile,
+          MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+          MEMORY_LANE_CONFIG: cfgFile,
+          MEMORY_LANE_TEST_EMBEDDING_KEY: "test-key",
+        },
+        stdin: JSON.stringify({
+          hook_event_name: "PostToolUse",
+          session_id: "session-1",
+          cwd: process.cwd(),
+          transcript_path: null,
+          permission_mode: "default",
+          tool_name: "Bash",
+          tool_input: { command: "pnpm test" },
+          tool_response: { exit_code: 0, stdout: "tests passed" },
+        }),
+      })
+      const durationMs = Date.now() - startedAt
+
+      assert.equal(result.status, 0, result.stderr)
+      assert.equal(result.stdout.trim(), "{}")
+      assert.ok(durationMs < 5_000, `hook took ${durationMs}ms`)
+    })
+  })
+
   it("claude session-end accepts hook payload on stdin and uses temp config", () => {
     fs.writeFileSync(cfgFile, JSON.stringify({ memory: { sessionEndSummary: { enabled: true } } }), "utf8")
     const result = runProcess(["claude", "session-end"], {
@@ -2329,6 +2392,27 @@ describe("CLI integration", () => {
     assert.equal(result.status, 0)
     assert.match(result.stdout, /requires memory\.sessionEndSummary\.baseUrl and model/)
     assert.equal(fs.existsSync(memFile) ? fs.readFileSync(memFile, "utf8") : "", "")
+  })
+
+  it("hook commands fail safe when config cannot be loaded", () => {
+    fs.writeFileSync(cfgFile, "{bad json", "utf8")
+    const result = runProcess(["claude", "session-start"], {
+      env: {
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+      stdin: JSON.stringify({
+        hook_event_name: "SessionStart",
+        session_id: "session-1",
+        cwd: process.cwd(),
+        transcript_path: null,
+        permission_mode: "default",
+        source: "startup",
+      }),
+    })
+    assert.equal(result.status, 0)
+    assert.equal(result.stdout.trim(), "{}")
   })
 
   it("obsidian status reports unconfigured mirror", () => {

@@ -116,6 +116,8 @@ export interface LLMProviderConfig {
   baseUrl: string
   apiKeyEnv?: string | null
   model: string
+  /** Per-provider request timeout in milliseconds. Defaults to 30000. */
+  timeoutMs?: number
 }
 
 export interface SessionMessage {
