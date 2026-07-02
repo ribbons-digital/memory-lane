@@ -19,7 +19,7 @@ import type { SemanticMemoryConfig } from "@memory-lane/core"
 import { resolveBundledPlugin } from "./plugins.js"
 import {
   formatMemories, formatReviewMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
-  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatPreferenceDiagnosticsSummary, formatOperatingAgreements, formatContinuityReadModel, formatError, formatMemoryGet, formatUpdatePreview, formatRescopeResult, formatSupersedeResult, formatReplaceResult, usage,
+  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatPreferenceDiagnosticsSummary, formatOperatingAgreements, formatContinuityReadModel, formatError, formatMemoryGet, formatUpdatePreview, formatRescopeResult, formatSupersedeResult, formatReplaceResult, formatLegacyProjectMemorySummary, formatLegacyProjectMemoryMigrationPreview, usage,
 } from "./formatters.js"
 
 // ── Config helpers ───────────────────────────────────────────
@@ -162,7 +162,7 @@ function createEngine(paths: MemoryPaths | EngineStoragePaths, projPath?: string
   const storage = "explicitEnv" in paths
     ? paths.kind === "default-two-tier"
       ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey)
-      : createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath)
+      : createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath, paths.kind === "environment" ? "explicit-storage-env" : "single-store")
     : createSingleStoreEngineStorage(paths.memoryPath, paths.embeddingsPath)
   const configPath = paths.configPath
   const engine = new MemoryEngine({
@@ -489,6 +489,8 @@ function handleStatus(ctx: CliContext): void {
   const r = report as any
   const lines = [`Total: ${r.totalMemories}, Approved: ${r.approvedMemories}, Pending: ${r.pendingMemories}, Embeddings: ${r.embeddingCount}`]
   lines.push(...formatPreferenceDiagnosticsSummary(r.preferenceDiagnostics, report))
+  const legacySummary = formatLegacyProjectMemorySummary(r.legacyProjectMemories)
+  if (legacySummary) lines.push(legacySummary)
   if (since) {
     const freshnessSummary = formatFreshnessSummary(r.freshness)
     if (freshnessSummary) lines.push(freshnessSummary)
@@ -663,6 +665,20 @@ function handleConfig(ctx: CliContext): void {
   else console.log(formatError("Usage: memory-lane config [show | enable-semantic | disable-semantic | set <key> <value>]", ctx.json))
 }
 
+function handleMigrate(ctx: CliContext): void {
+  const subCmd = ctx.rest[0]?.toLowerCase()
+  if (subCmd !== "project-local") {
+    console.log(formatError("Usage: memory-lane migrate project-local --dry-run [--json] [--project <path>]", ctx.json))
+    process.exit(2)
+  }
+  if (!hasFlag(ctx.argv, "dry-run")) {
+    console.log(formatError("Mutating project-local migration is not implemented in this release. Run `memory-lane migrate project-local --dry-run` to preview legacy records.", ctx.json))
+    process.exit(1)
+  }
+  const report = ctx.engine.doctor().legacyProjectMemories as any
+  console.log(formatLegacyProjectMemoryMigrationPreview(report, ctx.json))
+}
+
 const claudeHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start", "session-end"])
 const codexHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start", "session-end"])
 
@@ -701,7 +717,7 @@ async function handleClaude(ctx: CliContext): Promise<void> {
 type CommandHandler = (ctx: CliContext) => void | Promise<void>
 
 // These inspection commands must work in read-only desktop/client sandboxes without home-storage write probes.
-const readOnlyStorageCommands = new Set(["recall", "list", "search", "review", "dashboard", "agreements", "continuity", "route", "doctor", "status", "show", "get", "mcp"])
+const readOnlyStorageCommands = new Set(["recall", "list", "search", "review", "dashboard", "agreements", "continuity", "route", "doctor", "status", "show", "get", "migrate", "mcp"])
 const readOnlyStorageSubcommands: Record<string, Set<string | undefined>> = {
   config: new Set([undefined, "show"]),
   obsidian: new Set([undefined, "status"]),
@@ -773,6 +789,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   reindex: handleReindex,
   config: handleConfig,
   obsidian: handleObsidian,
+  migrate: handleMigrate,
   claude: handleClaude,
   codex: handleCodex,
   mcp: handleMcp,

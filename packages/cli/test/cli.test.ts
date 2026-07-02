@@ -434,6 +434,69 @@ describe("CLI integration", () => {
     assert.ok(fs.readFileSync(path.join(project, ".gitignore"), "utf8").includes(".memory-lane/"))
   })
 
+  it("reports legacy home-stored project memories in status doctor and dry-run without creating project files", () => {
+    const project = tempDir()
+    const home = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "legacy-scope" }), "utf8")
+    const homeStore = path.join(home, ".memory-lane")
+    fs.mkdirSync(homeStore, { recursive: true })
+    const memoryFile = path.join(homeStore, "memory.jsonl")
+    const embeddingFile = path.join(homeStore, "embeddings.jsonl")
+    writeMemoryRecords(memoryFile, [
+      { id: "legacy-approved", text: "Legacy approved home project memory", category: "project", scope: { type: "project", key: "legacy-scope" }, status: "approved", source: "manual", kind: "project_fact", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-03T00:00:00.000Z" },
+      { id: "legacy-pending", text: "Legacy pending home project memory", category: "project", scope: { type: "project", key: "legacy-scope" }, status: "pending", source: "manual", kind: "project_fact", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z" },
+      { id: "other", text: "Other project memory", category: "project", scope: { type: "project", key: "other-scope" }, status: "approved", source: "manual", kind: "project_fact", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-04T00:00:00.000Z" },
+    ] as MemoryRecord[])
+    fs.writeFileSync(embeddingFile, JSON.stringify({ memoryId: "legacy-approved", memoryUpdatedAt: "2026-01-03T00:00:00.000Z", contentHash: "hash", profileName: "default", model: "test", dimensions: 1, vector: [1], createdAt: "2026-01-03T00:00:00.000Z" }) + "\n", "utf8")
+    const beforeMemory = fs.readFileSync(memoryFile, "utf8")
+    const beforeEmbedding = fs.readFileSync(embeddingFile, "utf8")
+
+    const status = runProcess(["status", "--json", "--project", project], { env: { HOME: home } })
+    const doctor = runProcess(["doctor", "--json", "--project", project], { env: { HOME: home } })
+    const dryRun = runProcess(["migrate", "project-local", "--dry-run", "--json", "--project", project], { env: { HOME: home } })
+
+    assert.equal(status.status, 0, status.stderr)
+    assert.equal(doctor.status, 0, doctor.stderr)
+    assert.equal(dryRun.status, 0, dryRun.stderr)
+    const statusReport = JSON.parse(status.stdout).data.legacyProjectMemories
+    const doctorReport = JSON.parse(doctor.stdout).data.legacyProjectMemories
+    const dryRunReport = JSON.parse(dryRun.stdout).data.legacyProjectMemories
+    assert.equal(statusReport.totalLegacyCandidateCount, 2)
+    assert.equal(statusReport.approvedLegacyCandidateCount, 1)
+    assert.equal(statusReport.pendingLegacyCandidateCount, 1)
+    assert.equal(statusReport.hazards.homeSideEmbeddings, 1)
+    assert.deepEqual(statusReport.samples.map((sample: { id: string }) => sample.id), ["legacy-approved", "legacy-pending"])
+    assert.equal(doctorReport.totalLegacyCandidateCount, 2)
+    assert.equal(dryRunReport.totalLegacyCandidateCount, 2)
+    assert.equal(fs.existsSync(path.join(project, ".memory-lane")), false)
+    assert.equal(fs.existsSync(path.join(project, ".gitignore")), false)
+    assert.equal(fs.readFileSync(memoryFile, "utf8"), beforeMemory)
+    assert.equal(fs.readFileSync(embeddingFile, "utf8"), beforeEmbedding)
+  })
+
+  it("requires dry-run for project-local migration and treats explicit storage as not applicable", () => {
+    const project = tempDir()
+    const home = tempDir()
+    const explicitDir = tempDir()
+    const env = {
+      HOME: home,
+      MEMORY_LANE_FILE: path.join(explicitDir, "memory.jsonl"),
+      MEMORY_LANE_EMBEDDINGS_FILE: path.join(explicitDir, "embeddings.jsonl"),
+      MEMORY_LANE_CONFIG: path.join(explicitDir, "config.json"),
+    }
+
+    const missingDryRun = runProcess(["migrate", "project-local", "--project", project], { env })
+    const dryRun = runProcess(["migrate", "project-local", "--dry-run", "--json", "--project", project], { env })
+
+    assert.notEqual(missingDryRun.status, 0)
+    assert.match(missingDryRun.stdout + missingDryRun.stderr, /not implemented.*dry-run/u)
+    assert.equal(dryRun.status, 0, dryRun.stderr)
+    const report = JSON.parse(dryRun.stdout).data.legacyProjectMemories
+    assert.equal(report.status, "not-applicable")
+    assert.equal(report.notApplicableReason, "explicit-storage-env")
+    assert.equal(fs.existsSync(path.join(project, ".memory-lane")), false)
+  })
+
   it("save rejects invalid category without writing", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,

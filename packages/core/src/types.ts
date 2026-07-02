@@ -88,6 +88,36 @@ export interface MemoryRecord {
   descriptor?: MemoryDescriptorMetadata
 }
 
+export interface LegacyProjectMemorySample {
+  id: string
+  status: Extract<MemoryStatus, "approved" | "pending">
+  kind?: MemoryKind
+  updatedAt: string
+  preview: string
+  hazards: string[]
+}
+
+export interface LegacyProjectMemoryDiagnostics {
+  status: "ok" | "not-applicable"
+  notApplicableReason?: "explicit-storage-env" | "no-active-project-scope" | "single-store"
+  projectScopeKey?: string
+  homeMemoryFile: string
+  projectMemoryFile?: string
+  totalLegacyCandidateCount: number
+  approvedLegacyCandidateCount: number
+  pendingLegacyCandidateCount: number
+  hazards: {
+    duplicateIdInProjectStore: number
+    homeSideEmbeddings: number
+    pending: number
+    mixedOriginRevisionChains: number
+    mixedOriginRevisionChainsInspected: boolean
+  }
+  samples: LegacyProjectMemorySample[]
+  sampleLimit: number
+  previewLimit: number
+}
+
 export type FreshnessClassification = "none" | "current" | "stale" | "expired"
 
 export interface FreshnessMemoryMetadata {

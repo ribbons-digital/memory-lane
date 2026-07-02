@@ -2,7 +2,7 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { buildContinuityHints, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryRecord, type MemoryRecordWithReviewHygiene, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type UpdatePreview, type RescopeResult, type SupersedeResult, type ReplaceResult } from "@memory-lane/core"
+import { buildContinuityHints, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryRecord, type MemoryRecordWithReviewHygiene, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type UpdatePreview, type RescopeResult, type SupersedeResult, type ReplaceResult, type LegacyProjectMemoryDiagnostics } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 const VERSION = "0.1.0"
@@ -688,6 +688,50 @@ function isContinuityHintSummary(value: unknown): value is ContinuityHintSummary
     && Array.isArray((value as ContinuityHintSummary).hints)
 }
 
+function isLegacyProjectMemoryDiagnostics(value: unknown): value is LegacyProjectMemoryDiagnostics {
+  return typeof value === "object" && value !== null
+    && ((value as LegacyProjectMemoryDiagnostics).status === "ok" || (value as LegacyProjectMemoryDiagnostics).status === "not-applicable")
+    && typeof (value as LegacyProjectMemoryDiagnostics).totalLegacyCandidateCount === "number"
+}
+
+export function formatLegacyProjectMemorySummary(value: unknown): string | undefined {
+  if (!isLegacyProjectMemoryDiagnostics(value)) return undefined
+  if (value.status === "not-applicable") return undefined
+  if (!value.totalLegacyCandidateCount) return undefined
+  const count = value.totalLegacyCandidateCount
+  const label = count === 1 ? "legacy project memory" : "legacy project memories"
+  return `Legacy project memory storage: ${count} active home-stored ${label} for this project. Run memory-lane migrate project-local --dry-run for details.`
+}
+
+function formatLegacyProjectMemoryDoctor(value: unknown): string | undefined {
+  if (!isLegacyProjectMemoryDiagnostics(value)) return undefined
+  if (value.status === "not-applicable") return `Legacy project memories: not applicable (${value.notApplicableReason ?? "unknown"})`
+  const lines = [
+    `Legacy project memories: ${value.totalLegacyCandidateCount} active home-stored candidate(s) for project ${value.projectScopeKey ?? "none"}`,
+    `  approved: ${value.approvedLegacyCandidateCount}; pending: ${value.pendingLegacyCandidateCount}`,
+    `  hazards: duplicate-id ${value.hazards.duplicateIdInProjectStore}; home embeddings ${value.hazards.homeSideEmbeddings}; pending ${value.hazards.pending}; mixed-origin ${value.hazards.mixedOriginRevisionChains}${value.hazards.mixedOriginRevisionChainsInspected ? "" : " (not inspected)"}`,
+  ]
+  if (value.samples.length) {
+    lines.push("  samples:")
+    for (const sample of value.samples) {
+      const hazards = sample.hazards.length ? ` [${sample.hazards.join(", ")}]` : ""
+      lines.push(`    - [${sample.id}] ${sample.status}/${sample.kind ?? "misc"} updated ${sample.updatedAt}${hazards}: ${sample.preview}`)
+    }
+  }
+  return lines.join("\n")
+}
+
+export function formatLegacyProjectMemoryMigrationPreview(value: LegacyProjectMemoryDiagnostics, json: boolean): string {
+  if (json) return JSON.stringify({ ok: true, data: { legacyProjectMemories: value }, meta: meta() }, null, 2)
+  if (value.status === "not-applicable") return `Legacy project memory migration dry run: not applicable (${value.notApplicableReason ?? "unknown"}).`
+  const details = formatLegacyProjectMemoryDoctor(value) ?? "Legacy project memories: unavailable"
+  return [
+    "Legacy project memory migration dry run:",
+    details,
+    "No files were changed. Mutating migration is not implemented in this release.",
+  ].join("\n")
+}
+
 function formatContinuityHintSummary(value: unknown): string | undefined {
   if (!isContinuityHintSummary(value)) return undefined
   if (!value.hintCount) return "Continuity hints: none"
@@ -829,6 +873,7 @@ export function formatDoctor(report: Record<string, unknown>, json: boolean): st
     .map(([k, v]) => {
       if (k === "freshness") return formatFreshnessSummary(v) ?? "freshness: unavailable"
       if (k === "continuityHints") return formatContinuityHintSummary(v) ?? "continuityHints: unavailable"
+      if (k === "legacyProjectMemories") return formatLegacyProjectMemoryDoctor(v) ?? "legacyProjectMemories: unavailable"
       if (k === "operatingAgreements") return formatOperatingAgreementSummary(v) ?? "operatingAgreements: unavailable"
       if (v && typeof v === "object") return `${k}: ${JSON.stringify(v, null, 2)}`
       return `${k}: ${v}`
@@ -924,6 +969,8 @@ Commands:
                   Reconcile generated mirror files and indexes
   obsidian import [--dry-run]
                   Explicitly import user-authored notes from configured imports/; applies by default
+  migrate project-local --dry-run
+                  Preview legacy home-stored project memories without mutating files
   mcp              Run the bundled Memory Lane MCP server over stdio
   claude <user-prompt-submit|stop|post-tool-use|session-start|session-end>
                   Run a Claude Code hook adapter command; reads hook JSON from stdin

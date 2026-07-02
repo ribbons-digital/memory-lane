@@ -125,6 +125,7 @@ memory-lane status                # quick stats
 memory-lane status --json --since 2026-06-18T00:00:00.000Z
 memory-lane doctor                # full diagnostic report
 memory-lane doctor --json --since 2026-06-18T00:00:00.000Z
+memory-lane migrate project-local --dry-run # preview legacy home-stored project memories without mutating files
 memory-lane compact               # remove deleted/rejected entries while preserving invalid rows
 memory-lane reindex               # embed approved memories missing current vectors
 memory-lane init                  # first-time setup wizard for harnesses
