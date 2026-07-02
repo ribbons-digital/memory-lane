@@ -100,12 +100,13 @@ Read-only commands should not auto-create project-local storage.
 
 Auto-creating a project store must not accidentally convert the whole process back into legacy project-local single-store behavior on the next invocation.
 Legacy `resolveMemoryPaths()` discovery can find an existing `.memory-lane/` by walking upward and return that project-local store as the scalar path set.
+That upward discovery path is compatibility-only fallback behavior for legacy scalar path resolution, not the approved default resolver for two-tier routing.
 Slice 1 should not let that legacy discovery path decide default two-tier routing.
 
 Implementation should introduce a project-aware storage factory or resolver mode that handles default two-tier engine construction directly:
 
 - explicit env paths still produce a single-store facade;
-- default mode produces a home-primary facade plus an optional project store derived from project scope;
+- default mode produces a home-primary facade plus an optional project store derived from project scope, without relying on compatibility-only upward `.memory-lane/` discovery;
 - legacy `init --project-local` behavior stays supported, but normal project-scoped auto-init must not make global preferences write to project-local storage on the next run.
 
 This is a load-bearing design decision.
