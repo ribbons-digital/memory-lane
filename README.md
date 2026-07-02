@@ -68,7 +68,7 @@ Windows (PowerShell):
 irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.ps1 | iex
 ```
 
-The installer downloads a prebuilt binary and places it on your PATH. After installation, run `memory-lane init` to configure Claude Code, Codex, Claude Desktop, Codex Desktop, and pi. Use `memory-lane init --yes` to auto-configure all detected harnesses without prompting.
+The installer downloads a prebuilt binary, verifies its SHA-256 checksum with `sha256sum` or `shasum`, and places it on your PATH. After installation, run `memory-lane init` to configure Claude Code, Codex, Claude Desktop, Codex Desktop, and pi. Use `memory-lane init --yes` to auto-configure all detected harnesses without prompting.
 
 If you are an end user, this installer + `memory-lane init` path is the recommended setup. If you are developing Memory Lane and also using it on the same machine, prefer the [development setup](#development-setup-local-checkout--manual-harness-config) below instead of `memory-lane init --yes`; release-style init can replace local dev shims and hand-edited harness config. Memory Lane guards generated skill writes so symlinked installed skill paths are not allowed to overwrite Memory Lane source skill files. For pi, release-style init writes a loadable CLI bridge extension that executes the installed `memory-lane` binary; local checkout development should use the manual pi-adapter shim below.
 
@@ -85,6 +85,8 @@ irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/inst
 ```
 
 After installing, run `memory-lane init` again any time to reconfigure or add new integrations.
+When `init` writes JSON harness configs, it preserves unrelated settings and hooks, replaces older Memory Lane hook entries, and creates a one-time `<config>.memory-lane.bak` backup before the first successful write.
+If an existing JSON config is malformed, `init` leaves it untouched and reports the parse error instead of overwriting it.
 
 ### Upgrading
 
@@ -131,7 +133,7 @@ memory-lane doctor
 
 ### Development setup: local checkout + manual harness config
 
-If you are developing Memory Lane and using it on the same machine, avoid `memory-lane init --yes` unless you intentionally want release-style harness config. The init wizard is safe for end users, but on a development machine it can overwrite local shims or hand-edited settings that point at your checkout. `init` and `upgrade` now skip generated Claude/Codex skill writes when the destination resolves through a symlink into the Memory Lane source checkout, printing a warning while preserving other hook/config writes. Release-style pi init writes a CLI bridge around the installed binary; for full local pi adapter behavior while developing, use the manual shim below. Prefer manual config so each harness loads the code you just built.
+If you are developing Memory Lane and using it on the same machine, avoid `memory-lane init --yes` unless you intentionally want release-style harness config. The init wizard is safe for end users, but on a development machine it can overwrite local shims or hand-edited settings that point at your checkout. `init` and `upgrade` now skip generated Claude/Codex skill writes when the destination resolves through a symlink into the Memory Lane source checkout, printing a warning while preserving other hook/config writes. JSON hook/config writes preserve unrelated entries, replace older Memory Lane hook entries, create a one-time `.memory-lane.bak` backup before the first successful write, and refuse to overwrite malformed JSON. Release-style pi init writes a CLI bridge around the installed binary; for full local pi adapter behavior while developing, use the manual shim below. Prefer manual config so each harness loads the code you just built.
 
 Recommended development loop:
 
@@ -394,7 +396,8 @@ By default, Memory Lane uses two storage tiers when no explicit `MEMORY_LANE_*` 
 - new memories whose final scope is the current project live in `<project-root>/.memory-lane/memory.jsonl` when a project scope is known.
 
 Each write appends a record; reads fold duplicates by id with the newest revision winning.
-Atomic memory writes use a short lock plus `.tmp` + `rename`, and batch writes are atomic per underlying store.
+Atomic memory, embedding, continuity-baseline, and compaction writes use short file locks plus `.tmp` + `rename`, and batch memory writes are atomic per underlying store.
+Compaction removes folded deleted/rejected records and stale embeddings, but it preserves malformed or schema-invalid JSONL rows so diagnostics remain available instead of silently erasing corrupt input.
 The internal storage facade merges the active project store with the home store for recall, list, review, continuity, and status surfaces.
 Existing records keep their origin store for normal edits/review actions so one logical memory id is not split across files.
 Advanced `@memory-lane/core` consumers can import `MemoryEngineStorage`, `createSingleStoreEngineStorage`, and `createTwoTierEngineStorage` when they need to inject storage that owns memory, embedding, compaction, diagnostics, and continuity-baseline paths.
@@ -459,10 +462,10 @@ memory-lane rescope|move <id> --scope global|project [--dry-run|--yes]
                                   Correct memory scope with the same id
 memory-lane supersede <new-id> <old-id...> Link approved old memories to an approved successor
 memory-lane replace <old-id...>   Create a successor memory for approved old memories
-memory-lane compact               Remove deleted/rejected tombstones
+memory-lane compact               Remove deleted/rejected tombstones while preserving invalid rows
 memory-lane doctor                Diagnostic report
 memory-lane status                Quick stats
-memory-lane reindex [--force]     Rebuild embeddings
+memory-lane reindex [--force]     Embed approved memories missing current vectors; --force recomputes
 memory-lane init --project-local  Initialize sandbox-friendly project-local storage
 memory-lane session-end --confirm Generate a pending session summary from stdin JSON
 memory-lane obsidian ...          Manage optional Obsidian mirror/import workflows
@@ -583,6 +586,7 @@ Configure it in `~/.memory-lane/config.json`:
       "apiKeyEnv": "MEMORY_LANE_SUMMARY_API_KEY",
       "model": "gpt-4.1-mini",
       "maxTokens": 800,
+      "timeoutMs": 30000,
       "requireConfirmation": true,
       "includeToolOutputs": false
     }
@@ -606,7 +610,7 @@ memory-lane reject <id>            # reject obsolete/suspect pending entries
 
 Codex CLI does not currently expose a supported `SessionEnd` hook event. Do not add `SessionEnd` to `.codex/hooks.json`; Codex will ignore it. For Codex today, use either the manual `memory-lane session-end --confirm` command or the supported `Stop` hook explicit-intent path: when the latest user message says something like "remember this session", "save a session summary", or "summarize this session to memory", `memory-lane codex stop` treats that request as confirmation, summarizes a bounded transcript through the configured provider, and saves the result as a pending session-summary memory. Ordinary `Stop` turns keep the existing silent autosave behavior and do not run the summarizer.
 
-Tool messages are excluded unless `includeToolOutputs` is true. Lines that look like secrets are redacted before the transcript is sent to the configured model. Generated summaries are also cleaned of obvious Memory Lane review-management chatter such as “run memory-lane review” or “approve these memory IDs,” unless review decisions are themselves the durable outcome. A repeated summary for the same adapter/session id, or one with the same normalized durable content as an existing visible pending/approved session summary, is skipped before writing another pending memory. Generated summaries dominated by operational subagent/orchestrator chatter are skipped when they contain no durable project outcome; existing pending suspect summaries may show a read-only `review hint` in CLI review output and `reviewHygiene` metadata in JSON/MCP review output. This Phase 21 Slice 7 summary hygiene shipped in `v0.2.34`. When transcript/session messages include canonical ISO timestamps, the saved pending summary stores the latest message timestamp as `freshness.capturedAt`; no current-time fallback is used. Claude Code supports `memory-lane claude session-end` through its documented `SessionEnd` hook; by default it still requires confirmation and will not save from a bare hook unless `memory.sessionEndSummary.requireConfirmation` is set to `false` or the payload includes `confirmed: true` for manual testing. pi supports explicit session summaries through `/memory session-summary`, using pi's session manager plus interactive confirmation; automatic pi `agent_end`, `session_shutdown`, and compaction summarization remain out of scope.
+Tool messages are excluded unless `includeToolOutputs` is true. `timeoutMs` is optional and defaults to 30000 ms for OpenAI-compatible session-summary calls. Lines that look like secrets are redacted before the transcript is sent to the configured model. Generated summaries are also cleaned of obvious Memory Lane review-management chatter such as “run memory-lane review” or “approve these memory IDs,” unless review decisions are themselves the durable outcome. A repeated summary for the same adapter/session id, or one with the same normalized durable content as an existing visible pending/approved session summary, is skipped before writing another pending memory. Generated summaries dominated by operational subagent/orchestrator chatter are skipped when they contain no durable project outcome; existing pending suspect summaries may show a read-only `review hint` in CLI review output and `reviewHygiene` metadata in JSON/MCP review output. This Phase 21 Slice 7 summary hygiene shipped in `v0.2.34`. When transcript/session messages include canonical ISO timestamps, the saved pending summary stores the latest message timestamp as `freshness.capturedAt`; no current-time fallback is used. Claude Code supports `memory-lane claude session-end` through its documented `SessionEnd` hook; by default it still requires confirmation and will not save from a bare hook unless `memory.sessionEndSummary.requireConfirmation` is set to `false` or the payload includes `confirmed: true` for manual testing. pi supports explicit session summaries through `/memory session-summary`, using pi's session manager plus interactive confirmation; automatic pi `agent_end`, `session_shutdown`, and compaction summarization remain out of scope.
 
 ### Obsidian mirror
 
@@ -741,7 +745,8 @@ Values:
           "provider": "openai-compatible-embeddings",
           "baseUrl": "http://localhost:11434/v1",
           "model": "nomic-embed-text",
-          "apiKeyEnv": null
+          "apiKeyEnv": null,
+          "timeoutMs": 30000
         }
       }
     },
@@ -760,7 +765,9 @@ Values:
 }
 ```
 
-After configuring, run `memory-lane reindex` to embed existing memories.
+After configuring, run `memory-lane reindex` to embed approved memories that do not already have a current vector for the active profile, model, and content hash.
+Use `memory-lane reindex --force` to recompute embeddings even when current vectors already exist.
+Embedding provider calls honor optional per-profile `timeoutMs` and default to 30000 ms.
 
 `memory-lane doctor` is read-only. When semantic search is enabled, it reports how many approved memories have current embeddings for the active profile/model. If coverage is low, doctor prints a semantic warning such as “Run `memory-lane reindex`.” Reindexing is an explicit repair step and is not run automatically by doctor or hooks.
 
@@ -898,7 +905,7 @@ user/agent → suggest() → pending → approve() → approved
 approved   → delete()           → deleted
 ```
 
-Compaction removes deleted + rejected tombstones. Trigger: `memory-lane compact` or startup auto-check (>30% dead weight + >100 records).
+Compaction removes deleted + rejected tombstones and stale embeddings while preserving malformed or schema-invalid JSONL rows for diagnostics. Trigger: `memory-lane compact` or startup auto-check (>30% dead weight + >100 valid records).
 
 ## Harness Integrations
 
@@ -1016,7 +1023,7 @@ memory-lane claude post-tool-use
 memory-lane claude session-end
 ```
 
-`SessionStart` injects a compact session-opening context when allowed by `memory.contextPolicy.mode`: tiny always-on bodies plus `Memory Index` descriptor cards in `selective` mode, and guidance without memory bodies in `policy-only` mode. `UserPromptSubmit` follows the same context policy: `off` suppresses injection, `policy-only` emits guidance without memory bodies, and `selective` injects a small relevant-memory block for ordinary or topic-specific prompts while suppressing ordinary recall bodies for broad `project-position` and `next-work` continuity prompts. `Stop` and `PostToolUse` save useful memories externally and remain quiet when nothing pending was suggested. When a write hook saves pending memories, Memory Lane may emit a compact count-only system message such as `Memory Lane: suggested 1 pending memory for review. Run memory-lane review to approve or reject it.` The notice does not include memory text, prompts, transcripts, or tool output. Claude Code's documented `SessionEnd` hook can run `memory-lane claude session-end` to generate pending `session_summary` memories when `memory.sessionEndSummary.enabled` is configured. By default, Memory Lane still requires confirmation; a bare hook will not save unless `memory.sessionEndSummary.requireConfirmation` is set to `false` or the payload is invoked with `confirmed: true` for manual testing. A real Claude Code CLI smoke test in Sitewright confirmed `SessionEnd` fires with the project cwd and saves a pending `session_summary` with Claude `session_end` provenance when enabled and configured. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
+`SessionStart` injects a compact session-opening context when allowed by `memory.contextPolicy.mode`: tiny always-on bodies plus `Memory Index` descriptor cards in `selective` mode, and guidance without memory bodies in `policy-only` mode. `UserPromptSubmit` follows the same context policy: `off` suppresses injection, `policy-only` emits guidance without memory bodies, and `selective` injects a small relevant-memory block for ordinary or topic-specific prompts while suppressing ordinary recall bodies for broad `project-position` and `next-work` continuity prompts. `Stop` and `PostToolUse` save useful memories externally and remain quiet when nothing pending was suggested. When a write hook saves pending memories, Memory Lane may emit a compact count-only system message such as `Memory Lane: suggested 1 pending memory for review. Run memory-lane review to approve or reject it.` The notice does not include memory text, prompts, transcripts, or tool output. Hook commands fail safe: if storage/config/plugin initialization fails, Claude/Codex hook invocations return `{}` and exit successfully so the host session is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr. Hook shutdown waits briefly for background embedding writes and cancels outstanding embedding work after a bounded timeout. Claude Code's documented `SessionEnd` hook can run `memory-lane claude session-end` to generate pending `session_summary` memories when `memory.sessionEndSummary.enabled` is configured. By default, Memory Lane still requires confirmation; a bare hook will not save unless `memory.sessionEndSummary.requireConfirmation` is set to `false` or the payload is invoked with `confirmed: true` for manual testing. A real Claude Code CLI smoke test in Sitewright confirmed `SessionEnd` fires with the project cwd and saves a pending `session_summary` with Claude `session_end` provenance when enabled and configured. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
 
 These commands are for Claude Code CLI hooks, not the Claude Desktop app. Use the MCP Server setup above for Claude Desktop.
 
@@ -1031,6 +1038,6 @@ memory-lane codex stop
 memory-lane codex post-tool-use
 ```
 
-`SessionStart` baseline injection is available for compact session-opening context when allowed by `memory.contextPolicy.mode`: tiny always-on bodies plus `Memory Index` descriptor cards in `selective` mode, and guidance without memory bodies in `policy-only` mode. `UserPromptSubmit` follows the same context policy: `off` suppresses injection, `policy-only` emits guidance without memory bodies, and `selective` injects a small relevant-memory block for ordinary or topic-specific prompts while suppressing ordinary recall bodies for broad `project-position` and `next-work` continuity prompts. `Stop` and `PostToolUse` save useful memories externally and remain quiet when nothing pending was suggested. When a write hook saves pending memories, Memory Lane may emit a compact count-only system message such as `Memory Lane: suggested 1 pending memory for review. Run memory-lane review to approve or reject it.` The notice does not include memory text, prompts, transcripts, or tool output. If the latest user message explicitly asks to summarize the session (for example, "remember this session"), the supported `Stop` hook path uses `memory.sessionEndSummary` to save a pending session summary for review with `memory-lane review`; do not configure an unsupported Codex `SessionEnd` hook. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
+`SessionStart` baseline injection is available for compact session-opening context when allowed by `memory.contextPolicy.mode`: tiny always-on bodies plus `Memory Index` descriptor cards in `selective` mode, and guidance without memory bodies in `policy-only` mode. `UserPromptSubmit` follows the same context policy: `off` suppresses injection, `policy-only` emits guidance without memory bodies, and `selective` injects a small relevant-memory block for ordinary or topic-specific prompts while suppressing ordinary recall bodies for broad `project-position` and `next-work` continuity prompts. `Stop` and `PostToolUse` save useful memories externally and remain quiet when nothing pending was suggested. When a write hook saves pending memories, Memory Lane may emit a compact count-only system message such as `Memory Lane: suggested 1 pending memory for review. Run memory-lane review to approve or reject it.` The notice does not include memory text, prompts, transcripts, or tool output. Hook commands fail safe: if storage/config/plugin initialization fails, Claude/Codex hook invocations return `{}` and exit successfully so the host session is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr. Hook shutdown waits briefly for background embedding writes and cancels outstanding embedding work after a bounded timeout. If the latest user message explicitly asks to summarize the session (for example, "remember this session"), the supported `Stop` hook path uses `memory.sessionEndSummary` to save a pending session summary for review with `memory-lane review`; do not configure an unsupported Codex `SessionEnd` hook. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
 
 See `examples/harness-integrations/codex-cli.md` for setup details.

@@ -125,8 +125,8 @@ memory-lane status                # quick stats
 memory-lane status --json --since 2026-06-18T00:00:00.000Z
 memory-lane doctor                # full diagnostic report
 memory-lane doctor --json --since 2026-06-18T00:00:00.000Z
-memory-lane compact               # remove deleted/rejected entries
-memory-lane reindex               # (re)build embeddings for all approved memories
+memory-lane compact               # remove deleted/rejected entries while preserving invalid rows
+memory-lane reindex               # embed approved memories missing current vectors
 memory-lane init                  # first-time setup wizard for harnesses
 memory-lane init --yes            # auto-configure all detected harnesses
 memory-lane init --project-local  # initialize sandbox-friendly project-local storage
@@ -228,7 +228,7 @@ memory-lane codex stop
 memory-lane codex post-tool-use
 ```
 
-`session-start` performs compact baseline injection for new sessions only when `memory.contextPolicy.mode` allows lifecycle context; `selective` can render tiny always-on memories plus `Memory Index` descriptor cards, `policy-only` emits guidance without memory bodies, and `off` disables lifecycle context. Descriptor cards use stored `description` and `fetchHint` metadata when present, otherwise generated previews. `user-prompt-submit` recalls relevant approved memories for ordinary/topic-specific prompts in `selective` mode, while broad project-position/next-work continuity prompts receive inspection-first continuity guidance without ordinary recall bodies. `stop` and `post-tool-use` save useful memories externally and are silent by default. Current Codex CLI hooks do not expose a `SessionEnd` event; use manual `memory-lane session-end --confirm` or the Codex `Stop` explicit-intent path for session summaries.
+`session-start` performs compact baseline injection for new sessions only when `memory.contextPolicy.mode` allows lifecycle context; `selective` can render tiny always-on memories plus `Memory Index` descriptor cards, `policy-only` emits guidance without memory bodies, and `off` disables lifecycle context. Descriptor cards use stored `description` and `fetchHint` metadata when present, otherwise generated previews. `user-prompt-submit` recalls relevant approved memories for ordinary/topic-specific prompts in `selective` mode, while broad project-position/next-work continuity prompts receive inspection-first continuity guidance without ordinary recall bodies. `stop` and `post-tool-use` save useful memories externally and are silent by default. Hook commands fail safe: if storage/config/plugin initialization fails, Claude/Codex hook invocations return `{}` and exit successfully so the host session is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr. Current Codex CLI hooks do not expose a `SessionEnd` event; use manual `memory-lane session-end --confirm` or the Codex `Stop` explicit-intent path for session summaries.
 
 `UserPromptSubmit` follows `memory.contextPolicy.mode`: `off` suppresses lifecycle context, `policy-only` emits guidance without memory bodies, and `selective` injects a small context block for ordinary/topic-specific prompts; for broad continuity prompts such as “what were we last working on?” or “what should we work on next?”, it injects guidance to inspect canonical continuity instead of injecting recall-selected memory bodies. `Stop` and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
 
@@ -272,13 +272,13 @@ memory-lane config set <key> <value>  # set any config value (dot-path)
 After enabling, build embeddings:
 
 ```bash
-memory-lane reindex                   # embed all approved memories
-memory-lane reindex --force           # re-embed even existing vectors
+memory-lane reindex                   # embed approved memories missing current vectors
+memory-lane reindex --force           # re-embed even existing current vectors
 ```
 
-> **Auto-embed**: When semantic search is enabled and an embedding provider is configured, newly saved approved memories are automatically embedded — no manual reindex needed for incremental saves.
+> **Auto-embed**: When semantic search is enabled and an embedding provider is configured, newly saved approved memories are automatically embedded, so no manual reindex is needed for incremental saves.
 
-When `memory-lane doctor` reports `semanticWarnings`, treat them as advisory diagnostics. Do not run `memory-lane reindex` automatically from a hook or without user approval; offer it as an explicit repair command because it writes the embedding sidecar and may call the configured embedding provider.
+When `memory-lane doctor` reports `semanticWarnings`, treat them as advisory diagnostics. Do not run `memory-lane reindex` automatically from a hook or without user approval; offer it as an explicit repair command because it writes the embedding sidecar and may call the configured embedding provider. Embedding profiles may set `timeoutMs`; provider calls default to 30000 ms when it is omitted.
 
 ### Project scope
 

@@ -142,6 +142,7 @@ memory-lane codex post-tool-use
 - Claude Desktop / Codex Desktop use the MCP server for explicit tools; MCP is not lifecycle automation.
 - Current Codex CLI hooks do not expose a supported `SessionEnd` event. Do not add `SessionEnd` to `.codex/hooks.json`.
 - `Stop` and `PostToolUse` save useful memories externally and are silent by default.
+- Hook commands fail safe: if storage/config/plugin initialization fails, Claude/Codex hook invocations return `{}` and exit successfully so the host session is not blocked.
 - Set `MEMORY_LANE_HOOK_DEBUG=1` for concise diagnostics at `~/.memory-lane/hooks-log.jsonl`; debug logs do not include prompts, transcripts, or tool output.
 
 Pi:
@@ -180,12 +181,14 @@ Do not imply automatic sync, bidirectional sync, or Obsidian-backed storage. Do 
 
 Default storage is two-tier when no explicit `MEMORY_LANE_*` paths are set: global-scope memories, including default preferences and personal memories, stay in `~/.memory-lane/`, while new current-project-scoped memories write to the resolved project `<root>/.memory-lane/`. If home storage is not writable, writable commands/hooks auto-initialize project-local single-store fallback; read-only inspection commands should not create fallback storage. Explicit `MEMORY_LANE_FILE`, `MEMORY_LANE_EMBEDDINGS_FILE`, and `MEMORY_LANE_CONFIG` always win and keep single-store behavior.
 
-Semantic search is disabled by default. Enable and build embeddings when needed:
+Semantic search is disabled by default. Enable it, then run `reindex` when existing approved memories are missing current vectors for the active profile/model/content hash:
 
 ```bash
 memory-lane config enable-semantic
 memory-lane reindex
 ```
+
+Use `memory-lane reindex --force` to recompute existing current vectors.
 
 ## Safety defaults
 
