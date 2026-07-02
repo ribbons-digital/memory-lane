@@ -2,9 +2,9 @@
 
 ## Status
 
-Approved by the user through Plannotator and implemented on `docs/project-local-slice-1-design`, pending final review/PR.
+Approved by the user through Plannotator and merged in PR #80 as `a87eff5`, targeted for release `v0.2.43`.
 Opus 4.8 second-opinion review completed before presentation.
-Implementation should remain within this design gate.
+Implementation remained within this design gate.
 
 ## Context
 
@@ -285,5 +285,6 @@ Manual dogfood checks:
 ## Approval record
 
 The user approved Slice 1 as scoped here.
-Implementation remains limited to project-local default writes, merged two-store reads, origin-store routing, and compatible docs/tests.
+PR #80 merged the implementation as `a87eff5`, targeted for release `v0.2.43`.
+Implementation remained limited to project-local default writes, merged two-store reads, origin-store routing, and compatible docs/tests.
 Migration diagnostics and explicit cross-store moves remain deferred follow-ups.
