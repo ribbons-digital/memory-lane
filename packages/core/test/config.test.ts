@@ -190,6 +190,51 @@ describe("validateConfig", () => {
     assert.doesNotThrow(() => validateConfig(cfg))
   })
 
+  it("accepts optional positive embedding profile timeoutMs", () => {
+    const cfg = {
+      semantic: {
+        enabled: false,
+        activeEmbeddingProfile: "my-profile",
+        embeddings: {
+          profiles: {
+            "my-profile": {
+              provider: "openai-compatible-embeddings",
+              baseUrl: "http://localhost:8000",
+              model: "text-embedding-3-small",
+              timeoutMs: 1000,
+            },
+          },
+        },
+        retrieval: { topK: 8, minSimilarity: 0.25, semanticWeight: 0.65, lexicalWeight: 0.25, recencyWeight: 0.1, fallbackToAllVisibleOnMiss: true },
+        privacy: { allowRemoteEmbeddings: false },
+      },
+    }
+    assert.doesNotThrow(() => validateConfig(cfg))
+  })
+
+  it("rejects invalid embedding profile timeoutMs", () => {
+    for (const timeoutMs of ["1000", 0, -1, 1.5] as const) {
+      assert.throws(() => validateConfig({
+        semantic: {
+          enabled: false,
+          activeEmbeddingProfile: "my-profile",
+          embeddings: {
+            profiles: {
+              "my-profile": {
+                provider: "openai-compatible-embeddings",
+                baseUrl: "http://localhost:8000",
+                model: "text-embedding-3-small",
+                timeoutMs,
+              },
+            },
+          },
+          retrieval: { topK: 8, minSimilarity: 0.25, semanticWeight: 0.65, lexicalWeight: 0.25, recencyWeight: 0.1, fallbackToAllVisibleOnMiss: true },
+          privacy: { allowRemoteEmbeddings: false },
+        },
+      }), /semantic\.embeddings\.profiles\.my-profile\.timeoutMs/)
+    }
+  })
+
   it("rejects missing activeEmbeddingProfile when profiles are non-empty", () => {
     const cfg = {
       semantic: {

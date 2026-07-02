@@ -73,6 +73,11 @@ function positiveInt(v: unknown, p: string): number {
   if (!Number.isInteger(n) || n < 0) throw new ConfigError(`${p} must be a non-negative integer`)
   return n
 }
+function positiveNonZeroInt(v: unknown, p: string): number {
+  const n = num(v, p)
+  if (!Number.isInteger(n) || n <= 0) throw new ConfigError(`${p} must be a positive integer`)
+  return n
+}
 function optionalStr(v: unknown, p: string): string | undefined {
   if (v === undefined) return undefined
   return str(v, p)
@@ -99,6 +104,7 @@ function validateProfile(v: unknown, p: string): void {
   if (o.provider !== "openai-compatible-embeddings") throw new ConfigError(`${p}.provider must be openai-compatible-embeddings`)
   str(o.baseUrl, `${p}.baseUrl`)
   str(o.model, `${p}.model`)
+  if (o.timeoutMs !== undefined) positiveNonZeroInt(o.timeoutMs, `${p}.timeoutMs`)
 }
 
 function deepMerge(base: unknown, override: unknown): unknown {
