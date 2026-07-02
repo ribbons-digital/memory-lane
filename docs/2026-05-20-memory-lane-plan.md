@@ -890,7 +890,7 @@ function findGitRoot(cwd: string): string | null {
   } catch { return null }
 }
 
-/** Resolve project scope: scope file → git root → null. Never auto-creates scope files. */
+/** Resolve project scope from scope file or git root without creating scope files. */
 export function resolveProjectScope(cwd?: string): ProjectScope | null {
   const resolvedCwd = path.resolve(cwd ?? process.cwd())
   const scope = findScopeFile(resolvedCwd)

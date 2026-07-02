@@ -37,7 +37,7 @@ Recent completion evidence:
 - Release `v0.2.42` (`cd1a839`) passed workflow `28484161404` and published 8 assets, shipping the project-local storage Slice 0 facade proof from PR #78.
 - Installed-artifact `v0.2.42` dogfood after `memory-lane upgrade --yes` passed `memory-lane --smoke-test`; validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
 - Release `v0.2.43` (`287bb1a`) passed workflow `28560737645`, shipping PR #80 project-local storage Slice 1 and PR #82 continuity routing/context hygiene.
-- Installed-artifact `v0.2.43` dogfood after `memory-lane upgrade --yes` passed smoke, route, and generated Pi bridge continuity checks; validation: `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
+- Installed-artifact `v0.2.43` dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, route classification, and generated Pi bridge continuity checks; validation: `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
 - Installed-artifact `v0.2.41` continuity dogfood after `memory-lane upgrade --yes` passed: broad next-work continuity has empty workstream candidates plus `no-topic`, stale release/checkpoint ids are absent from operating guidance, and topic-specific queries still return candidates.
 - Phase-completion docs sync landed in `309021e docs: declare phase 21 complete`.
 - PR #69 (`4ebf447`) completed the docs/context-budget slice: root `ROADMAP.md` is compact, historical roadmap detail through Phase 20.5 is archived, and skill guidance uses bounded reads.
@@ -81,7 +81,7 @@ Slice plan:
    Detect legacy home-stored project memories and provide bounded warnings plus explicit dry-run migration; do not silently move/delete/approve/consolidate.
 
 Current release state: Slice 0 is merged and released in `v0.2.42`; Slice 1 is merged and released in `v0.2.43` alongside continuity routing/context hygiene PR #82 (`a808231`).
-Installed-artifact `v0.2.43` dogfood passed via `memory-lane upgrade --yes`, `memory-lane --smoke-test`, route classification, and generated Pi bridge continuity smoke.
+Installed-artifact `v0.2.43` dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, route classification, and generated Pi bridge continuity smoke.
 Validation: `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
 
 Current next candidate: Slice 2 migration/compatibility diagnostics.

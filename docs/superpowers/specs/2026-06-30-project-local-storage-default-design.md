@@ -87,7 +87,7 @@ This is a storage architecture change, not a recall/ranking or schema change.
   - `resolveMemoryPaths()`
   - `resolveWritableMemoryPaths()`
   - `initProjectLocalStorage()`
-  - upward `.memory-lane/` discovery
+  - upward `.memory-lane/` discovery as legacy scalar-path fallback
   - `.gitignore` append behavior
 - `packages/cli/src/index.ts`
   - command-level selection of read-only vs writable path resolution
@@ -117,7 +117,8 @@ Introduce a new project-aware path resolution mode for commands with project con
 
 This root rule is load-bearing.
 The current `findProjectLocalRoot()` helper discovers an existing `.memory-lane/` by walking upward from cwd, while project identity uses `.memory-lane-scope` and git-aware project scope resolution.
-The first implementation must unify these or make project scope resolution authoritative so nested cwd writes do not create fragmented `.memory-lane/` stores.
+That upward discovery path is compatibility-only fallback behavior for legacy scalar path resolution, not the approved resolver for default two-tier routing.
+The first implementation must make project scope resolution authoritative so nested cwd writes do not create fragmented `.memory-lane/` stores.
 
 ### Config split
 
@@ -197,7 +198,7 @@ Definition of done for Slice 0:
 9. Make cache invalidation a first-class facade invariant: every facade write method, including single append, append-many, embedding append, embedding invalidation, reindex writes, and compaction, must invalidate or refresh the owning store cache so immediate subsequent reads cannot observe stale data.
 10. Define batch append atomicity: append-many is atomic per target store and preserves the existing single-store successor-plus-superseded ordering semantics.
 11. Make the facade own or expose the embedding-store seam and continuity-baseline path seam, not only memory paths. Slice 0 keeps single-store behavior, but engine code should no longer scatter assumptions that there is exactly one scalar `embPath` or baseline path.
-12. Keep `doctor` / `status` JSON output shape unchanged in Slice 0; add shape-lock tests for the relevant scalar storage fields. Multi-store diagnostic shape is a later Slice 1 decision.
+12. Keep `doctor` / `status` JSON output shape unchanged in Slice 0; add shape-lock tests for the relevant scalar storage fields. Shipped Slice 1 kept the scalar storage fields compatible and left richer multi-store diagnostics additive.
 13. Keep explicit `MEMORY_LANE_*` paths fully authoritative and single-store.
 14. Update tests and internal docs for the new facade seam, but do not update user-facing storage-default docs yet except to note this is internal prep if needed.
 
