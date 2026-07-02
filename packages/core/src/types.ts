@@ -88,6 +88,7 @@ export interface MemoryRecord {
   descriptor?: MemoryDescriptorMetadata
 }
 
+/** Bounded sample shown by legacy project-memory diagnostics. */
 export interface LegacyProjectMemorySample {
   id: string
   status: Extract<MemoryStatus, "approved" | "pending">
@@ -97,6 +98,7 @@ export interface LegacyProjectMemorySample {
   hazards: string[]
 }
 
+/** Read-only report for home-stored project memories that predate project-local defaults. */
 export interface LegacyProjectMemoryDiagnostics {
   status: "ok" | "not-applicable"
   notApplicableReason?: "explicit-storage-env" | "no-active-project-scope" | "single-store"
@@ -675,7 +677,7 @@ export interface SemanticMemoryConfig {
 export interface MemoryEngineConfig {
   memoryPath?: string
   embeddingsPath?: string
-  /** Optional storage facade. When provided, it owns memory, embedding, compaction, diagnostics, and continuity-baseline storage paths. */
+  /** Optional storage facade. When provided, it owns memory, embedding, compaction, diagnostics, legacy project-memory diagnostics, and continuity-baseline storage paths. */
   storage?: MemoryEngineStorage
   /** Set false for read-only engine construction so startup does not compact or rewrite stores. */
   autoCompact?: boolean

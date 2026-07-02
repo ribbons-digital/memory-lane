@@ -29,6 +29,7 @@ export interface MemoryEngineStorage {
   appendEmbedding(record: EmbeddingLine): void
   listEmbeddings(): EmbeddingRecord[]
   listEmbeddingInvalidations(): EmbeddingInvalidationRecord[]
+  /** Return read-only diagnostics for active current-project memories that still live in the home store. */
   legacyProjectMemoryDiagnostics(projectScopeKey?: string): LegacyProjectMemoryDiagnostics
   shouldCompact(): boolean
   compact(): CompactReport

@@ -158,10 +158,11 @@ This command name leaves room for a future `--yes` execution path, but Slice 2a 
 
 ## Output and noise policy
 
-Slice 2a is CLI-only.
-Do not add lifecycle reminders, SessionStart text, recall warnings, continuity warnings, or MCP responses in this slice.
+Slice 2a adds no dedicated MCP tool or lifecycle prompt surface.
+Because MCP `memory_status` wraps `MemoryEngine.doctor()`, it inherits the same read-only `legacyProjectMemories` diagnostics exposed by `doctor --json`.
+Do not add lifecycle reminders, SessionStart text, recall warnings, continuity warnings, or separate MCP responses in this slice.
 
-Rationale: users who run `status`, `doctor`, or `migrate project-local --dry-run` are explicitly asking for Memory Lane state.
+Rationale: users who run `status`, `doctor`, `migrate project-local --dry-run`, or explicit MCP status are explicitly asking for Memory Lane state.
 Prompt-time warnings could add noise and should be considered only after dogfood shows users miss the CLI diagnostics.
 
 ## Read-only invariants

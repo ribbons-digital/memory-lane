@@ -77,7 +77,10 @@ In clients such as Claude Desktop and Codex Desktop, the model may try the `memo
 - `memory_reject`
 - `memory_delete`
 
-Ask your MCP client: "Use Memory Lane to check my status." The client should call `memory_continuity` before `memory_recall` for broad prior-work, next-action, project-status, resume, and handoff-style prompts. It can call `memory_status` to inspect counts, project scope, semantic status, storage/config paths, and integration diagnostics without modifying memory.
+Ask your MCP client: "Use Memory Lane to check my status."
+The client should call `memory_continuity` before `memory_recall` for broad prior-work, next-action, project-status, resume, and handoff-style prompts.
+It can call `memory_status` to inspect counts, project scope, semantic status, storage/config paths, legacy project-memory diagnostics, and integration diagnostics without modifying memory.
+Legacy project-memory diagnostics are read-only and may include bounded sample previews when legacy home-stored project memories exist.
 
 Use `memory_review` to list pending memories, then `memory_approve` or `memory_reject` with a memory `id` to finish the review loop. Use `memory_delete` with a memory `id` to soft-delete an existing memory.
 

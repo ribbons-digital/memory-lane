@@ -91,6 +91,13 @@ The command returns approved operating agreement text for the current project pl
 
 Use `memory-lane dashboard` for a compact human overview of continuity hints. Use `memory-lane status --json`, `memory-lane doctor --json`, or MCP `memory_status` when an agent needs text-free metadata about possible stale or overlapping continuity state. For natural-language workstream discovery such as "resume this thread" or "find where X was implemented", use existing continuity surfaces with a query: `memory-lane continuity --query "..." --json` or MCP `memory_continuity({ projectPath, query: "..." })`. Discovery is read-only and pointer-based; it skips superseded records but does not clean up, delete, reject, or mutate any memory.
 
+### Legacy project-local diagnostics
+
+Legacy project-scoped memories from before project-local defaults may still live in the home store.
+Use `memory-lane status --json`, `memory-lane doctor --json`, MCP `memory_status`, or `memory-lane migrate project-local --dry-run --json` to inspect active legacy candidates for the current project.
+The diagnostics are read-only and may include counts, hazard counters, and at most 10 sample previews capped at 160 characters.
+The dry-run migration preview does not move, delete, approve, reject, or consolidate records in this release.
+
 ### List (respects project scope by default)
 
 ```bash

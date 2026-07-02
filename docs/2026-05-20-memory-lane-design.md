@@ -275,7 +275,7 @@ Triggered on engine construction (if dead weight / total records > 0.3 and total
 interface MemoryEngineConfig {
   memoryPath?: string           // default: ~/.memory-lane/memory.jsonl
   embeddingsPath?: string       // default: ~/.memory-lane/embeddings.jsonl
-  storage?: MemoryEngineStorage // optional facade for memory, embeddings, compaction, diagnostics, and continuity baselines
+  storage?: MemoryEngineStorage // optional facade for memory, embeddings, compaction, diagnostics, legacy project-memory diagnostics, and continuity baselines
   configPath?: string           // default: ~/.memory-lane/config.json (pi adapter overrides to ~/.pi/agent/memory.config.json for backward compat)
   embeddingProvider?: EmbeddingProvider  // optional; lexical-only without it
 }
@@ -296,15 +296,17 @@ interface MemoryEngineStorage {
   appendEmbedding(record: EmbeddingLine): void
   listEmbeddings(): EmbeddingRecord[]
   listEmbeddingInvalidations(): EmbeddingInvalidationRecord[]
+  legacyProjectMemoryDiagnostics(projectScopeKey?: string): LegacyProjectMemoryDiagnostics
   shouldCompact(): boolean
   compact(): CompactReport
 }
 
-function createSingleStoreEngineStorage(memoryPath: string, embeddingsPath: string): MemoryEngineStorage
+function createSingleStoreEngineStorage(memoryPath: string, embeddingsPath: string, legacyDiagnosticsReason?: LegacyProjectMemoryDiagnostics["notApplicableReason"]): MemoryEngineStorage
 ```
 
 `memoryPath` and `embeddingsPath` still build the backward-compatible single-store facade.
-Advanced tests and integrations can pass a custom `MemoryEngineStorage` when they need to own memory, embedding, compaction, diagnostic, or continuity-baseline paths.
+Advanced tests and integrations can pass a custom `MemoryEngineStorage` when they need to own memory, embedding, compaction, diagnostic, legacy project-memory diagnostic, or continuity-baseline paths.
+Custom facades should return `LegacyProjectMemoryDiagnostics` from `legacyProjectMemoryDiagnostics()`; single-store facades normally report `not-applicable`.
 `EmbeddingLine` is the exported union accepted by `appendEmbedding()` for embedding records and embedding invalidation records.
 
 **Instance lifecycle recommendation:** Create one `MemoryEngine` per process and reuse it. The in-memory cache makes this significantly faster than per-operation construction. The pi adapter uses a singleton; the CLI creates one per invocation (naturally isolated processes).

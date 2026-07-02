@@ -173,14 +173,14 @@ Do not silently move existing home-stored project memories.
 
 First implementation should not migrate or diagnose legacy rows.
 
-Plan migration/compatibility as **Slice 2** after the facade proof and project-local default flip:
+Plan migration/compatibility as follow-up slices after the facade proof and project-local default flip:
 
-- detect approved/pending home-stored project memories whose scope key matches the active project;
-- show bounded warnings in `doctor`, `status`, or `continuity`;
-- add an explicit `memory-lane migrate project-local --dry-run --yes` command or equivalent dry-run-first migration flow;
+- Slice 2a detects approved/pending home-stored project memories whose scope key matches the active project;
+- Slice 2a shows bounded diagnostics in `doctor`, `status`, MCP `memory_status`, and `memory-lane migrate project-local --dry-run`;
+- mutating migration remains deferred for a later explicit `--yes` or equivalent dry-run-first flow;
 - avoid silent movement, deletion, approval, or consolidation.
 
-Those migration/compatibility features are out of scope for Slice 0 and Slice 1, but should remain the planned follow-up once new project writes are safely project-local by default.
+Those migration/compatibility features are out of scope for Slice 0 and Slice 1, and mutating migration should remain a planned follow-up once diagnostics are dogfooded.
 
 ## First implementation slice
 
