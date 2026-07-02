@@ -2,14 +2,14 @@
 
 ## Status
 
-Approved for implementation after PR #88 merged the design.
-Fable 5 second-opinion review completed before drafting this spec and again before approval.
-The implementation branch is `feat/project-local-slice-2a-diagnostics`.
+Merged in PR #89 as `96516ef feat(cli): add legacy project diagnostics dry run (#89)`.
+Fable 5 second-opinion review completed before drafting this spec, again before approval, and again before PR.
+Implementation remained inside the approved read-only Slice 2a scope.
 
 ## Entry gate
 
-This design gate is complete.
-Implementation must stay inside this approved read-only Slice 2a scope.
+This design and implementation gate is complete.
+Future mutating migration remains deferred to a later explicit design gate.
 
 ## Context
 
