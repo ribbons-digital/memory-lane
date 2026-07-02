@@ -2061,6 +2061,41 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(embeddings[0].contentHash, contentHash("approved embedding text"))
   })
 
+  it("can cancel scheduled approved memory embeddings", async () => {
+    const configPath = path.join(dir, "cfg-cancel-settle.json")
+    const embeddingsPath = path.join(dir, "emb-cancel-settle.jsonl")
+    fs.writeFileSync(configPath, JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "test-profile",
+        embeddings: { profiles: { "test-profile": { provider: "openai-compatible-embeddings", baseUrl: "http://localhost", model: "test-model" } } },
+      },
+    }), "utf8")
+    let aborted = false
+    const provider: EmbeddingProvider = {
+      embed: async (_inputs, signal) => new Promise((resolve) => {
+        signal?.addEventListener("abort", () => {
+          aborted = true
+          resolve([[1, 0]])
+        }, { once: true })
+      }),
+    }
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-cancel-settle.jsonl"),
+      embeddingsPath,
+      configPath,
+      embeddingProvider: provider,
+    })
+
+    const saved = e.save({ text: "approved embedding text", status: "approved" })
+    assert.equal(saved.status, "saved")
+    e.cancelPendingEmbeddings()
+    await e.settle()
+
+    assert.equal(aborted, true)
+    assert.equal(readJsonl(embeddingsPath).length, 0)
+  })
+
   it("reindex skips current embeddings unless forced", async () => {
     const configPath = path.join(dir, "cfg-reindex.json")
     const embeddingsPath = path.join(dir, "emb-reindex.jsonl")

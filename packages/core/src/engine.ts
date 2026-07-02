@@ -91,6 +91,7 @@ export class MemoryEngine {
   private readonly integrationPaths?: Partial<IntegrationDiagnosticPaths>
   private readonly env: NodeJS.ProcessEnv | Record<string, string | undefined>
   private readonly pendingEmbeddings = new Set<Promise<void>>()
+  private readonly pendingEmbeddingControllers = new Set<AbortController>()
 
   constructor(opts?: MemoryEngineConfig) {
     const memoryPath = opts?.memoryPath ?? path.join(DEFAULT_DIR, "memory.jsonl")
@@ -124,21 +125,30 @@ export class MemoryEngine {
   }
 
   /** Embed a single memory. Works with both sync and async providers. Non-fatal - failures are swallowed. */
-  private async _embedMemory(memory: MemoryRecord): Promise<void> {
-    if (containsLikelySecret(memory.text) || !this.embProvider) return
+  private async _embedMemory(memory: MemoryRecord, signal?: AbortSignal): Promise<void> {
+    if (containsLikelySecret(memory.text) || !this.embProvider || signal?.aborted) return
     try {
       const profileName = this.config.semantic.activeEmbeddingProfile
       const profile = this.config.semantic.embeddings.profiles[profileName]
-      if (!profile) return
-      const [vector] = await this.embProvider.embed([memory.text])
-      if (vector) this.appendEmbedding(memory, vector, profileName, profile.model)
+      if (!profile || signal?.aborted) return
+      const [vector] = await this.embProvider.embed([memory.text], signal)
+      if (vector && !signal?.aborted) this.appendEmbedding(memory, vector, profileName, profile.model)
     } catch { /* non-fatal: embedding can be rebuilt via reindex */ }
   }
 
   private scheduleEmbedding(memory: MemoryRecord): void {
-    const pending = this._embedMemory(memory).catch(() => { /* swallowed */ })
+    const controller = new AbortController()
+    const pending = this._embedMemory(memory, controller.signal).catch(() => { /* swallowed */ })
+    this.pendingEmbeddingControllers.add(controller)
     this.pendingEmbeddings.add(pending)
-    pending.finally(() => this.pendingEmbeddings.delete(pending)).catch(() => { /* swallowed */ })
+    pending.finally(() => {
+      this.pendingEmbeddingControllers.delete(controller)
+      this.pendingEmbeddings.delete(pending)
+    }).catch(() => { /* swallowed */ })
+  }
+
+  cancelPendingEmbeddings(): void {
+    for (const controller of this.pendingEmbeddingControllers) controller.abort()
   }
 
   async settle(): Promise<void> {

@@ -55,6 +55,7 @@ function composeAbortSignal(signal: AbortSignal | undefined, timeoutMs: number):
     didTimeout = true
     controller.abort()
   }, timeoutMs)
+  timer.unref?.()
   return {
     signal: controller.signal,
     timedOut: () => didTimeout,
