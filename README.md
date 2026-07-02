@@ -850,6 +850,12 @@ const firstMemory = engine.list()[0]
 const descriptorPreview = firstMemory ? memoryDescriptorPreview(firstMemory, 160) : undefined
 const workflowArea = classifyWorkflowArea("Project workflow loop: review before merge.")
 
+// If your process may exit soon after approved writes, wait for background embeddings.
+await engine.settle()
+
+// On shutdown timeouts, cancel outstanding embedding work before exiting.
+engine.cancelPendingEmbeddings()
+
 // Recall (semantic or lexical)
 const result = await engine.recall("package manager")
 
@@ -894,6 +900,8 @@ node packages/mcp-server/dist/index.js
 ```
 
 Do not wrap the server with commands that print banners to stdout. MCP stdio reserves stdout for JSON-RPC protocol messages.
+
+When stdin closes, the server waits briefly for background embedding writes from all project-scoped engines, then cancels outstanding embedding work after a bounded timeout so shutdown does not hang.
 
 See `examples/harness-integrations/mcp.md` for client configuration examples.
 

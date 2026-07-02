@@ -33,7 +33,9 @@ export interface EngineForProjectPathOptions {
 export interface MemoryLaneEngineResult {
   engine: MemoryEngine
   engineForProjectPath: (projectPath?: string, options?: EngineForProjectPathOptions) => MemoryEngine
+  /** Wait for background embedding writes scheduled by all engines created for this server. */
   settleEngines: () => Promise<void>
+  /** Abort outstanding background embedding writes for all engines created for this server. */
   cancelPendingEmbeddings: () => void
   plugins: LoadedPlugin[]
 }

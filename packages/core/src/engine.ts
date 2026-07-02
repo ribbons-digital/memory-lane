@@ -147,10 +147,12 @@ export class MemoryEngine {
     }).catch(() => { /* swallowed */ })
   }
 
+  /** Abort background embedding writes that were scheduled by approved-memory mutation paths. */
   cancelPendingEmbeddings(): void {
     for (const controller of this.pendingEmbeddingControllers) controller.abort()
   }
 
+  /** Wait for currently scheduled background embedding writes to finish. */
   async settle(): Promise<void> {
     while (this.pendingEmbeddings.size) {
       await Promise.allSettled([...this.pendingEmbeddings])
@@ -603,7 +605,7 @@ export class MemoryEngine {
     return currentKeys
   }
 
-  /** Rebuild embeddings for approved memories that do not already have a current embedding. */
+  /** Rebuild embeddings for approved memories missing current vectors; pass force to recompute existing current vectors. */
   async reindexEmbeddings(opts?: { force?: boolean; signal?: AbortSignal }): Promise<{ embedded: number; skippedExisting: number; skippedSecrets: number }> {
     if (!this.embProvider || !this.config.semantic.enabled) {
       return { embedded: 0, skippedExisting: 0, skippedSecrets: 0 }

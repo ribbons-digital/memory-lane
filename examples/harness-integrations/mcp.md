@@ -17,6 +17,7 @@ node /absolute/path/to/memory-lane/packages/mcp-server/dist/index.js
 ```
 
 Do not use a wrapper that prints to stdout. Stdio MCP servers use stdout for JSON-RPC messages.
+When stdin closes, the server waits briefly for background embedding writes and then cancels outstanding embedding work after a bounded shutdown timeout.
 
 ## Claude Desktop
 

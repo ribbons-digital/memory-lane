@@ -154,7 +154,7 @@ Pi:
 
 ## Session-end summarization
 
-Use `memory-lane session-end --confirm` only when the user explicitly wants to generate a manual session summary and `memory.sessionEndSummary` is configured. In Pi, use `/memory session-summary`; it reads the current branch through Pi's session manager and asks for confirmation. Generated summaries are pending memories for review. Raw transcripts are not stored; tool messages are excluded by default and likely secrets are redacted before the transcript is sent to the configured model.
+Use `memory-lane session-end --confirm` only when the user explicitly wants to generate a manual session summary and `memory.sessionEndSummary` is configured. In Pi, use `/memory session-summary`; it reads the current branch through Pi's session manager and asks for confirmation. Generated summaries are pending memories for review. Raw transcripts are not stored; tool messages are excluded by default and likely secrets are redacted before the transcript is sent to the configured model. `memory.sessionEndSummary.timeoutMs` is optional and defaults to 30000 ms for OpenAI-compatible summary calls.
 
 ## Obsidian mirror/import
 

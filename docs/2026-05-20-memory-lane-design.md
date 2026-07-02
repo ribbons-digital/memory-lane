@@ -228,7 +228,8 @@ function appendMany(filePath: string, records: MemoryRecord[]): void {
 }
 ```
 
-For true atomic appends: the store writes to a temp file with the original file's current contents plus the new line or batch, then atomically `renameSync`s the temp file over the original. A short lock directory serializes concurrent writers for the same memory file, and batch append preserves order atomically per underlying store.
+For true atomic appends: the store writes to a temp file with the original file's current contents plus the new line or batch, then atomically `renameSync`s the temp file over the original. A short lock directory serializes concurrent writers for memory, embedding, continuity-baseline, and compaction writes, and batch memory append preserves order atomically per underlying store.
+Compaction keeps malformed or schema-invalid JSONL rows in place while compacting valid records, so diagnostics can still report corrupt input instead of silently erasing it.
 
 ### Cache Invalidation
 
@@ -521,8 +522,9 @@ Identical to the current implementation — it's been well-tested and there's no
 
 - **No exceptions for user-facing errors.** Operations that can fail predictably (duplicate, secret, empty text) return result objects with a `reason` string, not throw.
 - **Configuration errors throw** at construction time (bad JSON, missing profile). The adapter catches and reports them.
+- **Hook initialization errors fail safe** for Claude/Codex hooks: storage, config, or plugin initialization failures return `{}` and exit successfully so the host session is not blocked.
 - **Provider errors are caught internally** and result in a degraded fallback, not a crash.
-- **Corrupted JSONL lines are silently skipped** with no error — same as persistent-memory.
+- **Corrupted JSONL lines are omitted from list/recall results but remain visible through diagnostics.** Compaction preserves malformed or schema-invalid rows rather than silently deleting them.
 
 ---
 

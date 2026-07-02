@@ -556,6 +556,7 @@ export interface EmbeddingInvalidationRecord {
 }
 
 export interface EmbeddingProvider {
+  /** Embed the provided inputs; implementations should honor abort signals when possible. */
   embed(inputs: string[], signal?: AbortSignal): Promise<number[][]>
 }
 
@@ -565,6 +566,7 @@ export interface EmbeddingProfileConfig {
   model: string
   apiKeyEnv?: string | null
   batchSize?: number
+  /** Per-provider request timeout in milliseconds. Defaults to 30000. */
   timeoutMs?: number
 }
 
@@ -609,6 +611,7 @@ export interface SessionEndSummaryConfig {
   model?: string
   promptTemplate?: string
   maxTokens?: number
+  /** Per-provider request timeout in milliseconds. Defaults to 30000. */
   timeoutMs?: number
   requireConfirmation?: boolean
   includeToolOutputs?: boolean
