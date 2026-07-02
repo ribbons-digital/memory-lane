@@ -2,8 +2,8 @@
 
 ## Current state
 
-- Branch context: `main` is synced through `96516ef feat(cli): add legacy project diagnostics dry run (#89)`.
-- Latest release: `v0.2.43` at tag `v0.2.43` / commit `287bb1a`; release workflow `28560737645` passed and published the release. Installed-artifact dogfood passed with a pre-upgrade baseline smoke, `memory-lane upgrade --yes`, and a post-upgrade smoke.
+- Branch context: `main` is synced through `2788c4e docs: prepare v0.2.44 release validation (#91)`.
+- Latest release: `v0.2.44` at tag `v0.2.44` / commit `2788c4e`; release workflow `28628495514` passed and published the release. Installed-artifact dogfood passed with a pre-upgrade baseline smoke, `memory-lane upgrade --yes`, a post-upgrade smoke, and Slice 2a CLI/MCP legacy diagnostics checks.
 - PR #85 merged as `6da6105`, completing Fable 5 Waves 1-3 hardening: JSON harness config merges/backups, fail-safe Claude/Codex hook initialization, bounded embedding settlement on CLI/MCP shutdown, compaction preserving invalid rows, stale embedding invalidation correctness, provider timeout validation, and docs/status sync.
 - PR #86 merged as `e2d4aec`, completing Fable 5 Wave 4 maintainability/UX follow-through: stale status docs were trued up, `.memory-lane-scope` is ignored by default, README/project-local docs note the scope file as local identity, and the Obsidian CLI command cluster was extracted without intended behavior changes.
 - PR #89 merged as `96516ef`, completing Slice 2a legacy project-memory diagnostics: `status` / `doctor` expose bounded legacy home-project diagnostics, `memory-lane migrate project-local --dry-run` previews candidates without mutation, explicit storage override mode reports not applicable, and docs/tests cover the read-only invariants.
@@ -44,9 +44,9 @@ Slice 2a legacy project-memory diagnostics is merged in PR #89.
 Fable 5 reviewed the planning direction, full spec, and implementation.
 Approved spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`.
 Shipped behavior: detect active legacy home-stored project memories for the current project, surface bounded `status` / `doctor` diagnostics, and provide a dry-run-only migration preview without silent moves/deletes/approvals/consolidation.
-Current action is `v0.2.44` release prep and installed-artifact dogfood for Slice 2a.
-Release prep validation draft: `docs/superpowers/validation/2026-07-02-v0.2.44-release-prep.md`.
-After the release-prep PR merges, tag `v0.2.44`, wait for the release workflow, run installed-artifact dogfood, and record the results.
+`v0.2.44` release and installed-artifact dogfood for Slice 2a are complete.
+Release validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
+Next recommended action is to pause project-local storage migration mutation until a fresh design gate, then choose either a review-first migration protocol slice or a separate backlog item with clearer user pressure.
 
 ## Load-bearing constraints
 
@@ -91,6 +91,7 @@ After the release-prep PR merges, tag `v0.2.44`, wait for the release workflow, 
 - PR #83 merged as `287bb1a`; post-merge cleanup synced `main`, deleted local/remote/gate `docs/v0.2.43-release-prep`, tagged `v0.2.43`, and release workflow `28560737645` passed. Installed dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, motivating prompt `memory-lane route --prompt ... --json`, and generated Pi bridge `before_agent_start` continuity context smoke.
 - PR #86 merged as `e2d4aec`; post-merge cleanup synced `main`, deleted local/remote `feat/fable-5-wave-4-maintainability`, and completed the Fable 5 Wave 4 maintainability/UX follow-through.
 - PR #89 merged as `96516ef`; post-merge cleanup synced `main` and deleted local/remote `feat/project-local-slice-2a-diagnostics`. Before merge, validation included Fable 5 implementation review and re-review, `pnpm build`, `pnpm --filter @memory-lane/core test -- storage-facade.test.ts`, `pnpm --filter @memory-lane/cli test`, `pnpm test`, `git diff --check`, no-mistakes gates, GitHub CI, and CodeRabbit.
+- PR #91 merged as `2788c4e`; post-merge cleanup synced `main`, deleted local/remote `docs/v0.2.44-release-prep`, tagged `v0.2.44`, and release workflow `28628495514` passed. Installed dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, isolated CLI and MCP legacy diagnostics, dry-run migration preview, and non-dry-run migration refusal.
 - Slice B no-mistakes/PR validation before merge: Opus 4.8 implementation review found no blockers; no-mistakes review found and fixed secret-like keyword pre-normalization and fallback-count-after-trim issues; CodeRabbit inline keyword-limit feedback was fixed by applying the keyword item cap after normalization/deduplication; GitHub PR checks passed (`test` and CodeRabbit). PR #72 merged as `bc02d04`.
 - `v0.2.40` release workflow `28419273491` passed and published 8 assets; installed `memory-lane upgrade --yes` passed and reconfigured Pi.
 - Installed Slice B dogfood passed: exact human and JSON `show` exposed descriptor metadata, released `memory-lane codex session-start` rendered structured descriptor summaries plus fetch hints, full descriptor-card bodies stayed out of SessionStart, and generated fallback descriptors still worked. Validation: `docs/superpowers/validation/2026-06-30-session-start-descriptor-metadata-dogfood.md`.
@@ -106,7 +107,7 @@ After the release-prep PR merges, tag `v0.2.44`, wait for the release workflow, 
 - Project-local storage default design: `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`
 - Project-local storage Slice 1 approved implementation spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`
 - Project-local storage Slice 2a legacy diagnostics shipped spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`
-- v0.2.44 release prep validation draft: `docs/superpowers/validation/2026-07-02-v0.2.44-release-prep.md`
+- v0.2.44 release/dogfood validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`
 - Continuity routing/context hygiene release: PR #82 / `a808231`, shipped in `v0.2.43`
 - Retrieval currentness tie-break design: `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md`
 - Retrieval currentness tie-break validation: `docs/superpowers/validation/2026-06-30-retrieval-currentness-tie-break-validation.md`

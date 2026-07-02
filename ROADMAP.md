@@ -77,23 +77,22 @@ Slice plan:
 2. **Slice 1 - project-local default for new project-scoped writes.**
    Shipped in `v0.2.43` / PR #80.
    New project-scoped writes route project-side by default, global-scope preference/personal writes stay home-side, project/home reads merge with deterministic folding, existing ids mutate in their origin store, embeddings/compaction follow owning stores, and read-only CLI/MCP/plugin paths avoid fallback creation while respecting per-request project context.
-3. **Slice 2a - legacy project-memory diagnostics.** Merged in PR #89 as `96516ef`.
+3. **Slice 2a - legacy project-memory diagnostics.** Shipped in `v0.2.44` / PR #89.
    Legacy home-stored project memories for the active project are detected through bounded `status` / `doctor` diagnostics, and `memory-lane migrate project-local --dry-run` provides a mutation-free preview; silent move/delete/approve/consolidate remains out of scope.
 
-Current release state: Slice 0 is merged and released in `v0.2.42`; Slice 1 is merged and released in `v0.2.43` alongside continuity routing/context hygiene PR #82 (`a808231`); Slice 2a is merged on main in PR #89 as `96516ef` and awaits release/dogfood.
-Installed-artifact `v0.2.43` dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, route classification, and generated Pi bridge continuity smoke.
-Validation: `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
+Current release state: Slice 0 is merged and released in `v0.2.42`; Slice 1 is merged and released in `v0.2.43` alongside continuity routing/context hygiene PR #82 (`a808231`); Slice 2a is merged and released in `v0.2.44` from PR #89 (`96516ef`).
+Installed-artifact `v0.2.44` dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, CLI and MCP legacy diagnostics, dry-run migration preview, and non-dry-run migration refusal.
+Validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
 Fable 5 Waves 1-3 hardening merged in PR #85 as `6da6105`: config merge/backups, hook fail-safe initialization, bounded background embedding shutdown, invalid-row preserving compaction, stale embedding invalidation checks, provider timeout validation, MCP shutdown settling, and docs/status sync.
 Fable 5 Wave 4 maintainability/UX follow-through merged in PR #86 as `e2d4aec`: stale status docs were trued up, `.memory-lane-scope` is ignored by default, project-local docs clarify scope identity handling, and the Obsidian CLI command cluster was extracted without intended behavior changes.
 
-Slice 2a legacy project-memory diagnostics is complete on main.
+Slice 2a legacy project-memory diagnostics is complete, released in `v0.2.44`, and dogfooded from the installed artifact.
 Fable 5 reviewed the planning direction, full spec, and implementation.
 Approved Slice 2a spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`.
 Approved Slice 1 spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
+Release validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
 Confirmed migration and cross-store rescope moves remain deferred until a later design explicitly approves the mutation protocol.
-Current action: prepare `v0.2.44` release from `main` so Slice 2a is validated as an installed artifact.
-Release prep validation draft: `docs/superpowers/validation/2026-07-02-v0.2.44-release-prep.md`.
-After the release-prep PR merges, tag `v0.2.44`, wait for the release workflow, run installed-artifact dogfood, and record the results.
+Next recommended action: pause project-local storage migration mutation until a fresh design gate, then choose either a review-first migration protocol slice or a separate backlog item with clearer user pressure.
 
 Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in `v0.2.41`; pause retrieval-ranking work unless new dogfood/eval evidence justifies another proposal.
 
