@@ -174,6 +174,16 @@ test("continuity read model uses lower-ranked safe operating guidance for an are
 })
 
 
+test("continuity read model prefers correction guidance over newer generic procedure in the same area", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "procedure", text: "Procedure: review PR body formatting before merge.", kind: "procedure", updatedAt: "2026-06-25T16:00:00.000Z" }),
+    memory({ id: "correction", text: "Correction: when editing PR bodies, use a temp markdown body file.", kind: "correction", updatedAt: "2026-06-25T15:00:00.000Z" }),
+  ], { projectScopeKey: "project-a" })
+
+  assert.deepEqual(result.operatingGuidance?.map((item) => item.id), ["correction"])
+})
+
+
 test("continuity read model excludes superseded memories from selected slots", () => {
   const result = buildContinuityReadModel([
     memory({ id: "old-checkpoint", text: "Released v0.1.0 with old continuity.", kind: "project_checkpoint", updatedAt: "2026-06-20T10:00:00.000Z", revision: { supersededBy: "new-checkpoint", revisedAt: "2026-06-20T12:00:00.000Z", revisedBy: "manual" } }),

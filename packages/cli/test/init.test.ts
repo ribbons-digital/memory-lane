@@ -248,6 +248,8 @@ const args = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
 if (args[0] === "status") {
   console.log(JSON.stringify({ data: { contextPolicyMode: "policy-only", contextPolicyPromptMaxItems: 2 } }));
+} else if (args[0] === "route") {
+  console.log(JSON.stringify({ data: { route: { route: "continuity", confidence: 1, reasons: ["test"] } } }));
 } else if (args[0] === "continuity" || args[0] === "recall") {
   console.log(JSON.stringify({ data: { shouldNotBeRead: true } }));
 } else {
@@ -282,6 +284,98 @@ if (args[0] === "status") {
     const calls = fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
     assert.equal(calls.some((args) => args[0] === "continuity"), false)
     assert.equal(calls.some((args) => args[0] === "recall"), false)
+  })
+
+  it("generated pi CLI bridge uses generic policy-only guidance when route command fails", () => {
+    const nativeBinary = path.join(home, ".local/bin/memory-lane")
+    const logPath = path.join(home, "policy-only-route-fallback-calls.jsonl")
+    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
+    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
+if (args[0] === "status") {
+  console.log(JSON.stringify({ data: { contextPolicyMode: "policy-only", contextPolicyPromptMaxItems: 2 } }));
+} else if (args[0] === "route") {
+  process.exit(42);
+} else if (args[0] === "continuity" || args[0] === "recall") {
+  console.log(JSON.stringify({ data: { shouldNotBeRead: true } }));
+} else {
+  console.log(JSON.stringify({ data: {} }));
+}
+`, "utf8")
+    fs.chmodSync(nativeBinary, 0o755)
+
+    run(["init", "--yes", "--only", "pi"], { HOME: home, MEMORY_LANE_INSTALL_BINARY: nativeBinary })
+
+    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
+    const smoke = `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const result = await handlers.before_agent_start({ prompt: "What were we last working on?" }, { cwd: process.cwd() });
+      if (!result?.message?.content.includes("Memory Lane command guidance")) throw new Error("expected generic policy-only guidance");
+      if (result.message.content.includes("Memory Lane continuity guidance")) throw new Error("route failure should not use continuity guidance in policy-only mode");
+      if (result.message.content.includes("shouldNotBeRead")) throw new Error("policy-only route fallback leaked lookup body");
+    `
+    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
+      encoding: "utf8",
+      env: { ...process.env, PI_EXTENSION_FILE: piExt },
+    })
+
+    const calls = fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    assert.ok(calls.some((args) => args[0] === "route"))
+    assert.equal(calls.some((args) => args[0] === "continuity"), false)
+    assert.equal(calls.some((args) => args[0] === "recall"), false)
+  })
+
+  it("generated pi CLI bridge falls back when route command fails", () => {
+    const nativeBinary = path.join(home, ".local/bin/memory-lane")
+    const logPath = path.join(home, "route-fallback-calls.jsonl")
+    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
+    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
+if (args[0] === "status") {
+  console.log(JSON.stringify({ data: { contextPolicyMode: "selective", contextPolicyPromptMaxItems: 2, contextPolicyPromptMaxChars: 3000 } }));
+} else if (args[0] === "route") {
+  process.exit(42);
+} else if (args[0] === "continuity") {
+  console.log(JSON.stringify({ data: { latestProgress: { id: "fallback", preview: "Fallback continuity context." }, suggestedActions: ["memory-lane continuity --json"] } }));
+} else if (args[0] === "recall") {
+  console.log(JSON.stringify({ data: { memories: [{ id: "recall", text: "Recall fallback body." }] } }));
+} else {
+  console.log(JSON.stringify({ data: {} }));
+}
+`, "utf8")
+    fs.chmodSync(nativeBinary, 0o755)
+
+    run(["init", "--yes", "--only", "pi"], { HOME: home, MEMORY_LANE_INSTALL_BINARY: nativeBinary })
+
+    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
+    const smoke = `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const continuityResult = await handlers.before_agent_start({ prompt: "What were we last working on?" }, { cwd: process.cwd() });
+      if (!continuityResult?.message?.content.includes("Fallback continuity context")) throw new Error("expected continuity heuristic fallback");
+      const recallResult = await handlers.before_agent_start({ prompt: "explain the API docs" }, { cwd: process.cwd() });
+      if (!recallResult?.message?.content.includes("Recall fallback body")) throw new Error("expected ordinary recall fallback");
+    `
+    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
+      encoding: "utf8",
+      env: { ...process.env, PI_EXTENSION_FILE: piExt },
+    })
+
+    const calls = fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    assert.ok(calls.some((args) => args[0] === "route"))
+    assert.ok(calls.some((args) => args[0] === "continuity"))
+    assert.ok(calls.some((args) => args[0] === "recall"))
   })
 
   it("writes pi CLI bridge before_agent_start messages with Pi's custom message shape", () => {

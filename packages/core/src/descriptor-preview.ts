@@ -7,11 +7,17 @@ export interface DescriptorPreviewResult {
   truncated: boolean
 }
 
+export function formatPreviewText(text: string, maxChars: number): string {
+  const normalized = text.replace(/\s+/gu, " ").trim()
+  if (normalized.length <= maxChars) return normalized
+  if (maxChars <= 1) return "…"
+  return `${normalized.slice(0, maxChars - 1).trimEnd()}…`
+}
+
 function compactPreview(text: string, maxChars: number): { text: string; truncated: boolean } {
   const normalized = text.replace(/\s+/gu, " ").trim()
-  if (normalized.length <= maxChars) return { text: normalized, truncated: false }
-  if (maxChars <= 1) return { text: "…", truncated: true }
-  return { text: `${normalized.slice(0, maxChars - 1).trimEnd()}…`, truncated: true }
+  const formatted = formatPreviewText(text, maxChars)
+  return { text: formatted, truncated: formatted !== normalized }
 }
 
 export function hasSecretDescriptorMetadata(memory: MemoryRecord): boolean {

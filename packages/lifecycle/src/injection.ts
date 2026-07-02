@@ -491,16 +491,16 @@ function scoredBroadIntent(prompt: string): ContinuityIntent {
   let projectPositionScore = 0
 
   if (hasAny(tokens, ["next", "upcoming"])) { nextWorkScore += 2; reasons.push("next-token") }
-  if (hasAny(tokens, ["work", "working", "task", "item", "slice", "scope", "plan"])) { nextWorkScore += 1; reasons.push("work-item-token") }
+  if (hasAny(tokens, ["work", "working", "task", "item", "slice", "plan"])) { nextWorkScore += 1; reasons.push("work-item-token") }
   if (/\bshould\s+we\b/iu.test(normalized)) { nextWorkScore += 1; reasons.push("should-we") }
   if (/\bwhat\s+(?:is|s)\s+(?:the\s+)?(?:next|scope)\b/iu.test(normalized)) { nextWorkScore += 1; reasons.push("next-question") }
-  if (hasAny(tokens, ["scope"]) && hasAny(tokens, ["next", "item", "task", "work"])) { nextWorkScore += 1; reasons.push("scope-next-work") }
+  if (hasAny(tokens, ["scope"]) && hasAny(tokens, ["item", "task", "work"])) { nextWorkScore += 1; reasons.push("scope-next-work") }
 
   if (hasAny(tokens, ["status", "progress", "latest", "current", "where"])) { projectPositionScore += 2; reasons.push("status-token") }
   if (/\bleave\s+off\b|\bleft\s+off\b|\blast\s+working\b/iu.test(normalized)) { projectPositionScore += 3; reasons.push("leave-off") }
   if (/\bwhere\s+are\s+we\b/iu.test(normalized)) { projectPositionScore += 3; reasons.push("where-are-we") }
 
-  if (nextWorkScore >= 4 && nextWorkScore >= projectPositionScore) {
+  if (nextWorkScore >= 5 && nextWorkScore >= projectPositionScore) {
     return { detected: true, family: "next-work", confidence: Math.min(1, nextWorkScore / 6), reasons }
   }
   if (projectPositionScore >= 4) {

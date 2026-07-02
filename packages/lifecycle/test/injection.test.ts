@@ -222,6 +222,7 @@ test("classifyPromptRoute routes detected continuity intents to continuity", () 
 test("classifyPromptRoute preserves low-signal and ordinary routing", () => {
   assert.equal(classifyPromptRoute("hi").route, "low-signal")
   assert.equal(classifyPromptRoute("How do I run tests?").route, "ordinary")
+  assert.equal(classifyPromptRoute("what is the next scope for the API docs?").route, "ordinary")
 })
 
 test("renders text-free continuity intent guidance", () => {

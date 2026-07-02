@@ -475,8 +475,12 @@ function handleContinuity(ctx: CliContext): void {
 }
 
 function handleRoute(ctx: CliContext): void {
-  const prompt = flag(ctx.argv, "prompt") ?? ctx.rest.join(" ")
-  if (!prompt || prompt === "true") throw new Error("Missing prompt. Usage: memory-lane route --prompt <prompt>")
+  const promptFlag = flag(ctx.argv, "prompt")
+  const hasPromptFlag = hasFlag(ctx.argv, "prompt")
+  const prompt = hasPromptFlag ? promptFlag : ctx.rest.join(" ")
+  const promptIndex = ctx.argv.indexOf("--prompt")
+  const promptValueMissing = hasPromptFlag && (promptIndex === ctx.argv.length - 1 || ctx.argv[promptIndex + 1]?.startsWith("--"))
+  if (!prompt || promptValueMissing) throw new Error("Missing prompt. Usage: memory-lane route --prompt <prompt>")
   const route = classifyPromptRoute(prompt)
   if (ctx.json) {
     console.log(formatResult("route", route, true))

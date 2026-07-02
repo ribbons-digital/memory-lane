@@ -96,7 +96,7 @@ function isPendingContinuity(memory: MemoryRecord): boolean {
 }
 
 function operatingGuidanceRank(memory: MemoryRecord, projectScopeKey?: string): number {
-  const explicitKindRank = memory.kind === "workflow_rule" ? 0 : 1
+  const explicitKindRank = memory.kind === "workflow_rule" ? 0 : memory.kind === "correction" ? 1 : 2
   const scopeRank = projectScoped(memory, projectScopeKey) ? 0 : memory.scope.type === "project" ? 1 : 2
   return explicitKindRank * 10 + scopeRank
 }

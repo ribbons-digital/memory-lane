@@ -1321,6 +1321,14 @@ describe("CLI integration", () => {
     assert.equal(parsed.data.route.intent.family, "next-work")
   })
 
+  it("route --json accepts literal true as prompt value", () => {
+    const output = runProcess(["route", "--prompt", "true", "--json"])
+    assert.equal(output.status, 0, output.stderr)
+    const parsed = JSON.parse(output.stdout)
+    assert.equal(parsed.ok, true)
+    assert.equal(parsed.data.route.route, "ordinary")
+  })
+
   it("continuity --json returns canonical continuity state", () => {
     const dir = tempDir()
     const project = path.join(dir, "project")
