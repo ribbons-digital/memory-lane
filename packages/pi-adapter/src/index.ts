@@ -1,5 +1,5 @@
 import { Type } from "typebox"
-import { createOpenAICompatibleProvider, detectContinuityIntent, handlePostToolUse, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy } from "@memory-lane/lifecycle"
+import { classifyPromptRoute, createOpenAICompatibleProvider, handlePostToolUse, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy } from "@memory-lane/lifecycle"
 import type { PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
 import {
   MemoryEngine, createSingleStoreEngineStorage, createTwoTierEngineStorage, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableEngineStoragePaths, type SaveResult,
@@ -153,10 +153,9 @@ function renderPiContinuityContext(model: any): string {
   ]
 
   const latestProgress = model?.latestProgress
-  if (latestProgress) lines.push("", `Latest project progress: [${latestProgress.id}] ${latestProgress.preview}`)
-
   const latestProject = model?.latestApproved?.project
-  if (latestProject) lines.push("", `Latest approved project continuity: [${latestProject.id}] ${latestProject.preview}`)
+  if (latestProgress) lines.push("", `Latest project progress: [${latestProgress.id}] ${latestProgress.preview}`)
+  if (latestProject && latestProject.id !== latestProgress?.id) lines.push("", `Latest approved project continuity: [${latestProject.id}] ${latestProject.preview}`)
 
   const operatingGuidance = model?.operatingGuidance ?? []
   if (operatingGuidance.length) {
@@ -525,8 +524,8 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     try {
       const e = getEngine(ctx.cwd)
       const policy = resolveContextPolicy(e.getContextPolicy())
-      const continuityIntent = detectContinuityIntent(prompt)
-      if (continuityIntent.detected && policy.mode === "selective") {
+      const routeDecision = classifyPromptRoute(prompt)
+      if (routeDecision.route === "continuity" && policy.mode === "selective") {
         e.refreshScope(ctx.cwd)
         const continuity = e.continuity({ caller: "lifecycle", query: prompt })
         return { message: memoryLaneContextMessage(renderPiContinuityContext(continuity), { surface: "continuity" }) }

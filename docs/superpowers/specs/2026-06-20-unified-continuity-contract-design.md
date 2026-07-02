@@ -203,12 +203,17 @@ The human formatter must not dump long memory bodies.
 ## MCP behavior
 
 Add MCP tool `memory_continuity` with optional `projectPath`.
+Later workstream-discovery and routing-hygiene slices also added optional `query` for read-only workstream pointers and sharpened the tool description for broad prior-work, next-action, project-status, resume, and handoff-style prompts.
 
 Tool description should be explicit:
 
-> Use this for project continuity, resumption, “last worked on,” “what was accomplished,” and “what is next” questions. Prefer this over `memory_recall` for continuity questions. Pass `projectPath` for project-scoped results in desktop MCP clients.
+> Use this for broad prior-work, project continuity, resumption, “last worked on,” “what was accomplished,” “what is next,” project-status, resume, and handoff-style questions.
+> Use this before `memory_recall` for continuity questions.
+> Pass `projectPath` for project-scoped results in desktop MCP clients.
+> Pass `query` for read-only workstream discovery pointers.
 
-MCP output should use the same core shape as CLI. It may include a note that MCP provides explicit tools only and does not run lifecycle hooks.
+MCP output should use the same core shape as CLI.
+It may include a note that MCP provides explicit tools only and does not run lifecycle hooks.
 
 ## Lifecycle guidance alignment
 

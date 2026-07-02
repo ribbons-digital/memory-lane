@@ -2,7 +2,7 @@
 
 ## Current state
 
-- Branch context: `main` is synced through `a87eff5 feat(core): default project memories to local storage (#80)`.
+- Branch context: active implementation branch `feat/continuity-routing-hygiene` branched from `main` synced through `92627bf docs: sync status after project-local slice 1 (#81)`.
 - Latest release: `v0.2.42` at tag `v0.2.42` / commit `cd1a839`; release workflow `28484161404` passed and published 8 assets. PR #80 is merged on `main` but not yet released.
 - Phase 21 `Handoff-Free Sessions` is complete and dogfooded. Fresh-thread prompt `where are we in the project and what should we work on next?` used about 11.8% context, improved from the previous 14.x% range.
 - Docs/context-budget slice is merged: root `ROADMAP.md` is now a compact active index, historical roadmap detail through Phase 20.5 is archived, `HANDOFF.md` is a status card, and Memory Lane skill guidance emphasizes bounded reads.
@@ -32,7 +32,9 @@ Slice 1 project-local default writes merged in PR #80 as `a87eff5` and is on `ma
 Spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
 Shipped on main: default two-tier engine storage, new project-scoped writes route to project-local storage when project scope is known and no explicit `MEMORY_LANE_*` paths override storage, global-scope preference/personal writes stay home-side, reads merge home plus active project stores, existing ids route by origin store, embeddings route to owning store, active project stores compact, CLI/MCP/pi engine construction use the two-tier resolver, read-only inspection paths avoid fallback creation, MCP per-call `projectPath` retargets storage, plugin engine resolution uses active MCP project context, and storage/CLI/MCP/plugin tests cover the behavior.
 
-Next recommended slice: Slice 2 migration/compatibility diagnostics. It needs a fresh design and approval gate before implementation. Target behavior: detect legacy home-stored project memories, surface bounded diagnostics/warnings, and provide explicit dry-run migration without silent moves/deletes/approvals/consolidation.
+Active implementation slice: continuity routing and continuity context hygiene. User-approved scope: harness-neutral deterministic routing for natural broad next-work/status prompts across Claude/Codex hooks, repo-local Pi, generated Pi bridge route-decision parity, continuity read-model/rendering cleanup, MCP tool-description steering, and a roadmap/backlog note for a future Memory-Lane-configured harness-agnostic LLM classifier. No classifier behavior in this slice.
+
+Next recommended slice after this work lands remains Slice 2 migration/compatibility diagnostics unless release/dogfood evidence changes priorities. Target behavior: detect legacy home-stored project memories, surface bounded diagnostics/warnings, and provide explicit dry-run migration without silent moves/deletes/approvals/consolidation.
 
 ## Load-bearing constraints
 

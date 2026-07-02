@@ -169,7 +169,7 @@ Keep it below core metadata and above the full memory body, or whichever existin
 
 ### List / review / dashboard / continuity
 
-Do not add descriptor text to broad human list/review/dashboard/continuity surfaces in Slice B. These surfaces are intentionally compact and should not grow because descriptors exist.
+Do not add descriptor text to broad human list/review/dashboard surfaces in Slice B. These surfaces are intentionally compact and should not grow because descriptors exist. A later continuity-routing hygiene slice intentionally allows bounded continuity selected previews to prefer safe descriptor metadata through the shared descriptor-preview helper, while still omitting secret-looking descriptor metadata and keeping exact inspection as the full-fidelity surface.
 
 ## Storage and compatibility
 
@@ -220,7 +220,7 @@ git diff --check
 - **Descriptors become another dumping channel:** Enforce strict char/item bounds and secret checks.
 - **CLI scope creep:** Keep descriptor authoring out of CLI unless the implementation stays small; exact JSON/human show is enough for Slice B's first vertical slice.
 - **Stale descriptors after updates/replacements:** Require explicit descriptor updates; do not auto-copy descriptors to replacement successors.
-- **Broad surfaces become noisy:** Do not add descriptor text to list/review/dashboard/continuity in Slice B.
+- **Broad surfaces become noisy:** Do not add descriptor text to list/review/dashboard in Slice B. Later bounded continuity previews may prefer safe descriptor metadata, but exact show/get remains the full-fidelity descriptor inspection surface.
 
 ## Open decisions
 

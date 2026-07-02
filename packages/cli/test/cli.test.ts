@@ -1312,6 +1312,23 @@ describe("CLI integration", () => {
     assert.ok(payload.data.suggestedActions.includes("memory-lane review"))
   })
 
+  it("route --json classifies broad next-work prompts", () => {
+    const output = runProcess(["route", "--prompt", "what's the next item we should work on and what's its scope?", "--json"])
+    assert.equal(output.status, 0, output.stderr)
+    const parsed = JSON.parse(output.stdout)
+    assert.equal(parsed.ok, true)
+    assert.equal(parsed.data.route.route, "continuity")
+    assert.equal(parsed.data.route.intent.family, "next-work")
+  })
+
+  it("route --json accepts literal true as prompt value", () => {
+    const output = runProcess(["route", "--prompt", "true", "--json"])
+    assert.equal(output.status, 0, output.stderr)
+    const parsed = JSON.parse(output.stdout)
+    assert.equal(parsed.ok, true)
+    assert.equal(parsed.data.route.route, "ordinary")
+  })
+
   it("continuity --json returns canonical continuity state", () => {
     const dir = tempDir()
     const project = path.join(dir, "project")

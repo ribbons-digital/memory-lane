@@ -122,7 +122,7 @@ For isolated testing, prefer absolute temp paths in hook commands, for example `
 
 `SessionStart` injects compact session-opening context when a new Claude Code session begins. In `selective` mode, it can include tiny always-on memory bodies plus `Memory Index` descriptor cards that point to exact `memory-lane show|get <id>` inspection; descriptor cards use stored metadata when present and generated previews otherwise. It uses a stricter budget than `UserPromptSubmit` and does not dump the full project history. It is safe to leave enabled alongside `UserPromptSubmit`.
 
-`UserPromptSubmit` recalls relevant approved memories and injects them via `hookSpecificOutput.additionalContext` before Claude processes the prompt.
+`UserPromptSubmit` uses the shared prompt route decision before Claude processes the prompt. Low-signal prompts inject nothing, memory-management prompts get list/status/review guidance, broad project-position or next-work prompts get continuity guidance without ordinary recall bodies, and eligible ordinary or topic-specific prompts can receive relevant approved memories via `hookSpecificOutput.additionalContext`.
 
 `Stop` does not inject context. It can save durable turn-level memories after Claude finishes responding.
 

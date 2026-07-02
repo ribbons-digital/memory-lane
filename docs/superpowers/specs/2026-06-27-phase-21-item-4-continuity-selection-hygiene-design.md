@@ -86,7 +86,7 @@ Run targeted core tests first, then broader verification.
 - No retrieval rewrite, embeddings/RRF, or query reranking overhaul.
 - No schema changes.
 - No memory mutation, deletion, cleanup, approval, or auto-consolidation.
-- No lifecycle injection changes.
-- No generated adapter changes.
+- No lifecycle injection changes for Item 4's core continuity-selection fix. A later continuity-routing hygiene slice intentionally changed lifecycle prompt routing and generated Pi bridge routing to share `memory-lane route --prompt <text> --json` decisions.
+- No generated adapter changes for Item 4's core continuity-selection fix.
 - No token budget retuning.
 - No persisted workstream IDs.

@@ -112,7 +112,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
     "memory_recall",
     {
       title: "Recall Memories",
-      description: "Recall Memory Lane memories relevant to a query.",
+      description: "Recall Memory Lane memories relevant to a specific topic or fact query. For broad prior-work, next-action, project-status, resume, or handoff-style prompts, use memory_continuity before memory_recall.",
       inputSchema: {
         query: z.string().optional(),
         projectPath,
@@ -181,7 +181,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
     "memory_continuity",
     {
       title: "Memory Lane Continuity",
-      description: "Canonical continuity read model for project resumption, last-worked-on, accomplished, next-action, and project-status questions. Prefer this over memory_recall for continuity questions. Pass projectPath for project-scoped results in desktop MCP clients. Pass query for read-only workstream discovery pointers.",
+      description: "Canonical continuity read model for broad prior-work, project resumption, last-worked-on, accomplished, next-action, project-status, resume, and handoff-style questions. Use this before memory_recall for continuity questions. Pass projectPath for project-scoped results in desktop MCP clients. Pass query for read-only workstream discovery pointers.",
       inputSchema: { projectPath, query: continuityQuery },
     },
     async (input) => handleMemoryContinuity(engineForProjectPath(input.projectPath, { writable: false }), input),

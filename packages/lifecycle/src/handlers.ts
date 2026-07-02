@@ -1,5 +1,5 @@
 import type { MemoryEngine, MemoryProvenance, MemorySource, SaveResult } from "@memory-lane/core"
-import { analyzeAutomaticHandoff, detectContinuityIntent, isAlwaysOnMemory, isMemoryManagementListIntent, isUnsafeAutomaticHandoffPointer, limitsFromContextPolicy, renderContinuityIntentGuidance, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, renderSessionStartMemoryContext, resolveContextPolicy, selectAlwaysOnMemories, selectDescriptorMemories, selectMemoriesForInjection, shouldSkipAutomaticInjection, SESSION_START_DESCRIPTOR_MAX_CHARS, SESSION_START_DESCRIPTOR_MAX_ITEMS, type AutomaticHandoffAnalysis, type MemoryInjectionLimits } from "./injection.js"
+import { analyzeAutomaticHandoff, classifyPromptRoute, isAlwaysOnMemory, isUnsafeAutomaticHandoffPointer, limitsFromContextPolicy, renderContinuityIntentGuidance, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, renderSessionStartMemoryContext, resolveContextPolicy, selectAlwaysOnMemories, selectDescriptorMemories, selectMemoriesForInjection, SESSION_START_DESCRIPTOR_MAX_CHARS, SESSION_START_DESCRIPTOR_MAX_ITEMS, type AutomaticHandoffAnalysis, type ContinuityIntent, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
 import { checkpointKeyFromText, extractCheckpointCandidatesFromPostToolUse, extractCheckpointCandidatesFromStop, filterDuplicateCheckpointCandidates } from "./checkpoint-capture.js"
 import { correctionKeyFromText, extractCorrectionCandidatesFromStop, filterDuplicateCorrectionCandidates, filterSameTurnCorrectionCandidates } from "./correction-capture.js"
@@ -72,12 +72,14 @@ function continuityDecision(notice: ReturnType<typeof renderContinuityNotice>): 
   return decision
 }
 
-function promptContinuityDecision(intent: ReturnType<typeof detectContinuityIntent>, guidanceInjected: boolean): MemoryContextDecision["continuityIntent"] {
+function promptContinuityDecision(intent: ContinuityIntent, guidanceInjected: boolean): MemoryContextDecision["continuityIntent"] {
   if (!intent.detected) return undefined
   return {
     detected: true,
     family: intent.family,
     ...(intent.topic ? { topic: intent.topic } : {}),
+    ...(intent.confidence !== undefined ? { confidence: intent.confidence } : {}),
+    ...(intent.reasons?.length ? { reasons: intent.reasons } : {}),
     guidanceInjected,
   }
 }
@@ -178,13 +180,14 @@ export async function handleUserPromptSubmit(
   options?: Partial<MemoryInjectionLimits>,
 ): Promise<LifecycleResult> {
   engine.refreshScope(input.cwd)
-  if (isMemoryManagementListIntent(input.prompt)) return createResult(renderMemoryManagementListGuidance())
+  const routeDecision = classifyPromptRoute(input.prompt)
+  if (routeDecision.route === "memory-management") return createResult(renderMemoryManagementListGuidance())
   const policy = resolveContextPolicy(engine.getContextPolicy())
   const budget = contextBudget("prompt", policy)
   if (policy.mode === "off") return createResult(undefined, contextDecision({ event: "prompt", mode: policy.mode, ...budget, selected: 0, omitted: 0, omittedReasons: ["off"] }))
-  if (shouldSkipAutomaticInjection(input.prompt)) return createResult(undefined, contextDecision({ event: "prompt", mode: policy.mode, ...budget, selected: 0, omitted: 0, omittedReasons: ["low-signal-prompt"] }))
+  if (routeDecision.route === "low-signal") return createResult(undefined, contextDecision({ event: "prompt", mode: policy.mode, ...budget, selected: 0, omitted: 0, omittedReasons: ["low-signal-prompt"] }))
 
-  const intent = detectContinuityIntent(input.prompt)
+  const intent = routeDecision.intent
   const guidance = renderContinuityIntentGuidance(intent)
   const continuityIntent = promptContinuityDecision(intent, Boolean(guidance))
 
@@ -202,7 +205,7 @@ export async function handleUserPromptSubmit(
     }))
   }
 
-  if (intent.detected && (intent.family === "project-position" || intent.family === "next-work")) {
+  if (routeDecision.route === "continuity" && intent.detected && (intent.family === "project-position" || intent.family === "next-work")) {
     const rendered = composePromptContext({ guidance, memoryContext: "", policy })
     return createResult(rendered || undefined, contextDecision({
       event: "prompt",

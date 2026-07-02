@@ -181,7 +181,7 @@ test("registers status review-complete and continuity tools on the MCP server", 
   ])
 
   const continuityTool = registeredTool(server, "memory_continuity")
-  assert.match(continuityTool.description, /Prefer this over memory_recall for continuity questions/u)
+  assert.match(continuityTool.description, /Use this before memory_recall for continuity questions/u)
   assert.match(continuityTool.description, /Pass projectPath/u)
 })
 

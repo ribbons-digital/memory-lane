@@ -550,7 +550,7 @@ test("retrieval/continuity eval fixtures exercise intended continuity slots", ()
 
   const broadModel = buildContinuityReadModel(corpus.records, { projectScopeKey: PROJECT_SCOPE_KEY, query: broadStatus.query, generatedAt: GENERATED_AT })
   assert.equal(broadModel.latestProgress?.id, "eval-current-track")
-  assert.equal(broadModel.operatingGuidance?.some((item) => item.id === "eval-pr-body-rule"), true)
+  assert.equal(broadModel.operatingGuidance?.some((item) => item.id === "eval-pr-body-rule"), false)
   assert.equal(broadModel.operatingGuidance?.some((item) => item.id === "eval-pr-process-agreement"), true)
 
   const nextModel = buildContinuityReadModel(corpus.records, { projectScopeKey: PROJECT_SCOPE_KEY, query: nextWork.query, generatedAt: GENERATED_AT })

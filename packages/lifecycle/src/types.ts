@@ -50,6 +50,8 @@ export interface PromptContinuityIntentDecision {
   detected: boolean
   family?: "resume" | "lookup" | "project-position" | "next-work"
   topic?: string
+  confidence?: number
+  reasons?: string[]
   guidanceInjected: boolean
 }
 

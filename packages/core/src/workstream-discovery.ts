@@ -1,3 +1,4 @@
+import { formatPreviewText } from "./descriptor-preview.js"
 import { containsLikelySecret } from "./secret-detection.js"
 import type {
   MemoryKind,
@@ -41,10 +42,7 @@ export interface WorkstreamDiscoveryOptions {
 }
 
 function compactPreview(text: string, maxChars: number): string {
-  const normalized = text.replace(/\s+/gu, " ").trim()
-  if (normalized.length <= maxChars) return normalized
-  if (maxChars <= 1) return "…"
-  return `${normalized.slice(0, maxChars - 1).trimEnd()}…`
+  return formatPreviewText(text, maxChars)
 }
 
 function unique(values: string[]): string[] {

@@ -1,11 +1,11 @@
 import { classifyCheckpointCandidate } from "./checkpoint-candidates.js"
-import { containsLikelySecret } from "./secret-detection.js"
 import { buildContinuityHints } from "./continuity-hints.js"
 import { classifyContinuityRole } from "./continuity-roles.js"
 import { buildFreshnessStatus } from "./freshness.js"
 import { discoverWorkstreams } from "./workstream-discovery.js"
 import { isDumpLikeMemoryBody } from "./dump-like-memory.js"
-import { selectOperatingAgreements, summarizeOperatingAgreements } from "./operating-agreements.js"
+import { memoryDescriptorPreview } from "./descriptor-preview.js"
+import { classifyWorkflowArea, selectOperatingAgreements, summarizeOperatingAgreements } from "./operating-agreements.js"
 import type {
   ContinuityMemoryPreview,
   ContinuityReadModel,
@@ -15,6 +15,7 @@ import type {
   HandoffProposal,
   MemoryKind,
   MemoryRecord,
+  WorkflowArea,
 } from "./types.js"
 
 const DEFAULT_PREVIEW_MAX_CHARS = 240
@@ -52,17 +53,10 @@ function projectScoped(memory: MemoryRecord, projectScopeKey?: string): boolean 
   return Boolean(projectScopeKey) && memory.scope.type === "project" && memory.scope.key === projectScopeKey
 }
 
-function compactPreview(text: string, maxChars: number): { text: string; truncated: boolean } {
-  const normalized = text.replace(/\s+/gu, " ").trim()
-  if (normalized.length <= maxChars) return { text: normalized, truncated: false }
-  if (maxChars <= 1) return { text: "…", truncated: true }
-  return { text: `${normalized.slice(0, maxChars - 1).trimEnd()}…`, truncated: true }
-}
-
 function preview(memory: MemoryRecord, maxChars: number): ContinuityMemoryPreview | undefined {
-  if (containsLikelySecret(memory.text)) return undefined
   const checkpointCandidate = classifyCheckpointCandidate(memory)
-  const compact = compactPreview(memory.text, maxChars)
+  const compact = memoryDescriptorPreview(memory, maxChars)
+  if (!compact) return undefined
   return {
     id: memory.id,
     status: memory.status as "approved" | "pending",
@@ -83,6 +77,10 @@ function compareNewest(a: MemoryRecord, b: MemoryRecord): number {
   return b.updatedAt.localeCompare(a.updatedAt) || b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id)
 }
 
+function isSuperseded(memory: MemoryRecord): boolean {
+  return Boolean(memory.revision?.supersededBy)
+}
+
 function compareApprovedProject(a: MemoryRecord, b: MemoryRecord): number {
   const priorityA = a.kind ? PROJECT_KIND_PRIORITY.get(a.kind) ?? 99 : 99
   const priorityB = b.kind ? PROJECT_KIND_PRIORITY.get(b.kind) ?? 99 : 99
@@ -95,6 +93,30 @@ function isPendingContinuity(memory: MemoryRecord): boolean {
   if (memory.status !== "pending") return false
   if (memory.kind === "project_checkpoint" || memory.kind === "session_summary" || memory.kind === "correction" || memory.kind === "procedure") return true
   return Boolean(classifyCheckpointCandidate(memory))
+}
+
+function operatingGuidanceRank(memory: MemoryRecord, projectScopeKey?: string): number {
+  const explicitKindRank = memory.kind === "workflow_rule" ? 0 : memory.kind === "correction" ? 1 : 2
+  const scopeRank = projectScoped(memory, projectScopeKey) ? 0 : memory.scope.type === "project" ? 1 : 2
+  return explicitKindRank * 10 + scopeRank
+}
+
+function compareOperatingGuidance(a: MemoryRecord, b: MemoryRecord, projectScopeKey?: string): number {
+  return operatingGuidanceRank(a, projectScopeKey) - operatingGuidanceRank(b, projectScopeKey)
+    || b.updatedAt.localeCompare(a.updatedAt)
+    || b.createdAt.localeCompare(a.createdAt)
+    || a.id.localeCompare(b.id)
+}
+
+function selectOperatingGuidancePreviews(memories: MemoryRecord[], projectScopeKey: string | undefined, maxChars: number): ContinuityMemoryPreview[] {
+  const byArea = new Map<WorkflowArea, ContinuityMemoryPreview>()
+  for (const memory of [...memories].sort((a, b) => compareOperatingGuidance(a, b, projectScopeKey))) {
+    const area = classifyWorkflowArea(memory.text)
+    if (byArea.has(area)) continue
+    const item = preview(memory, maxChars)
+    if (item) byArea.set(area, item)
+  }
+  return [...byArea.values()].slice(0, DEFAULT_MAX_OPERATING_GUIDANCE)
 }
 
 function isWorkflowRelevantGlobal(memory: MemoryRecord): boolean {
@@ -191,21 +213,21 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
   const previewMaxChars = options.previewMaxChars ?? DEFAULT_PREVIEW_MAX_CHARS
   const maxPendingContinuity = options.maxPendingContinuity ?? DEFAULT_MAX_PENDING_CONTINUITY
   const visibleApproved = memories.filter((memory) => memory.status === "approved" && visibleInProject(memory, projectScope))
-  const approvedProject = visibleApproved
+  const activeVisibleApproved = visibleApproved.filter((memory) => !isSuperseded(memory))
+  const approvedProject = activeVisibleApproved
     .filter((memory) => projectScoped(memory, projectScope) && (!memory.kind || CONTINUITY_KINDS.has(memory.kind)))
     .sort(compareApprovedProject)
-  const approvedGlobal = visibleApproved
+  const approvedGlobal = activeVisibleApproved
     .filter((memory) => isWorkflowRelevantGlobal(memory))
     .sort(compareNewest)
   const latestProgressCandidates = approvedProject
     .filter((memory) => classifyContinuityRole(memory) === "progress")
     .sort(compareApprovedProject)
-  const operatingGuidanceCandidates = visibleApproved
+  const operatingGuidanceCandidates = activeVisibleApproved
     .filter((memory) => {
       const role = classifyContinuityRole(memory)
       return role === "correction" || role === "procedure" || role === "operating_agreement" || role === "global_workflow"
     })
-    .sort(compareNewest)
   const pendingReview = memories.filter((memory) => memory.status === "pending" && visibleInProject(memory, projectScope))
   const pendingContinuityCandidates = pendingReview
     .filter((memory) => projectScoped(memory, projectScope) && isPendingContinuity(memory))
@@ -226,17 +248,14 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
   const operatingAgreements = summarizeOperatingAgreements(selectOperatingAgreements(memories, { projectScopeKey: projectScope }))
   const latestProject = approvedProject.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
   const latestProgress = latestProgressCandidates.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
-  const operatingGuidance = operatingGuidanceCandidates
-    .map((memory) => preview(memory, previewMaxChars))
-    .filter((item): item is ContinuityMemoryPreview => Boolean(item))
-    .slice(0, DEFAULT_MAX_OPERATING_GUIDANCE)
+  const operatingGuidance = selectOperatingGuidancePreviews(operatingGuidanceCandidates, projectScope, previewMaxChars)
   const truncatedOperatingGuidanceIds = operatingGuidance.filter((item) => item.truncated).map((item) => item.id)
   const latestGlobal = approvedGlobal.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
   const hintCodes = new Set(continuityHints.hints.map((hint) => hint.code))
   const warnings = buildWarnings({ projectScope, latestProject, pendingContinuityCandidates, hintCodes, caller: options.caller })
   const discoveryQuery = options.query?.trim()
   const workstreamDiscovery = discoveryQuery
-    ? discoverWorkstreams(memories, { projectScopeKey: projectScope, query: discoveryQuery, previewMaxChars })
+    ? discoverWorkstreams(activeVisibleApproved, { projectScopeKey: projectScope, query: discoveryQuery, previewMaxChars })
     : undefined
 
   const suggestedActions = unique([

@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises"
 import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type WorkflowArea } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
-import { handleSessionEnd, createOpenAICompatibleProvider } from "@memory-lane/lifecycle"
+import { classifyPromptRoute, handleSessionEnd, createOpenAICompatibleProvider } from "@memory-lane/lifecycle"
 import { handleMcp } from "./commands/mcp.js"
 import { handleInit } from "./commands/init.js"
 import { handleUninstall } from "./commands/uninstall.js"
@@ -474,6 +474,21 @@ function handleContinuity(ctx: CliContext): void {
   console.log(formatContinuityReadModel(ctx.engine.continuity({ caller: "cli", query }), ctx.json, { projectScope: ctx.engine.getProjectScope()?.key ?? "none" }))
 }
 
+function handleRoute(ctx: CliContext): void {
+  const promptFlag = flag(ctx.argv, "prompt")
+  const hasPromptFlag = hasFlag(ctx.argv, "prompt")
+  const prompt = hasPromptFlag ? promptFlag : ctx.rest.join(" ")
+  const promptIndex = ctx.argv.indexOf("--prompt")
+  const promptValueMissing = hasPromptFlag && (promptIndex === ctx.argv.length - 1 || ctx.argv[promptIndex + 1]?.startsWith("--"))
+  if (!prompt || promptValueMissing) throw new Error("Missing prompt. Usage: memory-lane route --prompt <prompt>")
+  const route = classifyPromptRoute(prompt)
+  if (ctx.json) {
+    console.log(formatResult("route", route, true))
+    return
+  }
+  console.log(`route: ${route.route}\nconfidence: ${route.confidence}\nreasons: ${route.reasons.join(", ") || "none"}`)
+}
+
 function handleCompact(ctx: CliContext): void {
   console.log(formatCompact(ctx.engine.compact(), ctx.json))
 }
@@ -930,7 +945,7 @@ async function handleClaude(ctx: CliContext): Promise<void> {
 type CommandHandler = (ctx: CliContext) => void | Promise<void>
 
 // These inspection commands must work in read-only desktop/client sandboxes without home-storage write probes.
-const readOnlyStorageCommands = new Set(["recall", "list", "search", "review", "dashboard", "agreements", "continuity", "doctor", "status", "show", "get", "mcp"])
+const readOnlyStorageCommands = new Set(["recall", "list", "search", "review", "dashboard", "agreements", "continuity", "route", "doctor", "status", "show", "get", "mcp"])
 const readOnlyStorageSubcommands: Record<string, Set<string | undefined>> = {
   config: new Set([undefined, "show"]),
   obsidian: new Set([undefined, "status"]),
@@ -963,6 +978,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   dashboard: handleDashboard,
   agreements: handleAgreements,
   continuity: handleContinuity,
+  route: handleRoute,
   compact: handleCompact,
   doctor: handleDoctor,
   status: handleStatus,

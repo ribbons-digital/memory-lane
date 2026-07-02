@@ -12,7 +12,7 @@ Local-first persistent memory system with semantic retrieval for coding agents.
 - **User explicitly asks you to remember something** → use `memory_save` tool
 - **You proactively identify something worth remembering** → use `memory_suggest` tool (user reviews later)
 - **You need a targeted approved fact, preference, or project memory** → use `memory_recall` tool
-- **User asks broad continuity questions like "what were we working on?", "where are we?", or "what should we do next?"** → use `memory_continuity` (MCP) or `memory-lane continuity --query "..." --json` (CLI) before falling back to recall/roadmap inspection
+- **User asks broad continuity questions like "what were we working on?", "where are we?", or "what should we do next?"** → use `memory_continuity` (MCP) or `memory-lane continuity --json` (CLI) before falling back to recall/roadmap inspection
 
 ## Project Docs Sync Rule
 
@@ -52,7 +52,7 @@ memory-lane replace <old-id> --text "new successor memory" --kind workflow_rule
 memory-lane supersede <new-id> <old-id> --reason "newer version"
 ```
 
-`update` keeps the same memory id. `replace` creates a new successor memory. `supersede` links an existing approved successor to approved old memories. Use `--dry-run` to preview revision commands before writing relationship changes. Use `--yes` for multi-old `replace` or `supersede`. Do not assume superseded memories are hidden from recall/context yet; Slice 3 records relationships only. MCP mutation tools are not available for these revision operations yet.
+`update` keeps the same memory id. `replace` creates a new successor memory. `supersede` links an existing approved successor to approved old memories. Use `--dry-run` to preview revision commands before writing relationship changes. Use `--yes` for multi-old `replace` or `supersede`. Active continuity slots and workstream discovery omit superseded records, but list/show/recall can still expose them for explicit inspection. MCP mutation tools are not available for these revision operations yet.
 
 ### Recall (semantic + lexical search of approved memories)
 
@@ -68,12 +68,13 @@ memory-lane recall "preferred release workflow"
 Use continuity first for broad handoff-style questions such as "what were we last working on?", "where are we?", "resume this thread", or "what should we work on next?".
 
 ```bash
-memory-lane continuity --query "what were we last working on?" --json
+memory-lane continuity --json
+memory-lane continuity --query "resume building package manager" --json
 ```
 
-MCP-capable harnesses should call `memory_continuity({ projectPath, query })`. CLI-only harnesses may use the command above; correct continuity behavior does not require direct MCP usage.
+MCP-capable harnesses should call `memory_continuity({ projectPath })` for broad status prompts, or include `query` for topic-specific workstream discovery. CLI-only harnesses may use the command above; correct continuity behavior does not require direct MCP usage.
 
-When present, prefer `latestProgress` for broad “last worked on / where are we” answers. Treat `latestApproved.project` as a legacy compatibility slot that may still contain corrections/procedures, and apply bounded `operatingGuidance` as workflow guidance rather than as the main progress answer.
+When present, prefer `latestProgress` for broad “last worked on / where are we” answers. Treat `latestApproved.project` as a legacy compatibility slot that may still contain corrections/procedures, and apply bounded `operatingGuidance` as workflow guidance rather than as the main progress answer. Active selected slots use non-superseded approved memories, collapse operating guidance to one preview per workflow area, and prefer safe descriptor metadata for previews when available.
 
 ### Operating agreements
 
@@ -88,7 +89,7 @@ The command returns approved operating agreement text for the current project pl
 
 ### Continuity hints
 
-Use `memory-lane dashboard` for a compact human overview of continuity hints. Use `memory-lane status --json`, `memory-lane doctor --json`, or MCP `memory_status` when an agent needs text-free metadata about possible stale or overlapping continuity state. For natural-language workstream discovery such as "resume this thread" or "find where X was implemented", use existing continuity surfaces with a query: `memory-lane continuity --query "..." --json` or MCP `memory_continuity({ projectPath, query: "..." })`. Discovery is read-only and pointer-based; do not assume it cleaned up, hid, deprioritized, or mutated any memory.
+Use `memory-lane dashboard` for a compact human overview of continuity hints. Use `memory-lane status --json`, `memory-lane doctor --json`, or MCP `memory_status` when an agent needs text-free metadata about possible stale or overlapping continuity state. For natural-language workstream discovery such as "resume this thread" or "find where X was implemented", use existing continuity surfaces with a query: `memory-lane continuity --query "..." --json` or MCP `memory_continuity({ projectPath, query: "..." })`. Discovery is read-only and pointer-based; it skips superseded records but does not clean up, delete, reject, or mutate any memory.
 
 ### List (respects project scope by default)
 
@@ -119,6 +120,7 @@ memory-lane agreements            # inspect approved operating agreement text
 memory-lane update <id> --text "..." --reason "..." # revise an active memory in place
 memory-lane supersede <new-id> <old-id...> [--yes] # link approved old memories to an approved successor
 memory-lane replace <old-id...> --text "..." [--yes] # create a successor memory
+memory-lane route --prompt "what should we work on next?" --json # internal harness routing decision
 memory-lane status                # quick stats
 memory-lane status --json --since 2026-06-18T00:00:00.000Z
 memory-lane doctor                # full diagnostic report
@@ -232,7 +234,7 @@ memory-lane codex post-tool-use
 
 Automatic context injection is controlled by `memory.contextPolicy`: `selective` injects bounded selected approved memories inside a guarded `<memory-context>` block for eligible ordinary/topic-specific prompts, `policy-only` injects guidance to use Memory Lane tools without memory bodies, and `off` disables automatic context injection while preserving explicit CLI/MCP tools and save hooks.
 
-Prompt-time continuity guidance: if the user asks natural questions like “resume building X,” “where was X implemented,” “where are we,” “what were we last working on,” or “what should we work on next,” Memory Lane may inject inspection-first guidance. Treat it as a cue to inspect `memory-lane continuity --query "..." --json` (or MCP `memory_continuity({ projectPath, query })`), status/dashboard/roadmap, and only use recall as a topic-specific follow-up. Broad project-position/next-work prompts get guidance without ordinary recall bodies; topic-specific prompts can still include bounded relevant memory. The guidance itself is not a memory body and does not mean Memory Lane performed cleanup or saved new progress.
+Prompt-time continuity guidance: if the user asks natural questions like “resume building X,” “where was X implemented,” “where are we,” “what is the next item's scope,” “what were we last working on,” or “what should we work on next,” Memory Lane may inject inspection-first guidance. Treat it as a cue to inspect `memory-lane continuity --json` for broad status or `memory-lane continuity --query "..." --json` for topic-specific workstreams (or MCP `memory_continuity({ projectPath, query })`), status/dashboard/roadmap, and only use recall as a topic-specific follow-up. Broad project-position/next-work prompts get guidance without ordinary recall bodies; topic-specific prompts can still include bounded relevant memory. The guidance itself is not a memory body and does not mean Memory Lane performed cleanup or saved new progress.
 
 ### Lifecycle continuity notices
 
@@ -246,7 +248,7 @@ For hook support checks, prefer `memory-lane doctor` first: use `hookDebugLogPat
 
 ### pi adapter boundary
 
-In pi, Memory Lane provides manual tools/commands, explicit `memory_continuity`, and read-only lifecycle context before the agent starts through pi's `before_agent_start` event. Broad continuity prompts such as “what were we last working on?”, “where are we?”, or “what should we work on next?” should route to canonical continuity before recall; this is supported in both the repo-local Pi adapter and the generated native-binary bridge. Repo-local Pi exposes `/memory continuity [query]` plus the `memory_continuity` tool. Release-style generated Pi bridges expose `memory_continuity` and proxy `/memory continuity ...` through the CLI. Pi also has bounded low-noise lifecycle writes on `input`, `turn_end`, and `tool_result`; do not assume automatic session-shutdown summaries. When a durable pi workflow rule, preference, or project fact should be saved, use `memory_save` for explicit user requests or `memory_suggest` for proactive suggestions.
+In pi, Memory Lane provides manual tools/commands, explicit `memory_continuity`, and read-only lifecycle context before the agent starts through pi's `before_agent_start` event. Broad continuity prompts such as “what were we last working on?”, “where are we?”, or “what should we work on next?” should route to canonical continuity before recall; this is supported in both the repo-local Pi adapter and the generated native-binary bridge. Repo-local Pi exposes `/memory continuity [query]` plus the `memory_continuity` tool. Release-style generated Pi bridges expose `memory_continuity`, proxy `/memory continuity ...` through the CLI, and use `memory-lane route --prompt <text> --json` for prompt routing parity. Pi also has bounded low-noise lifecycle writes on `input`, `turn_end`, and `tool_result`; do not assume automatic session-shutdown summaries. When a durable pi workflow rule, preference, or project fact should be saved, use `memory_save` for explicit user requests or `memory_suggest` for proactive suggestions.
 
 ### Sandboxed storage
 
@@ -343,7 +345,7 @@ When Memory Lane is installed as a harness skill, you can invoke it directly:
 
 Examples:
 - `/memory-lane save that we use pnpm for package management`
-- `/memory-lane recall what we were working on`
+- `/memory-lane continuity`
 - `$memory-lane suggest we should add CI linting`
 
 These skills are installed by `memory-lane init`:
@@ -356,7 +358,7 @@ When running inside an MCP client that has Memory Lane MCP configured (Claude De
 
 Example phrasing:
 - "I'll use the Memory Lane MCP to save that."
-- "Using the Memory Lane MCP, here's what I recall: ..."
+- "Using the Memory Lane MCP, I'll check continuity first for that status question."
 
 If MCP is not available, fall back to the CLI commands below.
 
@@ -379,11 +381,12 @@ Optional Memory Lane plugins extend the CLI and MCP server. For example, `@memor
 
 ## Pi Harness Tools
 
-When used as a pi extension, four tools are available:
+When used as a pi extension, five tools are available:
 
 | Tool | Description |
 |------|-------------|
 | `memory_save` | Save an approved persistent memory (bypasses review) |
 | `memory_suggest` | Queue a memory suggestion for user review |
-| `memory_recall` | Recall approved memories via semantic + lexical search |
+| `memory_continuity` | Read canonical broad prior-work, next-action, or project-status continuity |
+| `memory_recall` | Recall approved memories via semantic + lexical search for topic-specific follow-up |
 | `memory_get` | Inspect one exact active memory id |
