@@ -186,7 +186,7 @@ Do not imply automatic sync, bidirectional sync, or Obsidian-backed storage. Do 
 Default storage is two-tier when no explicit `MEMORY_LANE_*` paths are set: global-scope memories, including default preferences and personal memories, stay in `~/.memory-lane/`, while new current-project-scoped memories write to the resolved project `<root>/.memory-lane/`. If home storage is not writable, writable commands/hooks auto-initialize project-local single-store fallback; read-only inspection commands should not create fallback storage. Explicit `MEMORY_LANE_FILE`, `MEMORY_LANE_EMBEDDINGS_FILE`, and `MEMORY_LANE_CONFIG` always win and keep single-store behavior.
 
 Legacy project-scoped memories from before project-local defaults may still live in the home store.
-Use `memory-lane status --json`, `memory-lane doctor --json`, or `memory-lane migrate project-local --dry-run --json` to inspect them.
+Use `memory-lane status --json`, `memory-lane doctor --json`, MCP `memory_status`, or `memory-lane migrate project-local --dry-run --json` to inspect them.
 The diagnostics include counts, hazard counters, and bounded sample previews when legacy candidates exist.
 The migration preview is read-only in the current slice; do not imply records are moved.
 
