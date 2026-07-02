@@ -422,7 +422,9 @@ Project identity is resolved in order:
 2. Git identity — normal repos use the repo root; linked Git worktrees use the main checkout/common Git directory as the project key so worktrees share memories by default
 3. Global scope (fallback — memories are visible everywhere)
 
-Scope files are never auto-created. Create one manually in a project root when you want an explicit stable identity or need to override Git-derived identity:
+Read-only scope resolution never creates scope files.
+Project-local initialization and first project-scoped writes may create `.memory-lane-scope` as part of initializing `.memory-lane/`.
+Create one manually in a project root when you want an explicit stable identity or need to override Git-derived identity:
 ```bash
 echo '{"id":"my-project-uuid"}' > .memory-lane-scope
 ```

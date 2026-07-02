@@ -1,6 +1,6 @@
 # Memory Lane Roadmap
 
-## Product North Star — Cross-Agent Continuity Without Silent Autonomy
+## Product North Star - Cross-Agent Continuity Without Silent Autonomy
 
 Memory Lane helps coding agents preserve useful continuity across harnesses without silently turning every transcript into durable policy. The system should keep current status, decisions, corrections, procedures, and user preferences available through bounded, review-governed surfaces.
 
@@ -22,7 +22,7 @@ Root `ROADMAP.md` is the active planning index. Keep it safe to read wholesale i
 - Historical phases through Phase 20.5 are archived at `docs/superpowers/archive/roadmap-through-phase-20-5.md`.
 - Full pre-compaction handoff chronology is archived at `docs/superpowers/archive/2026-06-26-pre-docs-hygiene-handoff.md`.
 
-## Current status — Phase 21 complete
+## Current status - Phase 21 complete
 
 Phase 21 `Handoff-Free Sessions` is complete and released through `v0.2.37` (`6d234c3`). Fresh-thread dogfood for `where are we in the project and what should we work on next?` showed improved context-window usage at about 11.8%, down from the previous 14.x% range.
 
@@ -36,8 +36,8 @@ Recent completion evidence:
 - Release `v0.2.41` (`9f9cdde`) passed workflow `28423317038` and published 8 assets, shipping the retrieval currentness tie-break from PR #75.
 - Release `v0.2.42` (`cd1a839`) passed workflow `28484161404` and published 8 assets, shipping the project-local storage Slice 0 facade proof from PR #78.
 - Installed-artifact `v0.2.42` dogfood after `memory-lane upgrade --yes` passed `memory-lane --smoke-test`; validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
-- PR #80 (`a87eff5`) completed project-local storage Slice 1: new project-scoped writes default to active project-local storage, global-scope preference/personal writes remain home-side, merged home/project reads preserve origin-store mutation routing, and read-only/MCP/plugin paths respect project context without creating fallback storage.
-- PR #82 (`a808231`) completed continuity routing/context hygiene: deterministic continuity routing now covers natural broad next-work/status/resume/lookup prompts across Claude/Codex hooks, repo-local Pi, generated Pi bridge route decisions, and MCP steering; continuity read-model/rendering hygiene excludes superseded candidates and keeps operating guidance compact.
+- Release `v0.2.43` (`287bb1a`) passed workflow `28560737645`, shipping PR #80 project-local storage Slice 1 and PR #82 continuity routing/context hygiene.
+- Installed-artifact `v0.2.43` dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, route classification, and generated Pi bridge continuity checks; validation: `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
 - Installed-artifact `v0.2.41` continuity dogfood after `memory-lane upgrade --yes` passed: broad next-work continuity has empty workstream candidates plus `no-topic`, stale release/checkpoint ids are absent from operating guidance, and topic-specific queries still return candidates.
 - Phase-completion docs sync landed in `309021e docs: declare phase 21 complete`.
 - PR #69 (`4ebf447`) completed the docs/context-budget slice: root `ROADMAP.md` is compact, historical roadmap detail through Phase 20.5 is archived, and skill guidance uses bounded reads.
@@ -52,7 +52,7 @@ Key Phase 21 references:
 - Item 4 continuity selection hygiene design: `docs/superpowers/specs/2026-06-27-phase-21-item-4-continuity-selection-hygiene-design.md`
 - Docs/context-budget design: `docs/superpowers/specs/2026-06-27-docs-context-budget-design.md`
 
-## Recent context-budget follow-up — SessionStart Descriptor Index
+## Recent context-budget follow-up - SessionStart Descriptor Index
 
 Slice A merged in PR #71 as `e0deba1` and released in `v0.2.39` (`9021435`). It is schema-free: descriptor cards are generated from existing approved memories, pending/secret-looking memories are filtered before both ordinary and priority descriptor selection, and full memory bodies remain available through explicit `memory_get` / `memory-lane show <id>`.
 
@@ -64,7 +64,7 @@ Dogfood passed after installed `memory-lane upgrade --yes`: exact human and JSON
 
 Next decision for this track: decide whether to proceed to Slice C Obsidian/YAML frontmatter, proceed to Slice D token-aware policy refinement, or pause this track.
 
-## Active track — Project-local Storage Defaults
+## Active track - Project-local Storage Defaults
 
 The user raised that project-scoped memories stored in the home JSONL can still feel risky even with scope filtering. Directionally, project-scoped memories should live under the project `.memory-lane/` by default, while global-scope preferences/personal memories remain home-scoped.
 
@@ -75,16 +75,16 @@ Slice plan:
 1. **Slice 0 - storage facade proof, no default-location flip.** Shipped in `v0.2.42` / PR #78.
    Current storage behavior is preserved while `MemoryEngine` routes through an injectable storage facade with memory append/list/diagnostics, batch append, embedding append/read/invalidation, compaction, path metadata, and continuity-baseline seams.
 2. **Slice 1 - project-local default for new project-scoped writes.**
-   Merged in PR #80 as `a87eff5`; release target `v0.2.43`.
+   Shipped in `v0.2.43` / PR #80.
    New project-scoped writes route project-side by default, global-scope preference/personal writes stay home-side, project/home reads merge with deterministic folding, existing ids mutate in their origin store, embeddings/compaction follow owning stores, and read-only CLI/MCP/plugin paths avoid fallback creation while respecting per-request project context.
 3. **Slice 2 - migration/compatibility diagnostics.** Next recommended slice; requires a fresh approval gate.
    Detect legacy home-stored project memories and provide bounded warnings plus explicit dry-run migration; do not silently move/delete/approve/consolidate.
 
-Current release state: Slice 0 is merged and released in `v0.2.42`; Slice 1 is merged on `main` in PR #80 (`a87eff5`) and should ship in release target `v0.2.43` alongside continuity routing/context hygiene PR #82 (`a808231`).
-Installed-artifact `v0.2.42` dogfood passed via `memory-lane upgrade --yes` and `memory-lane --smoke-test`.
-Validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
+Current release state: Slice 0 is merged and released in `v0.2.42`; Slice 1 is merged and released in `v0.2.43` alongside continuity routing/context hygiene PR #82 (`a808231`).
+Installed-artifact `v0.2.43` dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, route classification, and generated Pi bridge continuity smoke.
+Validation: `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
 
-Current next candidate after `v0.2.43` release/dogfood: Slice 2 migration/compatibility diagnostics.
+Current next candidate: Slice 2 migration/compatibility diagnostics.
 Start with a fresh design/approval gate before implementation.
 Approved Slice 1 spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
 Migration diagnostics and cross-store rescope moves remain deferred until Slice 2 or later explicitly approves them.
@@ -93,7 +93,7 @@ Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in 
 
 ## Other viable future tracks
 
-- **Continuity routing/context hygiene follow-ups:** PR #82 is merged on `main` and targeted for `v0.2.43`.
+- **Continuity routing/context hygiene follow-ups:** PR #82 shipped in `v0.2.43`.
   Future work should stay backlog-only unless dogfood exposes regressions; no LLM classifier behavior shipped in this slice.
 - **Review-first consolidation proposals:** identify overlapping/superseded memories and suggest manual `update` / `replace` / `supersede` commands. Keep review-first; no auto-consolidation or auto-approval.
 - **Docs/context-budget follow-up:** consider README splitting or generated current-state docs if README becomes the next major context source.

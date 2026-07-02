@@ -2,29 +2,33 @@
 
 ## Status
 
-Slice 0 shipped in `v0.2.42` from PR #78 as the storage facade proof with no default-location change; Slice 1 and Slice 2 remain gated follow-ups.
+Slice 0 shipped in `v0.2.42` from PR #78 as the storage facade proof with no default-location change.
+Slice 1 shipped in `v0.2.43` from PR #80 as the project-local default for new project-scoped writes.
+Slice 2 migration diagnostics remains a gated follow-up.
 
 ## Entry gate
 
 Slice 0 was approved and implemented as an internal storage facade proof.
-Do not implement Slice 1 or Slice 2 until the user approves the next design gate.
+Slice 1 was approved and implemented as project-local default writes.
+Do not implement Slice 2 until the user approves the next design gate.
 
 ## Context
 
-Memory Lane currently supports project-local storage, but it is opt-in unless home storage is not writable.
-Default storage remains `~/.memory-lane/`:
+Before Slice 1, Memory Lane supported project-local storage, but it was opt-in unless home storage was not writable.
+Default global storage remains `~/.memory-lane/`:
 
 - `~/.memory-lane/memory.jsonl`
 - `~/.memory-lane/embeddings.jsonl`
 - `~/.memory-lane/config.json`
 
-Project-local storage already exists through:
+Project-local storage now exists through:
 
 - `memory-lane init --project-local --project <path>`
 - `.memory-lane/` discovery by walking upward from the current working directory
 - automatic project-local fallback when home storage is not writable and no explicit `MEMORY_LANE_*` paths are set
+- automatic project-local initialization on new project-scoped writes when project scope is known and no explicit storage override is active
 
-Important current-behavior clarification: explicitly asking an agent to save a **project-level** memory controls the memory's scope/category, not the storage file location. If `~/.memory-lane/` is writable and project-local storage was not already initialized, Memory Lane currently writes that project-scoped row to the home JSONL file and relies on scope filtering to keep it project-bound. Agents also do not automatically run `memory-lane init --project-local` before saving because that command creates project files and changes storage behavior; today it is an explicit setup action or sandbox fallback, not an automatic consequence of `--scope project`. This is the UX gap this design addresses.
+Historical behavior clarification: explicitly asking an agent to save a **project-level** memory controlled the memory's scope/category, not the storage file location. If `~/.memory-lane/` was writable and project-local storage was not already initialized, Memory Lane wrote that project-scoped row to the home JSONL file and relied on scope filtering to keep it project-bound. Agents also did not automatically run `memory-lane init --project-local` before saving because that command creates project files and changes storage behavior; it was an explicit setup action or sandbox fallback, not an automatic consequence of `--scope project`. Slice 1 addresses this UX gap for new project-scoped writes.
 
 The user raised a product concern: project-level memories stored in the home JSONL can accidentally pollute context across project boundaries. A project-local `.memory-lane/` directory better uses the native filesystem boundary to keep project memories near the project they belong to.
 
@@ -46,11 +50,12 @@ But project-local storage is not a complete replacement for Memory Lane scope fi
 
 ## Recommendation
 
-Adopt a two-tier storage model as the next design direction, but ship it in two approved slices:
+Adopt a two-tier storage model through approved slices:
 
 1. **Slice 0: storage facade proof, no default-location change.** Shipped in `v0.2.42` from PR #78.
    The core storage abstraction lets `MemoryEngine` operate through a store facade instead of assuming one scalar `memPath`/`embPath`, while current default storage behavior remains unchanged.
-2. **Slice 1: project-local default for project-scoped writes.** Now that the facade proof is merged and dogfooded, route new project-scoped memories to `<project-root>/.memory-lane/memory.jsonl` when project scope exists and no explicit storage env vars override it.
+2. **Slice 1: project-local default for project-scoped writes.** Shipped in `v0.2.43` from PR #80.
+   New project-scoped memories route to `<project-root>/.memory-lane/memory.jsonl` when project scope exists and no explicit storage env vars override it.
    Global-scope preferences and personal memories remain home-scoped in `~/.memory-lane/memory.jsonl`.
 
 This two-step path preserves the product direction while de-risking the single-store engine assumption before changing user-visible write locations.
@@ -82,7 +87,7 @@ This is a storage architecture change, not a recall/ranking or schema change.
   - `resolveMemoryPaths()`
   - `resolveWritableMemoryPaths()`
   - `initProjectLocalStorage()`
-  - upward `.memory-lane/` discovery
+  - upward `.memory-lane/` discovery as legacy scalar-path fallback
   - `.gitignore` append behavior
 - `packages/cli/src/index.ts`
   - command-level selection of read-only vs writable path resolution
@@ -112,7 +117,8 @@ Introduce a new project-aware path resolution mode for commands with project con
 
 This root rule is load-bearing.
 The current `findProjectLocalRoot()` helper discovers an existing `.memory-lane/` by walking upward from cwd, while project identity uses `.memory-lane-scope` and git-aware project scope resolution.
-The first implementation must unify these or make project scope resolution authoritative so nested cwd writes do not create fragmented `.memory-lane/` stores.
+That upward discovery path is compatibility-only fallback behavior for legacy scalar path resolution, not the approved resolver for default two-tier routing.
+The first implementation must make project scope resolution authoritative so nested cwd writes do not create fragmented `.memory-lane/` stores.
 
 ### Config split
 
@@ -192,11 +198,11 @@ Definition of done for Slice 0:
 9. Make cache invalidation a first-class facade invariant: every facade write method, including single append, append-many, embedding append, embedding invalidation, reindex writes, and compaction, must invalidate or refresh the owning store cache so immediate subsequent reads cannot observe stale data.
 10. Define batch append atomicity: append-many is atomic per target store and preserves the existing single-store successor-plus-superseded ordering semantics.
 11. Make the facade own or expose the embedding-store seam and continuity-baseline path seam, not only memory paths. Slice 0 keeps single-store behavior, but engine code should no longer scatter assumptions that there is exactly one scalar `embPath` or baseline path.
-12. Keep `doctor` / `status` JSON output shape unchanged in Slice 0; add shape-lock tests for the relevant scalar storage fields. Multi-store diagnostic shape is a later Slice 1 decision.
+12. Keep `doctor` / `status` JSON output shape unchanged in Slice 0; add shape-lock tests for the relevant scalar storage fields. Shipped Slice 1 kept the scalar storage fields compatible and left richer multi-store diagnostics additive.
 13. Keep explicit `MEMORY_LANE_*` paths fully authoritative and single-store.
 14. Update tests and internal docs for the new facade seam, but do not update user-facing storage-default docs yet except to note this is internal prep if needed.
 
-Definition of done for later Slice 1:
+Definition of done for shipped Slice 1:
 
 1. Derive project-local storage root from existing project scope resolution, not arbitrary cwd upward discovery.
 2. Route new project-scoped writes to project-local `.memory-lane/` by default when project scope is known and no explicit env paths override storage.
@@ -261,7 +267,7 @@ Manual/dogfood checks for Slice 0:
 10. Explicit `MEMORY_LANE_FILE` still forces single-store behavior.
 
 
-Manual/dogfood checks for later Slice 1:
+Manual/dogfood checks for shipped Slice 1:
 
 1. In a temp project with no `.memory-lane/`, save a project memory; assert it creates `<project>/.memory-lane/memory.jsonl` and not a home project row.
 2. Save a preference from the same project; assert it writes to the home store.
@@ -307,5 +313,5 @@ User feedback agreed with Slice 0 as the first implementation target: an interna
 
 Slice 0 implementation preserves current storage behavior through `MemoryEngineStorage` and `createSingleStoreEngineStorage`.
 It shipped in `v0.2.42` after local build/test validation, release workflow `28484161404`, and installed-artifact smoke testing documented in `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
-Slice 1 was later approved in `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`, merged in PR #80 as `a87eff5`, and targeted for release `v0.2.43`.
+Slice 1 was later approved in `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`, merged in PR #80 as `a87eff5`, and shipped in `v0.2.43` with installed-artifact dogfood documented in `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
 Slice 2 migration diagnostics remains a planned follow-up requiring its own approval gate.

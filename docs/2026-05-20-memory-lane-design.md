@@ -192,7 +192,10 @@ Invalidation records are appended when a memory changes, so `recall()` knows to 
 
 If present, the engine walks up from cwd to find it and uses its UUID as the project key. Survives renames. Not committed (user-local identity).
 
-**Important:** Scope files are **never auto-created**. If neither a scope file nor a git root is available, project-scoped saves fall back to global scope with a notice. The user must manually create `.memory-lane-scope` if they want stable scoping in a non-git directory.
+**Important:** Scope resolution itself never creates scope files.
+Project-local storage initialization can create `.memory-lane-scope` when Memory Lane initializes `.memory-lane/` for a known project.
+If neither a scope file, a git root, nor an explicit project path is available, project-scoped saves fall back to global scope with a notice.
+The user can still manually create `.memory-lane-scope` when they want stable scoping in a non-git directory.
 
 ---
 
