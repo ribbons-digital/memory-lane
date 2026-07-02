@@ -37,6 +37,7 @@ Recent completion evidence:
 - Release `v0.2.42` (`cd1a839`) passed workflow `28484161404` and published 8 assets, shipping the project-local storage Slice 0 facade proof from PR #78.
 - Installed-artifact `v0.2.42` dogfood after `memory-lane upgrade --yes` passed `memory-lane --smoke-test`; validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
 - PR #80 (`a87eff5`) completed project-local storage Slice 1: new project-scoped writes default to active project-local storage, global-scope preference/personal writes remain home-side, merged home/project reads preserve origin-store mutation routing, and read-only/MCP/plugin paths respect project context without creating fallback storage.
+- PR #82 (`a808231`) completed continuity routing/context hygiene: deterministic continuity routing now covers natural broad next-work/status/resume/lookup prompts across Claude/Codex hooks, repo-local Pi, generated Pi bridge route decisions, and MCP steering; continuity read-model/rendering hygiene excludes superseded candidates and keeps operating guidance compact.
 - Installed-artifact `v0.2.41` continuity dogfood after `memory-lane upgrade --yes` passed: broad next-work continuity has empty workstream candidates plus `no-topic`, stale release/checkpoint ids are absent from operating guidance, and topic-specific queries still return candidates.
 - Phase-completion docs sync landed in `309021e docs: declare phase 21 complete`.
 - PR #69 (`4ebf447`) completed the docs/context-budget slice: root `ROADMAP.md` is compact, historical roadmap detail through Phase 20.5 is archived, and skill guidance uses bounded reads.
@@ -73,15 +74,18 @@ Slice plan:
 
 1. **Slice 0 - storage facade proof, no default-location flip.** Shipped in `v0.2.42` / PR #78.
    Current storage behavior is preserved while `MemoryEngine` routes through an injectable storage facade with memory append/list/diagnostics, batch append, embedding append/read/invalidation, compaction, path metadata, and continuity-baseline seams.
-2. **Slice 1 - project-local default for new project-scoped writes.** Merged in PR #80 as `a87eff5`; not yet released.
+2. **Slice 1 - project-local default for new project-scoped writes.**
+   Merged in PR #80 as `a87eff5`; release target `v0.2.43`.
    New project-scoped writes route project-side by default, global-scope preference/personal writes stay home-side, project/home reads merge with deterministic folding, existing ids mutate in their origin store, embeddings/compaction follow owning stores, and read-only CLI/MCP/plugin paths avoid fallback creation while respecting per-request project context.
 3. **Slice 2 - migration/compatibility diagnostics.** Next recommended slice; requires a fresh approval gate.
    Detect legacy home-stored project memories and provide bounded warnings plus explicit dry-run migration; do not silently move/delete/approve/consolidate.
 
-Current release state: Slice 0 is merged and released in `v0.2.42`; Slice 1 is merged on `main` in PR #80 (`a87eff5`) but not yet released. Installed-artifact `v0.2.42` dogfood passed via `memory-lane upgrade --yes` and `memory-lane --smoke-test`.
+Current release state: Slice 0 is merged and released in `v0.2.42`; Slice 1 is merged on `main` in PR #80 (`a87eff5`) and should ship in release target `v0.2.43` alongside continuity routing/context hygiene PR #82 (`a808231`).
+Installed-artifact `v0.2.42` dogfood passed via `memory-lane upgrade --yes` and `memory-lane --smoke-test`.
 Validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
 
-Current next candidate: Slice 2 migration/compatibility diagnostics. Start with a fresh design/approval gate before implementation.
+Current next candidate after `v0.2.43` release/dogfood: Slice 2 migration/compatibility diagnostics.
+Start with a fresh design/approval gate before implementation.
 Approved Slice 1 spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
 Migration diagnostics and cross-store rescope moves remain deferred until Slice 2 or later explicitly approves them.
 
@@ -89,7 +93,8 @@ Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in 
 
 ## Other viable future tracks
 
-- **Continuity routing/context hygiene:** active implementation slice on `feat/continuity-routing-hygiene`. Scope: harness-neutral deterministic routing for natural broad next-work/status prompts, generated Pi bridge route-decision parity, continuity read-model/rendering cleanup, and MCP tool-description steering. No LLM classifier behavior in this slice.
+- **Continuity routing/context hygiene follow-ups:** PR #82 is merged on `main` and targeted for `v0.2.43`.
+  Future work should stay backlog-only unless dogfood exposes regressions; no LLM classifier behavior shipped in this slice.
 - **Review-first consolidation proposals:** identify overlapping/superseded memories and suggest manual `update` / `replace` / `supersede` commands. Keep review-first; no auto-consolidation or auto-approval.
 - **Docs/context-budget follow-up:** consider README splitting or generated current-state docs if README becomes the next major context source.
 - **Hardening backlog:** installer/init wizard improvements, Claude Desktop MCP config path tests, import dry-run secret warnings, and broader read-only taxonomy checks.

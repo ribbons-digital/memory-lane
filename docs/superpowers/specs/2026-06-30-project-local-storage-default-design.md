@@ -307,5 +307,5 @@ User feedback agreed with Slice 0 as the first implementation target: an interna
 
 Slice 0 implementation preserves current storage behavior through `MemoryEngineStorage` and `createSingleStoreEngineStorage`.
 It shipped in `v0.2.42` after local build/test validation, release workflow `28484161404`, and installed-artifact smoke testing documented in `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
-Slice 1 was later approved in `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md` and implemented on `docs/project-local-slice-1-design`, pending final review/PR.
+Slice 1 was later approved in `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`, merged in PR #80 as `a87eff5`, and targeted for release `v0.2.43`.
 Slice 2 migration diagnostics remains a planned follow-up requiring its own approval gate.
