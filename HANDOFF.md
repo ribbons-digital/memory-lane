@@ -2,8 +2,8 @@
 
 ## Current state
 
-- Branch context: active implementation branch `feat/continuity-routing-hygiene` branched from `main` synced through `92627bf docs: sync status after project-local slice 1 (#81)`.
-- Latest release: `v0.2.42` at tag `v0.2.42` / commit `cd1a839`; release workflow `28484161404` passed and published 8 assets. PR #80 is merged on `main` but not yet released.
+- Branch context: release-prep branch `docs/v0.2.43-release-prep` from `main` at `a808231 feat: improve continuity routing hygiene (#82)`.
+- Latest release: `v0.2.42` at tag `v0.2.42` / commit `cd1a839`; release workflow `28484161404` passed and published 8 assets. Release target `v0.2.43` should ship unreleased PR #80 and PR #82.
 - Phase 21 `Handoff-Free Sessions` is complete and dogfooded. Fresh-thread prompt `where are we in the project and what should we work on next?` used about 11.8% context, improved from the previous 14.x% range.
 - Docs/context-budget slice is merged: root `ROADMAP.md` is now a compact active index, historical roadmap detail through Phase 20.5 is archived, `HANDOFF.md` is a status card, and Memory Lane skill guidance emphasizes bounded reads.
 - Retrieval/continuity eval baseline PR #70 merged as `7d5a8a6`; local/remote `feat/retrieval-continuity-eval-baseline` branches are cleaned up. The slice added a sanitized six-scenario corpus, test-only core eval helpers, structural tests, and baseline findings doc.
@@ -32,9 +32,13 @@ Slice 1 project-local default writes merged in PR #80 as `a87eff5` and is on `ma
 Spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
 Shipped on main: default two-tier engine storage, new project-scoped writes route to project-local storage when project scope is known and no explicit `MEMORY_LANE_*` paths override storage, global-scope preference/personal writes stay home-side, reads merge home plus active project stores, existing ids route by origin store, embeddings route to owning store, active project stores compact, CLI/MCP/pi engine construction use the two-tier resolver, read-only inspection paths avoid fallback creation, MCP per-call `projectPath` retargets storage, plugin engine resolution uses active MCP project context, and storage/CLI/MCP/plugin tests cover the behavior.
 
-Active implementation slice: continuity routing and continuity context hygiene. User-approved scope: harness-neutral deterministic routing for natural broad next-work/status prompts across Claude/Codex hooks, repo-local Pi, generated Pi bridge route-decision parity, continuity read-model/rendering cleanup, MCP tool-description steering, and a roadmap/backlog note for a future Memory-Lane-configured harness-agnostic LLM classifier. No classifier behavior in this slice.
+Continuity routing and continuity context hygiene merged in PR #82 as `a808231` and is on `main` but not yet released.
+Scope shipped on main: harness-neutral deterministic routing for natural broad next-work/status/resume/lookup prompts across Claude/Codex hooks, repo-local Pi, generated Pi bridge route-decision parity, MCP tool-description steering, continuity read-model/rendering cleanup, superseded discovery exclusion, workflow-area operating-guidance collapse, descriptor preview sharing, and a roadmap/backlog note for a future Memory-Lane-configured harness-agnostic LLM classifier.
+No classifier behavior shipped in this slice.
 
-Next recommended slice after this work lands remains Slice 2 migration/compatibility diagnostics unless release/dogfood evidence changes priorities. Target behavior: detect legacy home-stored project memories, surface bounded diagnostics/warnings, and provide explicit dry-run migration without silent moves/deletes/approvals/consolidation.
+Current next action: cut release `v0.2.43` from `main` after this docs sync merges, then dogfood the installed artifact.
+Next recommended implementation slice after release/dogfood remains Slice 2 migration/compatibility diagnostics unless release evidence changes priorities.
+Target behavior: detect legacy home-stored project memories, surface bounded diagnostics/warnings, and provide explicit dry-run migration without silent moves/deletes/approvals/consolidation.
 
 ## Load-bearing constraints
 
@@ -73,6 +77,7 @@ Next recommended slice after this work lands remains Slice 2 migration/compatibi
 - PR #78 merged as `cd1a839`; post-merge cleanup synced `main` and deleted local/remote `feat/storage-facade-proof` branches.
 - `v0.2.42` release workflow `28484161404` passed and published 8 assets; installed `memory-lane upgrade --yes` passed, reconfigured Pi, and `memory-lane --smoke-test` returned `memory-lane ok`. Validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
 - PR #80 merged as `a87eff5`; post-merge cleanup synced `main`, deleted local/remote `docs/project-local-slice-1-design`, and saved checkpoint memory `a3cf55ce`. Before merge, validation included targeted core/CLI/MCP/plugin checks, `pnpm build`, `git diff --check`, Opus 4.8 review, no-mistakes gates, GitHub CI, and CodeRabbit.
+- PR #82 merged as `a808231`; post-merge cleanup synced `main`, deleted local/remote/gate `feat/continuity-routing-hygiene`, and saved checkpoint memory `77a3f00e`. Before merge, validation included Opus 4.8 focused reviews, `pnpm build`, `pnpm test`, `git diff --check`, no-mistakes gates, GitHub CI, and CodeRabbit fixes.
 - Slice B no-mistakes/PR validation before merge: Opus 4.8 implementation review found no blockers; no-mistakes review found and fixed secret-like keyword pre-normalization and fallback-count-after-trim issues; CodeRabbit inline keyword-limit feedback was fixed by applying the keyword item cap after normalization/deduplication; GitHub PR checks passed (`test` and CodeRabbit). PR #72 merged as `bc02d04`.
 - `v0.2.40` release workflow `28419273491` passed and published 8 assets; installed `memory-lane upgrade --yes` passed and reconfigured Pi.
 - Installed Slice B dogfood passed: exact human and JSON `show` exposed descriptor metadata, released `memory-lane codex session-start` rendered structured descriptor summaries plus fetch hints, full descriptor-card bodies stayed out of SessionStart, and generated fallback descriptors still worked. Validation: `docs/superpowers/validation/2026-06-30-session-start-descriptor-metadata-dogfood.md`.
@@ -87,6 +92,7 @@ Next recommended slice after this work lands remains Slice 2 migration/compatibi
 - Retrieval/continuity eval baseline findings: `docs/superpowers/validation/2026-06-27-retrieval-continuity-eval-baseline.md`
 - Project-local storage default design: `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`
 - Project-local storage Slice 1 approved implementation spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`
+- Continuity routing/context hygiene release candidate: PR #82 / `a808231`
 - Retrieval currentness tie-break design: `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md`
 - Retrieval currentness tie-break validation: `docs/superpowers/validation/2026-06-30-retrieval-currentness-tie-break-validation.md`
 - v0.2.42 release/dogfood validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`
