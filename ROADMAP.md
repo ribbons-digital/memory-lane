@@ -1,6 +1,6 @@
 # Memory Lane Roadmap
 
-## Product North Star — Cross-Agent Continuity Without Silent Autonomy
+## Product North Star - Cross-Agent Continuity Without Silent Autonomy
 
 Memory Lane helps coding agents preserve useful continuity across harnesses without silently turning every transcript into durable policy. The system should keep current status, decisions, corrections, procedures, and user preferences available through bounded, review-governed surfaces.
 
@@ -22,7 +22,7 @@ Root `ROADMAP.md` is the active planning index. Keep it safe to read wholesale i
 - Historical phases through Phase 20.5 are archived at `docs/superpowers/archive/roadmap-through-phase-20-5.md`.
 - Full pre-compaction handoff chronology is archived at `docs/superpowers/archive/2026-06-26-pre-docs-hygiene-handoff.md`.
 
-## Current status — Phase 21 complete
+## Current status - Phase 21 complete
 
 Phase 21 `Handoff-Free Sessions` is complete and released through `v0.2.37` (`6d234c3`). Fresh-thread dogfood for `where are we in the project and what should we work on next?` showed improved context-window usage at about 11.8%, down from the previous 14.x% range.
 
@@ -52,7 +52,7 @@ Key Phase 21 references:
 - Item 4 continuity selection hygiene design: `docs/superpowers/specs/2026-06-27-phase-21-item-4-continuity-selection-hygiene-design.md`
 - Docs/context-budget design: `docs/superpowers/specs/2026-06-27-docs-context-budget-design.md`
 
-## Recent context-budget follow-up — SessionStart Descriptor Index
+## Recent context-budget follow-up - SessionStart Descriptor Index
 
 Slice A merged in PR #71 as `e0deba1` and released in `v0.2.39` (`9021435`). It is schema-free: descriptor cards are generated from existing approved memories, pending/secret-looking memories are filtered before both ordinary and priority descriptor selection, and full memory bodies remain available through explicit `memory_get` / `memory-lane show <id>`.
 
@@ -64,7 +64,7 @@ Dogfood passed after installed `memory-lane upgrade --yes`: exact human and JSON
 
 Next decision for this track: decide whether to proceed to Slice C Obsidian/YAML frontmatter, proceed to Slice D token-aware policy refinement, or pause this track.
 
-## Active track — Project-local Storage Defaults
+## Active track - Project-local Storage Defaults
 
 The user raised that project-scoped memories stored in the home JSONL can still feel risky even with scope filtering. Directionally, project-scoped memories should live under the project `.memory-lane/` by default, while global-scope preferences/personal memories remain home-scoped.
 
