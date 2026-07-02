@@ -38,6 +38,8 @@ Recent completion evidence:
 - Installed-artifact `v0.2.42` dogfood after `memory-lane upgrade --yes` passed `memory-lane --smoke-test`; validation: `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
 - Release `v0.2.43` (`287bb1a`) passed workflow `28560737645`, shipping PR #80 project-local storage Slice 1 and PR #82 continuity routing/context hygiene.
 - Installed-artifact `v0.2.43` dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, route classification, and generated Pi bridge continuity checks; validation: `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
+- Release `v0.2.44` (`2788c4e`) passed workflow `28628495514`, shipping project-local storage Slice 2a legacy diagnostics from PR #89.
+- Installed-artifact `v0.2.44` dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, CLI and MCP legacy diagnostics, dry-run migration preview, and non-dry-run migration refusal; validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
 - Installed-artifact `v0.2.41` continuity dogfood after `memory-lane upgrade --yes` passed: broad next-work continuity has empty workstream candidates plus `no-topic`, stale release/checkpoint ids are absent from operating guidance, and topic-specific queries still return candidates.
 - Phase-completion docs sync landed in `309021e docs: declare phase 21 complete`.
 - PR #69 (`4ebf447`) completed the docs/context-budget slice: root `ROADMAP.md` is compact, historical roadmap detail through Phase 20.5 is archived, and skill guidance uses bounded reads.

@@ -2,9 +2,10 @@
 
 ## Status
 
-Merged in PR #89 as `96516ef feat(cli): add legacy project diagnostics dry run (#89)`.
+Merged in PR #89 as `96516ef feat(cli): add legacy project diagnostics dry run (#89)` and shipped in `v0.2.44`.
 Fable 5 second-opinion review completed before drafting this spec, again before approval, and again before PR.
 Implementation remained inside the approved read-only Slice 2a scope.
+Installed-artifact dogfood passed and is documented in `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
 
 ## Entry gate
 
@@ -19,15 +20,16 @@ New project-scoped memories now route to `<project-root>/.memory-lane/memory.jso
 Global-scope preferences and personal memories still route to the home store.
 Reads merge the home store and the active project store, and existing memory ids continue to mutate in their origin store.
 
-The remaining compatibility gap is legacy project-scoped memories that were written to the home store before Slice 1.
-Those records are still visible through the merged read model, but users have no bounded way to understand how many active current-project rows still live home-side or what a future migration would need to handle.
+Before Slice 2a, the remaining compatibility gap was legacy project-scoped memories that were written to the home store before Slice 1.
+Those records are still visible through the merged read model, and Slice 2a now gives users a bounded way to understand how many active current-project rows still live home-side and what a future migration would need to handle.
 
 ## Problem
 
 A real migration is risky because Memory Lane uses append-only revisions and last-wins folding by memory id.
 A naive cross-store copy could create duplicate active ids, change the folded winner, orphan embeddings, or hide pending review records.
 
-Before implementing any mutating migration command, Memory Lane needs a read-only diagnostics slice that measures the compatibility population and classifies migration hazards.
+Before implementing any mutating migration command, Memory Lane needed a read-only diagnostics slice that measures the compatibility population and classifies migration hazards.
+Slice 2a provides that diagnostics layer.
 The diagnostics must stay low-noise and must not create project-local storage during read-only commands.
 
 ## Goals
@@ -270,3 +272,5 @@ Manual dogfood checks after implementation:
 The user approved the Fable-reviewed Slice 2a scope on 2026-07-02.
 PR #88 merged the full spec as `4f64367 docs: draft project-local slice 2a diagnostics spec (#88)`.
 The user then approved implementation from this spec.
+PR #89 merged the implementation as `96516ef feat(cli): add legacy project diagnostics dry run (#89)`.
+The implementation shipped in `v0.2.44` with installed-artifact dogfood documented in `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
