@@ -11,6 +11,7 @@ import { handleInit } from "./commands/init.js"
 import { handleUninstall } from "./commands/uninstall.js"
 import { handleUpgrade } from "./commands/upgrade.js"
 import { handleObsidian } from "./commands/obsidian.js"
+import { flag, hasFlag } from "./args.js"
 import type { CliContext } from "./commands/context.js"
 import { loadPlugins } from "@memory-lane/plugin-api"
 import type { BundledPluginModule, LoadedPlugin } from "@memory-lane/plugin-api"
@@ -55,17 +56,6 @@ function parseConfigValue(raw: string): unknown {
 }
 
 // ── Arg parsing helpers ──────────────────────────────────────
-
-function flag(argv: string[], name: string): string | undefined {
-  const idx = argv.indexOf(`--${name}`)
-  if (idx === -1) return undefined
-  const next = argv[idx + 1]
-  return next && !next.startsWith("--") ? next : "true"
-}
-
-function hasFlag(argv: string[], name: string): boolean {
-  return argv.includes(`--${name}`)
-}
 
 function optionalWorkflowArea(argv: string[]): WorkflowArea | undefined {
   const value = flag(argv, "area")
