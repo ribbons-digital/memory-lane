@@ -45,6 +45,36 @@ describe("init wizard", () => {
     }).trim()
   }
 
+  function writeNativeMemoryLaneStub(logFileName: string, commandLogic: string): { nativeBinary: string; logPath: string } {
+    const nativeBinary = path.join(home, ".local/bin/memory-lane")
+    const logPath = path.join(home, logFileName)
+    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
+    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
+${commandLogic}
+`, "utf8")
+    fs.chmodSync(nativeBinary, 0o755)
+    return { nativeBinary, logPath }
+  }
+
+  function installPiCliBridge(nativeBinary: string): string {
+    run(["init", "--yes", "--only", "pi"], { HOME: home, MEMORY_LANE_INSTALL_BINARY: nativeBinary })
+    return path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
+  }
+
+  function runPiBridgeSmoke(piExt: string, smoke: string): void {
+    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
+      encoding: "utf8",
+      env: { ...process.env, PI_EXTENSION_FILE: piExt },
+    })
+  }
+
+  function readJsonlCalls(logPath: string): string[][] {
+    return fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string[])
+  }
+
   beforeEach(() => {
     home = tempDir()
     fakeBinDir = createFakeBinDir()
@@ -106,14 +136,7 @@ describe("init wizard", () => {
   })
 
   it("routes broad pi before_agent_start continuity prompts to continuity query", () => {
-    const nativeBinary = path.join(home, ".local/bin/memory-lane")
-    const logPath = path.join(home, "calls.jsonl")
-    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
-    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
-const fs = require("node:fs");
-const args = process.argv.slice(2);
-fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
-if (args[0] === "status") {
+    const { nativeBinary, logPath } = writeNativeMemoryLaneStub("calls.jsonl", `if (args[0] === "status") {
   console.log(JSON.stringify({ data: { contextPolicyMode: "selective", contextPolicyPromptMaxItems: 2 } }));
 } else if (args[0] === "route") {
   console.log(JSON.stringify({ data: { route: { route: "continuity", confidence: 1, reasons: ["test"] } } }));
@@ -129,17 +152,10 @@ if (args[0] === "status") {
   console.log(JSON.stringify({ data: { memories: [{ id: "wrong", text: "Plain recall should not be used for broad continuity." }] } }));
 } else {
   console.log(JSON.stringify({ data: {} }));
-}
-`, "utf8")
-    fs.chmodSync(nativeBinary, 0o755)
+}`)
 
-    run(["init", "--yes", "--only", "pi"], {
-      HOME: home,
-      MEMORY_LANE_INSTALL_BINARY: nativeBinary,
-    })
-
-    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
-    const smoke = `
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
       const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
       const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
       const handlers = {};
@@ -168,13 +184,9 @@ if (args[0] === "status") {
       if (!toolResult.content[0].text.includes("Latest project progress")) throw new Error("expected latest progress tool context");
       if (!toolResult.content[0].text.includes("latest1")) throw new Error("expected continuity tool candidate");
       if (!toolResult.content[0].text.includes("guide5")) throw new Error("expected continuity tool to render five operating guidance items");
-    `
-    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
-      encoding: "utf8",
-      env: { ...process.env, PI_EXTENSION_FILE: piExt },
-    })
+    `)
 
-    const calls = fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    const calls = readJsonlCalls(logPath)
     for (const prompt of [
       "What were we last working on?",
       "Where are we in the project?",
@@ -191,14 +203,7 @@ if (args[0] === "status") {
   })
 
   it("routes pi memory-management prompts to command guidance without recall", () => {
-    const nativeBinary = path.join(home, ".local/bin/memory-lane")
-    const logPath = path.join(home, "memory-management-calls.jsonl")
-    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
-    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
-const fs = require("node:fs");
-const args = process.argv.slice(2);
-fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
-if (args[0] === "status") {
+    const { nativeBinary, logPath } = writeNativeMemoryLaneStub("memory-management-calls.jsonl", `if (args[0] === "status") {
   console.log(JSON.stringify({ data: { contextPolicyMode: "selective", contextPolicyPromptMaxItems: 2 } }));
 } else if (args[0] === "route") {
   console.log(JSON.stringify({ data: { route: { route: "memory-management", confidence: 1, reasons: ["memory-management"] } } }));
@@ -206,17 +211,10 @@ if (args[0] === "status") {
   console.log(JSON.stringify({ data: { memories: [{ id: "wrong", text: "Memory bodies should not be injected." }] } }));
 } else {
   console.log(JSON.stringify({ data: {} }));
-}
-`, "utf8")
-    fs.chmodSync(nativeBinary, 0o755)
+}`)
 
-    run(["init", "--yes", "--only", "pi"], {
-      HOME: home,
-      MEMORY_LANE_INSTALL_BINARY: nativeBinary,
-    })
-
-    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
-    const smoke = `
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
       const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
       const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
       const handlers = {};
@@ -227,26 +225,15 @@ if (args[0] === "status") {
       if (!result.message.content.includes("Memory Lane command guidance")) throw new Error("expected command guidance");
       if (!result.message.content.includes("memory-lane list --json")) throw new Error("expected list command guidance");
       if (result.message.content.includes("Memory bodies should not be injected")) throw new Error("memory-management route leaked recall body");
-    `
-    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
-      encoding: "utf8",
-      env: { ...process.env, PI_EXTENSION_FILE: piExt },
-    })
+    `)
 
-    const calls = fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    const calls = readJsonlCalls(logPath)
     assert.ok(calls.some((args) => args[0] === "route" && args.includes("--prompt") && args.includes("show current memories")))
     assert.equal(calls.some((args) => args[0] === "recall"), false)
   })
 
   it("emits pi CLI bridge policy-only guidance without memory body lookup", () => {
-    const nativeBinary = path.join(home, ".local/bin/memory-lane")
-    const logPath = path.join(home, "policy-only-calls.jsonl")
-    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
-    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
-const fs = require("node:fs");
-const args = process.argv.slice(2);
-fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
-if (args[0] === "status") {
+    const { nativeBinary, logPath } = writeNativeMemoryLaneStub("policy-only-calls.jsonl", `if (args[0] === "status") {
   console.log(JSON.stringify({ data: { contextPolicyMode: "policy-only", contextPolicyPromptMaxItems: 2 } }));
 } else if (args[0] === "route") {
   console.log(JSON.stringify({ data: { route: { route: "continuity", confidence: 1, reasons: ["test"] } } }));
@@ -254,17 +241,10 @@ if (args[0] === "status") {
   console.log(JSON.stringify({ data: { shouldNotBeRead: true } }));
 } else {
   console.log(JSON.stringify({ data: {} }));
-}
-`, "utf8")
-    fs.chmodSync(nativeBinary, 0o755)
+}`)
 
-    run(["init", "--yes", "--only", "pi"], {
-      HOME: home,
-      MEMORY_LANE_INSTALL_BINARY: nativeBinary,
-    })
-
-    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
-    const smoke = `
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
       const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
       const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
       const handlers = {};
@@ -275,26 +255,15 @@ if (args[0] === "status") {
       if (!result.message.content.includes("Memory Lane continuity guidance")) throw new Error("expected continuity guidance");
       if (!result.message.content.includes("memory-lane continuity --json")) throw new Error("expected continuity command guidance");
       if (result.message.content.includes("shouldNotBeRead")) throw new Error("policy-only leaked lookup body");
-    `
-    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
-      encoding: "utf8",
-      env: { ...process.env, PI_EXTENSION_FILE: piExt },
-    })
+    `)
 
-    const calls = fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    const calls = readJsonlCalls(logPath)
     assert.equal(calls.some((args) => args[0] === "continuity"), false)
     assert.equal(calls.some((args) => args[0] === "recall"), false)
   })
 
   it("generated pi CLI bridge uses generic policy-only guidance when route command fails", () => {
-    const nativeBinary = path.join(home, ".local/bin/memory-lane")
-    const logPath = path.join(home, "policy-only-route-fallback-calls.jsonl")
-    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
-    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
-const fs = require("node:fs");
-const args = process.argv.slice(2);
-fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
-if (args[0] === "status") {
+    const { nativeBinary, logPath } = writeNativeMemoryLaneStub("policy-only-route-fallback-calls.jsonl", `if (args[0] === "status") {
   console.log(JSON.stringify({ data: { contextPolicyMode: "policy-only", contextPolicyPromptMaxItems: 2 } }));
 } else if (args[0] === "route") {
   process.exit(42);
@@ -302,14 +271,10 @@ if (args[0] === "status") {
   console.log(JSON.stringify({ data: { shouldNotBeRead: true } }));
 } else {
   console.log(JSON.stringify({ data: {} }));
-}
-`, "utf8")
-    fs.chmodSync(nativeBinary, 0o755)
+}`)
 
-    run(["init", "--yes", "--only", "pi"], { HOME: home, MEMORY_LANE_INSTALL_BINARY: nativeBinary })
-
-    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
-    const smoke = `
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
       const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
       const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
       const handlers = {};
@@ -319,27 +284,16 @@ if (args[0] === "status") {
       if (!result?.message?.content.includes("Memory Lane command guidance")) throw new Error("expected generic policy-only guidance");
       if (result.message.content.includes("Memory Lane continuity guidance")) throw new Error("route failure should not use continuity guidance in policy-only mode");
       if (result.message.content.includes("shouldNotBeRead")) throw new Error("policy-only route fallback leaked lookup body");
-    `
-    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
-      encoding: "utf8",
-      env: { ...process.env, PI_EXTENSION_FILE: piExt },
-    })
+    `)
 
-    const calls = fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    const calls = readJsonlCalls(logPath)
     assert.ok(calls.some((args) => args[0] === "route"))
     assert.equal(calls.some((args) => args[0] === "continuity"), false)
     assert.equal(calls.some((args) => args[0] === "recall"), false)
   })
 
   it("generated pi CLI bridge falls back when route command fails", () => {
-    const nativeBinary = path.join(home, ".local/bin/memory-lane")
-    const logPath = path.join(home, "route-fallback-calls.jsonl")
-    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
-    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
-const fs = require("node:fs");
-const args = process.argv.slice(2);
-fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
-if (args[0] === "status") {
+    const { nativeBinary, logPath } = writeNativeMemoryLaneStub("route-fallback-calls.jsonl", `if (args[0] === "status") {
   console.log(JSON.stringify({ data: { contextPolicyMode: "selective", contextPolicyPromptMaxItems: 2, contextPolicyPromptMaxChars: 3000 } }));
 } else if (args[0] === "route") {
   process.exit(42);
@@ -349,14 +303,10 @@ if (args[0] === "status") {
   console.log(JSON.stringify({ data: { memories: [{ id: "recall", text: "Recall fallback body." }] } }));
 } else {
   console.log(JSON.stringify({ data: {} }));
-}
-`, "utf8")
-    fs.chmodSync(nativeBinary, 0o755)
+}`)
 
-    run(["init", "--yes", "--only", "pi"], { HOME: home, MEMORY_LANE_INSTALL_BINARY: nativeBinary })
-
-    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
-    const smoke = `
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
       const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
       const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
       const handlers = {};
@@ -366,13 +316,9 @@ if (args[0] === "status") {
       if (!continuityResult?.message?.content.includes("Fallback continuity context")) throw new Error("expected continuity heuristic fallback");
       const recallResult = await handlers.before_agent_start({ prompt: "explain the API docs" }, { cwd: process.cwd() });
       if (!recallResult?.message?.content.includes("Recall fallback body")) throw new Error("expected ordinary recall fallback");
-    `
-    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
-      encoding: "utf8",
-      env: { ...process.env, PI_EXTENSION_FILE: piExt },
-    })
+    `)
 
-    const calls = fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    const calls = readJsonlCalls(logPath)
     assert.ok(calls.some((args) => args[0] === "route"))
     assert.ok(calls.some((args) => args[0] === "continuity"))
     assert.ok(calls.some((args) => args[0] === "recall"))
@@ -422,27 +368,16 @@ esac
   })
 
   it("generated pi CLI bridge skips greeting prompt injection without recall", () => {
-    const nativeBinary = path.join(home, ".local/bin/memory-lane")
-    const logPath = path.join(home, "greeting-calls.jsonl")
-    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
-    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
-const fs = require("node:fs");
-const args = process.argv.slice(2);
-fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
-if (args[0] === "status") {
+    const { nativeBinary, logPath } = writeNativeMemoryLaneStub("greeting-calls.jsonl", `if (args[0] === "status") {
   console.log(JSON.stringify({ data: { contextPolicyMode: "selective", contextPolicyPromptMaxItems: 2, contextPolicyPromptMaxChars: 3000 } }));
 } else if (args[0] === "recall") {
   console.log(JSON.stringify({ data: { memories: [{ id: "wrong", text: "Greeting should not recall." }] } }));
 } else {
   console.log(JSON.stringify({ data: {} }));
-}
-`, "utf8")
-    fs.chmodSync(nativeBinary, 0o755)
+}`)
 
-    run(["init", "--yes", "--only", "pi"], { HOME: home, MEMORY_LANE_INSTALL_BINARY: nativeBinary })
-
-    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
-    const smoke = `
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
       const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
       const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
       const handlers = {};
@@ -450,33 +385,24 @@ if (args[0] === "status") {
       fn(pi);
       const result = await handlers.before_agent_start({ prompt: "Hi!" }, { cwd: process.cwd() });
       if (result !== undefined) throw new Error("expected no greeting context");
-    `
-    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], { encoding: "utf8", env: { ...process.env, PI_EXTENSION_FILE: piExt } })
+    `)
 
-    const calls = fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    const calls = readJsonlCalls(logPath)
     assert.equal(calls.some((args) => args[0] === "recall"), false)
   })
 
   it("generated pi CLI bridge caps automatic recall context and keeps explicit recall full fidelity", () => {
-    const nativeBinary = path.join(home, ".local/bin/memory-lane")
-    fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
     const longText = "Relevant pnpm memory. " + "extra details. ".repeat(600)
-    fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
-const args = process.argv.slice(2);
-if (args[0] === "status") {
+    const { nativeBinary } = writeNativeMemoryLaneStub("recall-cap-calls.jsonl", `if (args[0] === "status") {
   console.log(JSON.stringify({ data: { contextPolicyMode: "selective", contextPolicyPromptMaxItems: 2 } }));
 } else if (args[0] === "recall") {
   console.log(JSON.stringify({ data: { memories: [{ id: "long1234", text: ${JSON.stringify(longText)} }] } }));
 } else {
   console.log(JSON.stringify({ data: {} }));
-}
-`, "utf8")
-    fs.chmodSync(nativeBinary, 0o755)
+}`)
 
-    run(["init", "--yes", "--only", "pi"], { HOME: home, MEMORY_LANE_INSTALL_BINARY: nativeBinary })
-
-    const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
-    const smoke = `
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
       const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
       const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
       const handlers = {};
@@ -488,8 +414,7 @@ if (args[0] === "status") {
       if (autoResult.message.content.length > 3300) throw new Error("automatic context exceeded fallback prompt budget: " + autoResult.message.content.length);
       const explicit = await tools.memory_recall.execute("tool-1", { query: "pnpm" }, undefined, undefined, { cwd: process.cwd() });
       if (explicit.content[0].text.length <= autoResult.message.content.length) throw new Error("explicit recall should remain fuller than automatic context");
-    `
-    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], { encoding: "utf8", env: { ...process.env, PI_EXTENSION_FILE: piExt } })
+    `)
   })
 
   it("writes install manifest", () => {
