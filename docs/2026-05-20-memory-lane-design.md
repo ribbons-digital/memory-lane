@@ -190,7 +190,8 @@ Invalidation records are appended when a memory changes, so `recall()` knows to 
 { "id": "a1b2c3d4-e5f6-..." }
 ```
 
-If present, the engine walks up from cwd to find it and uses its UUID as the project key. Survives renames. Not committed (user-local identity).
+If present, the engine walks up from cwd to find it and uses its UUID as the project key.
+It survives renames and should stay uncommitted unless sharing one stable scope id is deliberate.
 
 **Important:** Scope resolution itself never creates scope files.
 Project-local storage initialization can create `.memory-lane-scope` when Memory Lane initializes `.memory-lane/` for a known project.
