@@ -145,15 +145,17 @@ Example shape:
 ## Memory Lane continuity guidance
 
 This prompt appears to ask about prior or ongoing project work.
-Before answering from chat context alone, inspect Memory Lane project state.
+Before answering from chat context alone, inspect canonical Memory Lane continuity state.
 
 Suggested inspection:
+- memory-lane continuity --json
 - memory-lane status --json
 - memory-lane dashboard
 - memory-lane recall "<topic>"
 ```
 
-When no topic is detected, omit the topic-specific recall command and prefer status/dashboard/review/roadmap inspection guidance.
+When no topic is detected, omit the topic-specific recall command and prefer continuity/status/dashboard/review/roadmap inspection guidance.
+Later unified-continuity work made `memory-lane continuity --json` the first suggested broad-status surface.
 
 ### `contextPolicy.mode = selective`
 
@@ -168,7 +170,10 @@ For topic-specific continuity intents:
 For broad project-position and next-work intents:
 
 - Emit guidance first.
-- Existing recall may still run if the prompt has lexical signal, but the guidance should warn the agent to inspect authoritative surfaces before answering.
+- Suppress ordinary recall bodies for broad project-position and next-work prompts so stale lexical hits do not compete with canonical continuity.
+- Warn the agent to inspect authoritative surfaces before answering.
+
+This reflects the later broad-continuity hygiene slice; the original prompt-intent slice allowed ordinary recall to continue after the guidance.
 
 ## Context decision metadata
 
@@ -181,6 +186,8 @@ continuityIntent?: {
   detected: boolean
   family?: "resume" | "lookup" | "project-position" | "next-work"
   topic?: string
+  confidence?: number
+  reasons?: string[]
   guidanceInjected: boolean
 }
 ```
@@ -188,7 +195,8 @@ continuityIntent?: {
 Constraints:
 
 - Do not include memory text.
-- Do not include raw prompts if a normalized family/topic is enough.
+- Do not include raw prompts if a normalized family/topic/reason code is enough.
+- Keep confidence and reason fields text-free and deterministic when present.
 - Avoid adding memory ids unless already part of existing selected-memory diagnostics. Prefer counts and booleans.
 
 If adding metadata would make the slice larger than necessary, it can be deferred, but tests must still assert the rendered guidance behavior.

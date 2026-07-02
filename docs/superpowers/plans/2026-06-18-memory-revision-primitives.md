@@ -1243,7 +1243,9 @@ memory-lane replace <old-id> --text "new successor memory" --kind workflow_rule
 memory-lane supersede <new-id> <old-id> --reason "newer version"
 ```
 
-Use `--dry-run` before relationship changes. Use `--yes` for multi-old `replace` or `supersede`. Do not assume superseded memories are hidden from recall/context yet; Slice 3 records relationships only.
+Use `--dry-run` before relationship changes.
+Use `--yes` for multi-old `replace` or `supersede`.
+Slice 3 recorded relationships only; a later continuity-routing hygiene slice omits superseded records from active continuity slots and workstream discovery, while list/show/recall remain explicit inspection surfaces.
 ```
 
 - [ ] **Step 3: Update ROADMAP**
