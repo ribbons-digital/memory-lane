@@ -23,34 +23,55 @@ function processIsAlive(pid: number): boolean {
   }
 }
 
+interface LockSnapshot {
+  ownerText?: string
+  mtimeMs: number
+  stale: boolean
+}
+
+function lockSnapshot(lockDir: string): LockSnapshot | undefined {
+  const ownerFile = path.join(lockDir, "owner.json")
+  const stat = fs.statSync(lockDir)
+  if (!fs.existsSync(ownerFile)) {
+    return { mtimeMs: stat.mtimeMs, stale: Date.now() - stat.mtimeMs > 30_000 }
+  }
+
+  const ownerText = fs.readFileSync(ownerFile, "utf8")
+  const owner = JSON.parse(ownerText) as { pid?: unknown; createdAt?: unknown }
+  const pid = typeof owner.pid === "number" ? owner.pid : undefined
+  const createdAt = typeof owner.createdAt === "number" ? owner.createdAt : stat.mtimeMs
+  const stale = pid !== undefined ? !processIsAlive(pid) : Date.now() - createdAt > 30_000
+  return { ownerText, mtimeMs: stat.mtimeMs, stale }
+}
+
+function sameLockSnapshot(a: LockSnapshot, b: LockSnapshot): boolean {
+  return a.ownerText === b.ownerText && a.mtimeMs === b.mtimeMs
+}
+
 function removeStaleLock(lockDir: string): boolean {
+  const reapLockDir = `${lockDir}.reap`
   try {
-    const ownerFile = path.join(lockDir, "owner.json")
-    if (fs.existsSync(ownerFile)) {
-      const owner = JSON.parse(fs.readFileSync(ownerFile, "utf8")) as { pid?: unknown; createdAt?: unknown }
-      const pid = typeof owner.pid === "number" ? owner.pid : undefined
-      const createdAt = typeof owner.createdAt === "number" ? owner.createdAt : fs.statSync(lockDir).mtimeMs
-      if (pid !== undefined) {
-        if (!processIsAlive(pid)) {
-          fs.rmSync(lockDir, { recursive: true, force: true })
-          return true
-        }
-        return false
-      }
-      if (Date.now() - createdAt > 30_000) {
-        fs.rmSync(lockDir, { recursive: true, force: true })
-        return true
-      }
-      return false
+    const observed = lockSnapshot(lockDir)
+    if (!observed?.stale) return false
+
+    try {
+      fs.mkdirSync(reapLockDir)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") return false
+      throw error
     }
-    if (Date.now() - fs.statSync(lockDir).mtimeMs > 30_000) {
+
+    try {
+      const current = lockSnapshot(lockDir)
+      if (!current?.stale || !sameLockSnapshot(observed, current)) return false
       fs.rmSync(lockDir, { recursive: true, force: true })
       return true
+    } finally {
+      fs.rmSync(reapLockDir, { recursive: true, force: true })
     }
   } catch {
     return false
   }
-  return false
 }
 
 function releaseFileLock(lockDir: string, token: string): void {

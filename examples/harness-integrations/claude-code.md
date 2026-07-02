@@ -98,13 +98,13 @@ A real Claude Code CLI smoke test in Sitewright confirmed that `SessionEnd` fire
 {
   "adapter": "claude",
   "event": "session-end",
-  "cwd": "/Users/shiang/projects/ribbons-digital/sitewright",
+  "cwd": "/path/to/example-project",
   "status": "ok",
   "saved": 1
 }
 ```
 
-The saved memory was pending, scoped to the Sitewright project, and included:
+The saved memory was pending, scoped to the example project, and included:
 
 ```json
 {
@@ -117,7 +117,7 @@ The saved memory was pending, scoped to the Sitewright project, and included:
 }
 ```
 
-For isolated testing, prefer absolute temp paths in hook commands, for example `MEMORY_LANE_FILE=/tmp/ml-claude-sitewright.xxxxxx/memory.jsonl`. Do not use shell variables such as `$tmp` inside `settings.local.json`; Claude runs hook commands in its own shell and will not inherit your interactive variable.
+For isolated testing, prefer absolute temp paths in hook commands, for example `MEMORY_LANE_FILE=/tmp/ml-claude-example.xxxxxx/memory.jsonl`. Do not use shell variables such as `$tmp` inside `settings.local.json`; Claude runs hook commands in its own shell and will not inherit your interactive variable.
 
 ## What each hook does
 

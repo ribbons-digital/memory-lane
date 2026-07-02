@@ -34,6 +34,7 @@ export interface MemoryLaneEngineResult {
   engine: MemoryEngine
   engineForProjectPath: (projectPath?: string, options?: EngineForProjectPathOptions) => MemoryEngine
   settleEngines: () => Promise<void>
+  cancelPendingEmbeddings: () => void
   plugins: LoadedPlugin[]
 }
 
@@ -41,6 +42,7 @@ export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOpti
   const env = options.env ?? process.env
   const cwd = options.cwd ?? process.cwd()
   const engineCache = new Map<string, { engine: MemoryEngine; signature: string }>()
+  const createdEngines = new Set<MemoryEngine>()
 
   function configFingerprint(configPath: string): string {
     try {
@@ -82,6 +84,7 @@ export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOpti
       env,
     })
     engine.refreshScope(engineCwd)
+    createdEngines.add(engine)
     return engine
   }
 
@@ -102,7 +105,11 @@ export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOpti
   }
 
   async function settleEngines(): Promise<void> {
-    await Promise.allSettled(Array.from(engineCache.values(), ({ engine }) => engine.settle()))
+    await Promise.allSettled(Array.from(createdEngines, (engine) => engine.settle()))
+  }
+
+  function cancelPendingEmbeddings(): void {
+    for (const engine of createdEngines) engine.cancelPendingEmbeddings()
   }
 
   const engine = engineForProjectPath(undefined, { writable: false })
@@ -111,5 +118,5 @@ export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOpti
     ? await loadPlugins({ pluginNames: config.plugins, engine, engineResolver: engineForProjectPath, config, context: "mcp", bundledPlugins: options.bundledPlugins })
     : []
 
-  return { engine, engineForProjectPath, settleEngines, plugins }
+  return { engine, engineForProjectPath, settleEngines, cancelPendingEmbeddings, plugins }
 }

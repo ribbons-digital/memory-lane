@@ -159,4 +159,4 @@ memory-lane config enable-semantic
 memory-lane reindex
 ```
 
-With an OpenAI-compatible embedding provider configured in `~/.memory-lane/config.json`, newly saved approved memories are automatically embedded on a fire-and-forget path. Run `memory-lane reindex` to embed approved memories missing current vectors, or `memory-lane reindex --force` to recompute current vectors.
+With an OpenAI-compatible embedding provider configured in `~/.memory-lane/config.json`, newly saved approved memories queue background embedding work that hooks may wait on briefly before canceling pending work on timeout. Run `memory-lane reindex` to embed approved memories missing current vectors, or `memory-lane reindex --force` to recompute current vectors.

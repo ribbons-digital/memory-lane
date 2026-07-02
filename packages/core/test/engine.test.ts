@@ -1899,6 +1899,50 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.deepEqual(report.semanticWarnings, [])
   })
 
+  it("doctor ignores embeddings older than latest invalidation", () => {
+    const configPath = path.join(dir, "cfg-semantic-invalidated.json")
+    const embPath = path.join(dir, "emb-semantic-invalidated.jsonl")
+    fs.writeFileSync(configPath, JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "test-profile",
+        embeddings: { profiles: { "test-profile": { provider: "openai-compatible-embeddings", baseUrl: "http://localhost:11434", model: "test-model" } } },
+      },
+    }), "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-semantic-invalidated.jsonl"),
+      embeddingsPath: embPath,
+      configPath,
+    })
+    const saved = e.save({ text: "invalidated indexed text", status: "approved" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    fs.appendFileSync(embPath, JSON.stringify({
+      memoryId: saved.memory.id,
+      memoryUpdatedAt: saved.memory.updatedAt,
+      contentHash: contentHash(saved.memory.text),
+      profileName: "test-profile",
+      model: "test-model",
+      dimensions: 2,
+      vector: [1, 0],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    }) + "\n", "utf8")
+    fs.appendFileSync(embPath, JSON.stringify({
+      type: "invalidation",
+      memoryId: saved.memory.id,
+      invalidatedAt: "2026-01-02T00:00:00.000Z",
+      reason: "updated",
+    }) + "\n", "utf8")
+
+    const report = e.doctor()
+
+    assert.equal(report.semanticApprovedMemories, 1)
+    assert.equal(report.semanticEmbeddedApprovedMemories, 0)
+    assert.equal(report.semanticEmbeddingCoverage, 0)
+    assert.match((report.semanticWarnings as string[]).join("\n"), /only 0\/1 approved memories have current embeddings/)
+  })
+
   it("doctor ignores stale embeddings with mismatched content hash model or profile", () => {
     const configPath = path.join(dir, "cfg-semantic-stale.json")
     const embPath = path.join(dir, "emb-semantic-stale.jsonl")
@@ -2073,8 +2117,10 @@ You are continuing the same subagent session. Before this run can be accepted, c
     }), "utf8")
     let aborted = false
     const provider: EmbeddingProvider = {
-      embed: async (_inputs, signal) => new Promise((resolve) => {
+      embed: async (_inputs, signal) => new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("expected embedding abort")), 250)
         signal?.addEventListener("abort", () => {
+          clearTimeout(timeout)
           aborted = true
           resolve([[1, 0]])
         }, { once: true })
@@ -2094,6 +2140,44 @@ You are continuing the same subagent session. Before this run can be accepted, c
 
     assert.equal(aborted, true)
     assert.equal(readJsonl(embeddingsPath).length, 0)
+  })
+
+  it("reindex embeds rows made stale by later invalidation", async () => {
+    const configPath = path.join(dir, "cfg-reindex-stale-invalidation.json")
+    const embeddingsPath = path.join(dir, "emb-reindex-stale-invalidation.jsonl")
+    fs.writeFileSync(configPath, JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "test-profile",
+        embeddings: { profiles: { "test-profile": { provider: "openai-compatible-embeddings", baseUrl: "http://localhost", model: "test-model" } } },
+      },
+    }), "utf8")
+    let calls = 0
+    const provider: EmbeddingProvider = { embed: async (inputs) => {
+      calls += inputs.length
+      return inputs.map(() => [1, 0])
+    } }
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-reindex-stale-invalidation.jsonl"),
+      embeddingsPath,
+      configPath,
+      embeddingProvider: provider,
+    })
+    const saved = e.save({ text: "stale invalidation approved", status: "approved" })
+    assert.equal(saved.status, "saved")
+    await e.settle()
+    assert.equal(calls, 1)
+
+    fs.appendFileSync(embeddingsPath, JSON.stringify({
+      type: "invalidation",
+      memoryId: saved.memory.id,
+      invalidatedAt: "9999-01-01T00:00:00.000Z",
+      reason: "updated",
+    }) + "\n", "utf8")
+
+    const result = await e.reindexEmbeddings()
+    assert.deepEqual(result, { embedded: 1, skippedExisting: 0, skippedSecrets: 0 })
+    assert.equal(calls, 2)
   })
 
   it("reindex skips current embeddings unless forced", async () => {

@@ -977,13 +977,11 @@ async function settleEngineForCommand(command: string, engine: MemoryEngine): Pr
     return
   }
 
-  let timedOut = false
   let timer: NodeJS.Timeout | undefined
   await Promise.race([
     engine.settle(),
     new Promise<void>((resolve) => {
       timer = setTimeout(() => {
-        timedOut = true
         engine.cancelPendingEmbeddings()
         resolve()
       }, HOOK_SETTLE_TIMEOUT_MS)
@@ -991,7 +989,6 @@ async function settleEngineForCommand(command: string, engine: MemoryEngine): Pr
     }),
   ])
   if (timer) clearTimeout(timer)
-  if (timedOut) engine.cancelPendingEmbeddings()
 }
 
 const commandHandlers: Record<string, CommandHandler> = {

@@ -586,6 +586,23 @@ export class MemoryEngine {
     return this.storage.compact()
   }
 
+  private currentEmbeddingKeys(profileName: string, model: string): Set<string> {
+    const latestInvalidations = new Map<string, string>()
+    for (const invalidation of this.storage.listEmbeddingInvalidations()) {
+      const previous = latestInvalidations.get(invalidation.memoryId)
+      if (!previous || previous <= invalidation.invalidatedAt) latestInvalidations.set(invalidation.memoryId, invalidation.invalidatedAt)
+    }
+
+    const currentKeys = new Set<string>()
+    for (const embedding of this.storage.listEmbeddings()) {
+      const invalidatedAt = latestInvalidations.get(embedding.memoryId)
+      if (invalidatedAt && embedding.createdAt < invalidatedAt) continue
+      if (embedding.profileName !== profileName || embedding.model !== model) continue
+      currentKeys.add([embedding.memoryId, embedding.contentHash, embedding.profileName, embedding.model].join("\0"))
+    }
+    return currentKeys
+  }
+
   /** Rebuild embeddings for approved memories that do not already have a current embedding. */
   async reindexEmbeddings(opts?: { force?: boolean; signal?: AbortSignal }): Promise<{ embedded: number; skippedExisting: number; skippedSecrets: number }> {
     if (!this.embProvider || !this.config.semantic.enabled) {
@@ -602,18 +619,7 @@ export class MemoryEngine {
     const model = profile.model
     const skippedSecrets = approved.length - safe.length
 
-    const latestInvalidations = new Map<string, string>()
-    for (const invalidation of this.storage.listEmbeddingInvalidations()) {
-      const previous = latestInvalidations.get(invalidation.memoryId)
-      if (!previous || previous <= invalidation.invalidatedAt) latestInvalidations.set(invalidation.memoryId, invalidation.invalidatedAt)
-    }
-    const currentKeys = new Set<string>()
-    for (const embedding of this.storage.listEmbeddings()) {
-      const invalidatedAt = latestInvalidations.get(embedding.memoryId)
-      if (invalidatedAt && embedding.createdAt < invalidatedAt) continue
-      if (embedding.profileName !== profileName || embedding.model !== model) continue
-      currentKeys.add([embedding.memoryId, embedding.contentHash, embedding.profileName, embedding.model].join("\0"))
-    }
+    const currentKeys = this.currentEmbeddingKeys(profileName, model)
 
     const needsEmbedding = opts?.force
       ? safe
@@ -666,14 +672,9 @@ export class MemoryEngine {
 
     let semanticEmbeddedApprovedMemories = 0
     if (model) {
-      const embeddings = this.storage.listEmbeddings()
-      const currentKeys = new Set(
-        embeddings
-          .filter((embedding) => embedding.profileName === profileName && embedding.model === model)
-          .map((embedding) => [embedding.memoryId, embedding.contentHash].join("\0")),
-      )
+      const currentKeys = this.currentEmbeddingKeys(profileName, model)
       semanticEmbeddedApprovedMemories = approved.filter((memory) => (
-        currentKeys.has([memory.id, contentHash(memory.text)].join("\0"))
+        currentKeys.has([memory.id, contentHash(memory.text), profileName, model].join("\0"))
       )).length
     }
 

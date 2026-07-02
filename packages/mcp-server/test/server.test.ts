@@ -222,11 +222,18 @@ test("createMemoryLaneEngine settles cached engines before MCP shutdown", async 
   const writableEngine = engineForProjectPath(callProject)
   const settled: string[] = []
   ;(engine as any).settle = async () => { settled.push("startup") }
-  ;(writableEngine as any).settle = async () => { settled.push("call-project") }
+  ;(writableEngine as any).settle = async () => { settled.push("call-project-old") }
+
+  const configPath = path.join(home, ".memory-lane", "config.json")
+  fs.mkdirSync(path.dirname(configPath), { recursive: true })
+  fs.writeFileSync(configPath, JSON.stringify({ memory: { handoffMode: "manual" } }), "utf8")
+  const replacedEngine = engineForProjectPath(callProject)
+  assert.notEqual(replacedEngine, writableEngine)
+  ;(replacedEngine as any).settle = async () => { settled.push("call-project-new") }
 
   await settleEngines()
 
-  assert.deepEqual(settled.sort(), ["call-project", "startup"])
+  assert.deepEqual(settled.sort(), ["call-project-new", "call-project-old", "startup"])
 })
 
 test("createMemoryLaneEngine retargets storage for per-call project paths", async () => {

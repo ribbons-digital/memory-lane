@@ -11,7 +11,9 @@ function ensureDir(filePath: string): void {
 function readJson(filePath: string): Record<string, unknown> {
   if (!fs.existsSync(filePath)) return {}
   try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"))
+    if (!isRecord(parsed)) throw new Error("root must be a JSON object")
+    return parsed
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`Could not parse JSON config ${filePath}: ${message}`)

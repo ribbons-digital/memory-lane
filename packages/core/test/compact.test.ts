@@ -90,6 +90,24 @@ describe("compact", () => {
     assert.equal(remaining.length, 3)
   })
 
+  it("preserves invalid embedding rows while compacting valid embeddings", () => {
+    const alive = rec({ id: "alive", status: "approved" })
+    fs.writeFileSync(mf, [alive].map(JSON.stringify).join("\n") + "\n", "utf8")
+    const validEmbedding = { memoryId: "alive", memoryUpdatedAt: alive.updatedAt, contentHash: sha256("x"), profileName: "p", model: "m", dimensions: 1, vector: [0.5], createdAt: "2026-01-01T00:00:00.000Z" }
+    const invalidJson = "{not json"
+    const invalidRecord = JSON.stringify({ memoryId: "alive", vector: "not-array" })
+    fs.writeFileSync(ef, [JSON.stringify(validEmbedding), invalidRecord, invalidJson].join("\n") + "\n", "utf8")
+
+    const report = compact(mf, ef)
+    const remaining = fs.readFileSync(ef, "utf8").split("\n").filter(Boolean)
+
+    assert.equal(report.removedEmbeddings, 0)
+    assert.equal(remaining.length, 3)
+    assert.equal(JSON.parse(remaining[0]).memoryId, "alive")
+    assert.ok(remaining.includes(invalidRecord))
+    assert.ok(remaining.includes(invalidJson))
+  })
+
   it("preserves invalid rows while compacting valid memory records", () => {
     const alive = rec({ status: "approved", id: "alive" })
     const dead = rec({ status: "deleted", id: "dead" })

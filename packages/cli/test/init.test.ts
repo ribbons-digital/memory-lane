@@ -553,6 +553,21 @@ esac
     assert.match(output, /Claude Code CLI failed: Could not parse JSON config/u)
   })
 
+  it("leaves non-object JSON hook config untouched", () => {
+    const configPath = path.join(home, ".claude/settings.json")
+    fs.mkdirSync(path.dirname(configPath), { recursive: true })
+    fs.writeFileSync(configPath, "null", "utf8")
+
+    const output = run(["init", "--yes"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    assert.equal(fs.readFileSync(configPath, "utf8"), "null")
+    assert.equal(fs.existsSync(`${configPath}.memory-lane.bak`), false)
+    assert.match(output, /Claude Code CLI failed: Could not parse JSON config/u)
+  })
+
   it("writes project-level Claude Code hooks with --project", () => {
     const project = tempDir()
     run(["init", "--yes", "--project", project], {
