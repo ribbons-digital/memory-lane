@@ -2,6 +2,7 @@ import * as crypto from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { isStrictIsoTimestamp } from "./freshness.js"
+import { withFileLock } from "./storage.js"
 import type { ContinuityBaselineDiagnostic } from "./types.js"
 
 const BASELINE_FILE_NAME = "continuity-baselines.json"
@@ -72,14 +73,21 @@ export function readContinuityBaseline(filePath: string, projectScope?: string):
 
 export function writeContinuityBaseline(filePath: string, projectScope: string, observedAt: string): { ok: boolean; warning?: string } {
   try {
-    const { data } = readBaselineFile(filePath)
-    const now = new Date().toISOString()
-    data.projects[projectScope] = { projectScope, lastSeenAt: observedAt, updatedAt: now }
-    fs.mkdirSync(path.dirname(filePath), { recursive: true })
-    const tmpFile = `${filePath}.tmp.${crypto.randomBytes(4).toString("hex")}`
-    fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2) + "\n", "utf8")
-    fs.renameSync(tmpFile, filePath)
-    return { ok: true }
+    let result: { ok: boolean; warning?: string } = { ok: true }
+    withFileLock(filePath, () => {
+      const { data, warning, readable } = readBaselineFile(filePath)
+      if (!readable) {
+        result = { ok: false, warning: warning ?? UNREADABLE_WARNING }
+        return
+      }
+      const now = new Date().toISOString()
+      data.projects[projectScope] = { projectScope, lastSeenAt: observedAt, updatedAt: now }
+      fs.mkdirSync(path.dirname(filePath), { recursive: true })
+      const tmpFile = `${filePath}.tmp.${crypto.randomBytes(4).toString("hex")}`
+      fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2) + "\n", "utf8")
+      fs.renameSync(tmpFile, filePath)
+    })
+    return result
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     return { ok: false, warning: `Continuity baseline marker write failed: ${message}` }

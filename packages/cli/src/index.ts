@@ -963,10 +963,29 @@ function isHookInvocation(command: string): boolean {
   return command === "claude" || command === "codex"
 }
 
+const HOOK_SETTLE_TIMEOUT_MS = 2_000
+
 function failSafeHookInitialization(reason: string): never {
   if (process.env.MEMORY_LANE_HOOK_DEBUG) console.error(`Memory Lane hook initialization failed: ${reason}`)
   console.log("{}")
   process.exit(0)
+}
+
+async function settleEngineForCommand(command: string, engine: MemoryEngine): Promise<void> {
+  if (!isHookInvocation(command)) {
+    await engine.settle()
+    return
+  }
+
+  let timer: NodeJS.Timeout | undefined
+  await Promise.race([
+    engine.settle(),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, HOOK_SETTLE_TIMEOUT_MS)
+      timer.unref?.()
+    }),
+  ])
+  if (timer) clearTimeout(timer)
 }
 
 const commandHandlers: Record<string, CommandHandler> = {
@@ -1132,9 +1151,9 @@ async function main(): Promise<void> {
       configPath,
       engine,
     })
-    await engine.settle()
+    await settleEngineForCommand(command, engine)
   } catch (err: unknown) {
-    await engine.settle()
+    await settleEngineForCommand(command, engine)
     const msg = err instanceof Error ? err.message : String(err)
     if (isHookInvocation(command)) failSafeHookInitialization(msg)
     console.log(formatError(msg, json))

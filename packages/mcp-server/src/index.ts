@@ -21,11 +21,15 @@ async function waitForStdinClose(): Promise<void> {
 }
 
 export async function main(options: MainOptions = {}): Promise<void> {
-  const { engine, engineForProjectPath, plugins } = await createMemoryLaneEngine({ bundledPlugins: options.bundledPlugins })
+  const { engine, engineForProjectPath, settleEngines, plugins } = await createMemoryLaneEngine({ bundledPlugins: options.bundledPlugins })
   const server = createMemoryLaneMcpServer({ engine, engineForProjectPath, plugins })
   const transport = new StdioServerTransport()
   await server.connect(transport)
-  await waitForStdinClose()
+  try {
+    await waitForStdinClose()
+  } finally {
+    await settleEngines()
+  }
 }
 
 export function isDirectExecution(metaUrl = import.meta.url, argv1 = process.argv[1]): boolean {

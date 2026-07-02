@@ -210,6 +210,25 @@ test("read-only MCP tools request non-writable project-path engines", async () =
   assert.deepEqual(calls, cases.map(() => ({ projectPath, options: { writable: false } })))
 })
 
+test("createMemoryLaneEngine settles cached engines before MCP shutdown", async () => {
+  const dir = tempDir("memory-lane-mcp-engine-settle-")
+  const home = path.join(dir, "home")
+  const startupProject = path.join(dir, "startup-project")
+  const callProject = path.join(dir, "call-project")
+  fs.mkdirSync(startupProject, { recursive: true })
+  fs.mkdirSync(callProject, { recursive: true })
+
+  const { engine, engineForProjectPath, settleEngines } = await createMemoryLaneEngine({ cwd: startupProject, env: { HOME: home } })
+  const writableEngine = engineForProjectPath(callProject)
+  const settled: string[] = []
+  ;(engine as any).settle = async () => { settled.push("startup") }
+  ;(writableEngine as any).settle = async () => { settled.push("call-project") }
+
+  await settleEngines()
+
+  assert.deepEqual(settled.sort(), ["call-project", "startup"])
+})
+
 test("createMemoryLaneEngine retargets storage for per-call project paths", async () => {
   const dir = tempDir("memory-lane-mcp-engine-project-path-")
   const home = path.join(dir, "home")

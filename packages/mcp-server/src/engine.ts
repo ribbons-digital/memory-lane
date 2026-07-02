@@ -33,6 +33,7 @@ export interface EngineForProjectPathOptions {
 export interface MemoryLaneEngineResult {
   engine: MemoryEngine
   engineForProjectPath: (projectPath?: string, options?: EngineForProjectPathOptions) => MemoryEngine
+  settleEngines: () => Promise<void>
   plugins: LoadedPlugin[]
 }
 
@@ -100,11 +101,15 @@ export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOpti
     return engine
   }
 
+  async function settleEngines(): Promise<void> {
+    await Promise.allSettled(Array.from(engineCache.values(), ({ engine }) => engine.settle()))
+  }
+
   const engine = engineForProjectPath(undefined, { writable: false })
   const config = loadConfig(resolveEngineStoragePaths({ cwd, env }).configPath)
   const plugins = config.plugins?.length
     ? await loadPlugins({ pluginNames: config.plugins, engine, engineResolver: engineForProjectPath, config, context: "mcp", bundledPlugins: options.bundledPlugins })
     : []
 
-  return { engine, engineForProjectPath, plugins }
+  return { engine, engineForProjectPath, settleEngines, plugins }
 }
