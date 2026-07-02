@@ -2,7 +2,7 @@
 
 ## Status
 
-Approved by the user through Plannotator and merged in PR #80 as `a87eff5`, targeted for release `v0.2.43`.
+Approved by the user through Plannotator, merged in PR #80 as `a87eff5`, and shipped in `v0.2.43`.
 Opus 4.8 second-opinion review completed before presentation.
 Implementation remained within this design gate.
 
@@ -10,17 +10,17 @@ Implementation remained within this design gate.
 
 Slice 0 shipped in `v0.2.42` as the storage facade proof.
 It added `MemoryEngineStorage` and `createSingleStoreEngineStorage` while preserving all default storage behavior.
-The next product goal is to make new project-scoped writes land under the project by default when Memory Lane can resolve a project scope.
-Global-scope preferences and personal memories should remain in the home store.
+This slice's product goal was to make new project-scoped writes land under the project by default when Memory Lane can resolve a project scope.
+Global-scope preferences and personal memories remain in the home store.
 
 The active approved umbrella design is `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`.
-This document narrows Slice 1 so it can be approved, implemented, reviewed, and dogfooded without migration or retrieval changes.
+This document narrowed Slice 1 so it could be approved, implemented, reviewed, and dogfooded without migration or retrieval changes.
 
 ## Problem
 
-Today, a project-scoped memory usually writes to `~/.memory-lane/memory.jsonl` unless project-local storage was explicitly initialized or home storage is unavailable.
-That behavior relies on scope filtering to prevent cross-project context leakage.
-The product direction is safer and easier to explain if project-scoped memories live at `<project-root>/.memory-lane/memory.jsonl` by default.
+Before Slice 1, a project-scoped memory usually wrote to `~/.memory-lane/memory.jsonl` unless project-local storage was explicitly initialized or home storage was unavailable.
+That behavior relied on scope filtering to prevent cross-project context leakage.
+The product direction is safer and easier to explain now that project-scoped memories live at `<project-root>/.memory-lane/memory.jsonl` by default.
 
 Changing that default is not just a path-resolution tweak.
 Memory Lane revisions are append-only records with last-wins folding by `id`.
@@ -99,7 +99,7 @@ Read-only commands should not auto-create project-local storage.
 ### Resolver interaction
 
 Auto-creating a project store must not accidentally convert the whole process back into legacy project-local single-store behavior on the next invocation.
-Today, `resolveMemoryPaths()` discovers an existing `.memory-lane/` by walking upward and returns that project-local store as the scalar path set.
+Legacy `resolveMemoryPaths()` discovery can find an existing `.memory-lane/` by walking upward and return that project-local store as the scalar path set.
 Slice 1 should not let that legacy discovery path decide default two-tier routing.
 
 Implementation should introduce a project-aware storage factory or resolver mode that handles default two-tier engine construction directly:
@@ -285,6 +285,6 @@ Manual dogfood checks:
 ## Approval record
 
 The user approved Slice 1 as scoped here.
-PR #80 merged the implementation as `a87eff5`, targeted for release `v0.2.43`.
+PR #80 merged the implementation as `a87eff5` and shipped in `v0.2.43`.
 Implementation remained limited to project-local default writes, merged two-store reads, origin-store routing, and compatible docs/tests.
 Migration diagnostics and explicit cross-store moves remain deferred follow-ups.
