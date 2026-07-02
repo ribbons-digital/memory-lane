@@ -44,7 +44,9 @@ Slice 2a legacy project-memory diagnostics is merged in PR #89.
 Fable 5 reviewed the planning direction, full spec, and implementation.
 Approved spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`.
 Shipped behavior: detect active legacy home-stored project memories for the current project, surface bounded `status` / `doctor` diagnostics, and provide a dry-run-only migration preview without silent moves/deletes/approvals/consolidation.
-Next recommended action is release prep and installed-artifact dogfood for a post-`v0.2.43` release unless the user wants another implementation slice first.
+Current action is `v0.2.44` release prep and installed-artifact dogfood for Slice 2a.
+Release prep validation draft: `docs/superpowers/validation/2026-07-02-v0.2.44-release-prep.md`.
+After the release-prep PR merges, tag `v0.2.44`, wait for the release workflow, run installed-artifact dogfood, and record the results.
 
 ## Load-bearing constraints
 
@@ -104,6 +106,7 @@ Next recommended action is release prep and installed-artifact dogfood for a pos
 - Project-local storage default design: `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`
 - Project-local storage Slice 1 approved implementation spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`
 - Project-local storage Slice 2a legacy diagnostics shipped spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`
+- v0.2.44 release prep validation draft: `docs/superpowers/validation/2026-07-02-v0.2.44-release-prep.md`
 - Continuity routing/context hygiene release: PR #82 / `a808231`, shipped in `v0.2.43`
 - Retrieval currentness tie-break design: `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md`
 - Retrieval currentness tie-break validation: `docs/superpowers/validation/2026-06-30-retrieval-currentness-tie-break-validation.md`

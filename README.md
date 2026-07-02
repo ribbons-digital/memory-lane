@@ -436,8 +436,8 @@ If you do this in a Git repository, add `.memory-lane-scope` to `.gitignore` unl
 
 Existing memories saved under old worktree path keys are not migrated automatically. Use `memory-lane list --all`, `memory-lane show <id> --all`, and existing review/rescope/delete/save commands if you want to clean up fragmented historical records.
 
-For legacy project-scoped memories that still live in the home store from before project-local defaults, use `memory-lane status --json`, `memory-lane doctor --json`, or `memory-lane migrate project-local --dry-run`.
-These commands are read-only for legacy diagnostics and do not move records or create project-local storage.
+For legacy project-scoped memories that still live in the home store from before project-local defaults, use `memory-lane status --json`, `memory-lane doctor --json`, MCP `memory_status`, or `memory-lane migrate project-local --dry-run`.
+These surfaces are read-only for legacy diagnostics and do not move records or create project-local storage.
 When legacy candidates exist, the diagnostics include counts, hazard counters, and at most 10 bounded sample previews capped at 160 characters.
 
 ## CLI Commands
