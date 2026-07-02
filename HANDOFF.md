@@ -2,9 +2,9 @@
 
 ## Current state
 
-- Branch context: post-release docs branch `docs/v0.2.43-release-dogfood` from `main` synced through `287bb1a docs: prepare v0.2.43 release status (#83)`.
+- Branch context: Fable 5 Wave 4 maintainability branch `feat/fable-5-wave-4-maintainability` from `main` synced through `6da6105 fix(core): harden Memory Lane storage and lifecycle behavior (#85)`.
 - Latest release: `v0.2.43` at tag `v0.2.43` / commit `287bb1a`; release workflow `28560737645` passed and published the release. Installed-artifact dogfood passed with a pre-upgrade baseline smoke, `memory-lane upgrade --yes`, and a post-upgrade smoke.
-- Current feature branch `feat/fable-5-hardening` hardens storage/config reliability: JSON harness config merges/backups, fail-safe Claude/Codex hook initialization, bounded embedding settlement on CLI/MCP shutdown, compaction preserving invalid rows, stale embedding invalidation correctness, and provider timeout validation.
+- PR #85 merged as `6da6105`, completing Fable 5 Waves 1-3 hardening: JSON harness config merges/backups, fail-safe Claude/Codex hook initialization, bounded embedding settlement on CLI/MCP shutdown, compaction preserving invalid rows, stale embedding invalidation correctness, provider timeout validation, and docs/status sync.
 - Phase 21 `Handoff-Free Sessions` is complete and dogfooded. Fresh-thread prompt `where are we in the project and what should we work on next?` used about 11.8% context, improved from the previous 14.x% range.
 - Docs/context-budget slice is merged: root `ROADMAP.md` is now a compact active index, historical roadmap detail through Phase 20.5 is archived, `HANDOFF.md` is a status card, and Memory Lane skill guidance emphasizes bounded reads.
 - Retrieval/continuity eval baseline PR #70 merged as `7d5a8a6`; local/remote `feat/retrieval-continuity-eval-baseline` branches are cleaned up. The slice added a sanitized six-scenario corpus, test-only core eval helpers, structural tests, and baseline findings doc.
@@ -37,15 +37,16 @@ Continuity routing and continuity context hygiene merged in PR #82 as `a808231` 
 Scope shipped on main: harness-neutral deterministic routing for natural broad next-work/status/resume/lookup prompts across Claude/Codex hooks, repo-local Pi, generated Pi bridge route-decision parity, MCP tool-description steering, continuity read-model/rendering cleanup, superseded discovery exclusion, workflow-area operating-guidance collapse, descriptor preview sharing, and a roadmap/backlog note for a future Memory-Lane-configured harness-agnostic LLM classifier.
 No classifier behavior shipped in this slice.
 
-Current next action: finish and merge the `feat/fable-5-hardening` hardening branch after validation.
-Next recommended implementation slice remains Slice 2 migration/compatibility diagnostics unless hardening or release dogfood evidence changes priorities.
-Target behavior: detect legacy home-stored project memories, surface bounded diagnostics/warnings, and provide explicit dry-run migration without silent moves/deletes/approvals/consolidation.
+Current next action: complete Fable 5 Wave 4 maintainability/UX follow-through on `feat/fable-5-wave-4-maintainability`: truth up stale status docs, ignore `.memory-lane-scope`, and extract the Obsidian CLI command cluster without behavior changes.
+Next recommended product slice after Wave 4 remains Slice 2 migration/compatibility diagnostics unless release dogfood evidence changes priorities.
+Target behavior for Slice 2: detect legacy home-stored project memories, surface bounded diagnostics/warnings, and provide explicit dry-run migration without silent moves/deletes/approvals/consolidation.
 
 ## Load-bearing constraints
 
 - For broad prior-work/project-status/next-work questions, call Memory Lane continuity first and verify against compact repo state when available.
 - At phase/slice completion, release, merge, or next-work recommendation, sync status docs before calling work complete.
-- Use Opus 4.8 for Memory Lane design/spec and pre-PR implementation reviews with: `claude --model claude-opus-4-8 -p '<review prompt>'`.
+- Use Fable 5 for the active Fable 5 Wave 4 planning and code review with: `claude --model claude-fable-5 -p '<review prompt>'`.
+- Use Opus 4.8 for ordinary Memory Lane design/spec and pre-PR implementation reviews outside the Fable 5 wave with: `claude --model claude-opus-4-8 -p '<review prompt>'`.
 - PR-protected workflow applies: feature branch/worktree → PR → wait for user merge → sync main/delete feature branch/recommend next item.
 - Avoid retrieval rewrites, auto-consolidation, silent deletion, schema expansion, raw transcript indexing, token retuning, public eval commands, production eval APIs, or persisted workstream IDs unless a new approved slice explicitly includes them.
 
