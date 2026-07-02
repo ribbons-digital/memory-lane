@@ -39,8 +39,10 @@ Scope shipped on main: harness-neutral deterministic routing for natural broad n
 No classifier behavior shipped in this slice.
 
 Fable 5 Wave 4 maintainability/UX follow-through is complete in PR #86.
-Next recommended product slice is Slice 2 migration/compatibility diagnostics unless release dogfood evidence changes priorities.
-Target behavior for Slice 2: detect legacy home-stored project memories, surface bounded diagnostics/warnings, and provide explicit dry-run migration without silent moves/deletes/approvals/consolidation.
+Next recommended product slice is Slice 2a legacy project-memory diagnostics unless release dogfood evidence changes priorities.
+Fable 5 reviewed the planning direction, and the user approved the narrow scope for a full spec draft.
+Full spec approval is still required before implementation: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`.
+Target behavior for Slice 2a: detect active legacy home-stored project memories for the current project, surface bounded `status` / `doctor` diagnostics, and provide a dry-run-only migration preview without silent moves/deletes/approvals/consolidation.
 
 ## Load-bearing constraints
 
@@ -98,6 +100,7 @@ Target behavior for Slice 2: detect legacy home-stored project memories, surface
 - Retrieval/continuity eval baseline findings: `docs/superpowers/validation/2026-06-27-retrieval-continuity-eval-baseline.md`
 - Project-local storage default design: `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`
 - Project-local storage Slice 1 approved implementation spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`
+- Project-local storage Slice 2a legacy diagnostics draft: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`
 - Continuity routing/context hygiene release: PR #82 / `a808231`, shipped in `v0.2.43`
 - Retrieval currentness tie-break design: `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md`
 - Retrieval currentness tie-break validation: `docs/superpowers/validation/2026-06-30-retrieval-currentness-tie-break-validation.md`
