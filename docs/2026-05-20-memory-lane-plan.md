@@ -21,7 +21,7 @@ packages/core/src/
 ├── types.ts               # All interfaces, types, and type guards
 ├── engine.ts              # MemoryEngine: facade that wires everything together
 ├── storage.ts             # MemoryStore: JSONL storage for memory records, cache, and batch append
-├── storage-facade.ts      # MemoryEngineStorage seam for memories, embeddings, compaction, diagnostics, and baselines
+├── storage-facade.ts      # MemoryEngineStorage seam for memories, embeddings, compaction, diagnostics, legacy project-memory diagnostics, and baselines
 ├── search.ts              # Lexical search, dedup, secret detection, scope matching
 ├── project-scope.ts       # Project identity resolution (scope file → git → global)
 ├── embedding-store.ts     # EmbeddingStore: JSONL storage for embedding + invalidation records

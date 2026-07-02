@@ -36,7 +36,8 @@ Use this bounded path for prompts like “what were we working on?”, “where 
 - **You proactively identify something worth remembering** → use `memory_suggest` or `memory-lane suggest` so the user can review later.
 - **You need a targeted approved fact, preference, or project memory** → use `memory_recall` or `memory-lane recall`.
 - **User asks broad continuity / prior-work / next-action questions** → use the fast path above.
-- **You need setup/status without memory text** → use `memory-lane status --json`, `memory-lane doctor --json`, or `memory_status`.
+- **You need setup/status diagnostics** → use `memory-lane status --json`, `memory-lane doctor --json`, or `memory_status`.
+  Legacy project-memory diagnostics may include bounded sample previews.
 
 ## Project docs sync rule
 
@@ -64,6 +65,7 @@ memory-lane review
 memory-lane review --suspect-meta --include-approved
 memory-lane status --json
 memory-lane doctor --json
+memory-lane migrate project-local --dry-run --json
 memory-lane dashboard
 memory-lane agreements
 memory-lane agreements --area project-loop
@@ -105,7 +107,9 @@ Use `--dry-run` where available before changing scope or relationships. Active c
 - Use `memory-lane continuity --json` / `memory_continuity({})` for broad workstream state.
 - Use `memory-lane continuity --query "..." --json` / `memory_continuity({ query })` for topic-specific workstream discovery.
 - Use `memory-lane agreements` for project workflow, review gates, PR process, release process, or tooling workflow rules.
-- Use `memory-lane status --json`, `memory-lane doctor --json`, or MCP `memory_status` for text-free continuity/staleness metadata. Use `memory-lane dashboard` only when a compact human-facing overview is appropriate.
+- Use `memory-lane status --json`, `memory-lane doctor --json`, or MCP `memory_status` for text-free continuity/staleness metadata.
+  Legacy project-memory diagnostics on the same surfaces may include bounded sample previews.
+  Use `memory-lane dashboard` only when a compact human-facing overview is appropriate.
 - Treat pending continuity as review candidates, not approved facts.
 - Inspect full memories by exact id with `memory-lane show <id>` or MCP `memory_get` when continuity says operating guidance was truncated or a SessionStart `Memory Index` descriptor is relevant. Exact inspection includes descriptor metadata when present.
 
@@ -180,6 +184,11 @@ Do not imply automatic sync, bidirectional sync, or Obsidian-backed storage. Do 
 ## Storage and semantic search
 
 Default storage is two-tier when no explicit `MEMORY_LANE_*` paths are set: global-scope memories, including default preferences and personal memories, stay in `~/.memory-lane/`, while new current-project-scoped memories write to the resolved project `<root>/.memory-lane/`. If home storage is not writable, writable commands/hooks auto-initialize project-local single-store fallback; read-only inspection commands should not create fallback storage. Explicit `MEMORY_LANE_FILE`, `MEMORY_LANE_EMBEDDINGS_FILE`, and `MEMORY_LANE_CONFIG` always win and keep single-store behavior.
+
+Legacy project-scoped memories from before project-local defaults may still live in the home store.
+Use `memory-lane status --json`, `memory-lane doctor --json`, or `memory-lane migrate project-local --dry-run --json` to inspect them.
+The diagnostics include counts, hazard counters, and bounded sample previews when legacy candidates exist.
+The migration preview is read-only in the current slice; do not imply records are moved.
 
 Semantic search is disabled by default. Enable it, then run `reindex` when existing approved memories are missing current vectors for the active profile/model/content hash:
 

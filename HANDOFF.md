@@ -39,9 +39,9 @@ Scope shipped on main: harness-neutral deterministic routing for natural broad n
 No classifier behavior shipped in this slice.
 
 Fable 5 Wave 4 maintainability/UX follow-through is complete in PR #86.
-Next recommended product slice is Slice 2a legacy project-memory diagnostics unless release dogfood evidence changes priorities.
-Fable 5 reviewed the planning direction, and the user approved the narrow scope for a full spec draft.
-Full spec approval is still required before implementation: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`.
+Current implementation slice is Slice 2a legacy project-memory diagnostics on `feat/project-local-slice-2a-diagnostics`.
+Fable 5 reviewed the planning direction and full spec, and the user approved implementation.
+Approved spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`.
 Target behavior for Slice 2a: detect active legacy home-stored project memories for the current project, surface bounded `status` / `doctor` diagnostics, and provide a dry-run-only migration preview without silent moves/deletes/approvals/consolidation.
 
 ## Load-bearing constraints

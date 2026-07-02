@@ -2,14 +2,14 @@
 
 ## Status
 
-Approved as the next planning target after PR #87 post-Wave-4 status sync.
-Fable 5 second-opinion review completed before drafting this spec.
-Implementation is not approved until the user approves this full design.
+Approved for implementation after PR #88 merged the design.
+Fable 5 second-opinion review completed before drafting this spec and again before approval.
+The implementation branch is `feat/project-local-slice-2a-diagnostics`.
 
 ## Entry gate
 
-This is a roadmap/spec/design gate only.
-Do not implement until the user explicitly approves this design.
+This design gate is complete.
+Implementation must stay inside this approved read-only Slice 2a scope.
 
 ## Context
 
@@ -158,10 +158,11 @@ This command name leaves room for a future `--yes` execution path, but Slice 2a 
 
 ## Output and noise policy
 
-Slice 2a is CLI-only.
-Do not add lifecycle reminders, SessionStart text, recall warnings, continuity warnings, or MCP responses in this slice.
+Slice 2a adds no dedicated MCP tool or lifecycle prompt surface.
+Because MCP `memory_status` wraps `MemoryEngine.doctor()`, it inherits the same read-only `legacyProjectMemories` diagnostics exposed by `doctor --json`.
+Do not add lifecycle reminders, SessionStart text, recall warnings, continuity warnings, or separate MCP responses in this slice.
 
-Rationale: users who run `status`, `doctor`, or `migrate project-local --dry-run` are explicitly asking for Memory Lane state.
+Rationale: users who run `status`, `doctor`, `migrate project-local --dry-run`, or explicit MCP status are explicitly asking for Memory Lane state.
 Prompt-time warnings could add noise and should be considered only after dogfood shows users miss the CLI diagnostics.
 
 ## Read-only invariants
@@ -267,4 +268,5 @@ Manual dogfood checks after implementation:
 ## Approval record
 
 The user approved the Fable-reviewed Slice 2a scope on 2026-07-02.
-This full spec still requires approval before implementation.
+PR #88 merged the full spec as `4f64367 docs: draft project-local slice 2a diagnostics spec (#88)`.
+The user then approved implementation from this spec.

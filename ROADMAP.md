@@ -77,7 +77,7 @@ Slice plan:
 2. **Slice 1 - project-local default for new project-scoped writes.**
    Shipped in `v0.2.43` / PR #80.
    New project-scoped writes route project-side by default, global-scope preference/personal writes stay home-side, project/home reads merge with deterministic folding, existing ids mutate in their origin store, embeddings/compaction follow owning stores, and read-only CLI/MCP/plugin paths avoid fallback creation while respecting per-request project context.
-3. **Slice 2a - legacy project-memory diagnostics.** Design drafted at `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`; requires full spec approval before implementation.
+3. **Slice 2a - legacy project-memory diagnostics.** Implementation branch is active from approved spec `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`.
    Detect legacy home-stored project memories for the active project, provide bounded `status` / `doctor` diagnostics, and add a dry-run-only migration preview; do not silently move/delete/approve/consolidate.
 
 Current release state: Slice 0 is merged and released in `v0.2.42`; Slice 1 is merged and released in `v0.2.43` alongside continuity routing/context hygiene PR #82 (`a808231`).
@@ -86,9 +86,9 @@ Validation: `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
 Fable 5 Waves 1-3 hardening merged in PR #85 as `6da6105`: config merge/backups, hook fail-safe initialization, bounded background embedding shutdown, invalid-row preserving compaction, stale embedding invalidation checks, provider timeout validation, MCP shutdown settling, and docs/status sync.
 Fable 5 Wave 4 maintainability/UX follow-through merged in PR #86 as `e2d4aec`: stale status docs were trued up, `.memory-lane-scope` is ignored by default, project-local docs clarify scope identity handling, and the Obsidian CLI command cluster was extracted without intended behavior changes.
 
-Current next product candidate: Slice 2a legacy project-memory diagnostics.
-Fable 5 reviewed the planning direction, and the user approved the narrow scope for a full spec draft.
-Full spec approval is still required before implementation: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`.
+Current implementation candidate: Slice 2a legacy project-memory diagnostics.
+Fable 5 reviewed the planning direction and full spec, the user approved implementation, and the implementation branch is `feat/project-local-slice-2a-diagnostics`.
+Approved Slice 2a spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`.
 Approved Slice 1 spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
 Confirmed migration and cross-store rescope moves remain deferred until a later design explicitly approves the mutation protocol.
 

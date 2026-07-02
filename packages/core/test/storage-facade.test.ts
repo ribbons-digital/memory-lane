@@ -264,4 +264,92 @@ describe("MemoryEngineStorage two-tier facade", () => {
     assert.equal(fs.readFileSync(home.memoryPath, "utf8"), "")
     assert.equal(fs.readFileSync(project.memoryPath, "utf8"), "")
   })
+
+  it("reports legacy home-stored current-project candidates without mutating stores", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const projectRoot = path.join(dir, "project")
+    const project = projectLocalPaths(projectRoot)
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const legacyApproved = rec({ id: "legacy-approved", text: "Legacy approved project memory", scope: { type: "project", key: "scope-key" }, updatedAt: "2026-01-04T00:00:00.000Z" })
+    const legacyPending = rec({ id: "legacy-pending", status: "pending", text: "Legacy pending project memory", scope: { type: "project", key: "scope-key" }, updatedAt: "2026-01-03T00:00:00.000Z" })
+    const otherProject = rec({ id: "other-project", scope: { type: "project", key: "other" } })
+    const global = rec({ id: "global", category: "preference", scope: { type: "global" }, project: undefined })
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemories([legacyPending, otherProject, global, legacyApproved])
+    const beforeHome = fs.readFileSync(home.memoryPath, "utf8")
+
+    const report = storage.legacyProjectMemoryDiagnostics("scope-key")
+
+    assert.equal(report.status, "ok")
+    assert.equal(report.totalLegacyCandidateCount, 2)
+    assert.equal(report.approvedLegacyCandidateCount, 1)
+    assert.equal(report.pendingLegacyCandidateCount, 1)
+    assert.equal(report.hazards.pending, 1)
+    assert.deepEqual(report.samples.map((sample) => sample.id), ["legacy-approved", "legacy-pending"])
+    assert.equal(fs.readFileSync(home.memoryPath, "utf8"), beforeHome)
+    assert.equal(fs.existsSync(path.join(projectRoot, ".memory-lane")), false)
+    assert.equal(fs.existsSync(path.join(projectRoot, ".gitignore")), false)
+  })
+
+  it("classifies duplicate-id and home-side embedding hazards", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const legacy = rec({ id: "duplicate", text: "home winner", scope: { type: "project", key: "scope-key" }, updatedAt: "2026-01-03T00:00:00.000Z" })
+    const projectLoser = rec({ id: "duplicate", text: "project loser", scope: { type: "project", key: "scope-key" }, updatedAt: "2026-01-02T00:00:00.000Z" })
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemory(legacy)
+    createSingleStoreEngineStorage(project.memoryPath, project.embeddingsPath).appendMemory(projectLoser)
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendEmbedding({
+      memoryId: "duplicate",
+      memoryUpdatedAt: legacy.updatedAt,
+      contentHash: contentHash(legacy.text),
+      profileName: "default",
+      model: "test-model",
+      dimensions: 1,
+      vector: [1],
+      createdAt: "2026-01-03T00:00:00.000Z",
+    })
+
+    const report = storage.legacyProjectMemoryDiagnostics("scope-key")
+
+    assert.equal(report.totalLegacyCandidateCount, 1)
+    assert.equal(report.hazards.duplicateIdInProjectStore, 1)
+    assert.equal(report.hazards.homeSideEmbeddings, 1)
+    assert.equal(report.hazards.mixedOriginRevisionChains, 1)
+    assert.deepEqual(report.samples[0].hazards, ["duplicate-id-in-project-store", "home-side-embeddings", "mixed-origin-revision-chain"])
+  })
+
+  it("bounds and deterministically orders legacy diagnostic samples", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const records = Array.from({ length: 15 }, (_, index) => rec({
+      id: `legacy-${String(index).padStart(2, "0")}`,
+      text: `Legacy ${index} `.repeat(40),
+      scope: { type: "project", key: "scope-key" },
+      createdAt: `2026-01-01T00:00:${String(index).padStart(2, "0")}.000Z`,
+      updatedAt: `2026-01-01T00:00:${String(index).padStart(2, "0")}.000Z`,
+    }))
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemories(records)
+
+    const report = storage.legacyProjectMemoryDiagnostics("scope-key")
+
+    assert.equal(report.totalLegacyCandidateCount, 15)
+    assert.equal(report.samples.length, 10)
+    assert.deepEqual(report.samples.map((sample) => sample.id), ["legacy-14", "legacy-13", "legacy-12", "legacy-11", "legacy-10", "legacy-09", "legacy-08", "legacy-07", "legacy-06", "legacy-05"])
+    assert.ok(report.samples.every((sample) => sample.preview.length <= report.previewLimit))
+  })
+
+  it("reports single-store legacy diagnostics as not applicable", () => {
+    const dir = tempDir()
+    const storage = createSingleStoreEngineStorage(path.join(dir, "memory.jsonl"), path.join(dir, "embeddings.jsonl"))
+
+    const report = storage.legacyProjectMemoryDiagnostics("scope-key")
+
+    assert.equal(report.status, "not-applicable")
+    assert.equal(report.notApplicableReason, "single-store")
+    assert.equal(report.totalLegacyCandidateCount, 0)
+  })
 })

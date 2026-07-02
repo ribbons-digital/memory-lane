@@ -7,7 +7,7 @@ import { createEmbeddingStore, foldEmbeddings, type EmbeddingLine, type Embeddin
 import { normalizeMemoryRecord } from "./storage-validation.js"
 import { ensureProjectLocalStorageFiles, type MemoryPaths } from "./storage-locations.js"
 import { createMemoryStore, withFileLocks, type MemoryStore, type MemoryStoreDiagnostics } from "./storage.js"
-import type { CompactReport, EmbeddingInvalidationRecord, EmbeddingRecord, MemoryRecord } from "./types.js"
+import type { CompactReport, EmbeddingInvalidationRecord, EmbeddingRecord, LegacyProjectMemoryDiagnostics, MemoryRecord } from "./types.js"
 
 /**
  * Storage facade used by MemoryEngine.
@@ -29,6 +29,8 @@ export interface MemoryEngineStorage {
   appendEmbedding(record: EmbeddingLine): void
   listEmbeddings(): EmbeddingRecord[]
   listEmbeddingInvalidations(): EmbeddingInvalidationRecord[]
+  /** Return read-only diagnostics for active current-project memories that still live in the home store. */
+  legacyProjectMemoryDiagnostics(projectScopeKey?: string): LegacyProjectMemoryDiagnostics
   shouldCompact(): boolean
   compact(): CompactReport
 }
@@ -157,6 +159,38 @@ function embeddingKey(record: EmbeddingRecord): string {
   return [record.memoryId, record.contentHash, record.profileName, record.model].join("\0")
 }
 
+const LEGACY_PROJECT_SAMPLE_LIMIT = 10
+const LEGACY_PROJECT_PREVIEW_LIMIT = 160
+
+function compactPreview(text: string, max = LEGACY_PROJECT_PREVIEW_LIMIT): string {
+  const normalized = text.replace(/\s+/gu, " ").trim()
+  if (normalized.length <= max) return normalized
+  return normalized.slice(0, max - 1).trimEnd() + "…"
+}
+
+function notApplicableLegacyDiagnostics(homeMemoryFile: string, reason: LegacyProjectMemoryDiagnostics["notApplicableReason"], projectScopeKey?: string, projectMemoryFile?: string): LegacyProjectMemoryDiagnostics {
+  return {
+    status: "not-applicable",
+    notApplicableReason: reason,
+    projectScopeKey,
+    homeMemoryFile,
+    projectMemoryFile,
+    totalLegacyCandidateCount: 0,
+    approvedLegacyCandidateCount: 0,
+    pendingLegacyCandidateCount: 0,
+    hazards: {
+      duplicateIdInProjectStore: 0,
+      homeSideEmbeddings: 0,
+      pending: 0,
+      mixedOriginRevisionChains: 0,
+      mixedOriginRevisionChainsInspected: false,
+    },
+    samples: [],
+    sampleLimit: LEGACY_PROJECT_SAMPLE_LIMIT,
+    previewLimit: LEGACY_PROJECT_PREVIEW_LIMIT,
+  }
+}
+
 function createStoreEntry(name: StoreEntry["name"], paths: MemoryPaths, opts?: { scopeKey?: string }): StoreEntry {
   return { name, paths, scopeKey: opts?.scopeKey }
 }
@@ -181,7 +215,7 @@ function refresh(entry: StoreEntry): void {
 }
 
 /** Create the backward-compatible single JSONL store facade for MemoryEngine. */
-export function createSingleStoreEngineStorage(memoryPath: string, embeddingsPath: string): MemoryEngineStorage {
+export function createSingleStoreEngineStorage(memoryPath: string, embeddingsPath: string, legacyDiagnosticsReason: LegacyProjectMemoryDiagnostics["notApplicableReason"] = "single-store"): MemoryEngineStorage {
   let memoryStore: MemoryStore = createMemoryStore(memoryPath)
   let embeddingStore: EmbeddingStore = createEmbeddingStore(embeddingsPath)
 
@@ -220,6 +254,9 @@ export function createSingleStoreEngineStorage(memoryPath: string, embeddingsPat
     },
     listEmbeddingInvalidations() {
       return embeddingStore.listInvalidations()
+    },
+    legacyProjectMemoryDiagnostics(projectScopeKey) {
+      return notApplicableLegacyDiagnostics(memoryPath, legacyDiagnosticsReason, projectScopeKey)
     },
     shouldCompact() {
       return shouldCompact(memoryPath)
@@ -395,6 +432,75 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
     },
     listEmbeddingInvalidations() {
       return entries.flatMap((entry) => embeddingStore(entry)?.listInvalidations() ?? [])
+    },
+    legacyProjectMemoryDiagnostics(activeProjectScopeKey) {
+      if (!project || !project.scopeKey || !activeProjectScopeKey) {
+        return notApplicableLegacyDiagnostics(home.paths.memoryPath, "no-active-project-scope", activeProjectScopeKey, project?.paths.memoryPath)
+      }
+      const scopeKey = activeProjectScopeKey
+      const locatedLogs = allLocatedMemoryLogs()
+      const latest = new Map<string, LocatedMemoryRecord>()
+      const entriesById = new Map<string, Set<StoreEntry>>()
+      for (const located of locatedLogs) {
+        const stores = entriesById.get(located.record.id) ?? new Set<StoreEntry>()
+        stores.add(located.entry)
+        entriesById.set(located.record.id, stores)
+        const existing = latest.get(located.record.id)
+        if (!existing || compareLocatedMemory(existing, located) < 0) latest.set(located.record.id, located)
+      }
+      const duplicateIds = new Set<string>()
+      for (const [id, stores] of entriesById) {
+        if (stores.has(home) && stores.has(project)) duplicateIds.add(id)
+      }
+      const homeEmbeddingIds = new Set((embeddingStore(home)?.readLog() ?? [])
+        .filter((line): line is EmbeddingRecord => (line as EmbeddingInvalidationRecord).type !== "invalidation" && typeof (line as EmbeddingRecord).memoryId === "string")
+        .map((line) => line.memoryId))
+      const candidates = Array.from(latest.values()).filter(({ entry, record }) => {
+        if (entry !== home) return false
+        if (record.scope.type !== "project" || record.scope.key !== scopeKey) return false
+        if (record.status !== "approved" && record.status !== "pending") return false
+        if (record.revision?.supersededBy) return false
+        return true
+      }).map(({ record }) => record).sort((a, b) => {
+        const updated = b.updatedAt.localeCompare(a.updatedAt)
+        if (updated !== 0) return updated
+        return a.id.localeCompare(b.id)
+      })
+      const samples = candidates.slice(0, LEGACY_PROJECT_SAMPLE_LIMIT).map((record) => {
+        const hazards: string[] = []
+        if (duplicateIds.has(record.id)) hazards.push("duplicate-id-in-project-store")
+        if (homeEmbeddingIds.has(record.id)) hazards.push("home-side-embeddings")
+        if (record.status === "pending") hazards.push("pending")
+        // In this read-only slice, a same-id record present in both stores is the observable mixed-origin revision-chain hazard.
+        if (duplicateIds.has(record.id)) hazards.push("mixed-origin-revision-chain")
+        return {
+          id: record.id,
+          status: record.status as "approved" | "pending",
+          kind: record.kind,
+          updatedAt: record.updatedAt,
+          preview: compactPreview(record.text),
+          hazards,
+        }
+      })
+      return {
+        status: "ok",
+        projectScopeKey: scopeKey,
+        homeMemoryFile: home.paths.memoryPath,
+        projectMemoryFile: project.paths.memoryPath,
+        totalLegacyCandidateCount: candidates.length,
+        approvedLegacyCandidateCount: candidates.filter((record) => record.status === "approved").length,
+        pendingLegacyCandidateCount: candidates.filter((record) => record.status === "pending").length,
+        hazards: {
+          duplicateIdInProjectStore: candidates.filter((record) => duplicateIds.has(record.id)).length,
+          homeSideEmbeddings: candidates.filter((record) => homeEmbeddingIds.has(record.id)).length,
+          pending: candidates.filter((record) => record.status === "pending").length,
+          mixedOriginRevisionChains: candidates.filter((record) => duplicateIds.has(record.id)).length,
+          mixedOriginRevisionChainsInspected: true,
+        },
+        samples,
+        sampleLimit: LEGACY_PROJECT_SAMPLE_LIMIT,
+        previewLimit: LEGACY_PROJECT_PREVIEW_LIMIT,
+      }
     },
     shouldCompact() {
       return existingEntries().some((entry) => shouldCompact(entry.paths.memoryPath))

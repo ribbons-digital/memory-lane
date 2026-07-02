@@ -400,8 +400,8 @@ Atomic memory, embedding, continuity-baseline, and compaction writes use short f
 Compaction removes folded deleted/rejected records and stale embeddings, but it preserves malformed or schema-invalid JSONL rows so diagnostics remain available instead of silently erasing corrupt input.
 The internal storage facade merges the active project store with the home store for recall, list, review, continuity, and status surfaces.
 Existing records keep their origin store for normal edits/review actions so one logical memory id is not split across files.
-Advanced `@memory-lane/core` consumers can import `MemoryEngineStorage`, `createSingleStoreEngineStorage`, and `createTwoTierEngineStorage` when they need to inject storage that owns memory, embedding, compaction, diagnostics, and continuity-baseline paths.
-Custom facade implementations can also import `EmbeddingLine` for `appendEmbedding()` inputs.
+Advanced `@memory-lane/core` consumers can import `MemoryEngineStorage`, `createSingleStoreEngineStorage`, and `createTwoTierEngineStorage` when they need to inject storage that owns memory, embedding, compaction, diagnostics, legacy project-memory diagnostics, and continuity-baseline paths.
+Custom facade implementations can also import `EmbeddingLine` for `appendEmbedding()` inputs and should return `LegacyProjectMemoryDiagnostics` from `legacyProjectMemoryDiagnostics()`.
 
 Embeddings (when configured) are paired with the owning memory store: home memories use `~/.memory-lane/embeddings.jsonl`, and project-local memories use `<project-root>/.memory-lane/embeddings.jsonl`. When a memory changes, recall ignores only embeddings created before that memory's latest invalidation; newer embeddings for the same memory id can be used without a full reindex.
 
@@ -436,6 +436,10 @@ If you do this in a Git repository, add `.memory-lane-scope` to `.gitignore` unl
 
 Existing memories saved under old worktree path keys are not migrated automatically. Use `memory-lane list --all`, `memory-lane show <id> --all`, and existing review/rescope/delete/save commands if you want to clean up fragmented historical records.
 
+For legacy project-scoped memories that still live in the home store from before project-local defaults, use `memory-lane status --json`, `memory-lane doctor --json`, or `memory-lane migrate project-local --dry-run`.
+These commands are read-only for legacy diagnostics and do not move records or create project-local storage.
+When legacy candidates exist, the diagnostics include counts, hazard counters, and at most 10 bounded sample previews capped at 160 characters.
+
 ## CLI Commands
 
 ```
@@ -467,6 +471,7 @@ memory-lane replace <old-id...>   Create a successor memory for approved old mem
 memory-lane compact               Remove deleted/rejected tombstones while preserving invalid rows
 memory-lane doctor                Diagnostic report
 memory-lane status                Quick stats
+memory-lane migrate project-local --dry-run Preview legacy home-stored project memories without mutating files
 memory-lane reindex [--force]     Embed approved memories missing current vectors; --force recomputes
 memory-lane init --project-local  Initialize sandbox-friendly project-local storage
 memory-lane session-end --confirm Generate a pending session summary from stdin JSON
@@ -879,7 +884,7 @@ The MCP server exposes explicit tools only:
 - `memory_suggest` — queue a pending suggestion, or save approved when `status: "approved"`
 - `memory_recall` — recall relevant memories for a specific topic or fact query
 - `memory_continuity` — canonical continuity read model for broad prior-work, project resumption, last-worked-on, accomplished, next-action, project-status, resume, and handoff-style questions; accepts optional `query` for read-only workstream discovery
-- `memory_status` — read Memory Lane counts, config paths, project scope, and integration diagnostics
+- `memory_status` - read Memory Lane counts, config paths, project scope, legacy project-memory diagnostics, and integration diagnostics
 - `memory_list` — list memories visible to the current project scope by default
 - `memory_review` — list pending memories for review; supports `kind`, `source`, and `provenance` filters such as `kind: "session_summary"`, `source: "session-summary"`, and `provenance: "pi/session_end"`
 - `memory_approve` — approve a memory by id
@@ -888,7 +893,9 @@ The MCP server exposes explicit tools only:
 
 Use `memory_continuity({ projectPath })` from MCP clients before answering continuity questions such as project resumption, last-worked-on, accomplished, next-action, or project-status prompts. Use `memory_continuity({ projectPath, query: "resume building X" })` when the user asks for a specific workstream. Prefer it over `memory_recall` for continuity; `memory_recall` is a topic-specific follow-up after continuity inspection, not an authority by itself.
 
-Use `memory_status` from MCP clients when you want the same kind of read-only setup/status overview that `memory-lane doctor` provides in a terminal. It reports counts and diagnostics only; it does not return raw memory text or run lifecycle hooks. Use filtered `memory_review` calls when you want an MCP client to inspect only pending session summaries or continuity candidates from a specific adapter/event before approving or rejecting them.
+Use `memory_status` from MCP clients when you want the same kind of read-only setup/status overview that `memory-lane doctor` provides in a terminal.
+It reports counts and diagnostics only; it does not return raw memory text or run lifecycle hooks, except that legacy project-memory diagnostics may include bounded sample previews when legacy candidates exist.
+Use filtered `memory_review` calls when you want an MCP client to inspect only pending session summaries or continuity candidates from a specific adapter/event before approving or rejecting them.
 
 **Tip for Claude Desktop and Codex Desktop:** if you ask the model to save or recall a memory without mentioning the MCP, it may first try the `memory-lane` CLI, fail because the sandbox cannot write to `~/.memory-lane`, and then fall back to MCP. To skip that error turn, explicitly say "use the Memory Lane MCP" in your request.
 

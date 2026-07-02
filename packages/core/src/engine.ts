@@ -923,6 +923,7 @@ export class MemoryEngine {
       freshness: this.freshnessStatus({ since: opts?.freshnessSince }),
       continuityHints: this.continuityHints({ since: opts?.freshnessSince }),
       continuityBaseline: this.continuityBaselineDoctor(),
+      legacyProjectMemories: this.storage.legacyProjectMemoryDiagnostics(this.scope?.key),
       operatingAgreements: operatingAgreementSummary,
       preferenceDiagnostics: buildPreferenceDiagnostics(mems, {
         projectScopeKey: this.scope?.key,
