@@ -84,9 +84,9 @@ Current release state: Slice 0 is merged and released in `v0.2.42`; Slice 1 is m
 Installed-artifact `v0.2.43` dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, route classification, and generated Pi bridge continuity smoke.
 Validation: `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
 Fable 5 Waves 1-3 hardening merged in PR #85 as `6da6105`: config merge/backups, hook fail-safe initialization, bounded background embedding shutdown, invalid-row preserving compaction, stale embedding invalidation checks, provider timeout validation, MCP shutdown settling, and docs/status sync.
-Active Wave 4 maintainability/UX follow-through is `feat/fable-5-wave-4-maintainability`: truth up stale status docs, ignore `.memory-lane-scope`, and extract the Obsidian CLI command cluster without behavior changes.
+Fable 5 Wave 4 maintainability/UX follow-through merged in PR #86 as `e2d4aec`: stale status docs were trued up, `.memory-lane-scope` is ignored by default, project-local docs clarify scope identity handling, and the Obsidian CLI command cluster was extracted without intended behavior changes.
 
-Current next product candidate after Wave 4: Slice 2 migration/compatibility diagnostics.
+Current next product candidate: Slice 2 migration/compatibility diagnostics.
 Start with a fresh design/approval gate before implementation.
 Approved Slice 1 spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
 Migration diagnostics and cross-store rescope moves remain deferred until Slice 2 or later explicitly approves them.
