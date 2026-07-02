@@ -91,7 +91,9 @@ Fable 5 reviewed the planning direction, full spec, and implementation.
 Approved Slice 2a spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`.
 Approved Slice 1 spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
 Confirmed migration and cross-store rescope moves remain deferred until a later design explicitly approves the mutation protocol.
-Next recommended action: prepare and dogfood the next release so Slice 2a is validated as an installed artifact.
+Current action: prepare `v0.2.44` release from `main` so Slice 2a is validated as an installed artifact.
+Release prep validation draft: `docs/superpowers/validation/2026-07-02-v0.2.44-release-prep.md`.
+After the release-prep PR merges, tag `v0.2.44`, wait for the release workflow, run installed-artifact dogfood, and record the results.
 
 Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in `v0.2.41`; pause retrieval-ranking work unless new dogfood/eval evidence justifies another proposal.
 
