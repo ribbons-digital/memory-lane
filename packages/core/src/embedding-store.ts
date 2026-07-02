@@ -2,6 +2,7 @@ import * as crypto from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import type { EmbeddingRecord, EmbeddingInvalidationRecord } from "./types.js"
+import { withFileLock } from "./storage.js"
 
 /** One JSONL row in the embeddings store: either an embedding vector or an invalidation marker. */
 export type EmbeddingLine = EmbeddingRecord | EmbeddingInvalidationRecord
@@ -73,10 +74,17 @@ export function createEmbeddingStore(filePath: string): EmbeddingStore {
   return {
     file: filePath,
     append(record) {
-      const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : ""
-      const tmp = filePath + ".tmp." + crypto.randomBytes(4).toString("hex")
-      fs.writeFileSync(tmp, existing + JSON.stringify(record) + "\n", "utf8")
-      fs.renameSync(tmp, filePath)
+      withFileLock(filePath, () => {
+        const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : ""
+        const prefix = existing && !existing.endsWith("\n") ? existing + "\n" : existing
+        const tmp = filePath + ".tmp." + crypto.randomBytes(4).toString("hex")
+        try {
+          fs.writeFileSync(tmp, prefix + JSON.stringify(record) + "\n", "utf8")
+          fs.renameSync(tmp, filePath)
+        } finally {
+          if (fs.existsSync(tmp)) fs.rmSync(tmp, { force: true })
+        }
+      })
       cache = null
     },
     readLog: parse,

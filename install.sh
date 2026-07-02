@@ -116,7 +116,17 @@ VERSION="${VERSION:-latest}"
     download "$checksum_url" "$tmpdir/SHA256SUMS"
     (
       cd "$tmpdir"
-      grep "${asset}$" SHA256SUMS | sha256sum -c - || err "checksum verification failed"
+      checksum_line=$(grep "${asset}$" SHA256SUMS || true)
+      if [ -z "$checksum_line" ]; then
+        err "checksum entry not found for ${asset}"
+      fi
+      if command -v sha256sum >/dev/null 2>&1; then
+        printf '%s\n' "$checksum_line" | sha256sum -c - || err "checksum verification failed"
+      elif command -v shasum >/dev/null 2>&1; then
+        printf '%s\n' "$checksum_line" | shasum -a 256 -c - || err "checksum verification failed"
+      else
+        err "sha256sum or shasum is required for checksum verification"
+      fi
     )
 
     say "extracting"

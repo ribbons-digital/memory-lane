@@ -281,6 +281,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
       baseUrl: summaryConfig.baseUrl,
       apiKeyEnv: summaryConfig.apiKeyEnv,
       model: summaryConfig.model,
+      timeoutMs: summaryConfig.timeoutMs,
     }, memoryEnv())
     const candidates = await handleSessionEnd(e, {
       cwd: ctx.cwd,

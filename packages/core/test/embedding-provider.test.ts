@@ -63,4 +63,18 @@ describe("createOpenAIEmbeddingProvider", () => {
     )
     await assert.rejects(() => invalid.embed(["a"]), /Invalid vector/)
   })
+
+  it("times out embedding requests even when a caller signal is provided", async () => {
+    const caller = new AbortController()
+    const provider = createOpenAIEmbeddingProvider(
+      { provider: "openai-compatible-embeddings", baseUrl: "http://localhost", model: "test", timeoutMs: 1 },
+      {},
+      (_url, init) => new Promise((resolve, reject) => {
+        const signal = (init as { signal?: AbortSignal }).signal
+        signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })))
+      }),
+    )
+
+    await assert.rejects(() => provider.embed(["a"], caller.signal), /timed out after 1ms/)
+  })
 })

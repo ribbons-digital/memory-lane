@@ -609,6 +609,7 @@ export interface SessionEndSummaryConfig {
   model?: string
   promptTemplate?: string
   maxTokens?: number
+  timeoutMs?: number
   requireConfirmation?: boolean
   includeToolOutputs?: boolean
 }

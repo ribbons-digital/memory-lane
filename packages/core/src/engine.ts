@@ -90,6 +90,7 @@ export class MemoryEngine {
   private readonly hookDebugLogPath: string
   private readonly integrationPaths?: Partial<IntegrationDiagnosticPaths>
   private readonly env: NodeJS.ProcessEnv | Record<string, string | undefined>
+  private readonly pendingEmbeddings = new Set<Promise<void>>()
 
   constructor(opts?: MemoryEngineConfig) {
     const memoryPath = opts?.memoryPath ?? path.join(DEFAULT_DIR, "memory.jsonl")
@@ -122,8 +123,7 @@ export class MemoryEngine {
     })
   }
 
-  /** Embed a single memory (fire-and-forget, called internally from save/approve).
-   *  Works with both sync and async providers. Non-fatal — failures are swallowed. */
+  /** Embed a single memory. Works with both sync and async providers. Non-fatal - failures are swallowed. */
   private async _embedMemory(memory: MemoryRecord): Promise<void> {
     if (containsLikelySecret(memory.text) || !this.embProvider) return
     try {
@@ -133,6 +133,18 @@ export class MemoryEngine {
       const [vector] = await this.embProvider.embed([memory.text])
       if (vector) this.appendEmbedding(memory, vector, profileName, profile.model)
     } catch { /* non-fatal: embedding can be rebuilt via reindex */ }
+  }
+
+  private scheduleEmbedding(memory: MemoryRecord): void {
+    const pending = this._embedMemory(memory).catch(() => { /* swallowed */ })
+    this.pendingEmbeddings.add(pending)
+    pending.finally(() => this.pendingEmbeddings.delete(pending)).catch(() => { /* swallowed */ })
+  }
+
+  async settle(): Promise<void> {
+    while (this.pendingEmbeddings.size) {
+      await Promise.allSettled([...this.pendingEmbeddings])
+    }
   }
 
   /** Re-resolve the project scope from current cwd or given path. */
@@ -256,6 +268,7 @@ export class MemoryEngine {
     const result = this.buildRescopePreview(id, { ...input, dryRun: false })
     this.storage.appendMemory(result.proposed)
     this.invalidateEmbedding(id, "updated")
+    if (shouldAutoEmbed(result.proposed, this.config.semantic, this.embProvider)) this.scheduleEmbedding(result.proposed)
     const mirrorWarnings = this.syncMirrorAndCollectWarnings()
     return mirrorWarnings.length ? { ...result, mirrorWarnings } : result
   }
@@ -276,6 +289,7 @@ export class MemoryEngine {
     })
     this.storage.appendMemory(upgraded)
     this.invalidateEmbedding(dup.id, "updated")
+    if (shouldAutoEmbed(upgraded, this.config.semantic, this.embProvider)) this.scheduleEmbedding(upgraded)
     return { status: "saved", memory: upgraded }
   }
 
@@ -286,9 +300,7 @@ export class MemoryEngine {
   private persistMemory(input: SaveInput, ctx: SaveContext): SaveResult {
     const memory = createNewMemory(input, ctx, this.scope)
     this.storage.appendMemory(memory)
-    if (shouldAutoEmbed(memory, this.config.semantic, this.embProvider)) {
-      this._embedMemory(memory).catch(() => { /* swallowed */ })
-    }
+    if (shouldAutoEmbed(memory, this.config.semantic, this.embProvider)) this.scheduleEmbedding(memory)
     return { status: "saved", memory }
   }
 
@@ -322,9 +334,7 @@ export class MemoryEngine {
     const updated = clone(mem, { status: "approved" })
     this.storage.appendMemory(updated)
     this.invalidateEmbedding(id, "updated")
-    if (shouldAutoEmbed(updated, this.config.semantic, this.embProvider)) {
-      this._embedMemory(updated).catch(() => { /* swallowed */ })
-    }
+    if (shouldAutoEmbed(updated, this.config.semantic, this.embProvider)) this.scheduleEmbedding(updated)
     return this.mutationResultWithMirrorWarnings(updated)
   }
 
@@ -360,9 +370,7 @@ export class MemoryEngine {
     const updated = preview.proposed
     this.storage.appendMemory(updated)
     this.invalidateEmbedding(id, "updated")
-    if (shouldAutoEmbed(updated, this.config.semantic, this.embProvider)) {
-      this._embedMemory(updated).catch(() => { /* swallowed */ })
-    }
+    if (shouldAutoEmbed(updated, this.config.semantic, this.embProvider)) this.scheduleEmbedding(updated)
     return this.mutationResultWithMirrorWarnings(updated)
   }
 
@@ -420,10 +428,6 @@ export class MemoryEngine {
     if (opts?.dryRun) return preview
 
     this.appendMemoryRecords([preview.successor, ...preview.superseded])
-    this.invalidateEmbedding(preview.successor.id, "updated")
-    for (const memory of preview.superseded) {
-      this.invalidateEmbedding(memory.id, "updated")
-    }
     const mirrorWarnings = this.syncMirrorAndCollectWarnings()
     return mirrorWarnings.length ? { ...preview, mirrorWarnings } : preview
   }
@@ -486,12 +490,7 @@ export class MemoryEngine {
     if (input.dryRun) return result
 
     this.appendMemoryRecords([successor, ...superseded])
-    if (shouldAutoEmbed(successor, this.config.semantic, this.embProvider)) {
-      this._embedMemory(successor).catch(() => { /* swallowed */ })
-    }
-    for (const memory of superseded) {
-      this.invalidateEmbedding(memory.id, "updated")
-    }
+    if (shouldAutoEmbed(successor, this.config.semantic, this.embProvider)) this.scheduleEmbedding(successor)
     const mirrorWarnings = this.syncMirrorAndCollectWarnings()
     return mirrorWarnings.length ? { ...result, mirrorWarnings } : result
   }
@@ -577,42 +576,56 @@ export class MemoryEngine {
     return this.storage.compact()
   }
 
-  /** Rebuild embeddings for all approved memories. */
+  /** Rebuild embeddings for approved memories that do not already have a current embedding. */
   async reindexEmbeddings(opts?: { force?: boolean; signal?: AbortSignal }): Promise<{ embedded: number; skippedExisting: number; skippedSecrets: number }> {
     if (!this.embProvider || !this.config.semantic.enabled) {
       return { embedded: 0, skippedExisting: 0, skippedSecrets: 0 }
     }
 
     const config = this.config.semantic
-    const profile = config.embeddings.profiles[config.activeEmbeddingProfile]
+    const profileName = config.activeEmbeddingProfile
+    const profile = config.embeddings.profiles[profileName]
     if (!profile) throw new Error("No active embedding profile configured")
 
     const approved = this.storage.listMemories().filter((m) => m.status === "approved")
     const safe = approved.filter((m) => !containsLikelySecret(m.text))
-    const safeIds = new Set(safe.map((m) => m.id))
-
-    // Count existing embeddings
-    const existing = this.storage.listEmbeddings()
-    const skippedExisting = existing.filter((e) => safeIds.has(e.memoryId)).length
-
-    const profileName = config.activeEmbeddingProfile
     const model = profile.model
     const skippedSecrets = approved.length - safe.length
 
+    const latestInvalidations = new Map<string, string>()
+    for (const invalidation of this.storage.listEmbeddingInvalidations()) {
+      const previous = latestInvalidations.get(invalidation.memoryId)
+      if (!previous || previous <= invalidation.invalidatedAt) latestInvalidations.set(invalidation.memoryId, invalidation.invalidatedAt)
+    }
+    const currentKeys = new Set<string>()
+    for (const embedding of this.storage.listEmbeddings()) {
+      const invalidatedAt = latestInvalidations.get(embedding.memoryId)
+      if (invalidatedAt && embedding.createdAt < invalidatedAt) continue
+      if (embedding.profileName !== profileName || embedding.model !== model) continue
+      currentKeys.add([embedding.memoryId, embedding.contentHash, embedding.profileName, embedding.model].join("\0"))
+    }
+
+    const needsEmbedding = opts?.force
+      ? safe
+      : safe.filter((memory) => !currentKeys.has([memory.id, contentHash(memory.text), profileName, model].join("\0")))
+    const skippedExisting = safe.length - needsEmbedding.length
+
     let embedded = 0
     const batchSize = profile.batchSize ?? 16
-    for (let i = 0; i < safe.length; i += batchSize) {
-      const batch = safe.slice(i, i + batchSize)
+    for (let i = 0; i < needsEmbedding.length; i += batchSize) {
+      const batch = needsEmbedding.slice(i, i + batchSize)
       const vectors = await this.embProvider.embed(batch.map((m) => m.text), opts?.signal)
       batch.forEach((memory, index) => {
+        const vector = vectors[index]
+        if (!vector?.length) return
         this.storage.appendEmbedding({
           memoryId: memory.id,
           memoryUpdatedAt: memory.updatedAt,
           contentHash: contentHash(memory.text),
           profileName,
           model,
-          dimensions: vectors[index].length,
-          vector: vectors[index],
+          dimensions: vector.length,
+          vector,
           createdAt: new Date().toISOString(),
         })
         embedded++

@@ -10,7 +10,7 @@ import {
   selectOperatingAgreements,
   summarizeOperatingAgreements,
 } from "../src/operating-agreements.js"
-import type { MemoryRecord } from "../src/types.js"
+import type { EmbeddingProvider, MemoryRecord } from "../src/types.js"
 import { tempDir } from "./helpers.js"
 
 describe("MemoryEngine", () => {
@@ -2032,6 +2032,92 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(report.obsidianEnabled, true)
     assert.equal(report.obsidianMirrorFolderExists, false)
     assert.match((report.obsidianWarnings as string[]).join("\n"), /Obsidian vault path does not exist/)
+  })
+
+  it("settle waits for scheduled approved memory embeddings", async () => {
+    const configPath = path.join(dir, "cfg-settle.json")
+    const embeddingsPath = path.join(dir, "emb-settle.jsonl")
+    fs.writeFileSync(configPath, JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "test-profile",
+        embeddings: { profiles: { "test-profile": { provider: "openai-compatible-embeddings", baseUrl: "http://localhost", model: "test-model" } } },
+      },
+    }), "utf8")
+    const provider: EmbeddingProvider = { embed: async () => [[1, 0]] }
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-settle.jsonl"),
+      embeddingsPath,
+      configPath,
+      embeddingProvider: provider,
+    })
+
+    const saved = e.save({ text: "approved embedding text", status: "approved" })
+    assert.equal(saved.status, "saved")
+    await e.settle()
+
+    const embeddings = readJsonl(embeddingsPath)
+    assert.equal(embeddings.length, 1)
+    assert.equal(embeddings[0].contentHash, contentHash("approved embedding text"))
+  })
+
+  it("reindex skips current embeddings unless forced", async () => {
+    const configPath = path.join(dir, "cfg-reindex.json")
+    const embeddingsPath = path.join(dir, "emb-reindex.jsonl")
+    fs.writeFileSync(configPath, JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "test-profile",
+        embeddings: { profiles: { "test-profile": { provider: "openai-compatible-embeddings", baseUrl: "http://localhost", model: "test-model" } } },
+      },
+    }), "utf8")
+    let calls = 0
+    const provider: EmbeddingProvider = { embed: async (inputs) => {
+      calls += inputs.length
+      return inputs.map(() => [1, 0])
+    } }
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-reindex.jsonl"),
+      embeddingsPath,
+      configPath,
+      embeddingProvider: provider,
+    })
+    e.save({ text: "first approved", status: "approved" })
+    e.save({ text: "second approved", status: "approved" })
+    await e.settle()
+    assert.equal(calls, 2)
+
+    const skipped = await e.reindexEmbeddings()
+    assert.deepEqual(skipped, { embedded: 0, skippedExisting: 2, skippedSecrets: 0 })
+    assert.equal(readJsonl(embeddingsPath).length, 2)
+
+    const forced = await e.reindexEmbeddings({ force: true })
+    assert.deepEqual(forced, { embedded: 2, skippedExisting: 0, skippedSecrets: 0 })
+    assert.equal(readJsonl(embeddingsPath).length, 4)
+  })
+
+  it("reindex handles providers returning too few vectors", async () => {
+    const configPath = path.join(dir, "cfg-short-reindex.json")
+    fs.writeFileSync(configPath, JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "test-profile",
+        embeddings: { profiles: { "test-profile": { provider: "openai-compatible-embeddings", baseUrl: "http://localhost", model: "test-model" } } },
+      },
+    }), "utf8")
+    const provider: EmbeddingProvider = { embed: async () => [[1, 0]] }
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-short-reindex.jsonl"),
+      embeddingsPath: path.join(dir, "emb-short-reindex.jsonl"),
+      configPath,
+      embeddingProvider: provider,
+    })
+    e.save({ text: "first approved", status: "approved" })
+    e.save({ text: "second approved", status: "approved" })
+    await e.settle()
+
+    const result = await e.reindexEmbeddings({ force: true })
+    assert.equal(result.embedded, 1)
   })
 
   it("probe returns error without provider", async () => {

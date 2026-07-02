@@ -89,6 +89,36 @@ describe("compact", () => {
     const remaining = fs.readFileSync(mf, "utf8").split("\n").filter(Boolean)
     assert.equal(remaining.length, 3)
   })
+
+  it("preserves invalid rows while compacting valid memory records", () => {
+    const alive = rec({ status: "approved", id: "alive" })
+    const dead = rec({ status: "deleted", id: "dead" })
+    const invalidJson = "{not json"
+    const invalidRecord = JSON.stringify({ foo: 1 })
+    fs.writeFileSync(mf, [alive, dead].map(JSON.stringify).concat([invalidRecord, invalidJson]).join("\n") + "\n", "utf8")
+
+    const report = compact(mf, ef)
+    const remaining = fs.readFileSync(mf, "utf8").split("\n").filter(Boolean)
+
+    assert.equal(report.removedMemories, 1)
+    assert.equal(remaining.length, 3)
+    assert.equal(JSON.parse(remaining[0]).id, "alive")
+    assert.ok(remaining.includes(invalidRecord))
+    assert.ok(remaining.includes(invalidJson))
+  })
+})
+
+describe("shouldCompact", () => {
+  it("ignores invalid JSON records when calculating dead weight", () => {
+    const dir = tempDir()
+    const f = path.join(dir, "m.jsonl")
+    const records = [
+      ...Array.from({ length: 70 }, (_, i) => rec({ id: `a${i}`, status: "approved" })),
+      ...Array.from({ length: 40 }, (_, i) => rec({ id: `d${i}`, status: "deleted" })),
+    ]
+    fs.writeFileSync(f, records.map(JSON.stringify).concat([JSON.stringify({ foo: 1 })]).join("\n") + "\n", "utf8")
+    assert.equal(shouldCompact(f), true)
+  })
 })
 
 describe("shouldCompact", () => {

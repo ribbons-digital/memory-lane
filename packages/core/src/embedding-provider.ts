@@ -45,6 +45,26 @@ function batches<T>(items: T[], size: number): T[][] {
   return result
 }
 
+function composeAbortSignal(signal: AbortSignal | undefined, timeoutMs: number): { signal: AbortSignal; timedOut: () => boolean; dispose: () => void } {
+  const controller = new AbortController()
+  let didTimeout = false
+  const abort = () => controller.abort()
+  if (signal?.aborted) controller.abort()
+  else signal?.addEventListener("abort", abort, { once: true })
+  const timer = setTimeout(() => {
+    didTimeout = true
+    controller.abort()
+  }, timeoutMs)
+  return {
+    signal: controller.signal,
+    timedOut: () => didTimeout,
+    dispose: () => {
+      clearTimeout(timer)
+      signal?.removeEventListener("abort", abort)
+    },
+  }
+}
+
 export function createOpenAIEmbeddingProvider(
   profile: EmbeddingProfileConfig,
   env: NodeJS.ProcessEnv = process.env,
@@ -57,21 +77,22 @@ export function createOpenAIEmbeddingProvider(
   const headers = authHeaders(profile, env)
 
   async function fetchBatch(batch: string[], signal?: AbortSignal): Promise<number[][]> {
-    const controller = new AbortController()
-    const combined = signal ?? controller.signal
-    const timer = signal ? undefined : setTimeout(() => controller.abort(), timeoutMs)
+    const combined = composeAbortSignal(signal, timeoutMs)
     try {
       const res = await fetchImpl(`${baseUrl}/embeddings`, {
         method: "POST",
         headers,
         body: JSON.stringify({ model, input: batch }),
-        signal: combined,
+        signal: combined.signal,
       })
       const raw = await res.text()
       if (!res.ok) throw new Error(`Embedding provider HTTP ${res.status}: ${raw}`)
       return validateVectors(parseBody(raw), batch.length)
+    } catch (error) {
+      if ((error as { name?: string }).name === "AbortError" && combined.timedOut()) throw new Error(`Embedding provider timed out after ${timeoutMs}ms`)
+      throw error
     } finally {
-      if (timer) clearTimeout(timer)
+      combined.dispose()
     }
   }
 

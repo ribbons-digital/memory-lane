@@ -116,6 +116,7 @@ export interface LLMProviderConfig {
   baseUrl: string
   apiKeyEnv?: string | null
   model: string
+  timeoutMs?: number
 }
 
 export interface SessionMessage {

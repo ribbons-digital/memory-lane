@@ -528,6 +528,7 @@ function createSummaryProvider(config: ReturnType<typeof loadConfig>):
       baseUrl: summaryConfig.baseUrl,
       apiKeyEnv: summaryConfig.apiKeyEnv,
       model: summaryConfig.model,
+      timeoutMs: summaryConfig.timeoutMs,
     }),
     config: summaryConfig,
   }
@@ -958,6 +959,16 @@ function usesReadOnlyStorageResolution(command: string, argv: string[]): boolean
   return subcommands.has(positionals(argv.slice(1))[0]?.toLowerCase())
 }
 
+function isHookInvocation(command: string): boolean {
+  return command === "claude" || command === "codex"
+}
+
+function failSafeHookInitialization(reason: string): never {
+  if (process.env.MEMORY_LANE_HOOK_DEBUG) console.error(`Memory Lane hook initialization failed: ${reason}`)
+  console.log("{}")
+  process.exit(0)
+}
+
 const commandHandlers: Record<string, CommandHandler> = {
   save: handleSave,
   suggest: handleSuggest,
@@ -1058,15 +1069,24 @@ async function main(): Promise<void> {
   const projPath = flag(argv, "project")
   const pathOptions = { cwd: projPath ?? process.cwd(), env: process.env }
   const readOnlyStorage = usesReadOnlyStorageResolution(command, argv)
-  const paths = readOnlyStorage
-    ? resolveEngineStoragePaths(pathOptions)
-    : resolveWritableEngineStoragePaths({ ...pathOptions, autoInitProjectLocalOnHomeFailure: true })
+  let paths: EngineStoragePaths
+  try {
+    paths = readOnlyStorage
+      ? resolveEngineStoragePaths(pathOptions)
+      : resolveWritableEngineStoragePaths({ ...pathOptions, autoInitProjectLocalOnHomeFailure: true })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (isHookInvocation(command)) failSafeHookInitialization(msg)
+    console.log(formatError(`Failed to resolve storage paths: ${msg}`, json))
+    process.exit(1)
+  }
   const configPath = paths.configPath || resolveConfigPath()
   let engine: MemoryEngine
   try {
     engine = createEngine(paths, projPath, { autoCompact: !readOnlyStorage })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
+    if (isHookInvocation(command)) failSafeHookInitialization(msg)
     console.log(formatError(`Failed to initialize engine: ${msg}`, json))
     process.exit(1)
   }
@@ -1076,6 +1096,7 @@ async function main(): Promise<void> {
     config = loadConfig(configPath)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
+    if (isHookInvocation(command)) failSafeHookInitialization(msg)
     console.log(formatError(`Failed to load config: ${msg}`, json))
     process.exit(1)
   }
@@ -1092,6 +1113,7 @@ async function main(): Promise<void> {
       : []
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
+    if (isHookInvocation(command)) failSafeHookInitialization(msg)
     console.log(formatError(`Failed to load plugins: ${msg}`, json))
     process.exit(1)
   }
@@ -1110,8 +1132,11 @@ async function main(): Promise<void> {
       configPath,
       engine,
     })
+    await engine.settle()
   } catch (err: unknown) {
+    await engine.settle()
     const msg = err instanceof Error ? err.message : String(err)
+    if (isHookInvocation(command)) failSafeHookInitialization(msg)
     console.log(formatError(msg, json))
     process.exit(1)
   }

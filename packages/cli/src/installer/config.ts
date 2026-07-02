@@ -9,15 +9,24 @@ function ensureDir(filePath: string): void {
 }
 
 function readJson(filePath: string): Record<string, unknown> {
+  if (!fs.existsSync(filePath)) return {}
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>
-  } catch {
-    return {}
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Could not parse JSON config ${filePath}: ${message}`)
   }
+}
+
+function writeBackupIfNeeded(filePath: string): void {
+  if (!fs.existsSync(filePath)) return
+  const backupPath = `${filePath}.memory-lane.bak`
+  if (!fs.existsSync(backupPath)) fs.copyFileSync(filePath, backupPath)
 }
 
 function writeJson(filePath: string, data: unknown): void {
   ensureDir(filePath)
+  writeBackupIfNeeded(filePath)
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + "\n", "utf8")
 }
 
@@ -47,7 +56,12 @@ function findMemoryLaneSourceRoot(resolvedPath: string): string | undefined {
   while (true) {
     const packagePath = path.join(current, "package.json")
     if (fs.existsSync(packagePath)) {
-      const pkg = readJson(packagePath)
+      let pkg: Record<string, unknown> = {}
+      try {
+        pkg = readJson(packagePath)
+      } catch {
+        pkg = {}
+      }
       const sourceSkillPath = path.join(current, "skills", "memory-lane", "SKILL.md")
       if (pkg.name === "memory-lane" && fs.existsSync(sourceSkillPath) && pathContains(path.join(current, "skills", "memory-lane"), resolvedPath)) {
         return current
@@ -172,7 +186,43 @@ function mergeHooks(existing: Record<string, unknown>, harness: "claude" | "code
     ],
   }
 
-  return { ...existing, hooks: { ...((existing.hooks as Record<string, unknown>) ?? {}), ...hooks } }
+  const existingHooks = isRecord(existing.hooks) ? existing.hooks : {}
+  const mergedHooks: Record<string, unknown> = { ...existingHooks }
+  for (const [event, entries] of Object.entries(hooks)) {
+    mergedHooks[event] = mergeHookEvent(existingHooks[event], entries, binaryPath)
+  }
+  return { ...existing, hooks: mergedHooks }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function commandText(value: unknown): string | undefined {
+  return isRecord(value) && typeof value.command === "string" ? value.command : undefined
+}
+
+function isMemoryLaneCommand(command: string, binaryPath: string): boolean {
+  return command.includes(binaryPath) || /(^|[\s"'/\\])memory-lane(?:\.exe)?([\s"']|$)/u.test(command)
+}
+
+function withoutMemoryLaneCommands(entry: unknown, binaryPath: string): unknown | undefined {
+  if (!isRecord(entry)) return entry
+  if (!Array.isArray(entry.hooks)) return entry
+  const hooks = entry.hooks.filter((hook) => {
+    const command = commandText(hook)
+    return !command || !isMemoryLaneCommand(command, binaryPath)
+  })
+  if (!hooks.length) return undefined
+  return { ...entry, hooks }
+}
+
+function mergeHookEvent(existingEvent: unknown, memoryLaneEntries: unknown[], binaryPath: string): unknown[] {
+  const existingEntries = Array.isArray(existingEvent) ? existingEvent : []
+  const preserved = existingEntries
+    .map((entry) => withoutMemoryLaneCommands(entry, binaryPath))
+    .filter((entry): entry is unknown => entry !== undefined)
+  return [...preserved, ...memoryLaneEntries]
 }
 
 export function installClaudeCodeCli(options: InitOptions): IntegrationResult {

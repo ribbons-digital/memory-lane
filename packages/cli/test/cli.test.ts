@@ -2331,6 +2331,27 @@ describe("CLI integration", () => {
     assert.equal(fs.existsSync(memFile) ? fs.readFileSync(memFile, "utf8") : "", "")
   })
 
+  it("hook commands fail safe when config cannot be loaded", () => {
+    fs.writeFileSync(cfgFile, "{bad json", "utf8")
+    const result = runProcess(["claude", "session-start"], {
+      env: {
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+      stdin: JSON.stringify({
+        hook_event_name: "SessionStart",
+        session_id: "session-1",
+        cwd: process.cwd(),
+        transcript_path: null,
+        permission_mode: "default",
+        source: "startup",
+      }),
+    })
+    assert.equal(result.status, 0)
+    assert.equal(result.stdout.trim(), "{}")
+  })
+
   it("obsidian status reports unconfigured mirror", () => {
     const result = runProcess(["obsidian", "status"], {
       env: {

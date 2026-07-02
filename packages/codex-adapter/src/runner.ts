@@ -72,6 +72,7 @@ function createSessionEndSummaryProvider(configPath: string | undefined, env: No
       baseUrl: summaryConfig.baseUrl,
       apiKeyEnv: summaryConfig.apiKeyEnv,
       model: summaryConfig.model,
+      timeoutMs: summaryConfig.timeoutMs,
     }, env),
   }
 }
