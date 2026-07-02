@@ -169,7 +169,7 @@ Memory Lane **applies memories through context injection and guidance surfaces**
 |---|---|---|
 | Lifecycle context injection | `packages/lifecycle/src/injection.ts` (`renderMemoryContext`, `composePromptContext`, `composeSessionStartContext`) | Injects `<memory-context>` blocks into lifecycle events with grouped/rendered memories |
 | Continuity intent guidance | `packages/lifecycle/src/injection.ts` (`renderContinuityIntentGuidance`) | Injects inspection-first guidance text when a continuity intent is detected |
-| Policy-only guidance | `packages/lifecycle/src/injection.ts` (`renderMemoryContext` in policy-only mode) | "Use Memory Lane recall/list tools" guidance without memory bodies |
+| Policy-only guidance | `packages/lifecycle/src/injection.ts` (`renderMemoryContext` in policy-only mode) | Route-aware guidance to use Memory Lane continuity, recall, list, status, or review surfaces without memory bodies |
 | Continuity read model answerGuidance | `packages/core/src/continuity-read-model.ts` | Structured guidance: "Use this continuity read model before answering..." |
 | Continuity read model harnessGuidance | Same file | Per-harness guidance (CLI commands, MCP tools) |
 | Notification/continuity guidance | Same file | "Continuity is read-only; no mutation is performed" |
@@ -180,7 +180,7 @@ Memory Lane **applies memories through context injection and guidance surfaces**
 
 **Policy modes** in `memory.contextPolicy`:
 - `selective`: Injects bounded selected approved memories in `<memory-context>` block
-- `policy-only`: Injects "use Memory Lane tools" guidance, no memory bodies
+- `policy-only`: Injects route-aware "use Memory Lane tools" guidance, no memory bodies
 - `off`: No automatic context injection
 
 ### Paper correspondence

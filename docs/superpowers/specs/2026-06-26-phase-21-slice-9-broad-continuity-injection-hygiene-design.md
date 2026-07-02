@@ -13,7 +13,7 @@ Post-v0.2.35 validation (`docs/superpowers/validation/2026-06-26-phase-21-post-v
 
 One selected body was stale Slice 6a next-slice guidance (`3058f847`), while canonical continuity correctly identified v0.2.35 release memory `311283e6` as latest progress. This is not cross-project leakage and stays within budgets, but it can bias the context window away from the canonical continuity read model.
 
-The installed Pi generated bridge already behaves better for broad prompts: it routes broad continuity prompts to `memory-lane continuity --query <prompt> --json` and renders the continuity read model instead of ordinary recall bodies.
+At the time of Slice 9, the installed Pi generated bridge already behaved better for broad prompts: it used local deterministic continuity detection, routed broad continuity prompts to `memory-lane continuity --query <prompt> --json`, and rendered the continuity read model instead of ordinary recall bodies. A later continuity-routing hygiene slice replaced that local bridge-only routing with the shared `memory-lane route --prompt <text> --json` decision, with fallback continuity heuristics only when route subprocesses fail in selective mode.
 
 ## Scope
 
@@ -49,7 +49,7 @@ Keep `policy-only` behavior unchanged: it already emits guidance without bodies.
 - No persisted workstream ids.
 - No memory mutation, cleanup, approval, rejection, or auto-consolidation.
 - No explicit `memory_recall` / `memory_get` behavior changes.
-- No generated Pi bridge change unless tests show shared parity docs need adjustment; Pi already routes broad prompts through continuity.
+- No generated Pi bridge change in Slice 9. A later continuity-routing hygiene slice intentionally changed the generated Pi bridge to use the shared CLI route decision for parity.
 
 ## Proposed implementation
 
@@ -79,7 +79,7 @@ Rationale:
 - It directly fixes the validated pollution source: ordinary recall bodies on broad prompts.
 - It preserves the existing answer contract: agents are guided to inspect canonical continuity before answering.
 - It avoids introducing a second continuity renderer in lifecycle code.
-- It keeps Pi behavior untouched.
+- It keeps Pi behavior untouched for Slice 9; later routing-hygiene work aligned generated Pi routing through the shared CLI route decision.
 - It has a small test surface and low regression risk.
 
 A later enhancement can inject a compact continuity read model into Claude/Codex prompt context if evidence shows guidance-only broad prompts are too weak.

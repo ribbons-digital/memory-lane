@@ -240,7 +240,7 @@ A memory is eligible when all are true:
   - `project_fact`
   - `decision`
   - optionally `correction` / `procedure` when the topic strongly matches workflow/process terms.
-- Superseded records are not hidden automatically, but should be demoted and expose revision pointers. If a superseded record and its successor both match, prefer the successor.
+- Superseded records were demoted in the first slice. The later continuity-routing hygiene slice tightened active workstream discovery to omit superseded records entirely; list/show/recall remain the explicit inspection surfaces for superseded history.
 
 Pending memories remain visible through existing review/continuity pending sections, not through workstream discovery candidates.
 
@@ -289,7 +289,7 @@ Use deterministic scoring with reason labels. Suggested first-slice weights:
    - `project_fact` / `decision` moderate for lookup/status
 4. Recency as a tie-breaker, not a dominant signal.
 5. Provenance bonus for `session_summary` when query looks like session resumption.
-6. Demotion for stale/superseded records.
+6. Demotion for stale records and omission of superseded records from active discovery.
 
 Return `scoreReasons` such as:
 
@@ -300,7 +300,7 @@ Return `scoreReasons` such as:
 - `checkpoint-kind`
 - `session-summary-kind`
 - `recent-update`
-- `superseded-record`
+- `superseded-record` (legacy first-slice reason; active discovery omits superseded records)
 
 Do not expose internal token lists unless needed for tests.
 
@@ -357,7 +357,7 @@ Core tests:
 1. Parses resume/lookup/status intents and extracts topics.
 2. Returns approved current-project candidates only.
 3. Excludes pending records and secret-like records.
-4. Omits expired records and demotes stale/superseded records.
+4. Omits expired and superseded records, and demotes stale records.
 5. Extracts PR, branch, commit, and release references conservatively.
 6. Produces score reasons.
 7. Returns ambiguity/no-match warnings.
