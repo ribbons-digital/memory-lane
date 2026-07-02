@@ -340,6 +340,23 @@ describe("validateConfig", () => {
     assert.equal(config.memory?.sessionEndSummary?.model, "gpt-4.1-mini")
   })
 
+  it("rejects invalid sessionEndSummary timeoutMs", () => {
+    for (const timeoutMs of ["1000", 0, -1, 1.5] as const) {
+      assert.throws(() => validateConfig({
+        semantic: {
+          enabled: false,
+          activeEmbeddingProfile: "local-example",
+          embeddings: { profiles: {} },
+          retrieval: { topK: 8, minSimilarity: 0.25, semanticWeight: 0.65, lexicalWeight: 0.25, recencyWeight: 0.1, fallbackToAllVisibleOnMiss: true },
+          privacy: { allowRemoteEmbeddings: false },
+        },
+        memory: {
+          sessionEndSummary: { enabled: true, timeoutMs },
+        },
+      }), /memory\.sessionEndSummary\.timeoutMs/)
+    }
+  })
+
   it("rejects unknown sessionEndSummary provider", () => {
     assert.throws(() => validateConfig({
       semantic: {

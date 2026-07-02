@@ -198,7 +198,7 @@ function validateSessionEndSummaryConfig(v: unknown): void {
   if (o.model !== undefined) str(o.model, "memory.sessionEndSummary.model")
   if (o.promptTemplate !== undefined && o.promptTemplate !== null) str(o.promptTemplate, "memory.sessionEndSummary.promptTemplate")
   if (o.maxTokens !== undefined) num(o.maxTokens, "memory.sessionEndSummary.maxTokens")
-  if (o.timeoutMs !== undefined) positiveInt(o.timeoutMs, "memory.sessionEndSummary.timeoutMs")
+  if (o.timeoutMs !== undefined) positiveNonZeroInt(o.timeoutMs, "memory.sessionEndSummary.timeoutMs")
   if (o.requireConfirmation !== undefined) bool(o.requireConfirmation, "memory.sessionEndSummary.requireConfirmation")
   if (o.includeToolOutputs !== undefined) bool(o.includeToolOutputs, "memory.sessionEndSummary.includeToolOutputs")
 }
