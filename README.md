@@ -416,6 +416,7 @@ memory-lane init --project-local --project /path/to/project
 ```
 
 Project-local initialization creates `.memory-lane/` in the project, adds `.memory-lane/` to `.gitignore`, and creates `.memory-lane-scope`.
+Treat `.memory-lane-scope` as a local identity file too; keep it untracked unless you intentionally want to share one stable scope id across collaborators.
 In the default two-tier model, commands and hooks run with `--project /path/to/project` use this project store for project-scoped writes while keeping global-scope preferences home-side unless explicit `MEMORY_LANE_*` paths are set.
 
 ## Project Scoping
@@ -431,6 +432,7 @@ Create one manually in a project root when you want an explicit stable identity 
 ```bash
 echo '{"id":"my-project-uuid"}' > .memory-lane-scope
 ```
+If you do this in a Git repository, add `.memory-lane-scope` to `.gitignore` unless the shared id is deliberate.
 
 Existing memories saved under old worktree path keys are not migrated automatically. Use `memory-lane list --all`, `memory-lane show <id> --all`, and existing review/rescope/delete/save commands if you want to clean up fragmented historical records.
 

@@ -85,10 +85,11 @@ A save from `packages/foo` in a repository should write to the repository scope 
 On the first project-scoped write in default two-tier mode, Memory Lane may create `<project-root>/.memory-lane/`.
 It should create the memory and embeddings files as needed.
 It should append `.memory-lane/` to the project `.gitignore` using the existing idempotent behavior.
-The reason is privacy and repo hygiene: Memory Lane files may contain local project context, preferences, pending review records, deleted revisions, and embeddings that are useful to the local user but usually should not be committed or shared with every repository collaborator.
+The `.memory-lane-scope` file should also be treated as a local identity file and kept untracked unless a shared stable project id is intentional.
+The reason is privacy and repo hygiene: Memory Lane files may contain local project context, preferences, pending review records, deleted revisions, embeddings, and local scope identity that are useful to the local user but usually should not be committed or shared with every repository collaborator.
 Gitignoring also prevents large or frequently changing JSONL files from creating noisy diffs.
 
-If `.memory-lane/` is not gitignored, the possible upside is that a solo user or team can intentionally version project memory alongside the codebase and move it between machines through Git.
+If `.memory-lane/` or `.memory-lane-scope` is not gitignored, the possible upside is that a solo user or team can intentionally version project memory or share a project scope id alongside the codebase and move it between machines through Git.
 The downsides are stronger: accidental leakage of sensitive project notes, noisy append-only churn, merge conflicts in JSONL files, stale or rejected memories becoming repository history, and embeddings/baseline files bloating the repo.
 For Slice 1, the default should stay safe-local-by-default; a future explicit team-sharing feature can revisit committed project memory with a clearer review model.
 
@@ -242,7 +243,7 @@ Shape-lock tests should cover existing scalar fields.
 10. Updating or approving a project-origin memory appends to project-local.
 11. Mixed-store replace or supersede appends each touched existing id to its owner store.
 12. Rescope keeps the existing owner store in Slice 1 and does not silently move files.
-13. Project-local auto-init appends `.memory-lane/` to `.gitignore` idempotently.
+13. Project-local auto-init appends `.memory-lane/` to `.gitignore` idempotently, and repository-maintained ignore lists can also include `.memory-lane-scope` to keep local identity untracked.
 14. Worktree saves use the intended shared project scope root and do not fragment stores.
 15. Existing `doctor` and `status` JSON scalar storage fields remain compatible.
 16. Startup auto-compaction does not unexpectedly rewrite a project store.
@@ -267,7 +268,7 @@ git diff --check
 Manual dogfood checks:
 
 1. Use an installed build in a temp project with no `.memory-lane/` and save a project memory.
-2. Confirm `.memory-lane/` is created in the project, `.gitignore` is updated, and home does not receive the project row.
+2. Confirm `.memory-lane/` is created in the project, `.gitignore` is updated, `.memory-lane-scope` remains untracked unless deliberately shared, and home does not receive the project row.
 3. Save a preference from the same project and confirm it writes home-side.
 4. Ask a broad continuity question from the project and confirm it sees the project memory and home preference.
 5. Ask from a different temp project and confirm the first project's project memory is absent.

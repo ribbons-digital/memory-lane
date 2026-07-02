@@ -79,7 +79,7 @@ This is a storage architecture change, not a recall/ranking or schema change.
 - No cloud sync.
 - No embedding-default changes.
 - No public database format change beyond using existing JSONL files at different locations.
-- No requirement to commit `.memory-lane/`; project-local storage should remain gitignored by default.
+- No requirement to commit `.memory-lane/` or `.memory-lane-scope`; project-local storage and local scope identity should remain gitignored by default unless sharing the scope id is deliberate.
 
 ## Current implementation seams to reuse
 
@@ -111,7 +111,8 @@ Introduce a new project-aware path resolution mode for commands with project con
 3. If command writes project-scoped data and a project root is known:
    - use `<project-root>/.memory-lane/` for project memory and project embeddings;
    - auto-initialize the directory on first project write;
-   - append `.memory-lane/` to `.gitignore` when auto-initialized.
+   - append `.memory-lane/` to `.gitignore` when auto-initialized;
+   - keep `.memory-lane-scope` treated as a local identity file that project repositories should ignore unless they intentionally share one scope id.
 4. Continue to use `~/.memory-lane/` for global memory/config and install metadata.
 5. If explicit `MEMORY_LANE_*` paths are set, keep current behavior: explicit paths are authoritative, do not auto-fallback, and keep current single-store behavior.
 
@@ -289,7 +290,7 @@ Manual/dogfood checks for shipped Slice 1:
 - **Config confusion:** keep global config canonical for the first slice; do not add config merging.
 - **Worktree fragmentation:** prefer existing worktree-aware project scope logic; document `.memory-lane-scope` for stable identity.
 - **Surprising file creation:** only auto-create project-local storage on writes, not read-only commands.
-- **Git leakage:** append `.memory-lane/` to `.gitignore` whenever project-local storage is initialized.
+- **Git leakage:** append `.memory-lane/` to `.gitignore` whenever project-local storage is initialized, and keep `.memory-lane-scope` untracked unless a shared stable scope id is intentional.
 - **Embedding mismatch:** project-local project embeddings should live beside project-local project memories; reindex behavior must respect the active store model.
 
 ## Decisions for user approval
