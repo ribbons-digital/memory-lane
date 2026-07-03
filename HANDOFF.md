@@ -2,8 +2,9 @@
 
 ## Current state
 
-- Branch context: `main` is synced through `6132e43 docs: record v0.2.44 release dogfood (#92)`.
-- Latest release: `v0.2.44` at tag `v0.2.44` / commit `2788c4e`; release workflow `28628495514` passed and published the release. Installed-artifact dogfood passed with a pre-upgrade baseline smoke, `memory-lane upgrade --yes`, a post-upgrade smoke, and Slice 2a CLI/MCP legacy diagnostics checks.
+- Branch context: `main` is synced through `83b9b3d feat: add pre-compact session summaries (#95)`.
+- Latest release: `v0.2.45` at tag `v0.2.45` / commit `83b9b3d`; release workflow `28647421095` passed and published 8 assets.
+- Installed-artifact validation for `v0.2.45` passed with a pre-upgrade smoke, `memory-lane upgrade --yes`, a post-upgrade smoke, and Slice 2b plan/apply migration protocol dogfood.
 - PR #85 merged as `6da6105`, completing Fable 5 Waves 1-3 hardening: JSON harness config merges/backups, fail-safe Claude/Codex hook initialization, bounded embedding settlement on CLI/MCP shutdown, compaction preserving invalid rows, stale embedding invalidation correctness, provider timeout validation, and docs/status sync.
 - PR #86 merged as `e2d4aec`, completing Fable 5 Wave 4 maintainability/UX follow-through: stale status docs were trued up, `.memory-lane-scope` is ignored by default, README/project-local docs note the scope file as local identity, and the Obsidian CLI command cluster was extracted without intended behavior changes.
 - PR #89 merged as `96516ef`, completing Slice 2a legacy project-memory diagnostics: `status` / `doctor` expose bounded legacy home-project diagnostics, `memory-lane migrate project-local --dry-run` previews candidates without mutation, explicit storage override mode reports not applicable, and docs/tests cover the read-only invariants.
@@ -46,9 +47,15 @@ Approved spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a
 Shipped behavior: detect active legacy home-stored project memories for the current project, surface bounded `status` / `doctor` diagnostics, and provide a dry-run-only migration preview without silent moves/deletes/approvals/consolidation.
 `v0.2.44` release and installed-artifact dogfood for Slice 2a are complete.
 Release validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
-Current action is Slice 2b implementation from the approved review-first legacy migration protocol design.
+Slice 2b implementation is merged in PR #94 as `036fcde`.
 Approved spec: `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
-The slice is limited to reviewed plan generation, explicit `--apply-plan <path> --yes`, idempotent migration, tests, and docs; general cross-store rescope remains deferred.
+The shipped slice adds reviewed plan generation, explicit `--apply-plan <path> --yes`, idempotent migration, tests, and docs; general cross-store rescope remains deferred.
+
+Pre-compact session-summary support is merged in PR #95 as `83b9b3d` and released in `v0.2.45`.
+Claude, Codex, and native Pi can save pending `session_summary` memories before compaction when session-summary configuration allows unconfirmed pre-compact summaries.
+
+Current recommended next work is a screenshot-driven continuity rendering hygiene slice.
+Start by reproducing the duplicated continuity output and buried warning behavior end-to-end, then fix shared renderer/dedupe behavior without adding automatic supersession or silent memory mutation.
 
 ## Load-bearing constraints
 
@@ -61,6 +68,9 @@ The slice is limited to reviewed plan generation, explicit `--apply-plan <path> 
 
 ## Current verification evidence
 
+- `v0.2.45` release workflow `28647421095` passed and published 8 assets from `83b9b3d`; CI workflow `28647261055` passed.
+- Installed `v0.2.45` validation passed: pre-upgrade `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, Slice 2b plan generation, apply refusal without `--yes`, explicit apply, idempotent re-apply, and final legacy-candidate count of 0.
+- Validation doc: `docs/superpowers/validation/2026-07-03-v0.2.45-release-dogfood.md`.
 - `v0.2.37` release workflow passed; installed upgrade via `memory-lane upgrade --yes` passed and reconfigured Pi.
 - Installed broad next-work continuity returned latest progress, empty workstream candidates, and `no-topic`.
 - Installed operating guidance excluded stale release/checkpoint ids `1098781c`, `7eab3ad9`, and `0b56ed5d`.
@@ -110,6 +120,7 @@ The slice is limited to reviewed plan generation, explicit `--apply-plan <path> 
 - Project-local storage Slice 1 approved implementation spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`
 - Project-local storage Slice 2a legacy diagnostics shipped spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`
 - Project-local storage Slice 2b migration protocol spec: `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`
+- v0.2.45 release/dogfood validation: `docs/superpowers/validation/2026-07-03-v0.2.45-release-dogfood.md`
 - v0.2.44 release/dogfood validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`
 - Continuity routing/context hygiene release: PR #82 / `a808231`, shipped in `v0.2.43`
 - Retrieval currentness tie-break design: `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md`
