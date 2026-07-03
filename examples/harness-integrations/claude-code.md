@@ -142,7 +142,7 @@ For isolated testing, prefer absolute temp paths in hook commands, for example `
 
 `SessionEnd` is supported by Claude Code and can generate pending `session_summary` memories when `memory.sessionEndSummary.enabled` is configured. By default, Memory Lane still requires confirmation; a bare hook will not save unless `memory.sessionEndSummary.requireConfirmation` is set to `false` or the payload is invoked with `confirmed: true` for manual testing.
 
-`PreCompact` runs immediately before Claude Code compacts context. When `memory.sessionEndSummary.enabled` is configured, it can save a pending pre-compact `session_summary` for review without blocking compaction; set `memory.preCompactSummary.enabled` to `false` to opt out.
+`PreCompact` runs immediately before Claude Code compacts context. When `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`, it can save a pending pre-compact `session_summary` for review without blocking compaction. Set `memory.preCompactSummary.enabled` to `false` to opt out.
 
 `PostToolUse` does not inject context. It can save durable tool-outcome memories, such as successful test commands or package-manager workflow rules.
 If hook initialization fails because storage, config, or plugins cannot be loaded, Memory Lane returns `{}` and exits successfully so Claude Code is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr.

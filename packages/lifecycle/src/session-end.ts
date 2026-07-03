@@ -258,6 +258,10 @@ export async function handleSessionEnd(
   }])
 }
 
+/**
+ * Generate pending session-summary candidates immediately before host context compaction.
+ * This reuses session-end summary hygiene and duplicate filtering while tagging provenance as pre_compact.
+ */
 export async function handlePreCompact(
   engine: MemoryEngine,
   input: PreCompactInput,

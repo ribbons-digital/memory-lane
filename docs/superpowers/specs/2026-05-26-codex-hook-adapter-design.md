@@ -415,6 +415,8 @@ Add `SessionStart` support with strict budgeted baseline injection. This should 
 
 Add `PreCompact` support for context checkpointing. First try existing `project_checkpoint` kind. Introduce true `session` scope only if a concrete retrieval and deletion lifecycle proves necessary.
 
+Later note: the 2026-07-03 pre-compact session-summary slice is separate from this checkpointing idea. It saves pending `session_summary` memories with `pre_compact` provenance and does not implement `project_checkpoint` context checkpointing.
+
 ### Phase 4 — Classifier and richer recall scoring
 
 Add optional LLM classifier support and richer scored recall output if heuristic autosave or automatic injection needs better precision. Remote or hosted model use must remain opt-in.

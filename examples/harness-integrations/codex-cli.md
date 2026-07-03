@@ -98,16 +98,17 @@ Codex tool matcher names can vary by version. If `PostToolUse` does not fire, ad
 
 `UserPromptSubmit` uses the shared prompt route decision before Codex processes the prompt. Low-signal prompts such as `ok` or `thanks` inject nothing, memory-management prompts get list/status/review guidance, broad project-position or next-work prompts get continuity guidance without ordinary recall bodies, and eligible ordinary or topic-specific prompts can receive relevant approved memories within strict item and character limits.
 
-`Stop`, `PreCompact`, and `PostToolUse` do not inject context. They save concise memories externally and are silent by default. `PreCompact` can save a pending session summary immediately before Codex compacts context when `memory.sessionEndSummary.enabled` is configured; set `memory.preCompactSummary.enabled` to `false` to opt out. `Stop` only runs session-summary automation when the latest user message explicitly asks for it, such as "remember this session", "save a session summary", or "summarize this session to memory". If hook initialization fails because storage, config, or plugins cannot be loaded, Memory Lane returns `{}` and exits successfully so Codex is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr.
+`Stop`, `PreCompact`, and `PostToolUse` do not inject context. They save concise memories externally and are silent by default. `PreCompact` can save a pending session summary immediately before Codex compacts context when `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`; set `memory.preCompactSummary.enabled` to `false` to opt out. `Stop` only runs session-summary automation when the latest user message explicitly asks for it, such as "remember this session", "save a session summary", or "summarize this session to memory". If hook initialization fails because storage, config, or plugins cannot be loaded, Memory Lane returns `{}` and exits successfully so Codex is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr.
 
 ## Session-end summarization
 
 Session-end summarization is opt-in, and current Codex CLI hooks do **not** include a supported `SessionEnd` event. Do not add `SessionEnd` to `.codex/hooks.json`; Codex will ignore unsupported hook names.
 
-For Codex today, there are two supported explicit-intent options after enabling `memory.sessionEndSummary` in `~/.memory-lane/config.json`:
+For Codex today, there are supported options after enabling `memory.sessionEndSummary` in `~/.memory-lane/config.json`:
 
 1. Ask in your latest Codex prompt: "remember this session", "save a session summary", or "summarize this session to memory". The existing `Stop` hook treats that prompt as confirmation, reads a bounded transcript tail, sends it to the configured summary provider, and saves the result as a pending memory. Ordinary `Stop` turns keep the existing autosave behavior and do not summarize sessions.
-2. Use the manual command and pass a compact transcript JSON on stdin:
+2. Configure `PreCompact` with `memory.sessionEndSummary.requireConfirmation` set to `false` so Codex can queue a pending pre-compact summary before compaction. Set `memory.preCompactSummary.enabled` to `false` to opt out without disabling manual or explicit-intent summaries.
+3. Use the manual command and pass a compact transcript JSON on stdin:
 
 ```bash
 echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant","content":"Done."}]}' \

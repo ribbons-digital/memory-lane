@@ -137,17 +137,19 @@ memory-lane claude user-prompt-submit
 memory-lane claude stop
 memory-lane claude post-tool-use
 memory-lane claude session-end
+memory-lane claude pre-compact
 
 memory-lane codex session-start
 memory-lane codex user-prompt-submit
 memory-lane codex stop
 memory-lane codex post-tool-use
+memory-lane codex pre-compact
 ```
 
 - Claude adapter is for **Claude Code CLI hooks**, not Claude Desktop.
 - Claude Desktop / Codex Desktop use the MCP server for explicit tools; MCP is not lifecycle automation.
 - Current Codex CLI hooks do not expose a supported `SessionEnd` event. Do not add `SessionEnd` to `.codex/hooks.json`.
-- `Stop` and `PostToolUse` save useful memories externally and are silent by default.
+- `Stop`, `PreCompact`, and `PostToolUse` save useful memories externally and are silent by default.
 - Hook commands fail safe: if storage/config/plugin initialization fails, Claude/Codex hook invocations return `{}` and exit successfully so the host session is not blocked.
 - Set `MEMORY_LANE_HOOK_DEBUG=1` for concise diagnostics at `~/.memory-lane/hooks-log.jsonl`; debug logs do not include prompts, transcripts, or tool output.
 
@@ -156,11 +158,12 @@ Pi:
 - Pi supports manual tools/commands, explicit `memory_continuity`, and read-only lifecycle context through `before_agent_start`.
 - Broad Pi continuity prompts should route to canonical continuity before recall in both repo-local adapter and generated native-binary bridge.
 - Pi lifecycle writes are intentionally low-noise: explicit memory requests on `input`, higher-signal stop/tool candidates on `turn_end`/`tool_result`.
-- Do not assume automatic pi `agent_end`, `session_shutdown`, or compaction summaries.
+- Do not assume automatic pi `agent_end` or `session_shutdown` summaries.
+- Native pi `session_before_compact` can queue pending pre-compact summaries when `memory.sessionEndSummary.enabled` is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is not `false`.
 
 ## Session-end summarization
 
-Use `memory-lane session-end --confirm` only when the user explicitly wants to generate a manual session summary and `memory.sessionEndSummary` is configured. In Pi, use `/memory session-summary`; it reads the current branch through Pi's session manager and asks for confirmation. Generated summaries are pending memories for review. Raw transcripts are not stored; tool messages are excluded by default and likely secrets are redacted before the transcript is sent to the configured model. `memory.sessionEndSummary.timeoutMs` is optional and defaults to 30000 ms for OpenAI-compatible summary calls.
+Use `memory-lane session-end --confirm` only when the user explicitly wants to generate a manual session summary and `memory.sessionEndSummary` is configured. In Pi, use `/memory session-summary`; it reads the current branch through Pi's session manager and asks for confirmation. Claude/Codex `PreCompact` and native pi `session_before_compact` can queue pending pre-compact summaries only when the summary provider is configured and `memory.sessionEndSummary.requireConfirmation` is `false`; set `memory.preCompactSummary.enabled` to `false` to opt out. Generated summaries are pending memories for review. Raw transcripts are not stored; tool messages are excluded by default and likely secrets are redacted before the transcript is sent to the configured model. `memory.sessionEndSummary.timeoutMs` is optional and defaults to 30000 ms for OpenAI-compatible summary calls.
 
 ## Obsidian mirror/import
 

@@ -707,6 +707,11 @@ export interface SessionEndSummaryConfig {
 }
 
 export interface PreCompactSummaryConfig {
+  /**
+   * Controls pre-compact session summaries.
+   * When omitted, pre-compact summaries are allowed whenever sessionEndSummary is enabled and confirmation is disabled.
+   * Set to false to keep manual/session-end summaries enabled while opting out of PreCompact/session_before_compact hooks.
+   */
   enabled?: boolean
 }
 

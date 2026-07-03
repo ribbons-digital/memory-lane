@@ -149,8 +149,11 @@ export interface SessionEndOptions {
 }
 
 export interface PreCompactInput extends LifecycleContext {
+  /** Host compaction trigger, such as manual or auto. */
   trigger?: string
+  /** Compactable transcript messages supplied by the host, or adapter-read transcript fallback when omitted. */
   messages?: SessionMessage[]
 }
 
+/** Options for pre-compact summaries; adapters must pass confirmed true only after config disables confirmation. */
 export type PreCompactOptions = SessionEndOptions

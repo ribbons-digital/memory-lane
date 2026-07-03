@@ -4,6 +4,12 @@
 
 Let Memory Lane optionally capture a structured summary at the end of an agent session so the next session can start with meaningful project state rather than from scratch. This is the first step toward replacing manual `HANDOFF.md` notes with machine-generated, user-reviewable session memories.
 
+## Implementation update: pre-compact summaries
+
+As of 2026-07-03, later slices extend the original session-end design with pre-compact summaries for Claude/Codex `PreCompact` hooks and native pi `session_before_compact`.
+These paths require `memory.sessionEndSummary.enabled`, a configured provider, and `memory.sessionEndSummary.requireConfirmation: false`, save pending `session_summary` memories with `pre_compact` provenance, and can be disabled with `memory.preCompactSummary.enabled: false`.
+The original manual confirmation path and pending-review boundary remain unchanged.
+
 ## Principles
 
 1. **Opt-in and disabled by default.** Users must explicitly enable session-end summarization. The feature is off until they configure it, so they acknowledge the privacy and accuracy trade-offs.
