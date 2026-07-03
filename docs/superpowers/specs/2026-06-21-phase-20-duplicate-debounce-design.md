@@ -20,6 +20,7 @@ Real cross-harness review showed a remaining high-noise path: session summaries 
 - **Pending continuity candidate**: a pending `session_summary` or `project_checkpoint` memory created by lifecycle/session-summary capture before human approval.
 - **Candidate debounce**: deterministic suppression of a newly generated pending continuity candidate when an equivalent pending or approved memory is already visible for the same project/scope.
 - **Same-session summary duplicate**: a `session_summary` candidate with the same provenance session id and adapter/event as an existing visible pending or approved `session_summary`.
+  For `pre_compact` summaries, the provenance key also includes the host turn id, or a deterministic message-digest fallback when the host omits a turn id.
 - **Equivalent summary duplicate**: a `session_summary` candidate whose normalized durable content matches an existing visible pending or approved `session_summary` after removing generated heading/date noise and review-management chatter.
 - **Review-management chatter**: self-referential text about Memory Lane review queues, memory IDs, approval/rejection instructions, or commands such as `memory-lane review`, when that text is not itself the durable work outcome.
 
@@ -57,9 +58,11 @@ Recommendation: Use two deterministic keys, with no LLM classifier:
    - `kind: "session_summary"`
    - visible current project/global scope
    - pending or approved status
-   - `provenance.lifecycleEvent: "session_end"`
+   - `provenance.lifecycleEvent: "session_end"` or `"pre_compact"`
    - same `provenance.adapter` when available
    - same non-empty `provenance.sessionId`
+   - for `pre_compact`, the same non-empty `provenance.turnId`.
+     When the host omits a turn id, `handlePreCompact` uses a deterministic digest of the compacted messages as the fallback turn id.
 2. **Normalized content key** after stripping generated session-summary headings/dates, compacting whitespace, and removing review-management chatter lines.
 
 If neither key is available, write the candidate normally.

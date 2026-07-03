@@ -611,7 +611,11 @@ Hints invite inspection with commands such as `memory-lane dashboard`, `memory-l
 
 ### Session-end summarization
 
-Session-end summarization is opt-in and disabled by default. It sends a compact session transcript to an explicitly configured OpenAI-compatible chat model, then saves the generated summary as a **pending** memory with `source: "session-summary"`, `kind: "session_summary"`, and `provenance.lifecycleEvent: "session_end"`. The transcript itself is not stored in Memory Lane.
+Session-end summarization is opt-in and disabled by default.
+It sends a compact session transcript to an explicitly configured OpenAI-compatible chat model, then saves the generated summary as a **pending** memory with `source: "session-summary"` and `kind: "session_summary"`.
+Manual and session-end hook summaries use `provenance.lifecycleEvent: "session_end"`.
+Pre-compact summaries use `provenance.lifecycleEvent: "pre_compact"`.
+The transcript itself is not stored in Memory Lane.
 
 Configure it in `~/.memory-lane/config.json`:
 
@@ -654,7 +658,23 @@ memory-lane reject <id>            # reject obsolete/suspect pending entries
 
 Codex CLI does not currently expose a supported `SessionEnd` hook event. Do not add `SessionEnd` to `.codex/hooks.json`; Codex will ignore it. For Codex today, use the manual `memory-lane session-end --confirm` command, the supported `Stop` hook explicit-intent path, or the supported `PreCompact` hook when confirmation is disabled in config. When the latest user message says something like "remember this session", "save a session summary", or "summarize this session to memory", `memory-lane codex stop` treats that request as confirmation, summarizes a bounded transcript through the configured provider, and saves the result as a pending session-summary memory. Ordinary `Stop` turns keep the existing silent autosave behavior and do not run the summarizer.
 
-Tool messages are excluded unless `includeToolOutputs` is true. `timeoutMs` is optional and defaults to 30000 ms for OpenAI-compatible session-summary calls. Lines that look like secrets are redacted before the transcript is sent to the configured model. Generated summaries are also cleaned of obvious Memory Lane review-management chatter such as “run memory-lane review” or “approve these memory IDs,” unless review decisions are themselves the durable outcome. A repeated summary for the same adapter/session id, or one with the same normalized durable content as an existing visible pending/approved session summary, is skipped before writing another pending memory. Generated summaries dominated by operational subagent/orchestrator chatter are skipped when they contain no durable project outcome; existing pending suspect summaries may show a read-only `review hint` in CLI review output and `reviewHygiene` metadata in JSON/MCP review output. This Phase 21 Slice 7 summary hygiene shipped in `v0.2.34`. When transcript/session messages include canonical ISO timestamps, the saved pending summary stores the latest message timestamp as `freshness.capturedAt`; no current-time fallback is used. Claude Code supports `memory-lane claude session-end` through its documented `SessionEnd` hook; by default it still requires confirmation and will not save from a bare hook unless `memory.sessionEndSummary.requireConfirmation` is set to `false` or the payload includes `confirmed: true` for manual testing. Claude Code, Codex CLI, and the native pi adapter support pre-compact summaries through `PreCompact` / `session_before_compact` when `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`; these save pending `session_summary` memories with `pre_compact` provenance and never block or override host compaction. Set `memory.preCompactSummary.enabled` to `false` to opt out. pi also supports explicit session summaries through `/memory session-summary`, using pi's session manager plus interactive confirmation; automatic pi `agent_end` and `session_shutdown` summarization remain out of scope.
+Tool messages are excluded unless `includeToolOutputs` is true.
+`timeoutMs` is optional and defaults to 30000 ms for OpenAI-compatible session-summary calls.
+Lines that look like secrets are redacted before the transcript is sent to the configured model.
+Generated summaries are also cleaned of obvious Memory Lane review-management chatter such as “run memory-lane review” or “approve these memory IDs,” unless review decisions are themselves the durable outcome.
+A repeated manual/session-end summary for the same adapter and session id, a repeated pre-compact summary for the same adapter, session id, and turn id or fallback message digest, or a summary with the same normalized durable content as an existing visible pending/approved session summary, is skipped before writing another pending memory.
+Generated summaries dominated by operational subagent/orchestrator chatter are skipped when they contain no durable project outcome.
+Existing pending suspect summaries may show a read-only `review hint` in CLI review output and `reviewHygiene` metadata in JSON/MCP review output.
+This Phase 21 Slice 7 summary hygiene shipped in `v0.2.34`.
+When transcript/session messages include canonical ISO timestamps, the saved pending summary stores the latest message timestamp as `freshness.capturedAt`.
+No current-time fallback is used.
+Claude Code supports `memory-lane claude session-end` through its documented `SessionEnd` hook.
+By default it still requires confirmation and will not save from a bare hook unless `memory.sessionEndSummary.requireConfirmation` is set to `false` or the payload includes `confirmed: true` for manual testing.
+Claude Code, Codex CLI, and the native pi adapter support pre-compact summaries through `PreCompact` / `session_before_compact` when `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`.
+These summaries save pending `session_summary` memories with `pre_compact` provenance and never block or override host compaction.
+Set `memory.preCompactSummary.enabled` to `false` to opt out.
+pi also supports explicit session summaries through `/memory session-summary`, using pi's session manager plus interactive confirmation.
+Automatic pi `agent_end` and `session_shutdown` summarization remain out of scope.
 
 ### Obsidian mirror
 
