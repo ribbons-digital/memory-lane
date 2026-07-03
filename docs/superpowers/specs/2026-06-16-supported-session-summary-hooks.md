@@ -14,6 +14,13 @@ memory-lane session-end --confirm
 
 Memory Lane contains a Codex-shaped `session-end` adapter path for tests and future compatibility, but current OpenAI Codex hooks documentation does **not** expose a supported `SessionEnd` hook event. Do not configure `SessionEnd` in `.codex/hooks.json`.
 
+## Implementation update: pre-compact summaries
+
+As of 2026-07-03, Memory Lane supports Claude/Codex `PreCompact` hooks and native pi `session_before_compact` for pre-compact session-summary preservation.
+These paths reuse `memory.sessionEndSummary`, require a configured provider and `memory.sessionEndSummary.requireConfirmation: false`, save pending `session_summary` memories with `pre_compact` provenance, and never replace or block the host compaction result.
+Set `memory.preCompactSummary.enabled` to `false` to opt out while leaving manual/session-end summaries enabled.
+Automatic pi `agent_end` and `session_shutdown` summarization remain out of scope.
+
 ## Evidence from current hook documentation
 
 ### Codex CLI
@@ -166,11 +173,12 @@ Cons:
 - Pre-compact flows are latency-sensitive; adding another LLM call could slow compaction.
 - Summary output and pending memory review may be less visible at compaction time.
 
-Recommended design:
+Implemented follow-up design:
 
-- Do not implement auto-compaction summarization first.
-- Consider a later slice for `PreCompact` with matcher `manual` only, or a separate config flag such as `memory.sessionEndSummary.onManualCompact`.
-- Never enable for `auto` by default.
+- Use `PreCompact` rather than `PostCompact` so the summary is generated before context is lost.
+- Reuse `memory.sessionEndSummary` provider settings and require `memory.sessionEndSummary.requireConfirmation: false` because the hook cannot ask for confirmation.
+- Support both `manual` and `auto` triggers, but only after users have explicitly enabled session summaries and disabled confirmation.
+- Use `memory.preCompactSummary.enabled: false` as the opt-out flag.
 
 ### Candidate D — Codex `SubagentStop`
 
@@ -241,7 +249,7 @@ Recommended design:
 
 - First pi automation should be explicit command/UI driven, not automatic shutdown summarization.
 - Add a pi `/memory session-summary` command that uses `ctx.sessionManager` to gather the current branch, asks for confirmation via `ctx.ui.confirm` / editor review, and saves a pending memory.
-- Later, consider `session_before_compact` only for manual compaction and only with explicit config.
+- Later implementation added guarded `session_before_compact` support with `memory.sessionEndSummary.requireConfirmation: false` and the `memory.preCompactSummary.enabled` opt-out.
 - Avoid `agent_end` automatic summarization unless keyed off explicit user intent in the prompt.
 
 ## Recommended implementation order
@@ -262,12 +270,13 @@ Recommended design:
    - Confirmation remains careful because shutdown may not support interactive prompts.
 
 4. **pi explicit command**
-   - Add an interactive pi command using `ctx.sessionManager` and `ctx.ui`.
-   - Prefer user review/edit before saving.
+   - Completed through `/memory session-summary`.
+   - Uses `ctx.sessionManager` and `ctx.ui` for explicit interactive confirmation.
 
 5. **Compaction integrations**
-   - Add Codex/Claude `PreCompact` or pi `session_before_compact` only after manual/session-end flows prove useful.
-   - Start with manual compaction triggers only; never auto by default.
+   - Completed for Claude/Codex `PreCompact` and native pi `session_before_compact`.
+   - Requires `memory.sessionEndSummary.requireConfirmation: false` because compaction hooks cannot ask for confirmation.
+   - `memory.preCompactSummary.enabled: false` opts out.
 
 6. **Subagent summaries**
    - Treat as separate feature after main-session summaries are stable.
@@ -276,7 +285,7 @@ Recommended design:
 
 - No automatic summary on every `Stop` / `agent_end`.
 - No unsupported hook names.
-- No auto-compaction summarization by default.
+- No auto-compaction summarization unless session-summary automation is explicitly configured with confirmation disabled; `memory.preCompactSummary.enabled: false` opts out.
 - No raw transcript persistence.
 - No direct approval of generated summaries; they must stay pending unless the user explicitly approves later.
 

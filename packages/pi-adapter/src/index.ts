@@ -1,5 +1,5 @@
 import { Type } from "typebox"
-import { classifyPromptRoute, createOpenAICompatibleProvider, handlePostToolUse, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy } from "@memory-lane/lifecycle"
+import { classifyPromptRoute, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy } from "@memory-lane/lifecycle"
 import type { PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
 import {
   MemoryEngine, createSingleStoreEngineStorage, createTwoTierEngineStorage, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableEngineStoragePaths, type SaveResult,
@@ -238,6 +238,46 @@ function sessionMessagesFromPiBranch(branch: PiBranchEntry[]): SessionMessage[] 
   return messages
 }
 
+function sessionMessagesFromUnknownMessages(values: unknown): SessionMessage[] {
+  if (!Array.isArray(values)) return []
+  const messages: SessionMessage[] = []
+  for (const value of values) {
+    if (!value || typeof value !== "object") continue
+    const record = value as { role?: unknown; content?: unknown; message?: { role?: unknown; content?: unknown }; type?: unknown }
+    const nested = record.message
+    const role = typeof record.role === "string" ? record.role : typeof nested?.role === "string" ? nested.role : undefined
+    if (role !== "user" && role !== "assistant" && role !== "tool") continue
+    const rawContent = record.content ?? nested?.content
+    const content = textPartsFromContent(rawContent).join("\n").trim()
+    if (!content) continue
+    messages.push({ role, content })
+  }
+  return messages
+}
+
+function sessionMessagesFromPiCompactionEvent(event: any): SessionMessage[] {
+  const preparation = event?.preparation
+  const preparedMessages = [
+    ...sessionMessagesFromUnknownMessages(preparation?.messagesToSummarize),
+    ...sessionMessagesFromUnknownMessages(preparation?.turnPrefixMessages),
+  ]
+  if (preparedMessages.length) return preparedMessages
+
+  const branchEntries = Array.isArray(event?.branchEntries) ? event.branchEntries : []
+  const branchMessages = sessionMessagesFromPiBranch(branchEntries as PiBranchEntry[])
+  if (branchMessages.length) return branchMessages
+
+  return sessionMessagesFromUnknownMessages(event?.messages)
+}
+
+function preCompactSummaryEnabled(config: ReturnType<typeof loadConfig>): boolean {
+  return config.memory?.sessionEndSummary?.enabled === true && config.memory?.preCompactSummary?.enabled !== false
+}
+
+function piPreCompactTrigger(event: any): "manual" | "auto" {
+  return event?.reason === "manual" ? "manual" : "auto"
+}
+
 // ── Main extension ───────────────────────────────────────────
 
 export default function memoryLaneExtension(pi: ExtensionAPI) {
@@ -296,18 +336,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
       includeToolOutputs: summaryConfig.includeToolOutputs,
       adapter: "pi",
     }, memoryEnv())
-    const saved = candidates
-      .map((candidate) => e.save({
-        text: candidate.text,
-        category: candidate.category,
-        scopeType: candidate.scopeType,
-        status: candidate.status,
-        source: candidate.source,
-        kind: candidate.kind,
-        provenance: { ...candidate.provenance, adapter: "pi" },
-        freshness: candidate.freshness,
-      }))
-      .filter((result): result is Extract<SaveResult, { status: "saved" }> => result.status === "saved")
+    const saved = saveSessionSummaryCandidates(e, candidates)
 
     if (!saved.length) {
       notify(ctx, "No durable session summary was generated.", "info")
@@ -577,6 +606,77 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
       notify(ctx, `Auto-saved memory: ${formatMemory(save.memory)}`, "info")
     }
   }
+
+  function saveSessionSummaryCandidates(e: MemoryEngine, candidates: Awaited<ReturnType<typeof handleSessionEnd>>): Array<Extract<SaveResult, { status: "saved" }>> {
+    return candidates
+      .map((candidate) => e.save({
+        text: candidate.text,
+        category: candidate.category,
+        scopeType: candidate.scopeType,
+        status: candidate.status,
+        source: candidate.source,
+        kind: candidate.kind,
+        provenance: { ...candidate.provenance, adapter: "pi" },
+        freshness: candidate.freshness,
+      }))
+      .filter((result): result is Extract<SaveResult, { status: "saved" }> => result.status === "saved")
+  }
+
+  // ── Pre-compaction summary handler ───────────────────────
+
+  pi.on("session_before_compact", async (event, ctx) => {
+    try {
+      const config = loadConfig(process.env.PI_MEMORY_CONFIG_FILE ?? process.env.MEMORY_LANE_CONFIG)
+      if (!preCompactSummaryEnabled(config)) return undefined
+
+      const summaryConfig = config.memory?.sessionEndSummary
+      const trigger = piPreCompactTrigger(event)
+      if (!summaryConfig?.baseUrl || !summaryConfig.model) {
+        if (trigger !== "auto" || isPiDebugEnabled()) notify(ctx, "Pre-compact summarization requires memory.sessionEndSummary.baseUrl and model.", "warning")
+        return undefined
+      }
+      if (summaryConfig.requireConfirmation !== false) {
+        if (trigger !== "auto" || isPiDebugEnabled()) notify(ctx, "Pre-compact summarization requires memory.sessionEndSummary.requireConfirmation to be false because PreCompact hooks cannot ask for confirmation.", "warning")
+        return undefined
+      }
+
+      const messages = sessionMessagesFromPiCompactionEvent(event)
+      if (!messages.length) return undefined
+
+      const e = getEngine(ctx.cwd)
+      const provider = createOpenAICompatibleProvider({
+        provider: "openai-compatible",
+        baseUrl: summaryConfig.baseUrl,
+        apiKeyEnv: summaryConfig.apiKeyEnv,
+        model: summaryConfig.model,
+        timeoutMs: summaryConfig.timeoutMs,
+      }, memoryEnv())
+      const candidates = await handlePreCompact(e, {
+        cwd: ctx.cwd,
+        sessionId: piSessionId(ctx),
+        turnId: event?.turnId,
+        trigger,
+        messages,
+      }, {
+        provider,
+        promptTemplate: summaryConfig.promptTemplate ?? undefined,
+        maxTokens: summaryConfig.maxTokens,
+        requireConfirmation: false,
+        confirmed: true,
+        includeToolOutputs: summaryConfig.includeToolOutputs,
+        adapter: "pi",
+        trigger,
+      }, memoryEnv())
+      const saved = saveSessionSummaryCandidates(e, candidates)
+      if (saved.length) {
+        notify(ctx, `Memory Lane suggested ${saved.length} pending pre-compact summar${saved.length === 1 ? "y" : "ies"} for review. Run /memory review to inspect.`, "info")
+      }
+      return undefined
+    } catch (err) {
+      if (isPiDebugEnabled()) notify(ctx, err instanceof Error ? `Pre-compact summary failed: ${err.message}` : "Pre-compact summary failed", "warning")
+      return undefined
+    }
+  })
 
   // ── Input event handler (auto-save / suggest on user input) ──
 

@@ -4,7 +4,9 @@
 
 **Goal:** Add an explicit `/memory session-summary` command to the pi adapter that summarizes the current pi session into a pending Memory Lane `session_summary` memory after interactive confirmation.
 
-**Architecture:** Keep the feature inside `@memory-lane/pi-adapter`. The command reuses the existing Memory Lane config/storage resolution, `createOpenAICompatibleProvider`, and lifecycle `handleSessionEnd`; pi-specific code only extracts text from `ctx.sessionManager.getBranch()`, handles pi UI confirmation/notifications, and saves generated candidates with `adapter: "pi"` provenance. No automatic `agent_end`, `session_shutdown`, or compaction event handlers are added.
+**Architecture:** Keep the feature inside `@memory-lane/pi-adapter`. The command reuses the existing Memory Lane config/storage resolution, `createOpenAICompatibleProvider`, and lifecycle `handleSessionEnd`; pi-specific code only extracts text from `ctx.sessionManager.getBranch()`, handles pi UI confirmation/notifications, and saves generated candidates with `adapter: "pi"` provenance. This original command slice added no automatic `agent_end`, `session_shutdown`, or compaction event handlers.
+
+**Implementation update:** A later 2026-07-03 slice added native pi `session_before_compact` support for pending pre-compact summaries when `memory.sessionEndSummary.enabled` is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is not `false`. It saves pi `pre_compact` provenance and still does not add `agent_end` or `session_shutdown` summarization.
 
 **Tech Stack:** TypeScript, Node test runner, `@memory-lane/core`, `@memory-lane/lifecycle`, pi extension API shim in `packages/pi-adapter/src/index.ts`.
 
@@ -518,7 +520,7 @@ git commit -m "test(pi-adapter): verify session summary save privacy"
 In `README.md`, update the pi adapter paragraph to mention the command:
 
 ```md
-The pi adapter also provides an explicit `/memory session-summary` command. It reads the current pi branch through pi's session manager, asks for interactive confirmation, sends a compact transcript to the configured `memory.sessionEndSummary` provider, and saves any result as a pending `session_summary` memory with pi `session_end` provenance. It does not run automatically on `agent_end`, `session_shutdown`, or compaction.
+The pi adapter also provides an explicit `/memory session-summary` command. It reads the current pi branch through pi's session manager, asks for interactive confirmation, sends a compact transcript to the configured `memory.sessionEndSummary` provider, and saves any result as a pending `session_summary` memory with pi `session_end` provenance. The original command path does not run automatically on `agent_end`, `session_shutdown`, or compaction; a later slice added guarded native `session_before_compact` summaries.
 ```
 
 Also update the session-end summarization paragraph that currently says pi session-end automation remains follow-up work so it says pi has an explicit command, while automatic pi hooks remain deferred.
@@ -534,7 +536,7 @@ In `skills/memory-lane/SKILL.md`, add this command near the session-end command 
 Add one sentence:
 
 ```md
-In pi, use `/memory session-summary` for the supported explicit session-summary path; Memory Lane does not automatically summarize pi sessions on shutdown or compaction.
+In pi, use `/memory session-summary` for the supported explicit session-summary path; native `session_before_compact` can also queue pending pre-compact summaries when session-summary automation is configured with confirmation disabled. Memory Lane does not automatically summarize pi sessions on `agent_end` or `session_shutdown`.
 ```
 
 - [ ] **Step 3: Update ROADMAP Phase 13**
@@ -545,7 +547,7 @@ In `ROADMAP.md`, add a completed Slice 4 scope under Phase 13:
 Completed Slice 4 scope:
 
 1. Added explicit pi `/memory session-summary` command using pi's documented command, session manager, and UI APIs.
-2. Kept pi summarization interactive and confirmation-gated; no automatic `agent_end`, `session_shutdown`, or compaction summarization was added.
+2. Kept the explicit pi command interactive and confirmation-gated; this command slice added no automatic `agent_end`, `session_shutdown`, or compaction summarization.
 3. Reused `handleSessionEnd` and existing `memory.sessionEndSummary` config/provider behavior.
 4. Saved generated summaries as pending `session_summary` memories with pi `session_end` provenance.
 5. Added tests for disabled config, missing provider, empty branch, cancellation, confirmed save, and raw branch sentinel non-persistence.
@@ -558,7 +560,7 @@ Update remaining follow-up scope so pi explicit command is no longer listed as t
 In `HANDOFF.md`, add a recent completed work bullet:
 
 ```md
-- Added pi explicit session-summary command `/memory session-summary`; it uses `ctx.sessionManager.getBranch()` plus `ctx.ui.confirm`, saves pending `session_summary` memories with pi provenance, and deliberately does not add automatic shutdown/compaction summarization.
+- Added pi explicit session-summary command `/memory session-summary`; it uses `ctx.sessionManager.getBranch()` plus `ctx.ui.confirm`, saves pending `session_summary` memories with pi provenance, and this command slice deliberately does not add automatic shutdown/compaction summarization.
 ```
 
 Update suggested next steps to continue quality smoke/evaluation before Phase 14.
@@ -648,7 +650,7 @@ Verify:
 
 - `/memory session-summary` exists and is documented.
 - The feature uses only explicit command/UI APIs.
-- No `agent_end`, `session_shutdown`, `session_before_compact`, or `session_compact` handlers were added.
+- This command slice added no `agent_end`, `session_shutdown`, `session_before_compact`, or `session_compact` handlers; a later guarded slice added native `session_before_compact` support.
 - Tests use temp storage and a mock/local provider only.
 - Raw sentinel strings are not persisted.
 

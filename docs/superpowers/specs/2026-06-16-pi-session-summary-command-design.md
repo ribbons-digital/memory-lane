@@ -4,6 +4,13 @@
 
 Add an explicit pi command that lets a user summarize the current pi session into a pending Memory Lane `session_summary` memory, without adding automatic session-shutdown, per-turn, or compaction summarization.
 
+## Implementation update: pre-compact summaries
+
+As of 2026-07-03, a later slice added native pi `session_before_compact` support for pending pre-compact summaries.
+It runs only when `memory.sessionEndSummary.enabled` is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is not `false`.
+It saves pending `session_summary` memories with pi `pre_compact` provenance and does not override pi's own compaction summary.
+Automatic `agent_end` and `session_shutdown` summarization remain out of scope.
+
 ## Context
 
 Phase 13 already supports:
@@ -117,7 +124,7 @@ Add pi adapter tests that prove:
 
 - No `agent_end` automatic summarization.
 - No `session_shutdown` automatic summarization.
-- No `session_before_compact` or `session_compact` integration.
+- This original explicit-command slice added no `session_before_compact` or `session_compact` integration; a later 2026-07-03 slice added guarded native `session_before_compact` support.
 - No automatic approval of generated summaries.
 - No new memory review dashboard or Phase 14 UI work.
 - No real provider calls in tests.

@@ -141,3 +141,23 @@ test("parses SessionEnd payload with messages and confirmation", () => {
     { role: "tool", content: "pnpm test", timestamp: undefined, toolName: "Bash" },
   ])
 })
+
+test("parses PreCompact payload without requiring messages", () => {
+  const parsed = parseCodexPayload({
+    hook_event_name: "PreCompact",
+    session_id: "session-1",
+    turn_id: "turn-1",
+    cwd: "/tmp/memory-lane-fixture",
+    transcript_path: "/tmp/transcript.jsonl",
+    model: "gpt-5-codex",
+    trigger: "auto",
+  })
+
+  assert.equal(parsed.kind, "pre-compact")
+  assert.equal(parsed.kind === "pre-compact" ? parsed.input.cwd : undefined, "/tmp/memory-lane-fixture")
+  assert.equal(parsed.kind === "pre-compact" ? parsed.input.sessionId : undefined, "session-1")
+  assert.equal(parsed.kind === "pre-compact" ? parsed.input.turnId : undefined, "turn-1")
+  assert.equal(parsed.kind === "pre-compact" ? parsed.input.transcriptPath : undefined, "/tmp/transcript.jsonl")
+  assert.equal(parsed.kind === "pre-compact" ? parsed.input.trigger : undefined, "auto")
+  assert.deepEqual(parsed.kind === "pre-compact" ? parsed.input.messages : undefined, [])
+})

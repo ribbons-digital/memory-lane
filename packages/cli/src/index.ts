@@ -724,13 +724,13 @@ function handleMigrate(ctx: CliContext): void {
   console.log(formatLegacyProjectMemoryMigrationPreview(report, ctx.json, plan, planPath))
 }
 
-const claudeHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start", "session-end"])
-const codexHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start", "session-end"])
+const claudeHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start", "session-end", "pre-compact"])
+const codexHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start", "session-end", "pre-compact"])
 
 async function handleCodex(ctx: CliContext): Promise<void> {
   const event = ctx.rest[0]
   if (!codexHookCommands.has(event)) {
-    console.log(formatError("Unknown Codex hook event. Usage: memory-lane codex user-prompt-submit|stop|post-tool-use|session-start|session-end", ctx.json))
+    console.log(formatError("Unknown Codex hook event. Usage: memory-lane codex user-prompt-submit|stop|post-tool-use|session-start|session-end|pre-compact", ctx.json))
     process.exit(2)
   }
   const payloadText = await readStdin()
@@ -746,7 +746,7 @@ async function handleCodex(ctx: CliContext): Promise<void> {
 async function handleClaude(ctx: CliContext): Promise<void> {
   const event = ctx.rest[0]
   if (!claudeHookCommands.has(event)) {
-    console.log(formatError("Unknown Claude hook event. Usage: memory-lane claude user-prompt-submit|stop|post-tool-use|session-start|session-end", ctx.json))
+    console.log(formatError("Unknown Claude hook event. Usage: memory-lane claude user-prompt-submit|stop|post-tool-use|session-start|session-end|pre-compact", ctx.json))
     process.exit(2)
   }
   const payloadText = await readStdin()

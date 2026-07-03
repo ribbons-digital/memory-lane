@@ -1,6 +1,7 @@
-import { analyzeSummaryHygiene, containsLikelySecret, normalizeMemoryText, type MemoryEngine, type MemoryFreshness, type MemoryRecord } from "@memory-lane/core"
+import { createHash } from "node:crypto"
+import { analyzeSummaryHygiene, containsLikelySecret, normalizeMemoryText, type MemoryEngine, type MemoryFreshness, type MemoryLifecycleEvent, type MemoryRecord } from "@memory-lane/core"
 import { createOpenAICompatibleProvider } from "./llm-provider.js"
-import type { LLMProvider, SessionEndInput, SessionEndOptions } from "./types.js"
+import type { LLMProvider, PreCompactInput, PreCompactOptions, SessionEndInput, SessionEndOptions } from "./types.js"
 
 export const DEFAULT_SESSION_END_PROMPT = `You are summarizing an AI-assisted coding session for a memory system.
 Read the session transcript and produce a concise, structured summary.
@@ -13,6 +14,27 @@ Include only these sections if they have content:
 - Key facts about the project, codebase, or user preferences
 
 Rules:
+- Do not include secrets, API keys, passwords, or private data.
+- Do not include transient commands or raw tool output.
+- Do not include Memory Lane review-queue management, memory IDs, approval/rejection instructions, or commands like memory-lane review unless the user explicitly made review decisions that are themselves durable project outcomes.
+- Be specific but brief. Use Markdown bullet lists.
+- If the session had no durable takeaways, return exactly NO_DURABLE_MEMORY.
+
+Transcript:
+{{transcript}}`
+
+export const DEFAULT_PRE_COMPACT_PROMPT = `You are summarizing an AI-assisted coding session for a memory system immediately before the host compacts its conversation context.
+Read the session transcript and produce a concise, structured summary.
+
+Include only these sections if they have content:
+- Decisions made
+- Blockers or failures
+- Open questions
+- Next steps
+- Key facts about the project, codebase, or user preferences
+
+Rules:
+- Focus on information needed to continue after compaction.
 - Do not include secrets, API keys, passwords, or private data.
 - Do not include transient commands or raw tool output.
 - Do not include Memory Lane review-queue management, memory IDs, approval/rejection instructions, or commands like memory-lane review unless the user explicitly made review decisions that are themselves durable project outcomes.
@@ -62,10 +84,16 @@ function sessionSummaryContentKey(text: string): string | undefined {
   return normalized || undefined
 }
 
-function sessionSummaryProvenanceKey(input: { adapter?: string; sessionId?: string; lifecycleEvent?: string }): string | undefined {
+function sessionSummaryProvenanceKey(input: { adapter?: string; sessionId?: string; turnId?: string; lifecycleEvent?: string }): string | undefined {
+  const lifecycleEvent = input.lifecycleEvent
+  if (lifecycleEvent !== "session_end" && lifecycleEvent !== "pre_compact") return undefined
+
   const sessionId = input.sessionId?.trim()
-  if (!sessionId || input.lifecycleEvent !== "session_end") return undefined
-  return `${input.adapter ?? "unknown"}:session_end:${sessionId}`
+  if (!sessionId) return undefined
+
+  const parts = [input.adapter ?? "unknown", lifecycleEvent, sessionId]
+  if (lifecycleEvent === "pre_compact") parts.push(input.turnId?.trim() || "unknown-turn")
+  return parts.join(":")
 }
 
 function visibleInCurrentScope(memory: MemoryRecord, projectScopeKey?: string): boolean {
@@ -87,6 +115,7 @@ function existingSessionSummaryKeys(engine: MemoryEngine): { provenance: Set<str
       adapter: memory.provenance?.adapter,
       lifecycleEvent: memory.provenance?.lifecycleEvent,
       sessionId: memory.provenance?.sessionId,
+      turnId: memory.provenance?.turnId,
     })
     if (provenanceKey) provenance.add(provenanceKey)
 
@@ -147,6 +176,19 @@ function latestMessageTimestamp(messages: SessionEndInput["messages"]): string |
   return latest
 }
 
+function preCompactTurnIdFallback(input: SessionEndInput): string | undefined {
+  const digest = createHash("sha256")
+    .update(JSON.stringify(input.messages.map((message) => ({
+      role: message.role,
+      content: message.content,
+      timestamp: message.timestamp,
+      toolName: message.toolName,
+    }))))
+    .digest("hex")
+    .slice(0, 16)
+  return `messages-${digest}`
+}
+
 export interface SessionEndCandidate {
   text: string
   category: "project"
@@ -156,8 +198,9 @@ export interface SessionEndCandidate {
   source: "session-summary"
   provenance: {
     adapter: string
-    lifecycleEvent: "session_end"
+    lifecycleEvent: MemoryLifecycleEvent
     sessionId?: string
+    turnId?: string
   }
   freshness?: MemoryFreshness
 }
@@ -206,9 +249,34 @@ export async function handleSessionEnd(
     source: "session-summary",
     provenance: {
       adapter: options.adapter ?? options.providerConfig?.provider ?? "manual",
-      lifecycleEvent: "session_end",
+      lifecycleEvent: options.lifecycleEvent ?? "session_end",
       sessionId: input.sessionId,
+      turnId: options.turnId ?? (options.lifecycleEvent === "pre_compact" ? preCompactTurnIdFallback(input) : undefined),
     },
     ...(capturedAt ? { freshness: { capturedAt } } : {}),
   }])
+}
+
+/**
+ * Generate pending session-summary candidates immediately before host context compaction.
+ * This reuses session-end summary hygiene and duplicate filtering while tagging provenance as pre_compact.
+ */
+export async function handlePreCompact(
+  engine: MemoryEngine,
+  input: PreCompactInput,
+  options: PreCompactOptions = {},
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<SessionEndCandidate[]> {
+  return handleSessionEnd(engine, {
+    cwd: input.cwd,
+    sessionId: input.sessionId,
+    transcriptPath: input.transcriptPath,
+    messages: input.messages ?? [],
+  }, {
+    ...options,
+    promptTemplate: options.promptTemplate ?? DEFAULT_PRE_COMPACT_PROMPT,
+    lifecycleEvent: "pre_compact",
+    trigger: options.trigger ?? input.trigger,
+    turnId: options.turnId ?? input.turnId,
+  }, env)
 }

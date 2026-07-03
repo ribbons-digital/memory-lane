@@ -1,7 +1,7 @@
 import {
   appendHookDebugLog, hookDebugEnabled, loadConfig, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
-import { createOpenAICompatibleProvider, handlePostToolUse, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, type LifecycleResult, type SessionEndInput, type SessionMessage, type StopInput } from "@memory-lane/lifecycle"
+import { createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, type LifecycleResult, type SessionEndInput, type SessionMessage, type StopInput } from "@memory-lane/lifecycle"
 import { additionalContextOutput, lifecycleNoopOutput, noopOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseCodexPayload, type CodexCommand } from "./payloads.js"
 import { readLatestTurnFromTranscript, readSessionMessagesFromTranscript } from "./transcript.js"
@@ -59,8 +59,7 @@ function confirmationRequiredOutput(): string {
   return systemMessageOutput("Session-end summarization requires confirmation. Rerun the Codex-shaped session-end payload with confirmed: true to save a pending summary.")
 }
 
-function createSessionEndSummaryProvider(configPath: string | undefined, env: NodeJS.ProcessEnv | undefined) {
-  const config = loadConfig(configPath)
+function createSessionEndSummaryProvider(config: ReturnType<typeof loadConfig>, env: NodeJS.ProcessEnv | undefined) {
   const summaryConfig = config.memory?.sessionEndSummary
   if (!summaryConfig?.enabled) return { status: "disabled" as const }
   if (!summaryConfig.baseUrl || !summaryConfig.model) return { status: "missing-provider" as const, config: summaryConfig }
@@ -75,6 +74,10 @@ function createSessionEndSummaryProvider(configPath: string | undefined, env: No
       timeoutMs: summaryConfig.timeoutMs,
     }, env),
   }
+}
+
+function preCompactSummaryEnabled(config: ReturnType<typeof loadConfig>): boolean {
+  return config.memory?.sessionEndSummary?.enabled === true && config.memory?.preCompactSummary?.enabled !== false
 }
 
 function hasExplicitSessionSummaryIntent(message?: string): boolean {
@@ -175,7 +178,8 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         return lifecycleNoopOutput(result, debug)
       }
 
-      const summaryProvider = createSessionEndSummaryProvider(options.configPath, options.env)
+      const config = loadConfig(options.configPath)
+      const summaryProvider = createSessionEndSummaryProvider(config, options.env)
       if (summaryProvider.status === "disabled") {
         log("noop", { reason: "session-end summarization disabled" })
         return systemMessageOutput("Session summary was requested, but memory.sessionEndSummary.enabled is not enabled.")
@@ -207,7 +211,8 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
     }
 
     if (parsed.kind === "session-end") {
-      const summaryProvider = createSessionEndSummaryProvider(options.configPath, options.env)
+      const config = loadConfig(options.configPath)
+      const summaryProvider = createSessionEndSummaryProvider(config, options.env)
       if (summaryProvider.status === "disabled") {
         log("noop", { reason: "session-end summarization disabled" })
         return noopOutput("Session-end summarization is not enabled.", debug)
@@ -226,6 +231,42 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         promptTemplate: summaryProvider.config.promptTemplate ?? undefined,
         maxTokens: summaryProvider.config.maxTokens,
         // The Codex adapter performs confirmation gating above.
+        requireConfirmation: false,
+        confirmed: true,
+        includeToolOutputs: summaryProvider.config.includeToolOutputs,
+        adapter: "codex",
+      }, options.env)
+      const result = saveSessionEndCandidates(options.engine, candidates)
+      log("ok", lifecycleCounts(result))
+      return lifecycleNoopOutput(result, debug)
+    }
+
+    if (parsed.kind === "pre-compact") {
+      const config = loadConfig(options.configPath)
+      if (!preCompactSummaryEnabled(config)) {
+        log("noop", { reason: "pre-compact summarization disabled" })
+        return noopOutput("Pre-compact summarization is not enabled.", debug)
+      }
+      const summaryProvider = createSessionEndSummaryProvider(config, options.env)
+      if (summaryProvider.status !== "configured") {
+        log("noop", { reason: "pre-compact summary provider not configured" })
+        const message = "Pre-compact summarization requires memory.sessionEndSummary.baseUrl and model."
+        return parsed.input.trigger === "auto" ? noopOutput(message, debug) : systemMessageOutput(message)
+      }
+      if (summaryProvider.config.requireConfirmation !== false) {
+        log("noop", { reason: "pre-compact confirmation required" })
+        const message = "Pre-compact summarization requires memory.sessionEndSummary.requireConfirmation to be false because PreCompact hooks cannot ask for confirmation."
+        return parsed.input.trigger === "auto" ? noopOutput(message, debug) : systemMessageOutput(message)
+      }
+
+      const transcriptMessages = parsed.input.messages?.length ? parsed.input.messages : readSessionMessagesFromTranscript(parsed.input.transcriptPath)
+      const candidates = await handlePreCompact(options.engine, {
+        ...parsed.input,
+        messages: transcriptMessages,
+      }, {
+        provider: summaryProvider.provider,
+        promptTemplate: summaryProvider.config.promptTemplate ?? undefined,
+        maxTokens: summaryProvider.config.maxTokens,
         requireConfirmation: false,
         confirmed: true,
         includeToolOutputs: summaryProvider.config.includeToolOutputs,

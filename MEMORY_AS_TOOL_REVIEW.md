@@ -87,7 +87,7 @@ But Memory Lane differs from the paper in two major ways:
 
 This is mostly the right tradeoff for Memory Lane. A literal “write after every attempt” loop conflicts with the product goal of bounded, review-governed memory. The better adaptation is:
 
-> Write only after explicit user request, high-signal correction, failed-then-recovered procedure, checkpoint evidence, or explicit/confirmed session summary.
+> Write only after explicit user request, high-signal correction, failed-then-recovered procedure, checkpoint evidence, or explicit, confirmed, or configured pre-compact session summary.
 
 ---
 

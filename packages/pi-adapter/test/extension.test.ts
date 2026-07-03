@@ -181,6 +181,7 @@ test("registers pi commands tools input and before_agent_start handlers", () => 
   assert.equal(pi.events.get("turn_end")?.length, 1)
   assert.equal(pi.events.get("tool_result")?.length, 1)
   assert.equal(pi.events.get("before_agent_start")?.length, 1)
+  assert.equal(pi.events.get("session_before_compact")?.length, 1)
 })
 
 test("before_agent_start returns nothing when no relevant memory exists", async () => {
@@ -570,6 +571,76 @@ test("memory session-summary cancellation saves nothing", async () => {
 
   assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
   assert.ok(notifications.some((n) => n.message.includes("cancelled")))
+})
+
+test("session_before_compact skips summarization when confirmation is required", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  await withMockSummaryServer("## Decisions made\n- SHOULD_NOT_SAVE.", async (baseUrl, prompts) => {
+    fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
+      semantic: { enabled: false },
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-summary", requireConfirmation: true } },
+    }))
+    const pi = createFakePi()
+    memoryLaneExtension(pi)
+    const notifications: FakeNotification[] = []
+    const ctx = ctxWithUi(env.dir, { notifications })
+
+    const result = await runEvent(pi, "session_before_compact", {
+      reason: "threshold",
+      turnId: "turn-compact",
+      preparation: {
+        messagesToSummarize: [{ role: "user", content: [{ type: "text", text: "RAW_PI_PRECOMPACT_USER" }] }],
+        turnPrefixMessages: [],
+      },
+    }, ctx)
+
+    assert.equal(result, undefined)
+    assert.equal(prompts.length, 0)
+    assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
+    assert.equal(notifications.length, 0)
+  })
+})
+
+test("session_before_compact saves pending pi summary without overriding compaction", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  await withMockSummaryServer("## Decisions made\n- Pi pre-compact summary survived.", async (baseUrl, prompts) => {
+    fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
+      semantic: { enabled: false },
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-summary", requireConfirmation: false } },
+    }))
+    const pi = createFakePi()
+    memoryLaneExtension(pi)
+    const notifications: FakeNotification[] = []
+    const ctx = ctxWithUi(env.dir, { notifications })
+
+    const result = await runEvent(pi, "session_before_compact", {
+      reason: "threshold",
+      turnId: "turn-compact",
+      preparation: {
+        messagesToSummarize: [
+          { role: "user", content: [{ type: "text", text: "RAW_PI_PRECOMPACT_USER" }] },
+          { role: "assistant", content: [{ type: "text", text: "Durable pi compaction outcome." }] },
+        ],
+        turnPrefixMessages: [],
+      },
+    }, ctx)
+
+    assert.equal(result, undefined)
+    assert.equal(prompts.length, 1)
+    const rawMemory = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8")
+    assert.doesNotMatch(rawMemory, /RAW_PI_PRECOMPACT_USER/)
+    const mem = JSON.parse(rawMemory.trim())
+    assert.equal(mem.status, "pending")
+    assert.equal(mem.source, "session-summary")
+    assert.equal(mem.kind, "session_summary")
+    assert.equal(mem.provenance.adapter, "pi")
+    assert.equal(mem.provenance.lifecycleEvent, "pre_compact")
+    assert.equal(mem.provenance.turnId, "turn-compact")
+    assert.match(mem.text, /Pi pre-compact summary survived/)
+    assert.ok(notifications.some((n) => n.message.includes("pending pre-compact summary")))
+  })
 })
 
 test("memory session-summary saves pending pi session summary without raw branch text", async () => {

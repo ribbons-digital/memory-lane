@@ -136,3 +136,29 @@ test("parses SessionEnd missing or non-array messages as empty", () => {
   assert.equal(nonArrayMessages.kind, "session-end")
   assert.deepEqual(nonArrayMessages.kind === "session-end" ? nonArrayMessages.input.messages : undefined, [])
 })
+
+test("parses PreCompact payload", () => {
+  const parsed = parseClaudePayload({
+    hook_event_name: "PreCompact",
+    session_id: "session-1",
+    turn_id: "turn-1",
+    cwd: "/tmp/memory-lane-fixture",
+    transcript_path: "/tmp/transcript.jsonl",
+    trigger: "auto",
+    messages: [
+      { role: "user", content: "persist this before compaction" },
+      { role: "assistant", content: "I will." },
+    ],
+  })
+
+  assert.equal(parsed.kind, "pre-compact")
+  assert.equal(parsed.kind === "pre-compact" ? parsed.input.cwd : undefined, "/tmp/memory-lane-fixture")
+  assert.equal(parsed.kind === "pre-compact" ? parsed.input.sessionId : undefined, "session-1")
+  assert.equal(parsed.kind === "pre-compact" ? parsed.input.turnId : undefined, "turn-1")
+  assert.equal(parsed.kind === "pre-compact" ? parsed.input.transcriptPath : undefined, "/tmp/transcript.jsonl")
+  assert.equal(parsed.kind === "pre-compact" ? parsed.input.trigger : undefined, "auto")
+  assert.deepEqual(parsed.kind === "pre-compact" ? parsed.input.messages : undefined, [
+    { role: "user", content: "persist this before compaction" },
+    { role: "assistant", content: "I will." },
+  ])
+})

@@ -4,13 +4,21 @@
 
 Let Memory Lane optionally capture a structured summary at the end of an agent session so the next session can start with meaningful project state rather than from scratch. This is the first step toward replacing manual `HANDOFF.md` notes with machine-generated, user-reviewable session memories.
 
+## Implementation update: pre-compact summaries
+
+As of 2026-07-03, later slices extend the original session-end design with pre-compact summaries for Claude/Codex `PreCompact` hooks and native pi `session_before_compact`.
+These paths require `memory.sessionEndSummary.enabled`, a configured provider, and `memory.sessionEndSummary.requireConfirmation: false`, save pending `session_summary` memories with `pre_compact` provenance, and can be disabled with `memory.preCompactSummary.enabled: false`.
+The original manual confirmation path and pending-review boundary remain unchanged.
+
 ## Principles
 
 1. **Opt-in and disabled by default.** Users must explicitly enable session-end summarization. The feature is off until they configure it, so they acknowledge the privacy and accuracy trade-offs.
-2. **User confirmation, not auto-generation.** Even when enabled, the system prompts the user before generating a summary (e.g., "Generate a session-end memory?"). It does not silently summarize every session.
-3. **Privacy-safe by design.** Session content may be sent to an LLM for summarization, but only when the user opts in and confirms. The transcript itself is never stored in Memory Lane; only the summary and a reference hash are stored.
+2. **User confirmation, not surprise generation.** Manual and session-end paths prompt the user before generating a summary when confirmation is required (e.g., "Generate a session-end memory?").
+   Pre-compact hooks can run only after the user has configured the summary provider and set `memory.sessionEndSummary.requireConfirmation` to `false` because those hooks cannot ask for confirmation.
+3. **Privacy-safe by design.** Session content may be sent to an LLM for summarization, but only when the user opts in and confirms, or when pre-compact summaries are explicitly enabled by disabling confirmation in config.
+   The transcript itself is never stored in Memory Lane; only the generated summary, normal memory metadata, and provenance are stored.
 4. **Reviewable memories.** Generated summaries enter the pending review queue. They become active only after user approval.
-5. **Source-tagged and time-stamped.** Every generated memory is tagged with `source: "session-summary"`, `lifecycleEvent: "session_end"`, and timestamps so later refresh logic can reason about staleness.
+5. **Source-tagged and time-stamped.** Every generated memory is tagged with `source: "session-summary"`, `lifecycleEvent: "session_end"` or `"pre_compact"`, and timestamps so later refresh logic can reason about staleness.
 
 ## Non-goals
 
@@ -99,7 +107,7 @@ The user runs `memory-lane review` or uses the MCP `memory_review` tool to appro
 
 - `@memory-lane/lifecycle`: add `handleSessionEnd(engine, input, options)`.
 - `@memory-lane/core`: add `session_summary` to `MemoryKind`, add `MemoryConfig.sessionEndSummary` schema.
-- Harness adapters (pi, Codex, Claude Code): emit `SessionEnd` events and prompt for confirmation when configured.
+- Harness adapters (pi, Codex, Claude Code): call `handleSessionEnd` or `handlePreCompact` from supported events and preserve confirmation requirements for each host.
 - CLI/MCP: no major changes; reuse existing `suggest` and `review` paths.
 
 ### `handleSessionEnd` contract

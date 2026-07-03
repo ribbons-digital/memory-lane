@@ -1,4 +1,4 @@
-import type { ContinuityHintCode, MemoryRecord, MemorySource, ResolvedContinuityBaseline, SaveResult } from "@memory-lane/core"
+import type { ContinuityHintCode, MemoryLifecycleEvent, MemoryRecord, MemorySource, ResolvedContinuityBaseline, SaveResult } from "@memory-lane/core"
 
 export interface LifecycleContext {
   cwd: string
@@ -143,4 +143,17 @@ export interface SessionEndOptions {
   confirmed?: boolean
   includeToolOutputs?: boolean
   adapter?: string
+  lifecycleEvent?: MemoryLifecycleEvent
+  trigger?: string
+  turnId?: string
 }
+
+export interface PreCompactInput extends LifecycleContext {
+  /** Host compaction trigger, such as manual or auto. */
+  trigger?: string
+  /** Compactable transcript messages supplied by the host, or adapter-read transcript fallback when omitted. */
+  messages?: SessionMessage[]
+}
+
+/** Options for pre-compact summaries; adapters must pass confirmed true only after config disables confirmation. */
+export type PreCompactOptions = SessionEndOptions
