@@ -295,7 +295,7 @@ Manual/dogfood checks for shipped Slice 1:
 ## Risks and mitigations
 
 - **Breaking cross-harness continuity:** resolve project root consistently and keep `.memory-lane-scope` / git root behavior authoritative.
-- **Losing visibility of old home project memories:** do not delete or migrate old rows silently; use shipped Slice 2a diagnostics for visibility, and keep mutation blocked until the Slice 2b review-first protocol is approved and implemented.
+- **Losing visibility of old home project memories:** do not delete or migrate old rows silently; use shipped Slice 2a diagnostics for visibility, and allow mutation only through the approved Slice 2b review-first plan/apply protocol.
 - **Config confusion:** keep global config canonical for the first slice; do not add config merging.
 - **Worktree fragmentation:** prefer existing worktree-aware project scope logic; document `.memory-lane-scope` for stable identity.
 - **Surprising file creation:** only auto-create project-local storage on writes, not read-only commands.
