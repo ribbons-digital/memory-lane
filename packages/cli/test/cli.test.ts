@@ -45,8 +45,9 @@ async function withHangingServer<T>(fn: (baseUrl: string) => Promise<T>): Promis
   })
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
   const address = server.address()
-  assert.equal(typeof address, "object")
-  assert.ok(address)
+  if (!address || typeof address === "string") {
+    throw new Error("Expected TCP server address")
+  }
   try {
     return await fn(`http://127.0.0.1:${address.port}/v1`)
   } finally {
