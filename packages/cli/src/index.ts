@@ -691,8 +691,16 @@ function handleMigrate(ctx: CliContext): void {
       ? createEngine(resolveWritableEngineStoragePaths({ cwd: plan.projectRoot, env: process.env, autoInitProjectLocalOnHomeFailure: false }), plan.projectRoot, { autoCompact: false })
       : ctx.engine
     if (!hasFlag(ctx.argv, "yes")) {
-      console.log(formatLegacyProjectMemoryMigrationPreview(applyEngine.doctor().legacyProjectMemories as any, ctx.json, plan, applyPlanPath))
-      console.log(formatError("Applying a project-local migration plan requires --yes after you review the plan file.", ctx.json))
+      const message = "Applying a project-local migration plan requires --yes after you review the plan file."
+      if (ctx.json) {
+        const preview = JSON.parse(formatLegacyProjectMemoryMigrationPreview(applyEngine.doctor().legacyProjectMemories as any, true, plan, applyPlanPath))
+        preview.ok = false
+        preview.error = message
+        console.log(JSON.stringify(preview, null, 2))
+      } else {
+        console.log(formatLegacyProjectMemoryMigrationPreview(applyEngine.doctor().legacyProjectMemories as any, false, plan, applyPlanPath))
+        console.log(formatError(message, false))
+      }
       process.exit(1)
     }
     const result = applyEngine.applyLegacyProjectMigrationPlan(plan)
@@ -707,7 +715,7 @@ function handleMigrate(ctx: CliContext): void {
   const report = ctx.engine.doctor().legacyProjectMemories as any
   let plan: ReturnType<MemoryEngine["createLegacyProjectMigrationPlan"]> | undefined
   let planPath: string | undefined
-  if (writePlanPath && writePlanPath !== "true") {
+  if (writePlanPath && writePlanPath !== "true" && report.status === "ok") {
     plan = ctx.engine.createLegacyProjectMigrationPlan()
     planPath = writePlanPath
     fs.mkdirSync(path.dirname(path.resolve(planPath)), { recursive: true })

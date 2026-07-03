@@ -486,14 +486,21 @@ describe("CLI integration", () => {
     }
 
     const missingDryRun = runProcess(["migrate", "project-local", "--project", project], { env })
+    const planPath = path.join(tempDir(), "not-applicable-plan.json")
     const dryRun = runProcess(["migrate", "project-local", "--dry-run", "--json", "--project", project], { env })
+    const dryRunWritePlan = runProcess(["migrate", "project-local", "--dry-run", "--write-plan", planPath, "--json", "--project", project], { env })
 
     assert.notEqual(missingDryRun.status, 0)
     assert.match(missingDryRun.stdout + missingDryRun.stderr, /requires an explicit reviewed plan.*dry-run/u)
     assert.equal(dryRun.status, 0, dryRun.stderr)
+    assert.equal(dryRunWritePlan.status, 0, dryRunWritePlan.stderr)
     const report = JSON.parse(dryRun.stdout).data.legacyProjectMemories
+    const writePlanReport = JSON.parse(dryRunWritePlan.stdout).data.legacyProjectMemories
     assert.equal(report.status, "not-applicable")
     assert.equal(report.notApplicableReason, "explicit-storage-env")
+    assert.equal(writePlanReport.status, "not-applicable")
+    assert.equal(writePlanReport.migrationPlan, undefined)
+    assert.equal(fs.existsSync(planPath), false)
     assert.equal(fs.existsSync(path.join(project, ".memory-lane")), false)
   })
 
@@ -513,6 +520,7 @@ describe("CLI integration", () => {
 
     const plan = runProcess(["migrate", "project-local", "--dry-run", "--write-plan", planPath, "--project", project], { env: { HOME: home } })
     const applyWithoutYes = runProcess(["migrate", "project-local", "--apply-plan", planPath], { env: { HOME: home } })
+    const applyJsonWithoutYes = runProcess(["migrate", "project-local", "--apply-plan", planPath, "--json"], { env: { HOME: home } })
     const explicitDir = tempDir()
     const explicitApply = runProcess(["migrate", "project-local", "--apply-plan", planPath, "--yes"], { env: { HOME: home, MEMORY_LANE_FILE: path.join(explicitDir, "memory.jsonl"), MEMORY_LANE_EMBEDDINGS_FILE: path.join(explicitDir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: path.join(explicitDir, "config.json") } })
     const apply = runProcess(["migrate", "project-local", "--apply-plan", planPath, "--yes"], { env: { HOME: home } })
@@ -524,6 +532,11 @@ describe("CLI integration", () => {
     assert.notEqual(applyWithoutYes.status, 0)
     assert.match(applyWithoutYes.stdout + applyWithoutYes.stderr, /requires --yes/u)
     assert.match(applyWithoutYes.stdout, /2 active home-stored candidate\(s\) for project migration-scope/u)
+    assert.notEqual(applyJsonWithoutYes.status, 0)
+    const applyJsonPreview = JSON.parse(applyJsonWithoutYes.stdout)
+    assert.equal(applyJsonPreview.ok, false)
+    assert.match(applyJsonPreview.error, /requires --yes/u)
+    assert.equal(applyJsonPreview.data.legacyProjectMemories.totalLegacyCandidateCount, 2)
     assert.notEqual(explicitApply.status, 0)
     assert.match(explicitApply.stdout + explicitApply.stderr, /not applicable|Project-local migration requires/u)
     assert.equal(apply.status, 0, apply.stderr)
