@@ -410,6 +410,26 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
   }
 
+  function validateMigrationEmbedding(itemId: string, source: MemoryRecord, destination: MemoryRecord, item: LegacyProjectMigrationPlanItem): string[] {
+    const blockers: string[] = []
+    if (item.embeddingAction !== "copy-compatible" && item.embeddingAction !== "rebuild-needed") blockers.push(`invalid-embedding-action:${itemId}`)
+    if (item.embeddingAction === "rebuild-needed") {
+      if (item.embeddingRecord !== undefined) blockers.push(`unexpected-embedding-record:${itemId}`)
+      return blockers
+    }
+    const embedding = item.embeddingRecord
+    if (!embedding || typeof embedding !== "object") return [...blockers, `invalid-embedding-record:${itemId}`]
+    if (embedding.memoryId !== itemId) blockers.push(`embedding-memory-id-mismatch:${itemId}`)
+    if (embedding.contentHash !== contentHash(source.text)) blockers.push(`embedding-content-hash-mismatch:${itemId}`)
+    if (embedding.memoryUpdatedAt !== destination.updatedAt) blockers.push(`embedding-memory-updated-at-mismatch:${itemId}`)
+    if (typeof embedding.profileName !== "string" || !embedding.profileName.trim()) blockers.push(`invalid-embedding-profile:${itemId}`)
+    if (typeof embedding.model !== "string" || !embedding.model.trim()) blockers.push(`invalid-embedding-model:${itemId}`)
+    if (!Number.isInteger(embedding.dimensions) || embedding.dimensions <= 0) blockers.push(`invalid-embedding-dimensions:${itemId}`)
+    if (!Array.isArray(embedding.vector) || embedding.vector.length !== embedding.dimensions || !embedding.vector.every((value) => typeof value === "number" && Number.isFinite(value))) blockers.push(`invalid-embedding-vector:${itemId}`)
+    if (typeof embedding.createdAt !== "string" || !embedding.createdAt) blockers.push(`invalid-embedding-created-at:${itemId}`)
+    return blockers
+  }
+
   function validateMigrationPlan(plan: LegacyProjectMigrationPlan): string[] {
     const blockers: string[] = []
     if (!plan || typeof plan !== "object") return ["invalid-plan-shape"]
@@ -448,7 +468,8 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
       if (destination.status !== source.status) blockers.push(`destination-status-changed:${itemId}`)
       if (!sameRecordExceptUpdatedAt(source, destination)) blockers.push(`destination-semantic-fields-changed:${itemId}`)
       if (tombstone.status !== "deleted" || tombstone.text !== MIGRATION_TOMBSTONE_TEXT) blockers.push(`invalid-tombstone:${itemId}`)
-      if (tombstone.updatedAt >= destination.updatedAt) blockers.push(`invalid-migration-timestamp-order:${itemId}`)
+      if (source.updatedAt >= tombstone.updatedAt || tombstone.updatedAt >= destination.updatedAt) blockers.push(`invalid-migration-timestamp-order:${itemId}`)
+      blockers.push(...validateMigrationEmbedding(itemId, source, destination, item))
     }
     return blockers
   }

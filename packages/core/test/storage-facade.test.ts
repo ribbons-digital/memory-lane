@@ -527,6 +527,54 @@ describe("MemoryEngineStorage two-tier facade", () => {
     assert.equal(fs.readFileSync(home.memoryPath, "utf8").includes("Migrated to project-local storage."), false)
   })
 
+  it("validates migration tombstones are strictly after the source", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const legacy = rec({ id: "legacy", text: "Legacy project memory", scope: { type: "project", key: "scope-key" }, updatedAt: "2026-01-03T00:00:00.000Z" })
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemory(legacy)
+    const plan = storage.createLegacyProjectMigrationPlan("scope-key")
+    plan.candidates[0].sourceTombstone.updatedAt = legacy.updatedAt
+
+    const result = storage.applyLegacyProjectMigrationPlan(plan)
+
+    assert.notEqual(result.blocked, 0)
+    assert.ok(result.items[0].blockers.includes("invalid-migration-timestamp-order:legacy"))
+    assert.equal(fs.existsSync(project.memoryPath), false)
+    assert.equal(fs.readFileSync(home.memoryPath, "utf8").includes("Migrated to project-local storage."), false)
+  })
+
+  it("validates copy-compatible migration embedding records", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const legacy = rec({ id: "legacy", text: "Legacy project memory", scope: { type: "project", key: "scope-key" }, updatedAt: "2026-01-03T00:00:00.000Z" })
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemory(legacy)
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendEmbedding({
+      memoryId: "legacy",
+      memoryUpdatedAt: legacy.updatedAt,
+      contentHash: contentHash(legacy.text),
+      profileName: "default",
+      model: "test-model",
+      dimensions: 1,
+      vector: [1],
+      createdAt: legacy.updatedAt,
+    })
+    const plan = storage.createLegacyProjectMigrationPlan("scope-key")
+    plan.candidates[0].embeddingRecord = { ...plan.candidates[0].embeddingRecord!, memoryId: "other", contentHash: "wrong", memoryUpdatedAt: legacy.updatedAt, dimensions: 2, vector: [1] }
+
+    const result = storage.applyLegacyProjectMigrationPlan(plan)
+
+    assert.notEqual(result.blocked, 0)
+    assert.ok(result.items[0].blockers.includes("embedding-memory-id-mismatch:legacy"))
+    assert.ok(result.items[0].blockers.includes("embedding-content-hash-mismatch:legacy"))
+    assert.ok(result.items[0].blockers.includes("embedding-memory-updated-at-mismatch:legacy"))
+    assert.ok(result.items[0].blockers.includes("invalid-embedding-vector:legacy"))
+    assert.equal(fs.existsSync(project.embeddingsPath), false)
+  })
+
   it("blocks apply when source fingerprint changed before migration", () => {
     const dir = tempDir()
     const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
