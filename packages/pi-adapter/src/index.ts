@@ -274,6 +274,10 @@ function preCompactSummaryEnabled(config: ReturnType<typeof loadConfig>): boolea
   return config.memory?.sessionEndSummary?.enabled === true && config.memory?.preCompactSummary?.enabled !== false
 }
 
+function piPreCompactTrigger(event: any): "manual" | "auto" {
+  return event?.reason === "manual" ? "manual" : "auto"
+}
+
 // ── Main extension ───────────────────────────────────────────
 
 export default function memoryLaneExtension(pi: ExtensionAPI) {
@@ -626,12 +630,13 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
       if (!preCompactSummaryEnabled(config)) return undefined
 
       const summaryConfig = config.memory?.sessionEndSummary
+      const trigger = piPreCompactTrigger(event)
       if (!summaryConfig?.baseUrl || !summaryConfig.model) {
-        if (event?.trigger !== "auto" || isPiDebugEnabled()) notify(ctx, "Pre-compact summarization requires memory.sessionEndSummary.baseUrl and model.", "warning")
+        if (trigger !== "auto" || isPiDebugEnabled()) notify(ctx, "Pre-compact summarization requires memory.sessionEndSummary.baseUrl and model.", "warning")
         return undefined
       }
       if (summaryConfig.requireConfirmation !== false) {
-        if (event?.trigger !== "auto" || isPiDebugEnabled()) notify(ctx, "Pre-compact summarization requires memory.sessionEndSummary.requireConfirmation to be false because PreCompact hooks cannot ask for confirmation.", "warning")
+        if (trigger !== "auto" || isPiDebugEnabled()) notify(ctx, "Pre-compact summarization requires memory.sessionEndSummary.requireConfirmation to be false because PreCompact hooks cannot ask for confirmation.", "warning")
         return undefined
       }
 
@@ -650,7 +655,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         cwd: ctx.cwd,
         sessionId: piSessionId(ctx),
         turnId: event?.turnId,
-        trigger: event?.trigger,
+        trigger,
         messages,
       }, {
         provider,
@@ -660,6 +665,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         confirmed: true,
         includeToolOutputs: summaryConfig.includeToolOutputs,
         adapter: "pi",
+        trigger,
       }, memoryEnv())
       const saved = saveSessionSummaryCandidates(e, candidates)
       if (saved.length) {

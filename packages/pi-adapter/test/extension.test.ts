@@ -587,7 +587,7 @@ test("session_before_compact skips summarization when confirmation is required",
     const ctx = ctxWithUi(env.dir, { notifications })
 
     const result = await runEvent(pi, "session_before_compact", {
-      trigger: "auto",
+      reason: "threshold",
       turnId: "turn-compact",
       preparation: {
         messagesToSummarize: [{ role: "user", content: [{ type: "text", text: "RAW_PI_PRECOMPACT_USER" }] }],
@@ -616,7 +616,7 @@ test("session_before_compact saves pending pi summary without overriding compact
     const ctx = ctxWithUi(env.dir, { notifications })
 
     const result = await runEvent(pi, "session_before_compact", {
-      trigger: "auto",
+      reason: "threshold",
       turnId: "turn-compact",
       preparation: {
         messagesToSummarize: [
