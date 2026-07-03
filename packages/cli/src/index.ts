@@ -19,7 +19,8 @@ import type { SemanticMemoryConfig } from "@memory-lane/core"
 import { resolveBundledPlugin } from "./plugins.js"
 import {
   formatMemories, formatReviewMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
-  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatPreferenceDiagnosticsSummary, formatOperatingAgreements, formatContinuityReadModel, formatError, formatMemoryGet, formatUpdatePreview, formatRescopeResult, formatSupersedeResult, formatReplaceResult, formatLegacyProjectMemorySummary, formatLegacyProjectMemoryMigrationPreview, usage,
+  formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatPreferenceDiagnosticsSummary, formatOperatingAgreements, formatContinuityReadModel, formatError, formatMemoryGet, formatUpdatePreview, formatRescopeResult, formatSupersedeResult, formatReplaceResult, formatLegacyProjectMemorySummary, formatLegacyProjectMemoryMigrationPreview, formatLegacyProjectMemoryMigrationApply, usage,
+  VERSION,
 } from "./formatters.js"
 
 // ── Config helpers ───────────────────────────────────────────
@@ -161,7 +162,7 @@ function createEmbeddingProvider(configPath: string): EmbeddingProvider | undefi
 function createEngine(paths: MemoryPaths | EngineStoragePaths, projPath?: string, opts: { autoCompact?: boolean } = {}): MemoryEngine {
   const storage = "explicitEnv" in paths
     ? paths.kind === "default-two-tier"
-      ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey)
+      ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey, { producerVersion: VERSION })
       : createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath, paths.kind === "environment" ? "explicit-storage-env" : "single-store")
     : createSingleStoreEngineStorage(paths.memoryPath, paths.embeddingsPath)
   const configPath = paths.configPath
@@ -668,15 +669,59 @@ function handleConfig(ctx: CliContext): void {
 function handleMigrate(ctx: CliContext): void {
   const subCmd = ctx.rest[0]?.toLowerCase()
   if (subCmd !== "project-local") {
-    console.log(formatError("Usage: memory-lane migrate project-local --dry-run [--json] [--project <path>]", ctx.json))
+    console.log(formatError("Usage: memory-lane migrate project-local --dry-run [--write-plan <path>] [--json] [--project <path>]", ctx.json))
     process.exit(2)
   }
+  const applyPlanPath = flag(ctx.argv, "apply-plan")
+  const writePlanPath = flag(ctx.argv, "write-plan")
+  if (applyPlanPath && applyPlanPath !== "true") {
+    let raw: any
+    try {
+      raw = JSON.parse(fs.readFileSync(applyPlanPath, "utf8"))
+    } catch {
+      console.log(formatError("Invalid project-local migration plan file.", ctx.json))
+      process.exit(1)
+    }
+    const plan = raw?.planVersion ? raw : undefined
+    if (!plan?.planVersion) {
+      console.log(formatError("Invalid project-local migration plan file.", ctx.json))
+      process.exit(1)
+    }
+    const applyEngine = plan?.projectRoot
+      ? createEngine(resolveWritableEngineStoragePaths({ cwd: plan.projectRoot, env: process.env, autoInitProjectLocalOnHomeFailure: false }), plan.projectRoot, { autoCompact: false })
+      : ctx.engine
+    if (!hasFlag(ctx.argv, "yes")) {
+      const message = "Applying a project-local migration plan requires --yes after you review the plan file."
+      if (ctx.json) {
+        const preview = JSON.parse(formatLegacyProjectMemoryMigrationPreview(applyEngine.doctor().legacyProjectMemories as any, true, plan, applyPlanPath))
+        preview.ok = false
+        preview.error = message
+        console.log(JSON.stringify(preview, null, 2))
+      } else {
+        console.log(formatLegacyProjectMemoryMigrationPreview(applyEngine.doctor().legacyProjectMemories as any, false, plan))
+        console.log(formatError(message, false))
+      }
+      process.exit(1)
+    }
+    const result = applyEngine.applyLegacyProjectMigrationPlan(plan)
+    console.log(formatLegacyProjectMemoryMigrationApply(result, ctx.json))
+    if (result.blocked) process.exit(1)
+    return
+  }
   if (!hasFlag(ctx.argv, "dry-run")) {
-    console.log(formatError("Mutating project-local migration is not implemented in this release. Run `memory-lane migrate project-local --dry-run` to preview legacy records.", ctx.json))
+    console.log(formatError("Mutating project-local migration requires an explicit reviewed plan. Run `memory-lane migrate project-local --dry-run --write-plan <path>` first, review it, then run `memory-lane migrate project-local --apply-plan <path> --yes`.", ctx.json))
     process.exit(1)
   }
   const report = ctx.engine.doctor().legacyProjectMemories as any
-  console.log(formatLegacyProjectMemoryMigrationPreview(report, ctx.json))
+  let plan: ReturnType<MemoryEngine["createLegacyProjectMigrationPlan"]> | undefined
+  let planPath: string | undefined
+  if (writePlanPath && writePlanPath !== "true" && report.status === "ok") {
+    plan = ctx.engine.createLegacyProjectMigrationPlan()
+    planPath = writePlanPath
+    fs.mkdirSync(path.dirname(path.resolve(planPath)), { recursive: true })
+    fs.writeFileSync(planPath, JSON.stringify(plan, null, 2) + "\n", "utf8")
+  }
+  console.log(formatLegacyProjectMemoryMigrationPreview(report, ctx.json, plan, planPath))
 }
 
 const claudeHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start", "session-end"])
@@ -724,6 +769,7 @@ const readOnlyStorageSubcommands: Record<string, Set<string | undefined>> = {
 }
 
 function usesReadOnlyStorageResolution(command: string, argv: string[]): boolean {
+  if (command === "migrate" && hasFlag(argv, "apply-plan")) return false
   if (readOnlyStorageCommands.has(command)) return true
   const subcommands = readOnlyStorageSubcommands[command]
   if (!subcommands) return false

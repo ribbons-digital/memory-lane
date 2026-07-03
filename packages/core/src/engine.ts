@@ -40,6 +40,7 @@ import type {
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig, HandoffMode,
   FreshnessStatus, ContinuityHintSummary, ContinuityReadModel, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
   SupersedeResult, ReplaceResult, MemoryRevisionActor, ResolvedContinuityBaseline, ContinuityBaselineDiagnostic,
+  LegacyProjectMigrationApplyResult, LegacyProjectMigrationPlan,
 } from "./types.js"
 
 function displayValue(value: unknown): string {
@@ -890,6 +891,16 @@ export class MemoryEngine {
       handoffMode: this.getHandoffMode(),
       query: opts?.query,
     })
+  }
+
+  /** Create a reviewable plan for moving active legacy home-stored project memories into project-local storage. */
+  createLegacyProjectMigrationPlan(): LegacyProjectMigrationPlan {
+    return this.storage.createLegacyProjectMigrationPlan(this.scope?.key)
+  }
+
+  /** Apply a reviewed legacy project migration plan; callers should require explicit user confirmation first. */
+  applyLegacyProjectMigrationPlan(plan: LegacyProjectMigrationPlan): LegacyProjectMigrationApplyResult {
+    return this.storage.applyLegacyProjectMigrationPlan(plan)
   }
 
   /** Generate a diagnostic report. */

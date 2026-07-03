@@ -2,10 +2,10 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { buildContinuityHints, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryRecord, type MemoryRecordWithReviewHygiene, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type UpdatePreview, type RescopeResult, type SupersedeResult, type ReplaceResult, type LegacyProjectMemoryDiagnostics } from "@memory-lane/core"
+import { buildContinuityHints, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryRecord, type MemoryRecordWithReviewHygiene, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type UpdatePreview, type RescopeResult, type SupersedeResult, type ReplaceResult, type LegacyProjectMemoryDiagnostics, type LegacyProjectMigrationApplyResult, type LegacyProjectMigrationPlan } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
-const VERSION = "0.1.0"
+export const VERSION = "0.1.0"
 
 export interface ObsidianImportApplyResult {
   summary: {
@@ -721,15 +721,49 @@ function formatLegacyProjectMemoryDoctor(value: unknown): string | undefined {
   return lines.join("\n")
 }
 
-export function formatLegacyProjectMemoryMigrationPreview(value: LegacyProjectMemoryDiagnostics, json: boolean): string {
-  if (json) return JSON.stringify({ ok: true, data: { legacyProjectMemories: value }, meta: meta() }, null, 2)
+export function formatLegacyProjectMemoryMigrationPreview(value: LegacyProjectMemoryDiagnostics, json: boolean, plan?: LegacyProjectMigrationPlan, planPath?: string): string {
+  if (json) {
+    const migrationPlan = plan ? {
+      version: plan.planVersion,
+      producerVersion: plan.producerVersion,
+      projectScopeKey: plan.projectScopeKey,
+      planPath,
+      candidateCount: plan.candidateCount,
+      blockerCount: plan.blockerCount,
+      embeddingActions: plan.embeddingActions,
+      applyCommand: planPath ? `memory-lane migrate project-local --apply-plan ${planPath} --yes` : undefined,
+    } : undefined
+    return JSON.stringify({ ok: true, data: { legacyProjectMemories: { ...value, ...(migrationPlan ? { migrationPlan } : {}) } }, meta: meta() }, null, 2)
+  }
   if (value.status === "not-applicable") return `Legacy project memory migration dry run: not applicable (${value.notApplicableReason ?? "unknown"}).`
   const details = formatLegacyProjectMemoryDoctor(value) ?? "Legacy project memories: unavailable"
-  return [
-    "Legacy project memory migration dry run:",
-    details,
-    "No files were changed. Mutating migration is not implemented in this release.",
-  ].join("\n")
+  const lines = ["Legacy project memory migration dry run:", details]
+  if (plan) {
+    lines.push(`Migration plan: ${plan.candidateCount} candidate(s), ${plan.blockerCount} blocker(s), ${plan.embeddingActions.copyCompatible} copyable embedding(s), ${plan.embeddingActions.rebuildNeeded} rebuild-needed embedding(s).`)
+    lines.push(`Producer version: ${plan.producerVersion}`)
+    lines.push(`Destination project memory file: ${plan.projectMemoryFile}`)
+    if (planPath) {
+      lines.push(`Wrote review plan: ${planPath}`)
+      lines.push("Warning: the plan file may contain memory text. Do not commit it.")
+      lines.push(`Apply after review: memory-lane migrate project-local --apply-plan ${planPath} --yes`)
+    }
+  } else {
+    lines.push("No files were changed. Use --write-plan <path> to create a reviewable migration plan.")
+  }
+  return lines.join("\n")
+}
+
+export function formatLegacyProjectMemoryMigrationApply(result: LegacyProjectMigrationApplyResult, json: boolean): string {
+  if (json) return JSON.stringify({ ok: result.blocked === 0, data: { migration: result }, meta: meta() }, null, 2)
+  const lines = [
+    "Legacy project memory migration apply:",
+    `  migrated: ${result.migrated}; repaired: ${result.repaired}; completed before run: ${result.completedBeforeRun}; skipped: ${result.skipped}; blocked: ${result.blocked}; reindex needed: ${result.reindexNeeded}`,
+    ...result.warnings.map((warning) => `  warning: ${warning}`),
+  ]
+  for (const item of result.items.filter((candidate) => candidate.blockers.length)) {
+    lines.push(`  blocked ${item.id}: ${item.blockers.join(", ")}`)
+  }
+  return lines.join("\n")
 }
 
 function formatContinuityHintSummary(value: unknown): string | undefined {
@@ -969,8 +1003,10 @@ Commands:
                   Reconcile generated mirror files and indexes
   obsidian import [--dry-run]
                   Explicitly import user-authored notes from configured imports/; applies by default
-  migrate project-local --dry-run
-                  Preview legacy home-stored project memories without mutating files
+  migrate project-local --dry-run [--write-plan <path>]
+                  Preview legacy home-stored project memories and optionally write a review plan
+  migrate project-local --apply-plan <path> --yes
+                  Apply a reviewed project-local migration plan
   mcp              Run the bundled Memory Lane MCP server over stdio
   claude <user-prompt-submit|stop|post-tool-use|session-start|session-end>
                   Run a Claude Code hook adapter command; reads hook JSON from stdin

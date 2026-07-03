@@ -1,7 +1,7 @@
 # Memory Lane — Implementation Plan
 
 > **Status note:** This file is the original build plan and includes historical task snippets.
-> Current user-facing API and storage behavior are summarized in `README.md` and `docs/2026-05-20-memory-lane-design.md`; newer core code routes engine storage through `MemoryEngineStorage` even when older task snippets below still show direct `this.store`, `this.memPath`, or `this.embPath` usage.
+> Current user-facing API and storage behavior are summarized in `README.md` and `docs/2026-05-20-memory-lane-design.md`; newer core code routes engine storage through `MemoryEngineStorage` and supports review-first legacy project migration plans even when older task snippets below still show direct `this.store`, `this.memPath`, or `this.embPath` usage.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -21,7 +21,7 @@ packages/core/src/
 ├── types.ts               # All interfaces, types, and type guards
 ├── engine.ts              # MemoryEngine: facade that wires everything together
 ├── storage.ts             # MemoryStore: JSONL storage for memory records, cache, and batch append
-├── storage-facade.ts      # MemoryEngineStorage seam for memories, embeddings, compaction, diagnostics, legacy project-memory diagnostics, and baselines
+├── storage-facade.ts      # MemoryEngineStorage seam for memories, embeddings, compaction, diagnostics, legacy project-memory diagnostics/migration, and baselines
 ├── search.ts              # Lexical search, dedup, secret detection, scope matching
 ├── project-scope.ts       # Project identity resolution (scope file → git → global)
 ├── embedding-store.ts     # EmbeddingStore: JSONL storage for embedding + invalidation records

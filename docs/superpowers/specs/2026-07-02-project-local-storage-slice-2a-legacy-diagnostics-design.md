@@ -10,8 +10,8 @@ Installed-artifact dogfood passed and is documented in `docs/superpowers/validat
 ## Entry gate
 
 This design and implementation gate is complete.
-The later explicit design gate is Slice 2b, drafted in `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
-Mutating migration remains deferred until that draft receives Fable 5 review and explicit user approval.
+The later explicit design gate was Slice 2b, implemented from `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md` after Fable 5 review and explicit user approval.
+Mutating migration remains limited to that reviewed plan/apply protocol.
 
 ## Context
 
@@ -185,8 +185,8 @@ If current command construction would auto-compact or auto-create stores, the im
 
 ## Future mutating migration protocol
 
-Confirmed migration is deferred to the Slice 2b design gate in `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
-That later gate specifies a review-first plan/apply protocol, including:
+Confirmed migration moved to the Slice 2b plan/apply protocol in `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
+That protocol specifies a review-first flow, including:
 
 - destination project-store revision creation;
 - source home-store tombstone semantics;
@@ -276,4 +276,4 @@ PR #88 merged the full spec as `4f64367 docs: draft project-local slice 2a diagn
 The user then approved implementation from this spec.
 PR #89 merged the implementation as `96516ef feat(cli): add legacy project diagnostics dry run (#89)`.
 The implementation shipped in `v0.2.44` with installed-artifact dogfood documented in `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
-Slice 2b later drafted the mutating migration protocol in `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`; implementation remains blocked until Fable 5 review and explicit user approval.
+Slice 2b later implemented the Fable-reviewed mutating migration protocol in `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`; migration remains limited to reviewed plan generation plus explicit `--apply-plan <path> --yes` confirmation.

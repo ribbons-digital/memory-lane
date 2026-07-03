@@ -5,16 +5,16 @@
 Slice 0 shipped in `v0.2.42` from PR #78 as the storage facade proof with no default-location change.
 Slice 1 shipped in `v0.2.43` from PR #80 as the project-local default for new project-scoped writes.
 Slice 2a shipped in `v0.2.44` from PR #89 as read-only legacy project-memory diagnostics and dry-run preview.
-Slice 2b is a draft review-first mutating migration protocol design in `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
-Mutating migration remains blocked until Fable 5 review and explicit user approval.
+Slice 2b is approved and implemented as a review-first mutating migration protocol in `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
+Mutating migration is limited to generated plan review plus explicit `--apply-plan <path> --yes` confirmation.
 
 ## Entry gate
 
 Slice 0 was approved and implemented as an internal storage facade proof.
 Slice 1 was approved and implemented as project-local default writes.
 Slice 2a was approved and implemented as diagnostics only.
-Slice 2b is the current design gate for review-first legacy migration.
-Do not implement mutating migration until Fable 5 review is resolved and the user explicitly approves the Slice 2b spec.
+Slice 2b is approved and implemented as the review-first legacy migration protocol.
+Mutating migration remains limited to the reviewed plan/apply flow.
 
 ## Context
 
@@ -63,10 +63,10 @@ Adopt a two-tier storage model through approved slices:
    Global-scope preferences and personal memories remain home-scoped in `~/.memory-lane/memory.jsonl`.
 3. **Slice 2a: legacy project-memory diagnostics.** Shipped in `v0.2.44` from PR #89.
    Home-stored project memories for the active project are reported through bounded status, doctor, MCP status, and dry-run migration preview surfaces without mutating files.
-4. **Slice 2b: review-first legacy migration protocol.** In design.
-   The draft protocol requires a generated plan file, explicit review, and `--apply-plan <path> --yes` before any mutation, and remains blocked until Fable 5 review and explicit user approval.
+4. **Slice 2b: review-first legacy migration protocol.** Implemented in this slice.
+   The protocol requires a generated plan file, explicit review, and `--apply-plan <path> --yes` before any mutation.
 
-This sliced path preserves the product direction while de-risking the single-store engine assumption before changing user-visible write locations, adding read-only migration diagnostics, and then designing a review-first migration protocol.
+This sliced path preserves the product direction while de-risking the single-store engine assumption before changing user-visible write locations, adding read-only migration diagnostics, and then implementing a review-first migration protocol.
 
 Long-term target:
 
@@ -146,7 +146,7 @@ For the long-term project-local default:
 - Read project-local project memories from the project store.
 - Read global/personal/preference memories from the home store.
 - Keep status/scope filtering as a second boundary.
-- Existing home-scoped project memories remain accessible through current home-store behavior; Slice 2a reports them through bounded diagnostics, and Slice 2b drafts the separate review-first migration approval gate.
+- Existing home-scoped project memories remain accessible through current home-store behavior; Slice 2a reports them through bounded diagnostics, and Slice 2b adds the separate review-first migration plan/apply protocol.
 
 For Slice 0, reads remain behaviorally equivalent to today's single home store, but they should go through the new facade contract.
 The facade must be capable of returning a merged read view to `MemoryEngine` and tracking the originating store for each folded record so update/approve/reject/delete/rescope and duplicate upgrades can re-append to the same store that owns the existing record.
@@ -187,7 +187,7 @@ Slice 2a shipped the first migration/compatibility diagnostics after the facade 
 - avoid silent movement, deletion, approval, or consolidation.
 
 Those migration/compatibility diagnostics were out of scope for Slice 0 and Slice 1.
-Slice 2b now drafts the mutating migration protocol, but implementation remains blocked until Fable 5 review and explicit user approval.
+Slice 2b now implements the mutating migration protocol after Fable 5 review and explicit user approval.
 
 ## First implementation slice
 
@@ -223,8 +223,8 @@ Definition of done for shipped Slice 1:
 9. Update README, skill docs, and HANDOFF/ROADMAP.
 
 Legacy home-project migration diagnostics shipped in Slice 2a.
-Slice 2b drafts a review-first migration protocol with a plan file and explicit apply command.
-Explicitly defer mutating migration implementation unless the Slice 2b spec is reviewed and approved.
+Slice 2b implements a review-first migration protocol with a plan file and explicit apply command.
+Continue to defer any migration outside that reviewed plan/apply protocol.
 
 ## Files likely to modify
 
@@ -295,7 +295,7 @@ Manual/dogfood checks for shipped Slice 1:
 ## Risks and mitigations
 
 - **Breaking cross-harness continuity:** resolve project root consistently and keep `.memory-lane-scope` / git root behavior authoritative.
-- **Losing visibility of old home project memories:** do not delete or migrate old rows silently; use shipped Slice 2a diagnostics for visibility, and keep mutation blocked until the Slice 2b review-first protocol is approved and implemented.
+- **Losing visibility of old home project memories:** do not delete or migrate old rows silently; use shipped Slice 2a diagnostics for visibility, and allow mutation only through the approved Slice 2b review-first plan/apply protocol.
 - **Config confusion:** keep global config canonical for the first slice; do not add config merging.
 - **Worktree fragmentation:** prefer existing worktree-aware project scope logic; document `.memory-lane-scope` for stable identity.
 - **Surprising file creation:** only auto-create project-local storage on writes, not read-only commands.
@@ -310,7 +310,7 @@ Manual/dogfood checks for shipped Slice 1:
 4. Global config remains canonical for the first project-local default slice; no config merge model.
 5. Project-local storage may auto-create on first project write when project scope is known, but only in Slice 1.
 6. Legacy home-project migration diagnostics shipped in Slice 2a.
-7. Slice 2b drafts a review-first mutating migration protocol, but implementation remains blocked until Fable 5 review and explicit user approval.
+7. Slice 2b implements a review-first mutating migration protocol after Fable 5 review and explicit user approval.
 
 ## Slice 1 rescope decision
 
@@ -326,4 +326,4 @@ Slice 0 implementation preserves current storage behavior through `MemoryEngineS
 It shipped in `v0.2.42` after local build/test validation, release workflow `28484161404`, and installed-artifact smoke testing documented in `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
 Slice 1 was later approved in `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`, merged in PR #80 as `a87eff5`, and shipped in `v0.2.43` with installed-artifact dogfood documented in `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
 Slice 2a was later approved in `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`, merged in PR #89 as `96516ef`, and shipped in `v0.2.44` with installed-artifact dogfood documented in `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
-Slice 2b is drafted in `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md` as a review-first migration protocol requiring Fable 5 review and explicit user approval before implementation.
+Slice 2b was approved after Fable 5 review and implemented from `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md` as a review-first migration protocol requiring plan review plus explicit `--apply-plan <path> --yes` confirmation.

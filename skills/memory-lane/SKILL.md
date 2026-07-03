@@ -66,6 +66,8 @@ memory-lane review --suspect-meta --include-approved
 memory-lane status --json
 memory-lane doctor --json
 memory-lane migrate project-local --dry-run --json
+memory-lane migrate project-local --dry-run --write-plan <path> --project <project>
+memory-lane migrate project-local --apply-plan <path> --yes
 memory-lane dashboard
 memory-lane agreements
 memory-lane agreements --area project-loop
@@ -188,7 +190,10 @@ Default storage is two-tier when no explicit `MEMORY_LANE_*` paths are set: glob
 Legacy project-scoped memories from before project-local defaults may still live in the home store.
 Use `memory-lane status --json`, `memory-lane doctor --json`, MCP `memory_status`, or `memory-lane migrate project-local --dry-run --json` to inspect them.
 The diagnostics include counts, hazard counters, and bounded sample previews when legacy candidates exist.
-The migration preview is read-only in the current slice; do not imply records are moved.
+To migrate legacy candidates, first write and review an explicit plan with `memory-lane migrate project-local --dry-run --write-plan <path> --project <project>`.
+Plan files may contain memory text and should not be committed.
+After review, apply the plan with `memory-lane migrate project-local --apply-plan <path> --yes`.
+Do not imply records are moved without an explicit reviewed plan and `--yes`.
 
 Semantic search is disabled by default. Enable it, then run `reindex` when existing approved memories are missing current vectors for the active profile/model/content hash:
 
