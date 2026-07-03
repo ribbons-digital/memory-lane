@@ -403,6 +403,32 @@ describe("MemoryEngineStorage two-tier facade", () => {
     assert.equal(fs.readFileSync(home.memoryPath, "utf8"), "")
   })
 
+  it("blocks stale completed candidates before mutating other migration items", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const stale = rec({ id: "stale", text: "Stale project memory", scope: { type: "project", key: "scope-key" }, updatedAt: "2026-01-03T00:00:00.000Z" })
+    const pending = rec({ id: "pending", text: "Pending project memory", scope: { type: "project", key: "scope-key" }, updatedAt: "2026-01-04T00:00:00.000Z" })
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemories([stale, pending])
+    const plan = storage.createLegacyProjectMigrationPlan("scope-key")
+    const staleItem = plan.candidates.find((item) => item.id === "stale")!
+    createSingleStoreEngineStorage(project.memoryPath, project.embeddingsPath).appendMemory(staleItem.destinationRecord)
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemories([
+      staleItem.sourceTombstone,
+      { ...stale, text: "Changed after migration", updatedAt: "2099-01-01T00:00:00.000Z" },
+    ])
+
+    const result = storage.applyLegacyProjectMigrationPlan(plan)
+
+    assert.equal(result.migrated, 0)
+    assert.equal(result.blocked, 1)
+    assert.equal(result.items.find((item) => item.id === "stale")?.state, "conflict")
+    assert.ok(result.items.find((item) => item.id === "stale")?.blockers.includes("source-fingerprint-mismatch"))
+    assert.equal(fs.readFileSync(project.memoryPath, "utf8").includes('"id":"pending"'), false)
+    assert.equal(fs.readFileSync(home.memoryPath, "utf8").includes('"id":"pending","status":"deleted"'), false)
+  })
+
   it("repairs destination-written partial migrations by appending the source tombstone", () => {
     const dir = tempDir()
     const home = homePathsFor(path.join(dir, "home", ".memory-lane"))

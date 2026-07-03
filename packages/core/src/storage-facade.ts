@@ -742,13 +742,20 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
         const hasPlannedDestination = projectLog.some((record) => exactRecord(record, item.destinationRecord))
         const hasPlannedTombstone = homeLog.some((record) => exactRecord(record, item.sourceTombstone))
         const hasHomeRecord = homeLog.length > 0
-        const latestHome = homeLog.map((record, logIndex) => ({ entry: home, record, logIndex })).sort(compareLocatedMemory).at(-1)?.record
+        const locatedHomeLog = homeLog.map((record, logIndex) => ({ entry: home, record, logIndex }))
+        const latestHomeLocated = locatedHomeLog.sort(compareLocatedMemory).at(-1)
+        const latestHome = latestHomeLocated?.record
+        const plannedTombstoneLocated = locatedHomeLog.find((located) => exactRecord(located.record, item.sourceTombstone))
+        const hasNewerHomeWinnerAfterTombstone = Boolean(plannedTombstoneLocated && latestHomeLocated && !exactRecord(latestHomeLocated.record, item.sourceTombstone) && compareLocatedMemory(plannedTombstoneLocated, latestHomeLocated) < 0)
         const projectConflict = projectLog.some((record) => !exactRecord(record, item.destinationRecord) && (record.text !== item.sourceRecord.text || record.status !== item.sourceRecord.status))
         const unplannedProjectRecord = projectLog.some((record) => !exactRecord(record, item.destinationRecord))
         if (projectConflict) blockers.push("duplicate-active-project-record")
         else if (unplannedProjectRecord) blockers.push("mixed-origin-revision-chain")
+        if (hasNewerHomeWinnerAfterTombstone) blockers.push("source-fingerprint-mismatch")
         let state: LegacyProjectMigrationApplyResult["items"][number]["state"]
-        if (hasPlannedDestination && (hasPlannedTombstone || !hasHomeRecord)) {
+        if (hasNewerHomeWinnerAfterTombstone) {
+          state = "conflict"
+        } else if (hasPlannedDestination && (hasPlannedTombstone || !hasHomeRecord)) {
           state = "complete"
         } else if (hasPlannedDestination && !hasPlannedTombstone && hasHomeRecord) {
           if (!latestHome) blockers.push("missing-source-home-record")
