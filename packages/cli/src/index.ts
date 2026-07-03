@@ -687,14 +687,14 @@ function handleMigrate(ctx: CliContext): void {
       console.log(formatError("Invalid project-local migration plan file.", ctx.json))
       process.exit(1)
     }
-    if (!hasFlag(ctx.argv, "yes")) {
-      console.log(formatLegacyProjectMemoryMigrationPreview(ctx.engine.doctor().legacyProjectMemories as any, ctx.json, plan, applyPlanPath))
-      console.log(formatError("Applying a project-local migration plan requires --yes after you review the plan file.", ctx.json))
-      process.exit(1)
-    }
     const applyEngine = plan?.projectRoot
       ? createEngine(resolveWritableEngineStoragePaths({ cwd: plan.projectRoot, env: process.env, autoInitProjectLocalOnHomeFailure: false }), plan.projectRoot, { autoCompact: false })
       : ctx.engine
+    if (!hasFlag(ctx.argv, "yes")) {
+      console.log(formatLegacyProjectMemoryMigrationPreview(applyEngine.doctor().legacyProjectMemories as any, ctx.json, plan, applyPlanPath))
+      console.log(formatError("Applying a project-local migration plan requires --yes after you review the plan file.", ctx.json))
+      process.exit(1)
+    }
     const result = applyEngine.applyLegacyProjectMigrationPlan(plan)
     console.log(formatLegacyProjectMemoryMigrationApply(result, ctx.json))
     if (result.blocked) process.exit(1)

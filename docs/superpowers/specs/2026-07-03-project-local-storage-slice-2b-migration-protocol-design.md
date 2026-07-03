@@ -338,11 +338,12 @@ The implementation should cover:
 12. compatible embeddings are copied to the project embedding log with the destination `updatedAt` and a fresh `createdAt`;
 13. stale or missing embeddings do not block apply and produce a rebuild hint;
 14. explicit `MEMORY_LANE_*` mode blocks apply;
-15. apply can create project-local storage only when using an approved plan;
-16. `status`, `doctor`, and MCP `memory_status` remain bounded and do not emit full plan contents;
-17. `memory-lane migrate project-local` without flags still refuses;
-18. worktree/shared-scope projects use the expected project scope key and project store path;
-19. continuity or SessionStart dogfood checks whether migrated records with fresh `updatedAt` create unacceptable recency noise.
+15. missing or blank `producerVersion` blocks apply with `invalid-producer-version` before mutation;
+16. apply can create project-local storage only when using an approved plan;
+17. `status`, `doctor`, and MCP `memory_status` remain bounded and do not emit full plan contents;
+18. `memory-lane migrate project-local` without flags still refuses;
+19. worktree/shared-scope projects use the expected project scope key and project store path;
+20. continuity or SessionStart dogfood checks whether migrated records with fresh `updatedAt` create unacceptable recency noise.
 
 ## Verification plan for implementation
 

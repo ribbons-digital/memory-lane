@@ -829,15 +829,19 @@ const engineWithStorage = new MemoryEngine({ storage })
 
 // Programmatic integrations that want CLI-style default two-tier storage should wire the resolver and facade explicitly.
 const paths = resolveEngineStoragePaths({ cwd: process.cwd(), env: process.env })
-const tieredStorage = paths.kind === "default-two-tier"
-  ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey, { producerVersion: "my-integration/1.0.0" })
-  : createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath)
-const tieredEngine = new MemoryEngine({ storage: tieredStorage, autoCompact: false, configPath: paths.configPath })
+if (paths.kind === "default-two-tier") {
+  const tieredStorage = createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey, { producerVersion: "my-integration/1.0.0" })
+  const tieredEngine = new MemoryEngine({ storage: tieredStorage, autoCompact: false, configPath: paths.configPath })
 
-// Review-first legacy project migration APIs mirror the CLI plan/apply flow.
-const plan = tieredEngine.createLegacyProjectMigrationPlan()
-// Persist and review the plan before applying it with explicit user confirmation.
-const result = tieredEngine.applyLegacyProjectMigrationPlan(plan)
+  // Review-first legacy project migration APIs mirror the CLI plan/apply flow.
+  // They require the two-tier facade with an active project scope.
+  const plan = tieredEngine.createLegacyProjectMigrationPlan()
+  // Persist and review the plan before applying it with explicit user confirmation.
+  const result = tieredEngine.applyLegacyProjectMigrationPlan(plan)
+} else {
+  const singleStoreStorage = createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath)
+  const singleStoreEngine = new MemoryEngine({ storage: singleStoreStorage, autoCompact: false, configPath: paths.configPath })
+}
 
 // Save
 engine.save({ text: "use pnpm for all installs", status: "approved" })

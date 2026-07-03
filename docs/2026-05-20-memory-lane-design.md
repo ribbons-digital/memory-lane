@@ -310,7 +310,9 @@ function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?: Memor
 `memoryPath` and `embeddingsPath` still build the backward-compatible single-store facade.
 Advanced tests and integrations can pass a custom `MemoryEngineStorage` when they need to own memory, embedding, compaction, diagnostic, legacy project-memory diagnostic/migration, or continuity-baseline paths.
 Custom facades should return `LegacyProjectMemoryDiagnostics` from `legacyProjectMemoryDiagnostics()`; single-store facades normally report `not-applicable` and reject migration plan/apply methods as not applicable.
+`createLegacyProjectMigrationPlan()` and `applyLegacyProjectMigrationPlan()` are only valid on the two-tier facade created by `createTwoTierEngineStorage()` when `projectScopeKey` identifies an active project-local scope.
 Two-tier facades can create explicit review plans with `createLegacyProjectMigrationPlan()` and apply reviewed plans with `applyLegacyProjectMigrationPlan()`; the optional `producerVersion` records integration provenance in generated plans.
+Consumers should treat these migration helpers as project-local two-tier behavior, not generic `MemoryEngineStorage` behavior available on every single-store or custom facade.
 `EmbeddingLine` is the exported union accepted by `appendEmbedding()` for embedding records and embedding invalidation records.
 
 **Instance lifecycle recommendation:** Create one `MemoryEngine` per process and reuse it. The in-memory cache makes this significantly faster than per-operation construction. The pi adapter uses a singleton; the CLI creates one per invocation (naturally isolated processes).

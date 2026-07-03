@@ -535,6 +535,26 @@ describe("MemoryEngineStorage two-tier facade", () => {
     assert.equal(fs.readFileSync(home.memoryPath, "utf8").includes("Migrated to project-local storage."), false)
   })
 
+  it("validates missing and blank migration producer versions before mutating files", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const legacy = rec({ id: "legacy", text: "Legacy project memory", scope: { type: "project", key: "scope-key" }, updatedAt: "2026-01-03T00:00:00.000Z" })
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemory(legacy)
+    const plan = storage.createLegacyProjectMigrationPlan("scope-key")
+
+    for (const producerVersion of [undefined, ""] as const) {
+      const invalidPlan = { ...plan, producerVersion } as never
+      const result = storage.applyLegacyProjectMigrationPlan(invalidPlan)
+
+      assert.notEqual(result.blocked, 0)
+      assert.ok(result.items[0].blockers.includes("invalid-producer-version"))
+      assert.equal(fs.existsSync(project.memoryPath), false)
+      assert.equal(fs.readFileSync(home.memoryPath, "utf8").includes("Migrated to project-local storage."), false)
+    }
+  })
+
   it("validates malformed migration plan item arrays before mutating files", () => {
     const dir = tempDir()
     const home = homePathsFor(path.join(dir, "home", ".memory-lane"))

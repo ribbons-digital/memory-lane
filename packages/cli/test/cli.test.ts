@@ -523,6 +523,7 @@ describe("CLI integration", () => {
     assert.match(plan.stdout, /Warning: the plan file may contain memory text/u)
     assert.notEqual(applyWithoutYes.status, 0)
     assert.match(applyWithoutYes.stdout + applyWithoutYes.stderr, /requires --yes/u)
+    assert.match(applyWithoutYes.stdout, /2 active home-stored candidate\(s\) for project migration-scope/u)
     assert.notEqual(explicitApply.status, 0)
     assert.match(explicitApply.stdout + explicitApply.stderr, /not applicable|Project-local migration requires/u)
     assert.equal(apply.status, 0, apply.stderr)
