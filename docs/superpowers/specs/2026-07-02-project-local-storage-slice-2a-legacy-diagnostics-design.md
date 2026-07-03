@@ -144,7 +144,7 @@ Doctor must not create `<project-root>/.memory-lane/`, `.memory-lane-scope`, `.g
 
 Add a report-only migration preview command.
 The command should require `--dry-run` in Slice 2a.
-If the user runs `memory-lane migrate project-local` without `--dry-run`, it should fail with a clear message that mutating migration is not implemented in this release.
+If the user runs `memory-lane migrate project-local` without `--dry-run`, Slice 2a / `v0.2.44` should fail with a clear message that mutating migration is not implemented in that release.
 
 The dry-run command should:
 

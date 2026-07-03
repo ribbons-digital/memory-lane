@@ -5,7 +5,7 @@
 Slice 0 shipped in `v0.2.42` from PR #78 as the storage facade proof with no default-location change.
 Slice 1 shipped in `v0.2.43` from PR #80 as the project-local default for new project-scoped writes.
 Slice 2a shipped in `v0.2.44` from PR #89 as read-only legacy project-memory diagnostics and dry-run preview.
-Slice 2b is approved and implemented as a review-first mutating migration protocol in `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
+Slice 2b shipped in `v0.2.45` from PR #94 as the review-first mutating migration protocol in `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
 Mutating migration is limited to generated plan review plus explicit `--apply-plan <path> --yes` confirmation.
 
 ## Entry gate
@@ -13,7 +13,7 @@ Mutating migration is limited to generated plan review plus explicit `--apply-pl
 Slice 0 was approved and implemented as an internal storage facade proof.
 Slice 1 was approved and implemented as project-local default writes.
 Slice 2a was approved and implemented as diagnostics only.
-Slice 2b is approved and implemented as the review-first legacy migration protocol.
+Slice 2b is approved, implemented, and released as the review-first legacy migration protocol.
 Mutating migration remains limited to the reviewed plan/apply flow.
 
 ## Context
@@ -63,7 +63,7 @@ Adopt a two-tier storage model through approved slices:
    Global-scope preferences and personal memories remain home-scoped in `~/.memory-lane/memory.jsonl`.
 3. **Slice 2a: legacy project-memory diagnostics.** Shipped in `v0.2.44` from PR #89.
    Home-stored project memories for the active project are reported through bounded status, doctor, MCP status, and dry-run migration preview surfaces without mutating files.
-4. **Slice 2b: review-first legacy migration protocol.** Implemented in this slice.
+4. **Slice 2b: review-first legacy migration protocol.** Shipped in `v0.2.45` from PR #94.
    The protocol requires a generated plan file, explicit review, and `--apply-plan <path> --yes` before any mutation.
 
 This sliced path preserves the product direction while de-risking the single-store engine assumption before changing user-visible write locations, adding read-only migration diagnostics, and then implementing a review-first migration protocol.
@@ -183,11 +183,11 @@ Slice 2a shipped the first migration/compatibility diagnostics after the facade 
 
 - Slice 2a detects approved/pending home-stored project memories whose scope key matches the active project;
 - Slice 2a shows bounded diagnostics in `doctor`, `status`, MCP `memory_status`, and `memory-lane migrate project-local --dry-run`;
-- mutating migration remains deferred to the Slice 2b review-first plan/apply protocol;
+- mutating migration requires the Slice 2b review-first plan/apply protocol;
 - avoid silent movement, deletion, approval, or consolidation.
 
 Those migration/compatibility diagnostics were out of scope for Slice 0 and Slice 1.
-Slice 2b now implements the mutating migration protocol after Fable 5 review and explicit user approval.
+Slice 2b implements and ships the mutating migration protocol after Fable 5 review and explicit user approval.
 
 ## First implementation slice
 
@@ -326,4 +326,4 @@ Slice 0 implementation preserves current storage behavior through `MemoryEngineS
 It shipped in `v0.2.42` after local build/test validation, release workflow `28484161404`, and installed-artifact smoke testing documented in `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
 Slice 1 was later approved in `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`, merged in PR #80 as `a87eff5`, and shipped in `v0.2.43` with installed-artifact dogfood documented in `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
 Slice 2a was later approved in `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`, merged in PR #89 as `96516ef`, and shipped in `v0.2.44` with installed-artifact dogfood documented in `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
-Slice 2b was approved after Fable 5 review and implemented from `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md` as a review-first migration protocol requiring plan review plus explicit `--apply-plan <path> --yes` confirmation.
+Slice 2b was approved after Fable 5 review, implemented from `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`, and shipped in `v0.2.45` as a review-first migration protocol requiring plan review plus explicit `--apply-plan <path> --yes` confirmation.
