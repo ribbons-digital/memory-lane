@@ -98,6 +98,55 @@ export interface LegacyProjectMemorySample {
   hazards: string[]
 }
 
+/** One planned legacy project-local migration action. */
+export interface LegacyProjectMigrationPlanItem {
+  id: string
+  status: Extract<MemoryStatus, "approved" | "pending">
+  sourceFingerprint: string
+  sourceRecord: MemoryRecord
+  destinationRecord: MemoryRecord
+  sourceTombstone: MemoryRecord
+  embeddingAction: "copy-compatible" | "rebuild-needed"
+  embeddingRecord?: EmbeddingRecord
+  blockers: string[]
+  hazards: string[]
+}
+
+export interface LegacyProjectMigrationPlan {
+  planVersion: 1
+  producerVersion: string
+  generatedAt: string
+  migrationBase: string
+  projectScopeKey: string
+  projectRoot?: string
+  homeMemoryFile: string
+  homeEmbeddingFile: string
+  projectMemoryFile: string
+  projectEmbeddingFile: string
+  candidates: LegacyProjectMigrationPlanItem[]
+  candidateCount: number
+  approvedCount: number
+  pendingCount: number
+  blockerCount: number
+  embeddingActions: {
+    copyCompatible: number
+    rebuildNeeded: number
+  }
+}
+
+export interface LegacyProjectMigrationApplyResult {
+  planVersion: 1
+  projectScopeKey: string
+  migrated: number
+  repaired: number
+  completedBeforeRun: number
+  skipped: number
+  blocked: number
+  reindexNeeded: number
+  warnings: string[]
+  items: Array<{ id: string; state: "not-started" | "destination-written" | "complete" | "conflict"; action: string; blockers: string[] }>
+}
+
 /** Read-only report for home-stored project memories that predate project-local defaults. */
 export interface LegacyProjectMemoryDiagnostics {
   status: "ok" | "not-applicable"

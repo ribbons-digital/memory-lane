@@ -439,6 +439,9 @@ Existing memories saved under old worktree path keys are not migrated automatica
 For legacy project-scoped memories that still live in the home store from before project-local defaults, use `memory-lane status --json`, `memory-lane doctor --json`, MCP `memory_status`, or `memory-lane migrate project-local --dry-run`.
 These surfaces are read-only for legacy diagnostics and do not move records or create project-local storage.
 When legacy candidates exist, the diagnostics include counts, hazard counters, and at most 10 bounded sample previews capped at 160 characters.
+To migrate legacy candidates, first write and review an explicit plan with `memory-lane migrate project-local --dry-run --write-plan <path> --project <project>`.
+Plan files may contain memory text and should not be committed.
+After review, apply the plan with `memory-lane migrate project-local --apply-plan <path> --yes`.
 
 ## CLI Commands
 
@@ -471,7 +474,10 @@ memory-lane replace <old-id...>   Create a successor memory for approved old mem
 memory-lane compact               Remove deleted/rejected tombstones while preserving invalid rows
 memory-lane doctor                Diagnostic report
 memory-lane status                Quick stats
-memory-lane migrate project-local --dry-run Preview legacy home-stored project memories without mutating files
+memory-lane migrate project-local --dry-run [--write-plan <path>]
+                                  Preview legacy home-stored project memories and optionally write a review plan
+memory-lane migrate project-local --apply-plan <path> --yes
+                                  Apply a reviewed project-local migration plan
 memory-lane reindex [--force]     Embed approved memories missing current vectors; --force recomputes
 memory-lane init --project-local  Initialize sandbox-friendly project-local storage
 memory-lane session-end --confirm Generate a pending session summary from stdin JSON

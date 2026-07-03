@@ -96,7 +96,10 @@ Use `memory-lane dashboard` for a compact human overview of continuity hints. Us
 Legacy project-scoped memories from before project-local defaults may still live in the home store.
 Use `memory-lane status --json`, `memory-lane doctor --json`, MCP `memory_status`, or `memory-lane migrate project-local --dry-run --json` to inspect active legacy candidates for the current project.
 The diagnostics are read-only and may include counts, hazard counters, and at most 10 sample previews capped at 160 characters.
-The dry-run migration preview does not move, delete, approve, reject, or consolidate records in this release.
+To migrate candidates, first write and review a plan with `memory-lane migrate project-local --dry-run --write-plan <path> --project <project>`.
+Plan files may contain memory text and should not be committed.
+After review, apply with `memory-lane migrate project-local --apply-plan <path> --yes`.
+Memory Lane does not move, delete, approve, reject, or consolidate records without this explicit reviewed plan and confirmation.
 
 ### List (respects project scope by default)
 
@@ -133,6 +136,8 @@ memory-lane status --json --since 2026-06-18T00:00:00.000Z
 memory-lane doctor                # full diagnostic report
 memory-lane doctor --json --since 2026-06-18T00:00:00.000Z
 memory-lane migrate project-local --dry-run # preview legacy home-stored project memories without mutating files
+memory-lane migrate project-local --dry-run --write-plan <path> --project <project> # write a reviewable migration plan
+memory-lane migrate project-local --apply-plan <path> --yes # apply a reviewed migration plan
 memory-lane compact               # remove deleted/rejected entries while preserving invalid rows
 memory-lane reindex               # embed approved memories missing current vectors
 memory-lane init                  # first-time setup wizard for harnesses

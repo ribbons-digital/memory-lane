@@ -46,9 +46,9 @@ Approved spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a
 Shipped behavior: detect active legacy home-stored project memories for the current project, surface bounded `status` / `doctor` diagnostics, and provide a dry-run-only migration preview without silent moves/deletes/approvals/consolidation.
 `v0.2.44` release and installed-artifact dogfood for Slice 2a are complete.
 Release validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
-Current action is Slice 2b, a review-first legacy migration protocol design.
-Draft spec: `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
-Do not implement mutating migration until Fable 5 review is resolved and the user explicitly approves the spec.
+Current action is Slice 2b implementation from the approved review-first legacy migration protocol design.
+Approved spec: `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
+The slice is limited to reviewed plan generation, explicit `--apply-plan <path> --yes`, idempotent migration, tests, and docs; general cross-store rescope remains deferred.
 
 ## Load-bearing constraints
 

@@ -7,7 +7,7 @@ import { createEmbeddingStore, foldEmbeddings, type EmbeddingLine, type Embeddin
 import { normalizeMemoryRecord } from "./storage-validation.js"
 import { ensureProjectLocalStorageFiles, type MemoryPaths } from "./storage-locations.js"
 import { createMemoryStore, withFileLocks, type MemoryStore, type MemoryStoreDiagnostics } from "./storage.js"
-import type { CompactReport, EmbeddingInvalidationRecord, EmbeddingRecord, LegacyProjectMemoryDiagnostics, MemoryRecord } from "./types.js"
+import type { CompactReport, EmbeddingInvalidationRecord, EmbeddingRecord, LegacyProjectMemoryDiagnostics, LegacyProjectMigrationApplyResult, LegacyProjectMigrationPlan, LegacyProjectMigrationPlanItem, MemoryRecord } from "./types.js"
 
 /**
  * Storage facade used by MemoryEngine.
@@ -31,6 +31,8 @@ export interface MemoryEngineStorage {
   listEmbeddingInvalidations(): EmbeddingInvalidationRecord[]
   /** Return read-only diagnostics for active current-project memories that still live in the home store. */
   legacyProjectMemoryDiagnostics(projectScopeKey?: string): LegacyProjectMemoryDiagnostics
+  createLegacyProjectMigrationPlan(projectScopeKey?: string): LegacyProjectMigrationPlan
+  applyLegacyProjectMigrationPlan(plan: LegacyProjectMigrationPlan): LegacyProjectMigrationApplyResult
   shouldCompact(): boolean
   compact(): CompactReport
 }
@@ -161,6 +163,41 @@ function embeddingKey(record: EmbeddingRecord): string {
 
 const LEGACY_PROJECT_SAMPLE_LIMIT = 10
 const LEGACY_PROJECT_PREVIEW_LIMIT = 160
+const MIGRATION_PLAN_VERSION = 1 as const
+const MIGRATION_TOMBSTONE_TEXT = "Migrated to project-local storage."
+const DEFAULT_MIGRATION_PRODUCER_VERSION = "memory-lane-core"
+
+function contentHash(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex")
+}
+
+function sourceFingerprint(record: MemoryRecord, sourcePath: string): string {
+  return createHash("sha256").update(JSON.stringify({ sourcePath, record }), "utf8").digest("hex")
+}
+
+function addMilliseconds(iso: string, ms: number): string {
+  return new Date(new Date(iso).getTime() + ms).toISOString()
+}
+
+function sameRecordExceptUpdatedAt(a: MemoryRecord, b: MemoryRecord): boolean {
+  const strip = (record: MemoryRecord) => {
+    const { updatedAt: _updatedAt, ...rest } = record
+    return rest
+  }
+  return JSON.stringify(strip(a)) === JSON.stringify(strip(b))
+}
+
+function sameEmbeddingIdentity(a: EmbeddingRecord, b: EmbeddingRecord): boolean {
+  return a.memoryId === b.memoryId
+    && a.contentHash === b.contentHash
+    && a.profileName === b.profileName
+    && a.model === b.model
+    && a.memoryUpdatedAt === b.memoryUpdatedAt
+}
+
+function exactRecord(a: MemoryRecord, b: MemoryRecord): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
 
 function compactPreview(text: string, max = LEGACY_PROJECT_PREVIEW_LIMIT): string {
   const normalized = text.replace(/\s+/gu, " ").trim()
@@ -258,6 +295,12 @@ export function createSingleStoreEngineStorage(memoryPath: string, embeddingsPat
     legacyProjectMemoryDiagnostics(projectScopeKey) {
       return notApplicableLegacyDiagnostics(memoryPath, legacyDiagnosticsReason, projectScopeKey)
     },
+    createLegacyProjectMigrationPlan(projectScopeKey) {
+      throw new Error(`Project-local migration is not applicable in ${legacyDiagnosticsReason} mode${projectScopeKey ? ` for ${projectScopeKey}` : ""}.`)
+    },
+    applyLegacyProjectMigrationPlan() {
+      throw new Error(`Project-local migration is not applicable in ${legacyDiagnosticsReason} mode.`)
+    },
     shouldCompact() {
       return shouldCompact(memoryPath)
     },
@@ -275,7 +318,7 @@ export function createSingleStoreEngineStorage(memoryPath: string, embeddingsPat
  * New records route to projectPaths when their final project scope key matches projectScopeKey; global-scope and mismatched-project records route to homePaths.
  * Existing ids continue appending to the store that owns the newest active revision, and merged reads fold duplicate ids by updatedAt, createdAt, same-store log order, then project-store precedence.
  */
-export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?: MemoryPaths, projectScopeKey?: string): MemoryEngineStorage {
+export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?: MemoryPaths, projectScopeKey?: string, options: { producerVersion?: string } = {}): MemoryEngineStorage {
   const home = createStoreEntry("home", homePaths)
   const project = projectPaths ? createStoreEntry("project", projectPaths, { scopeKey: projectScopeKey }) : undefined
   const entries = project ? [home, project] : [home]
@@ -324,6 +367,145 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
 
   function existingEntries(): StoreEntry[] {
     return entries.filter((entry) => existingFile(entry.paths.memoryPath) || existingFile(entry.paths.embeddingsPath))
+  }
+
+  function latestLocatedById(): Map<string, LocatedMemoryRecord> {
+    const latest = new Map<string, LocatedMemoryRecord>()
+    for (const located of allLocatedMemoryLogs()) {
+      const existing = latest.get(located.record.id)
+      if (!existing || compareLocatedMemory(existing, located) < 0) latest.set(located.record.id, located)
+    }
+    return latest
+  }
+
+  function legacyCandidates(scopeKey: string): LocatedMemoryRecord[] {
+    return Array.from(latestLocatedById().values()).filter(({ entry, record }) => {
+      if (entry !== home) return false
+      if (record.scope.type !== "project" || record.scope.key !== scopeKey) return false
+      if (record.status !== "approved" && record.status !== "pending") return false
+      if (record.revision?.supersededBy) return false
+      return true
+    }).sort((a, b) => {
+      const updated = b.record.updatedAt.localeCompare(a.record.updatedAt)
+      if (updated !== 0) return updated
+      return a.record.id.localeCompare(b.record.id)
+    })
+  }
+
+  function latestCompatibleHomeEmbedding(record: MemoryRecord): EmbeddingRecord | undefined {
+    const hash = contentHash(record.text)
+    const invalidatedAt = new Map<string, string>()
+    const embeddings: EmbeddingRecord[] = []
+    for (const line of embeddingStore(home)?.readLog() ?? []) {
+      if ((line as EmbeddingInvalidationRecord).type === "invalidation") {
+        const invalidation = line as EmbeddingInvalidationRecord
+        const previous = invalidatedAt.get(invalidation.memoryId)
+        if (!previous || previous < invalidation.invalidatedAt) invalidatedAt.set(invalidation.memoryId, invalidation.invalidatedAt)
+      } else {
+        embeddings.push(line as EmbeddingRecord)
+      }
+    }
+    return foldEmbeddings(embeddings)
+      .filter((embedding) => embedding.memoryId === record.id && embedding.contentHash === hash && embedding.createdAt >= (invalidatedAt.get(record.id) ?? ""))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+  }
+
+  function validateMigrationPlan(plan: LegacyProjectMigrationPlan): string[] {
+    const blockers: string[] = []
+    if (plan.planVersion !== MIGRATION_PLAN_VERSION) blockers.push("invalid-plan-version")
+    if (typeof plan.producerVersion !== "string" || !plan.producerVersion.trim()) blockers.push("invalid-producer-version")
+    if (plan.projectScopeKey !== project?.scopeKey) blockers.push("project-scope-mismatch")
+    if (plan.homeMemoryFile !== home.paths.memoryPath || plan.projectMemoryFile !== project?.paths.memoryPath) blockers.push("storage-path-mismatch")
+    if (plan.homeEmbeddingFile !== home.paths.embeddingsPath || plan.projectEmbeddingFile !== project?.paths.embeddingsPath) blockers.push("embedding-path-mismatch")
+    const ids = new Set<string>()
+    for (const item of plan.candidates ?? []) {
+      if (ids.has(item.id)) blockers.push(`duplicate-plan-id:${item.id}`)
+      ids.add(item.id)
+      const source = normalizeMemoryRecord(item.sourceRecord)
+      const destination = normalizeMemoryRecord(item.destinationRecord)
+      const tombstone = normalizeMemoryRecord(item.sourceTombstone)
+      if (!source || !destination || !tombstone) {
+        blockers.push(`invalid-plan-record:${item.id}`)
+        continue
+      }
+      if (sourceFingerprint(source, home.paths.memoryPath) !== item.sourceFingerprint) blockers.push(`source-fingerprint-does-not-match-plan-source:${item.id}`)
+      if (item.id !== source.id || item.id !== destination.id || item.id !== tombstone.id) blockers.push(`id-mismatch:${item.id}`)
+      if (source.scope.type !== "project" || source.scope.key !== plan.projectScopeKey) blockers.push(`source-scope-mismatch:${item.id}`)
+      if (destination.scope.type !== "project" || destination.scope.key !== plan.projectScopeKey) blockers.push(`destination-scope-mismatch:${item.id}`)
+      if (tombstone.scope.type !== "project" || tombstone.scope.key !== plan.projectScopeKey) blockers.push(`tombstone-scope-mismatch:${item.id}`)
+      if (destination.status !== source.status) blockers.push(`destination-status-changed:${item.id}`)
+      if (!sameRecordExceptUpdatedAt(source, destination)) blockers.push(`destination-semantic-fields-changed:${item.id}`)
+      if (tombstone.status !== "deleted" || tombstone.text !== MIGRATION_TOMBSTONE_TEXT) blockers.push(`invalid-tombstone:${item.id}`)
+      if (tombstone.updatedAt >= destination.updatedAt) blockers.push(`invalid-migration-timestamp-order:${item.id}`)
+    }
+    return blockers
+  }
+
+  function migrationPlan(scopeKey: string): LegacyProjectMigrationPlan {
+    if (!project) throw new Error("Project-local migration requires an active project-local destination.")
+    const generatedAt = new Date().toISOString()
+    const migrationBase = addMilliseconds(generatedAt, 1000)
+    const candidates = legacyCandidates(scopeKey)
+    const items: LegacyProjectMigrationPlanItem[] = candidates.map((located, index) => {
+      const tombstoneAt = addMilliseconds(migrationBase, index * 2)
+      const destinationAt = addMilliseconds(migrationBase, index * 2 + 1)
+      const blockers: string[] = []
+      const hazards: string[] = []
+      if (located.record.updatedAt >= tombstoneAt) blockers.push("source-updated-at-not-before-tombstone")
+      const projectRecords = readLog(project).filter((record) => record.id === located.record.id)
+      const projectLatest = projectRecords.map((record, logIndex) => ({ entry: project, record, logIndex })).sort(compareLocatedMemory).at(-1)?.record
+      if (projectLatest && (projectLatest.text !== located.record.text || projectLatest.status !== located.record.status)) blockers.push("duplicate-active-project-record")
+      if (projectRecords.length) blockers.push("mixed-origin-revision-chain")
+      if (located.record.status === "pending") hazards.push("pending")
+      const destinationRecord: MemoryRecord = { ...located.record, updatedAt: destinationAt }
+      const sourceTombstone: MemoryRecord = {
+        ...located.record,
+        status: "deleted",
+        text: MIGRATION_TOMBSTONE_TEXT,
+        updatedAt: tombstoneAt,
+        revision: { revisedAt: tombstoneAt, revisedBy: "cli", reason: "migrated-to-project-local-storage" },
+      }
+      const embedding = latestCompatibleHomeEmbedding(located.record)
+      if (embedding) hazards.push("copy-compatible-embedding")
+      else hazards.push("rebuild-needed")
+      return {
+        id: located.record.id,
+        status: located.record.status as "approved" | "pending",
+        sourceFingerprint: sourceFingerprint(located.record, home.paths.memoryPath),
+        sourceRecord: located.record,
+        destinationRecord,
+        sourceTombstone,
+        embeddingAction: embedding ? "copy-compatible" : "rebuild-needed",
+        embeddingRecord: embedding ? { ...embedding, memoryUpdatedAt: destinationAt, createdAt: destinationAt } : undefined,
+        blockers,
+        hazards,
+      }
+    })
+    return {
+      planVersion: MIGRATION_PLAN_VERSION,
+      producerVersion: options.producerVersion?.trim() || DEFAULT_MIGRATION_PRODUCER_VERSION,
+      generatedAt,
+      migrationBase,
+      projectScopeKey: scopeKey,
+      projectRoot: project.paths.root,
+      homeMemoryFile: home.paths.memoryPath,
+      homeEmbeddingFile: home.paths.embeddingsPath,
+      projectMemoryFile: project.paths.memoryPath,
+      projectEmbeddingFile: project.paths.embeddingsPath,
+      candidates: items,
+      candidateCount: items.length,
+      approvedCount: items.filter((item) => item.status === "approved").length,
+      pendingCount: items.filter((item) => item.status === "pending").length,
+      blockerCount: items.reduce((sum, item) => sum + item.blockers.length, 0),
+      embeddingActions: {
+        copyCompatible: items.filter((item) => item.embeddingAction === "copy-compatible").length,
+        rebuildNeeded: items.filter((item) => item.embeddingAction === "rebuild-needed").length,
+      },
+    }
+  }
+
+  function appendEmbeddingsTo(entry: StoreEntry, records: EmbeddingRecord[]): void {
+    for (const record of records) embeddingStore(entry, true)!.append(record)
   }
 
   function compactMemoryLogs(compactedEntries: StoreEntry[]): { report: CompactReport; aliveById: Map<string, LocatedMemoryRecord> } {
@@ -438,15 +620,11 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
         return notApplicableLegacyDiagnostics(home.paths.memoryPath, "no-active-project-scope", activeProjectScopeKey, project?.paths.memoryPath)
       }
       const scopeKey = activeProjectScopeKey
-      const locatedLogs = allLocatedMemoryLogs()
-      const latest = new Map<string, LocatedMemoryRecord>()
       const entriesById = new Map<string, Set<StoreEntry>>()
-      for (const located of locatedLogs) {
+      for (const located of allLocatedMemoryLogs()) {
         const stores = entriesById.get(located.record.id) ?? new Set<StoreEntry>()
         stores.add(located.entry)
         entriesById.set(located.record.id, stores)
-        const existing = latest.get(located.record.id)
-        if (!existing || compareLocatedMemory(existing, located) < 0) latest.set(located.record.id, located)
       }
       const duplicateIds = new Set<string>()
       for (const [id, stores] of entriesById) {
@@ -455,17 +633,7 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
       const homeEmbeddingIds = new Set((embeddingStore(home)?.readLog() ?? [])
         .filter((line): line is EmbeddingRecord => (line as EmbeddingInvalidationRecord).type !== "invalidation" && typeof (line as EmbeddingRecord).memoryId === "string")
         .map((line) => line.memoryId))
-      const candidates = Array.from(latest.values()).filter(({ entry, record }) => {
-        if (entry !== home) return false
-        if (record.scope.type !== "project" || record.scope.key !== scopeKey) return false
-        if (record.status !== "approved" && record.status !== "pending") return false
-        if (record.revision?.supersededBy) return false
-        return true
-      }).map(({ record }) => record).sort((a, b) => {
-        const updated = b.updatedAt.localeCompare(a.updatedAt)
-        if (updated !== 0) return updated
-        return a.id.localeCompare(b.id)
-      })
+      const candidates = legacyCandidates(scopeKey).map(({ record }) => record)
       const samples = candidates.slice(0, LEGACY_PROJECT_SAMPLE_LIMIT).map((record) => {
         const hazards: string[] = []
         if (duplicateIds.has(record.id)) hazards.push("duplicate-id-in-project-store")
@@ -501,6 +669,105 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
         sampleLimit: LEGACY_PROJECT_SAMPLE_LIMIT,
         previewLimit: LEGACY_PROJECT_PREVIEW_LIMIT,
       }
+    },
+    createLegacyProjectMigrationPlan(activeProjectScopeKey) {
+      if (!project || !project.scopeKey || !activeProjectScopeKey) throw new Error("Project-local migration requires an active project scope.")
+      return migrationPlan(activeProjectScopeKey)
+    },
+    applyLegacyProjectMigrationPlan(plan) {
+      if (!project || !project.scopeKey) throw new Error("Project-local migration requires an active project scope.")
+      const planBlockers = validateMigrationPlan(plan)
+      if (planBlockers.length) {
+        return {
+          planVersion: MIGRATION_PLAN_VERSION,
+          projectScopeKey: plan.projectScopeKey ?? "unknown",
+          migrated: 0,
+          repaired: 0,
+          completedBeforeRun: 0,
+          skipped: 0,
+          blocked: planBlockers.length,
+          reindexNeeded: 0,
+          warnings: ["Migration plan failed validation before any files were changed."],
+          items: [{ id: "plan", state: "conflict", action: "blocked", blockers: planBlockers }],
+        }
+      }
+
+      const items: LegacyProjectMigrationApplyResult["items"] = []
+      const plannedDestinationWrites: MemoryRecord[] = []
+      const plannedTombstoneWrites: MemoryRecord[] = []
+      const plannedEmbeddingWrites: EmbeddingRecord[] = []
+      let migrated = 0
+      let repaired = 0
+      let completedBeforeRun = 0
+      let reindexNeeded = 0
+      const warnings: string[] = []
+
+      for (const item of plan.candidates) {
+        const blockers = [...item.blockers]
+        const projectLog = readLog(project).filter((record) => record.id === item.id)
+        const homeLog = readLog(home).filter((record) => record.id === item.id)
+        const hasPlannedDestination = projectLog.some((record) => exactRecord(record, item.destinationRecord))
+        const hasPlannedTombstone = homeLog.some((record) => exactRecord(record, item.sourceTombstone))
+        const hasHomeRecord = homeLog.length > 0
+        const projectConflict = projectLog.some((record) => !exactRecord(record, item.destinationRecord) && (record.text !== item.sourceRecord.text || record.status !== item.sourceRecord.status))
+        if (projectConflict) blockers.push("duplicate-active-project-record")
+        let state: LegacyProjectMigrationApplyResult["items"][number]["state"]
+        if (hasPlannedDestination && (hasPlannedTombstone || !hasHomeRecord)) {
+          state = "complete"
+        } else if (hasPlannedDestination && !hasPlannedTombstone && hasHomeRecord) {
+          state = "destination-written"
+        } else if (!hasPlannedDestination && !hasPlannedTombstone) {
+          const latestHome = homeLog.map((record, logIndex) => ({ entry: home, record, logIndex })).sort(compareLocatedMemory).at(-1)?.record
+          if (!latestHome) blockers.push("missing-source-home-record")
+          else if (sourceFingerprint(latestHome, home.paths.memoryPath) !== item.sourceFingerprint) blockers.push("source-fingerprint-mismatch")
+          state = blockers.length ? "conflict" : "not-started"
+        } else {
+          state = "conflict"
+        }
+        if (state === "conflict" && !blockers.length) blockers.push("current-state-differs-from-plan")
+        const action = blockers.length ? "blocked"
+          : state === "not-started" ? "migrate"
+          : state === "destination-written" ? "repair-tombstone"
+          : "skip-complete"
+        items.push({ id: item.id, state, action, blockers })
+        if (blockers.length) continue
+        if (state === "not-started") {
+          plannedDestinationWrites.push(item.destinationRecord)
+          plannedTombstoneWrites.push(item.sourceTombstone)
+          if (item.embeddingRecord) plannedEmbeddingWrites.push({ ...item.embeddingRecord, memoryUpdatedAt: item.destinationRecord.updatedAt, createdAt: new Date().toISOString() })
+          else reindexNeeded += 1
+          migrated += 1
+        } else if (state === "destination-written") {
+          plannedTombstoneWrites.push(item.sourceTombstone)
+          if (item.embeddingRecord) {
+            const hasEmbedding = (embeddingStore(project)?.readLog() ?? []).some((line) => (line as EmbeddingInvalidationRecord).type !== "invalidation" && sameEmbeddingIdentity(line as EmbeddingRecord, item.embeddingRecord!))
+            if (!hasEmbedding) plannedEmbeddingWrites.push({ ...item.embeddingRecord, memoryUpdatedAt: item.destinationRecord.updatedAt, createdAt: new Date().toISOString() })
+          } else reindexNeeded += 1
+          repaired += 1
+        } else {
+          completedBeforeRun += 1
+        }
+      }
+
+      const blocked = items.filter((item) => item.blockers.length).length
+      if (blocked) {
+        return { planVersion: MIGRATION_PLAN_VERSION, projectScopeKey: plan.projectScopeKey, migrated: 0, repaired: 0, completedBeforeRun, skipped: completedBeforeRun, blocked, reindexNeeded: 0, warnings, items }
+      }
+
+      appendTo(project, plannedDestinationWrites)
+      appendEmbeddingsTo(project, plannedEmbeddingWrites)
+      appendTo(home, plannedTombstoneWrites)
+      refresh(home)
+      refresh(project)
+
+      const latest = latestLocatedById()
+      const failed = plan.candidates.filter((item) => {
+        const located = latest.get(item.id)
+        return !located || located.entry !== project || !exactRecord(located.record, item.destinationRecord)
+      })
+      if (failed.length) warnings.push(`Post-write verification failed for: ${failed.map((item) => item.id).join(", ")}`)
+      if (reindexNeeded) warnings.push("Some migrated memories need semantic embeddings rebuilt; run memory-lane reindex if semantic recall should be refreshed immediately.")
+      return { planVersion: MIGRATION_PLAN_VERSION, projectScopeKey: plan.projectScopeKey, migrated, repaired, completedBeforeRun, skipped: completedBeforeRun, blocked: failed.length, reindexNeeded, warnings, items }
     },
     shouldCompact() {
       return existingEntries().some((entry) => shouldCompact(entry.paths.memoryPath))
