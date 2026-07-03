@@ -2,7 +2,7 @@
 
 ## Current state
 
-- Branch context: `main` is synced through `2788c4e docs: prepare v0.2.44 release validation (#91)`.
+- Branch context: `main` is synced through `6132e43 docs: record v0.2.44 release dogfood (#92)`.
 - Latest release: `v0.2.44` at tag `v0.2.44` / commit `2788c4e`; release workflow `28628495514` passed and published the release. Installed-artifact dogfood passed with a pre-upgrade baseline smoke, `memory-lane upgrade --yes`, a post-upgrade smoke, and Slice 2a CLI/MCP legacy diagnostics checks.
 - PR #85 merged as `6da6105`, completing Fable 5 Waves 1-3 hardening: JSON harness config merges/backups, fail-safe Claude/Codex hook initialization, bounded embedding settlement on CLI/MCP shutdown, compaction preserving invalid rows, stale embedding invalidation correctness, provider timeout validation, and docs/status sync.
 - PR #86 merged as `e2d4aec`, completing Fable 5 Wave 4 maintainability/UX follow-through: stale status docs were trued up, `.memory-lane-scope` is ignored by default, README/project-local docs note the scope file as local identity, and the Obsidian CLI command cluster was extracted without intended behavior changes.
@@ -46,7 +46,9 @@ Approved spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a
 Shipped behavior: detect active legacy home-stored project memories for the current project, surface bounded `status` / `doctor` diagnostics, and provide a dry-run-only migration preview without silent moves/deletes/approvals/consolidation.
 `v0.2.44` release and installed-artifact dogfood for Slice 2a are complete.
 Release validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
-Next recommended action is to pause project-local storage migration mutation until a fresh design gate, then choose either a review-first migration protocol slice or a separate backlog item with clearer user pressure.
+Current action is Slice 2b, a review-first legacy migration protocol design.
+Draft spec: `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
+Do not implement mutating migration until Fable 5 review is resolved and the user explicitly approves the spec.
 
 ## Load-bearing constraints
 
@@ -107,6 +109,7 @@ Next recommended action is to pause project-local storage migration mutation unt
 - Project-local storage default design: `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`
 - Project-local storage Slice 1 approved implementation spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`
 - Project-local storage Slice 2a legacy diagnostics shipped spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`
+- Project-local storage Slice 2b migration protocol draft spec: `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`
 - v0.2.44 release/dogfood validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`
 - Continuity routing/context hygiene release: PR #82 / `a808231`, shipped in `v0.2.43`
 - Retrieval currentness tie-break design: `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md`

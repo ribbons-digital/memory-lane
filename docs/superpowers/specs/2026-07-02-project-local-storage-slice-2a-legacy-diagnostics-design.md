@@ -10,7 +10,8 @@ Installed-artifact dogfood passed and is documented in `docs/superpowers/validat
 ## Entry gate
 
 This design and implementation gate is complete.
-Future mutating migration remains deferred to a later explicit design gate.
+The later explicit design gate is Slice 2b, drafted in `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
+Mutating migration remains deferred until that draft receives Fable 5 review and explicit user approval.
 
 ## Context
 
@@ -156,7 +157,8 @@ The dry-run command should:
 - respect `--project <path>`;
 - report not-applicable under explicit storage overrides.
 
-This command name leaves room for a future `--yes` execution path, but Slice 2a must not implement it.
+This command name leaves room for a future explicit execution path, but Slice 2a must not implement it.
+Slice 2b later narrows that path to `--apply-plan <path> --yes` after a reviewed plan file.
 
 ## Output and noise policy
 
@@ -183,20 +185,20 @@ If current command construction would auto-compact or auto-create stores, the im
 
 ## Future mutating migration protocol
 
-Confirmed migration is deferred to a later design gate.
-That later gate should specify:
+Confirmed migration is deferred to the Slice 2b design gate in `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
+That later gate specifies a review-first plan/apply protocol, including:
 
 - destination project-store revision creation;
-- source home-store tombstone or migrated-marker semantics;
+- source home-store tombstone semantics;
 - duplicate id conflict handling;
 - pending-review preservation;
-- embedding relocation or rebuild behavior;
+- embedding copy or rebuild guidance;
 - idempotency after partial failure;
-- rollback or recovery story;
+- recovery without rollback for append-only stores;
 - exact interaction with `updatedAt` winner semantics;
-- manual confirmation and dry-run-first UX.
+- manual confirmation through `--apply-plan <path> --yes` after plan-file review.
 
-Slice 2a should gather enough hazard information to make this later protocol safer.
+Slice 2a gathers enough hazard information to make this later protocol safer.
 
 ## Files likely to modify in implementation
 
@@ -274,3 +276,4 @@ PR #88 merged the full spec as `4f64367 docs: draft project-local slice 2a diagn
 The user then approved implementation from this spec.
 PR #89 merged the implementation as `96516ef feat(cli): add legacy project diagnostics dry run (#89)`.
 The implementation shipped in `v0.2.44` with installed-artifact dogfood documented in `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
+Slice 2b later drafted the mutating migration protocol in `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`; implementation remains blocked until Fable 5 review and explicit user approval.

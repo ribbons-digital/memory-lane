@@ -81,8 +81,11 @@ Slice plan:
    New project-scoped writes route project-side by default, global-scope preference/personal writes stay home-side, project/home reads merge with deterministic folding, existing ids mutate in their origin store, embeddings/compaction follow owning stores, and read-only CLI/MCP/plugin paths avoid fallback creation while respecting per-request project context.
 3. **Slice 2a - legacy project-memory diagnostics.** Shipped in `v0.2.44` / PR #89.
    Legacy home-stored project memories for the active project are detected through bounded `status` / `doctor` diagnostics, and `memory-lane migrate project-local --dry-run` provides a mutation-free preview; silent move/delete/approve/consolidate remains out of scope.
+4. **Slice 2b - review-first legacy migration protocol.** In design.
+   Draft spec: `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
+   This is a design gate only; implementation remains blocked until Fable 5 review and explicit user approval.
 
-Current release state: Slice 0 is merged and released in `v0.2.42`; Slice 1 is merged and released in `v0.2.43` alongside continuity routing/context hygiene PR #82 (`a808231`); Slice 2a is merged and released in `v0.2.44` from PR #89 (`96516ef`).
+Current release state: Slice 0 is merged and released in `v0.2.42`; Slice 1 is merged and released in `v0.2.43` alongside continuity routing/context hygiene PR #82 (`a808231`); Slice 2a is merged and released in `v0.2.44` from PR #89 (`96516ef`); Slice 2b is in design.
 Installed-artifact `v0.2.44` dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, CLI and MCP legacy diagnostics, dry-run migration preview, and non-dry-run migration refusal.
 Validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
 Fable 5 Waves 1-3 hardening merged in PR #85 as `6da6105`: config merge/backups, hook fail-safe initialization, bounded background embedding shutdown, invalid-row preserving compaction, stale embedding invalidation checks, provider timeout validation, MCP shutdown settling, and docs/status sync.
@@ -94,7 +97,8 @@ Approved Slice 2a spec: `docs/superpowers/specs/2026-07-02-project-local-storage
 Approved Slice 1 spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
 Release validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
 Confirmed migration and cross-store rescope moves remain deferred until a later design explicitly approves the mutation protocol.
-Next recommended action: pause project-local storage migration mutation until a fresh design gate, then choose either a review-first migration protocol slice or a separate backlog item with clearer user pressure.
+Current action: draft and review Slice 2b, a review-first legacy migration protocol design.
+Do not implement mutating migration until the Slice 2b spec is reviewed and explicitly approved.
 
 Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in `v0.2.41`; pause retrieval-ranking work unless new dogfood/eval evidence justifies another proposal.
 
