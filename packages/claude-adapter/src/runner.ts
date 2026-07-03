@@ -201,6 +201,11 @@ export async function runClaudeHookCommand(command: ClaudeCommand, options: RunC
         log("noop", { reason: "session-end summarization disabled" })
         return noopOutput("Pre-compact summarization is not enabled.", debug)
       }
+      if (summaryProvider.config.requireConfirmation !== false) {
+        log("noop", { reason: "pre-compact confirmation required" })
+        const message = "Pre-compact summarization requires memory.sessionEndSummary.requireConfirmation to be false because PreCompact hooks cannot ask for confirmation."
+        return parsed.input.trigger === "auto" ? noopOutput(message, debug) : systemMessageOutput(message)
+      }
 
       const transcriptMessages = parsed.input.messages?.length ? parsed.input.messages : readSessionMessagesFromTranscript(parsed.input.transcriptPath)
       const candidates = await handlePreCompact(options.engine, {

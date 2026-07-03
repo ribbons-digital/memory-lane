@@ -113,7 +113,7 @@ test("skips duplicate pre-compact summary for same adapter session and turn", as
   assert.deepStrictEqual(result, [])
 })
 
-test("uses pre-compact trigger as provenance fallback when turn id is absent", async () => {
+test("uses message digest as pre-compact provenance fallback when turn id is absent", async () => {
   const engine = makeEngine()
   const provider: LLMProvider = { complete: async () => "- Decisions made: fallback key." }
   const result = await handlePreCompact(engine, {
@@ -123,7 +123,30 @@ test("uses pre-compact trigger as provenance fallback when turn id is absent", a
     messages: [{ role: "user", content: "summarize before compact" }],
   }, { provider, adapter: "claude" })
   assert.strictEqual(result.length, 1)
-  assert.strictEqual(result[0].provenance.turnId, "manual")
+  assert.match(result[0].provenance.turnId ?? "", /^messages-[a-f0-9]{16}$/u)
+})
+
+test("keeps distinct pre-compact summaries without turn ids", async () => {
+  const engine = makeEngine()
+  engine.save({
+    text: "## Session Summary (2026-06-20)\n\n- Decisions made: first compact.",
+    category: "project",
+    scopeType: "global",
+    status: "pending",
+    source: "session-summary",
+    kind: "session_summary",
+    provenance: { adapter: "codex", lifecycleEvent: "pre_compact", sessionId: "s1", turnId: "messages-0eaf8bb3a48a6e9a" },
+  })
+  const provider: LLMProvider = { complete: async () => "- Decisions made: second compact." }
+  const result = await handlePreCompact(engine, {
+    cwd: "/tmp",
+    sessionId: "s1",
+    trigger: "auto",
+    messages: [{ role: "user", content: "second pre-compact context" }],
+  }, { provider, adapter: "codex" })
+  assert.strictEqual(result.length, 1)
+  assert.match(result[0].provenance.turnId ?? "", /^messages-[a-f0-9]{16}$/u)
+  assert.notEqual(result[0].provenance.turnId, "messages-0eaf8bb3a48a6e9a")
 })
 
 test("sets capturedAt from the latest valid message timestamp", async () => {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { analyzeSummaryHygiene, containsLikelySecret, normalizeMemoryText, type MemoryEngine, type MemoryFreshness, type MemoryLifecycleEvent, type MemoryRecord } from "@memory-lane/core"
 import { createOpenAICompatibleProvider } from "./llm-provider.js"
 import type { LLMProvider, PreCompactInput, PreCompactOptions, SessionEndInput, SessionEndOptions } from "./types.js"
@@ -175,6 +176,20 @@ function latestMessageTimestamp(messages: SessionEndInput["messages"]): string |
   return latest
 }
 
+function preCompactTurnIdFallback(input: SessionEndInput, trigger: string | undefined): string | undefined {
+  if (!input.messages.length) return trigger?.trim() || undefined
+  const digest = createHash("sha256")
+    .update(JSON.stringify(input.messages.map((message) => ({
+      role: message.role,
+      content: message.content,
+      timestamp: message.timestamp,
+      toolName: message.toolName,
+    }))))
+    .digest("hex")
+    .slice(0, 16)
+  return `messages-${digest}`
+}
+
 export interface SessionEndCandidate {
   text: string
   category: "project"
@@ -237,7 +252,7 @@ export async function handleSessionEnd(
       adapter: options.adapter ?? options.providerConfig?.provider ?? "manual",
       lifecycleEvent: options.lifecycleEvent ?? "session_end",
       sessionId: input.sessionId,
-      turnId: options.turnId ?? (options.lifecycleEvent === "pre_compact" ? options.trigger : undefined),
+      turnId: options.turnId ?? (options.lifecycleEvent === "pre_compact" ? preCompactTurnIdFallback(input, options.trigger) : undefined),
     },
     ...(capturedAt ? { freshness: { capturedAt } } : {}),
   }])

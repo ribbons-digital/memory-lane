@@ -630,6 +630,10 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         if (event?.trigger !== "auto" || isPiDebugEnabled()) notify(ctx, "Pre-compact summarization requires memory.sessionEndSummary.baseUrl and model.", "warning")
         return undefined
       }
+      if (summaryConfig.requireConfirmation !== false) {
+        if (event?.trigger !== "auto" || isPiDebugEnabled()) notify(ctx, "Pre-compact summarization requires memory.sessionEndSummary.requireConfirmation to be false because PreCompact hooks cannot ask for confirmation.", "warning")
+        return undefined
+      }
 
       const messages = sessionMessagesFromPiCompactionEvent(event)
       if (!messages.length) return undefined

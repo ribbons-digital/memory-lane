@@ -401,11 +401,30 @@ test("pre-compact auto trigger with missing provider remains quiet", async () =>
   assert.equal(engine.list({ all: true }).length, 0)
 })
 
+test("pre-compact does not summarize when confirmation is required", async () => {
+  await withMockSummaryProvider("- Decisions made: SHOULD_NOT_SAVE.", async (baseUrl) => {
+    const { engine, configPath } = engineWithConfigInTemp()
+    fs.writeFileSync(configPath, JSON.stringify({
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-model", requireConfirmation: true } },
+    }), "utf8")
+
+    const output = await runClaudeHookCommand("pre-compact", {
+      engine,
+      env: {} as NodeJS.ProcessEnv,
+      configPath,
+      payloadText: preCompactPayload(),
+    })
+
+    assert.equal(output, "{}")
+    assert.equal(engine.list({ all: true }).length, 0)
+  })
+})
+
 test("pre-compact saves pending provider summary without raw transcript", async () => {
   await withMockSummaryProvider("- Decisions made: preserve Claude compaction continuity.", async (baseUrl) => {
     const { engine, configPath } = engineWithConfigInTemp()
     fs.writeFileSync(configPath, JSON.stringify({
-      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-model", requireConfirmation: true } },
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-model", requireConfirmation: false } },
     }), "utf8")
 
     const output = await runClaudeHookCommand("pre-compact", {

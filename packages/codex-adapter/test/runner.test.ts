@@ -283,10 +283,27 @@ test("session-end saves confirmed provider summary without raw transcript", asyn
   })
 })
 
+test("pre-compact does not summarize when confirmation is required", async () => {
+  await withMockSummaryServer("- Decisions made: SHOULD_NOT_SAVE.", async (baseUrl, requests) => {
+    const { engine, configPath } = engineFixture()
+    enableSessionEndSummary(configPath, baseUrl, true)
+
+    const output = await runCodexHookCommand("pre-compact", {
+      engine,
+      configPath,
+      payloadText: preCompactPayload({ messages: [{ role: "user", content: "hello" }] }),
+    })
+
+    assert.equal(output, "{}")
+    assert.equal(requests.length, 0)
+    assert.equal(engine.list({ all: true }).length, 0)
+  })
+})
+
 test("pre-compact saves pending provider summary from transcript", async () => {
   await withMockSummaryServer("- Decisions made: preserve Codex compaction continuity.", async (baseUrl, requests) => {
     const { engine, configPath } = engineFixture()
-    enableSessionEndSummary(configPath, baseUrl, true)
+    enableSessionEndSummary(configPath, baseUrl, false)
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-codex-precompact-"))
     const transcriptPath = path.join(dir, "transcript.jsonl")
     fs.writeFileSync(transcriptPath, [

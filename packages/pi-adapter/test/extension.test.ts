@@ -573,13 +573,42 @@ test("memory session-summary cancellation saves nothing", async () => {
   assert.ok(notifications.some((n) => n.message.includes("cancelled")))
 })
 
+test("session_before_compact skips summarization when confirmation is required", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  await withMockSummaryServer("## Decisions made\n- SHOULD_NOT_SAVE.", async (baseUrl, prompts) => {
+    fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
+      semantic: { enabled: false },
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-summary", requireConfirmation: true } },
+    }))
+    const pi = createFakePi()
+    memoryLaneExtension(pi)
+    const notifications: FakeNotification[] = []
+    const ctx = ctxWithUi(env.dir, { notifications })
+
+    const result = await runEvent(pi, "session_before_compact", {
+      trigger: "auto",
+      turnId: "turn-compact",
+      preparation: {
+        messagesToSummarize: [{ role: "user", content: [{ type: "text", text: "RAW_PI_PRECOMPACT_USER" }] }],
+        turnPrefixMessages: [],
+      },
+    }, ctx)
+
+    assert.equal(result, undefined)
+    assert.equal(prompts.length, 0)
+    assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
+    assert.equal(notifications.length, 0)
+  })
+})
+
 test("session_before_compact saves pending pi summary without overriding compaction", async () => {
   const env = makeTempEnv()
   cleanup = env.restore
   await withMockSummaryServer("## Decisions made\n- Pi pre-compact summary survived.", async (baseUrl, prompts) => {
     fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
       semantic: { enabled: false },
-      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-summary" } },
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-summary", requireConfirmation: false } },
     }))
     const pi = createFakePi()
     memoryLaneExtension(pi)
