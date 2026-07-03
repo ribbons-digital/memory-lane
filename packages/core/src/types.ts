@@ -102,18 +102,25 @@ export interface LegacyProjectMemorySample {
 export interface LegacyProjectMigrationPlanItem {
   id: string
   status: Extract<MemoryStatus, "approved" | "pending">
+  /** Hash proving the reviewed source record still matches before first apply. */
   sourceFingerprint: string
+  /** Active legacy home-side record captured during plan generation. */
   sourceRecord: MemoryRecord
+  /** Project-side active revision to append during apply. */
   destinationRecord: MemoryRecord
+  /** Home-side deleted revision to append after the destination exists. */
   sourceTombstone: MemoryRecord
   embeddingAction: "copy-compatible" | "rebuild-needed"
+  /** Compatible embedding copy to append project-side, when available. */
   embeddingRecord?: EmbeddingRecord
   blockers: string[]
   hazards: string[]
 }
 
+/** Reviewable plan for migrating legacy home-stored project memories into project-local storage. */
 export interface LegacyProjectMigrationPlan {
   planVersion: 1
+  /** Memory Lane producer version used for plan provenance and diagnostics. */
   producerVersion: string
   generatedAt: string
   migrationBase: string
@@ -134,6 +141,7 @@ export interface LegacyProjectMigrationPlan {
   }
 }
 
+/** Result of applying a reviewed legacy project-local migration plan. */
 export interface LegacyProjectMigrationApplyResult {
   planVersion: 1
   projectScopeKey: string
@@ -726,7 +734,7 @@ export interface SemanticMemoryConfig {
 export interface MemoryEngineConfig {
   memoryPath?: string
   embeddingsPath?: string
-  /** Optional storage facade. When provided, it owns memory, embedding, compaction, diagnostics, legacy project-memory diagnostics, and continuity-baseline storage paths. */
+  /** Optional storage facade. When provided, it owns memory, embedding, compaction, diagnostics, legacy project-memory diagnostics/migration, and continuity-baseline storage paths. */
   storage?: MemoryEngineStorage
   /** Set false for read-only engine construction so startup does not compact or rewrite stores. */
   autoCompact?: boolean

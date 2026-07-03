@@ -2,7 +2,7 @@
 
 ## Status
 
-Approved for implementation.
+Approved and implemented in this slice.
 Fable 5 reviewed the draft, blockers were resolved, and the user approved implementation.
 
 Slice 0 shipped in `v0.2.42` as the storage facade proof.
@@ -10,8 +10,7 @@ Slice 1 shipped in `v0.2.43` as project-local default writes for new project-sco
 Slice 2a shipped in `v0.2.44` as read-only legacy diagnostics and dry-run preview.
 
 Slice 2b defines the mutating migration protocol required before Memory Lane may move legacy home-stored project memories into project-local storage.
-This document is a design gate only.
-It must not ship mutation code by itself.
+The implementation is limited to this reviewed plan/apply protocol.
 
 ## Entry gate
 
@@ -303,19 +302,19 @@ It does not implement general cross-store `rescope` / `move` semantics.
 
 A future rescope slice can reuse the plan/apply pattern, but it must make separate decisions because rescope changes the memory scope as well as the storage side.
 
-## Files likely to change in implementation
+## Implementation files
 
-A later implementation slice will likely touch:
+The implementation touched:
 
 - `packages/core/src/storage-facade.ts`;
 - `packages/core/src/engine.ts`;
-- `packages/core/src/storage-locations.ts`;
+- `packages/core/src/types.ts`;
 - `packages/cli/src/index.ts`;
 - `packages/cli/src/formatters.ts`;
 - `packages/core/test/storage-facade.test.ts`;
 - `packages/cli/test/cli.test.ts`;
-- `packages/mcp-server/test/handlers.test.ts` if MCP status shape needs a lock;
 - `README.md`;
+- `docs/2026-05-20-memory-lane-design.md`;
 - `skills/memory-lane/SKILL.md`;
 - `skills/memory-lane/REFERENCE.md`;
 - `ROADMAP.md`;
@@ -323,7 +322,7 @@ A later implementation slice will likely touch:
 
 ## Required implementation tests
 
-A later implementation slice should include tests for:
+The implementation should cover:
 
 1. plan generation for one approved legacy candidate;
 2. plan generation preserving pending status;

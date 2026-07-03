@@ -893,10 +893,12 @@ export class MemoryEngine {
     })
   }
 
+  /** Create a reviewable plan for moving active legacy home-stored project memories into project-local storage. */
   createLegacyProjectMigrationPlan(): LegacyProjectMigrationPlan {
     return this.storage.createLegacyProjectMigrationPlan(this.scope?.key)
   }
 
+  /** Apply a reviewed legacy project migration plan; callers should require explicit user confirmation first. */
   applyLegacyProjectMigrationPlan(plan: LegacyProjectMigrationPlan): LegacyProjectMigrationApplyResult {
     return this.storage.applyLegacyProjectMigrationPlan(plan)
   }

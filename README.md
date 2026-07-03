@@ -400,8 +400,8 @@ Atomic memory, embedding, continuity-baseline, and compaction writes use short f
 Compaction removes folded deleted/rejected records and stale embeddings, but it preserves malformed or schema-invalid JSONL rows so diagnostics remain available instead of silently erasing corrupt input.
 The internal storage facade merges the active project store with the home store for recall, list, review, continuity, and status surfaces.
 Existing records keep their origin store for normal edits/review actions so one logical memory id is not split across files.
-Advanced `@memory-lane/core` consumers can import `MemoryEngineStorage`, `createSingleStoreEngineStorage`, and `createTwoTierEngineStorage` when they need to inject storage that owns memory, embedding, compaction, diagnostics, legacy project-memory diagnostics, and continuity-baseline paths.
-Custom facade implementations can also import `EmbeddingLine` for `appendEmbedding()` inputs and should return `LegacyProjectMemoryDiagnostics` from `legacyProjectMemoryDiagnostics()`.
+Advanced `@memory-lane/core` consumers can import `MemoryEngineStorage`, `createSingleStoreEngineStorage`, and `createTwoTierEngineStorage` when they need to inject storage that owns memory, embedding, compaction, diagnostics, legacy project-memory diagnostics, legacy project migration planning/apply, and continuity-baseline paths.
+Custom facade implementations can also import `EmbeddingLine` for `appendEmbedding()` inputs, should return `LegacyProjectMemoryDiagnostics` from `legacyProjectMemoryDiagnostics()`, and should implement explicit reviewed migration plan methods when project-local migration is applicable.
 
 Embeddings (when configured) are paired with the owning memory store: home memories use `~/.memory-lane/embeddings.jsonl`, and project-local memories use `<project-root>/.memory-lane/embeddings.jsonl`. When a memory changes, recall ignores only embeddings created before that memory's latest invalidation; newer embeddings for the same memory id can be used without a full reindex.
 
@@ -830,9 +830,14 @@ const engineWithStorage = new MemoryEngine({ storage })
 // Programmatic integrations that want CLI-style default two-tier storage should wire the resolver and facade explicitly.
 const paths = resolveEngineStoragePaths({ cwd: process.cwd(), env: process.env })
 const tieredStorage = paths.kind === "default-two-tier"
-  ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey)
+  ? createTwoTierEngineStorage(paths.home, paths.project, paths.projectScopeKey, { producerVersion: "my-integration/1.0.0" })
   : createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath)
 const tieredEngine = new MemoryEngine({ storage: tieredStorage, autoCompact: false, configPath: paths.configPath })
+
+// Review-first legacy project migration APIs mirror the CLI plan/apply flow.
+const plan = tieredEngine.createLegacyProjectMigrationPlan()
+// Persist and review the plan before applying it with explicit user confirmation.
+const result = tieredEngine.applyLegacyProjectMigrationPlan(plan)
 
 // Save
 engine.save({ text: "use pnpm for all installs", status: "approved" })

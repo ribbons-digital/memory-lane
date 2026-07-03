@@ -109,7 +109,7 @@ The slice is limited to reviewed plan generation, explicit `--apply-plan <path> 
 - Project-local storage default design: `docs/superpowers/specs/2026-06-30-project-local-storage-default-design.md`
 - Project-local storage Slice 1 approved implementation spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`
 - Project-local storage Slice 2a legacy diagnostics shipped spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`
-- Project-local storage Slice 2b migration protocol draft spec: `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`
+- Project-local storage Slice 2b migration protocol spec: `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`
 - v0.2.44 release/dogfood validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`
 - Continuity routing/context hygiene release: PR #82 / `a808231`, shipped in `v0.2.43`
 - Retrieval currentness tie-break design: `docs/superpowers/specs/2026-06-30-retrieval-currentness-eval-scope-design.md`

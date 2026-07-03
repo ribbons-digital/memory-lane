@@ -31,7 +31,9 @@ export interface MemoryEngineStorage {
   listEmbeddingInvalidations(): EmbeddingInvalidationRecord[]
   /** Return read-only diagnostics for active current-project memories that still live in the home store. */
   legacyProjectMemoryDiagnostics(projectScopeKey?: string): LegacyProjectMemoryDiagnostics
+  /** Create a reviewable plan for moving active legacy home-stored project memories into the project store. */
   createLegacyProjectMigrationPlan(projectScopeKey?: string): LegacyProjectMigrationPlan
+  /** Apply a reviewed legacy project migration plan with explicit project/home store targeting. */
   applyLegacyProjectMigrationPlan(plan: LegacyProjectMigrationPlan): LegacyProjectMigrationApplyResult
   shouldCompact(): boolean
   compact(): CompactReport
