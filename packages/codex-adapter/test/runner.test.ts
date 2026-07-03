@@ -100,6 +100,19 @@ function sessionEndPayload(confirmed?: boolean): string {
   })
 }
 
+function preCompactPayload(fields: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    hook_event_name: "PreCompact",
+    session_id: "session-1",
+    turn_id: "turn-1",
+    cwd: process.cwd(),
+    transcript_path: null,
+    model: "gpt-5-codex",
+    trigger: "auto",
+    ...fields,
+  })
+}
+
 async function withMockSummaryServer<T>(summary: string, fn: (baseUrl: string, requests: unknown[]) => Promise<T>): Promise<T> {
   const requests: unknown[] = []
   const server = http.createServer((req, res) => {
@@ -267,6 +280,101 @@ test("session-end saves confirmed provider summary without raw transcript", asyn
     assert.match(saved[0].text, /use pnpm/)
     assert.doesNotMatch(saved[0].text, /RAW_TRANSCRIPT_SHOULD_NOT_BE_SAVED/)
     assert.doesNotMatch(fs.readFileSync(memoryPath, "utf8"), /RAW_TRANSCRIPT_SHOULD_NOT_BE_SAVED/)
+  })
+})
+
+test("pre-compact saves pending provider summary from transcript", async () => {
+  await withMockSummaryServer("- Decisions made: preserve Codex compaction continuity.", async (baseUrl, requests) => {
+    const { engine, configPath } = engineFixture()
+    enableSessionEndSummary(configPath, baseUrl, true)
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-codex-precompact-"))
+    const transcriptPath = path.join(dir, "transcript.jsonl")
+    fs.writeFileSync(transcriptPath, [
+      JSON.stringify({ role: "user", content: "RAW_PRECOMPACT_USER" }),
+      JSON.stringify({ role: "assistant", content: "Durable outcome happened." }),
+    ].join("\n"))
+
+    const output = await runCodexHookCommand("pre-compact", {
+      engine,
+      configPath,
+      env: { MEMORY_LANE_HOOK_DEBUG: "1" } as NodeJS.ProcessEnv,
+      payloadText: preCompactPayload({ transcript_path: transcriptPath }),
+    })
+
+    const parsed = JSON.parse(output)
+    assert.match(parsed.systemMessage, /suggested 1 pending memory for review/u)
+    assert.equal(requests.length, 1)
+    const saved = engine.list({ all: true })
+    assert.equal(saved.length, 1)
+    assert.equal(saved[0].status, "pending")
+    assert.equal(saved[0].kind, "session_summary")
+    assert.equal(saved[0].source, "session-summary")
+    assert.equal(saved[0].provenance?.adapter, "codex")
+    assert.equal(saved[0].provenance?.lifecycleEvent, "pre_compact")
+    assert.equal(saved[0].provenance?.turnId, "turn-1")
+    assert.match(saved[0].text, /preserve Codex compaction continuity/u)
+    assert.doesNotMatch(saved[0].text, /RAW_PRECOMPACT_USER/u)
+  })
+})
+
+test("pre-compact auto trigger with missing provider remains quiet", async () => {
+  const { engine, configPath } = engineFixture()
+  writeConfig(configPath, {
+    memory: {
+      sessionEndSummary: {
+        enabled: true,
+        provider: "openai-compatible",
+        model: "summary-model",
+      },
+    },
+  } as any)
+
+  const output = await runCodexHookCommand("pre-compact", {
+    engine,
+    configPath,
+    payloadText: preCompactPayload({ messages: [{ role: "user", content: "hello" }] }),
+  })
+
+  assert.equal(output, "{}")
+  assert.equal(engine.list({ all: true }).length, 0)
+})
+
+test("pre-compact opt-out remains quiet", async () => {
+  await withMockSummaryServer("SHOULD_NOT_RUN", async (baseUrl, requests) => {
+    const { engine, configPath } = engineFixture()
+    writeConfig(configPath, {
+      memory: {
+        sessionEndSummary: { enabled: true, provider: "openai-compatible", baseUrl, model: "summary-model" },
+        preCompactSummary: { enabled: false },
+      },
+    } as any)
+
+    const output = await runCodexHookCommand("pre-compact", {
+      engine,
+      configPath,
+      payloadText: preCompactPayload({ messages: [{ role: "user", content: "hello" }] }),
+    })
+
+    assert.equal(output, "{}")
+    assert.equal(requests.length, 0)
+    assert.equal(engine.list({ all: true }).length, 0)
+  })
+})
+
+test("pre-compact with unreadable transcript fails open without provider call", async () => {
+  await withMockSummaryServer("SHOULD_NOT_RUN", async (baseUrl, requests) => {
+    const { engine, configPath } = engineFixture()
+    enableSessionEndSummary(configPath, baseUrl, true)
+
+    const output = await runCodexHookCommand("pre-compact", {
+      engine,
+      configPath,
+      payloadText: preCompactPayload({ transcript_path: "/tmp/does-not-exist-memory-lane-transcript.jsonl" }),
+    })
+
+    assert.equal(output, "{}")
+    assert.equal(requests.length, 0)
+    assert.equal(engine.list({ all: true }).length, 0)
   })
 })
 

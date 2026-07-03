@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert"
 import { MemoryEngine } from "@memory-lane/core"
-import { handleSessionEnd } from "../src/session-end.js"
+import { handlePreCompact, handleSessionEnd } from "../src/session-end.js"
 import type { LLMProvider } from "../src/types.js"
 
 function makeEngine(): MemoryEngine {
@@ -62,6 +62,68 @@ test("returns a pending session-summary candidate", async () => {
   assert.equal(candidate.freshness, undefined)
   assert.strictEqual(candidate.provenance.lifecycleEvent, "session_end")
   assert.strictEqual(candidate.provenance.sessionId, "s1")
+})
+
+test("returns a pending pre-compact session-summary candidate", async () => {
+  const engine = makeEngine()
+  let captured = ""
+  const provider: LLMProvider = {
+    async complete(prompt) {
+      captured = prompt
+      return "- Decisions made: keep pre-compact continuity."
+    },
+  }
+  const result = await handlePreCompact(engine, {
+    cwd: "/tmp",
+    sessionId: "s-pre",
+    turnId: "t-pre",
+    trigger: "auto",
+    messages: [{ role: "user", content: "continue after compaction" }],
+  }, { provider, adapter: "codex" })
+  assert.strictEqual(result.length, 1)
+  assert.match(captured, /before the host compacts/u)
+  assert.match(captured, /continue after compaction/u)
+  assert.strictEqual(result[0].kind, "session_summary")
+  assert.strictEqual(result[0].status, "pending")
+  assert.strictEqual(result[0].provenance.adapter, "codex")
+  assert.strictEqual(result[0].provenance.lifecycleEvent, "pre_compact")
+  assert.strictEqual(result[0].provenance.sessionId, "s-pre")
+  assert.strictEqual(result[0].provenance.turnId, "t-pre")
+})
+
+test("skips duplicate pre-compact summary for same adapter session and turn", async () => {
+  const engine = makeEngine()
+  engine.save({
+    text: "## Session Summary (2026-06-20)\n\n- Decisions made: previous content.",
+    category: "project",
+    scopeType: "global",
+    status: "pending",
+    source: "session-summary",
+    kind: "session_summary",
+    provenance: { adapter: "codex", lifecycleEvent: "pre_compact", sessionId: "s1", turnId: "t1" },
+  })
+  const provider: LLMProvider = { complete: async () => "- Decisions made: new content that would otherwise be distinct." }
+  const result = await handlePreCompact(engine, {
+    cwd: "/tmp",
+    sessionId: "s1",
+    turnId: "t1",
+    trigger: "auto",
+    messages: [{ role: "user", content: "summarize before compact" }],
+  }, { provider, adapter: "codex" })
+  assert.deepStrictEqual(result, [])
+})
+
+test("uses pre-compact trigger as provenance fallback when turn id is absent", async () => {
+  const engine = makeEngine()
+  const provider: LLMProvider = { complete: async () => "- Decisions made: fallback key." }
+  const result = await handlePreCompact(engine, {
+    cwd: "/tmp",
+    sessionId: "s-trigger",
+    trigger: "manual",
+    messages: [{ role: "user", content: "summarize before compact" }],
+  }, { provider, adapter: "claude" })
+  assert.strictEqual(result.length, 1)
+  assert.strictEqual(result[0].provenance.turnId, "manual")
 })
 
 test("sets capturedAt from the latest valid message timestamp", async () => {

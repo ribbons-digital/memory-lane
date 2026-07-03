@@ -706,6 +706,10 @@ export interface SessionEndSummaryConfig {
   includeToolOutputs?: boolean
 }
 
+export interface PreCompactSummaryConfig {
+  enabled?: boolean
+}
+
 export interface SemanticMemoryConfig {
   semantic: {
     enabled: boolean
@@ -727,6 +731,7 @@ export interface SemanticMemoryConfig {
   memory?: {
     handoffMode?: HandoffMode
     sessionEndSummary?: SessionEndSummaryConfig
+    preCompactSummary?: PreCompactSummaryConfig
     contextPolicy?: MemoryContextPolicyConfig
   }
 }

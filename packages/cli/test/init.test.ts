@@ -535,6 +535,8 @@ esac
     assert.equal(config.hooks.Stop.length, 2)
     assert.equal(config.hooks.Stop[0].hooks[0].command, "echo keep-me")
     assert.equal(config.hooks.Stop[1].hooks[0].command, `${binaryPath} claude stop`)
+    assert.equal(config.hooks.PreCompact[0].matcher, "manual|auto")
+    assert.equal(config.hooks.PreCompact[0].hooks[0].command, `${binaryPath} claude pre-compact`)
     assert.ok(fs.existsSync(`${configPath}.memory-lane.bak`))
   })
 

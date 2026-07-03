@@ -60,6 +60,19 @@ Start with project-level `.codex/hooks.json` while testing Memory Lane in one re
         ]
       }
     ],
+    "PreCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memory-lane codex pre-compact",
+            "timeoutSec": 30,
+            "statusMessage": "Saving compaction summary"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Bash|shell:*",
@@ -85,7 +98,7 @@ Codex tool matcher names can vary by version. If `PostToolUse` does not fire, ad
 
 `UserPromptSubmit` uses the shared prompt route decision before Codex processes the prompt. Low-signal prompts such as `ok` or `thanks` inject nothing, memory-management prompts get list/status/review guidance, broad project-position or next-work prompts get continuity guidance without ordinary recall bodies, and eligible ordinary or topic-specific prompts can receive relevant approved memories within strict item and character limits.
 
-`Stop` and `PostToolUse` do not inject context. They save concise memories externally and are silent by default. `Stop` only runs session-summary automation when the latest user message explicitly asks for it, such as "remember this session", "save a session summary", or "summarize this session to memory". If hook initialization fails because storage, config, or plugins cannot be loaded, Memory Lane returns `{}` and exits successfully so Codex is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr.
+`Stop`, `PreCompact`, and `PostToolUse` do not inject context. They save concise memories externally and are silent by default. `PreCompact` can save a pending session summary immediately before Codex compacts context when `memory.sessionEndSummary.enabled` is configured; set `memory.preCompactSummary.enabled` to `false` to opt out. `Stop` only runs session-summary automation when the latest user message explicitly asks for it, such as "remember this session", "save a session summary", or "summarize this session to memory". If hook initialization fails because storage, config, or plugins cannot be loaded, Memory Lane returns `{}` and exits successfully so Codex is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr.
 
 ## Session-end summarization
 

@@ -27,6 +27,9 @@ export const DEFAULT_CONFIG: SemanticMemoryConfig = {
       includeToolOutputs: false,
       maxTokens: 800,
     },
+    preCompactSummary: {
+      enabled: undefined,
+    },
     contextPolicy: {
       mode: "selective",
       maxItems: { sessionStart: 4, prompt: 6 },
@@ -144,6 +147,7 @@ export function validateConfig(config: unknown): SemanticMemoryConfig {
   validateHandoffMode(memory?.handoffMode)
   validateContextPolicyConfig(memory?.contextPolicy)
   validateSessionEndSummaryConfig(memory?.sessionEndSummary)
+  validatePreCompactSummaryConfig(memory?.preCompactSummary)
   validatePluginsConfig(root.plugins, root.pluginConfig)
   return config as SemanticMemoryConfig
 }
@@ -201,6 +205,12 @@ function validateSessionEndSummaryConfig(v: unknown): void {
   if (o.timeoutMs !== undefined) positiveNonZeroInt(o.timeoutMs, "memory.sessionEndSummary.timeoutMs")
   if (o.requireConfirmation !== undefined) bool(o.requireConfirmation, "memory.sessionEndSummary.requireConfirmation")
   if (o.includeToolOutputs !== undefined) bool(o.includeToolOutputs, "memory.sessionEndSummary.includeToolOutputs")
+}
+
+function validatePreCompactSummaryConfig(v: unknown): void {
+  if (v === undefined) return
+  const o = obj(v, "memory.preCompactSummary")
+  if (o.enabled !== undefined) bool(o.enabled, "memory.preCompactSummary.enabled")
 }
 
 function validatePluginsConfig(plugins: unknown, pluginConfig: unknown): void {

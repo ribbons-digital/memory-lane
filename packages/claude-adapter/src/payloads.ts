@@ -1,6 +1,6 @@
-import type { PostToolUseInput, SessionEndInput, SessionMessage, SessionStartInput, StopInput, UserPromptInput } from "@memory-lane/lifecycle"
+import type { PostToolUseInput, PreCompactInput, SessionEndInput, SessionMessage, SessionStartInput, StopInput, UserPromptInput } from "@memory-lane/lifecycle"
 
-export type ClaudeCommand = "user-prompt-submit" | "stop" | "post-tool-use" | "session-start" | "session-end"
+export type ClaudeCommand = "user-prompt-submit" | "stop" | "post-tool-use" | "session-start" | "session-end" | "pre-compact"
 
 export type ParsedClaudePayload =
   | { kind: "user-prompt-submit"; hookEventName: "UserPromptSubmit"; input: UserPromptInput }
@@ -8,6 +8,7 @@ export type ParsedClaudePayload =
   | { kind: "post-tool-use"; hookEventName: "PostToolUse"; input: PostToolUseInput }
   | { kind: "session-start"; hookEventName: "SessionStart"; input: SessionStartInput }
   | { kind: "session-end"; hookEventName: "SessionEnd"; input: SessionEndInput; confirmed?: boolean; reason?: string }
+  | { kind: "pre-compact"; hookEventName: "PreCompact"; input: PreCompactInput }
   | { kind: "invalid"; reason: string }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -126,6 +127,18 @@ export function parseClaudePayload(value: unknown): ParsedClaudePayload {
       },
       confirmed: booleanField(obj, "confirmed"),
       reason: stringField(obj, "reason"),
+    }
+  }
+
+  if (event === "PreCompact") {
+    return {
+      kind: "pre-compact",
+      hookEventName: event,
+      input: {
+        ...context,
+        trigger: stringField(obj, "trigger"),
+        messages: parseSessionMessages(obj.messages),
+      },
     }
   }
 

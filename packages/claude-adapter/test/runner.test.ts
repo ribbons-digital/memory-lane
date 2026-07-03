@@ -123,6 +123,23 @@ function sessionEndPayload(overrides: Record<string, unknown> = {}): string {
   })
 }
 
+function preCompactPayload(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    hook_event_name: "PreCompact",
+    session_id: "session-1",
+    turn_id: "turn-1",
+    cwd: process.cwd(),
+    transcript_path: null,
+    permission_mode: "default",
+    trigger: "auto",
+    messages: [
+      { role: "user", content: "RAW_PRECOMPACT_USER" },
+      { role: "assistant", content: "Durable pre-compact outcome." },
+    ],
+    ...overrides,
+  })
+}
+
 test("session-start emits Claude additionalContext output", async () => {
   const engine = engineInTemp()
   engine.save({ text: "User likes concise replies", category: "preference", scopeType: "global", status: "approved", kind: "preference" })
@@ -365,6 +382,51 @@ test("session-end saves confirmed provider summary without raw transcript", asyn
     assert.equal(saved[0].provenance?.lifecycleEvent, "session_end")
     assert.match(saved[0].text, /Sanitized Claude summary/)
     assert.doesNotMatch(saved[0].text, /RAW_USER_SENTINEL|RAW_ASSISTANT_SENTINEL|RAW_TOOL_SENTINEL/)
+  })
+})
+
+test("pre-compact auto trigger with missing provider remains quiet", async () => {
+  const { engine, configPath } = engineWithConfigInTemp()
+  fs.writeFileSync(configPath, JSON.stringify({
+    memory: { sessionEndSummary: { enabled: true, model: "mock-model" } },
+  }), "utf8")
+
+  const output = await runClaudeHookCommand("pre-compact", {
+    engine,
+    configPath,
+    payloadText: preCompactPayload(),
+  })
+
+  assert.equal(output, "{}")
+  assert.equal(engine.list({ all: true }).length, 0)
+})
+
+test("pre-compact saves pending provider summary without raw transcript", async () => {
+  await withMockSummaryProvider("- Decisions made: preserve Claude compaction continuity.", async (baseUrl) => {
+    const { engine, configPath } = engineWithConfigInTemp()
+    fs.writeFileSync(configPath, JSON.stringify({
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-model", requireConfirmation: true } },
+    }), "utf8")
+
+    const output = await runClaudeHookCommand("pre-compact", {
+      engine,
+      env: { MEMORY_LANE_HOOK_DEBUG: "1" } as NodeJS.ProcessEnv,
+      configPath,
+      payloadText: preCompactPayload(),
+    })
+
+    const parsed = JSON.parse(output)
+    assert.match(parsed.systemMessage, /suggested 1 pending memory for review/u)
+    const saved = engine.list({ all: true })
+    assert.equal(saved.length, 1)
+    assert.equal(saved[0].status, "pending")
+    assert.equal(saved[0].source, "session-summary")
+    assert.equal(saved[0].kind, "session_summary")
+    assert.equal(saved[0].provenance?.adapter, "claude")
+    assert.equal(saved[0].provenance?.lifecycleEvent, "pre_compact")
+    assert.equal(saved[0].provenance?.turnId, "turn-1")
+    assert.match(saved[0].text, /preserve Claude compaction continuity/u)
+    assert.doesNotMatch(saved[0].text, /RAW_PRECOMPACT_USER/u)
   })
 })
 

@@ -173,6 +173,19 @@ function mergeHooks(existing: Record<string, unknown>, harness: "claude" | "code
         ],
       },
     ],
+    PreCompact: [
+      {
+        matcher: "manual|auto",
+        hooks: [
+          {
+            type: "command",
+            command: `${binaryPath} ${harness} pre-compact`,
+            [timeoutKey]: 30,
+            statusMessage: "Saving compaction summary",
+          },
+        ],
+      },
+    ],
     PostToolUse: [
       {
         matcher: postToolMatcher,

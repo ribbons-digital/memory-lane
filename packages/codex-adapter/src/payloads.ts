@@ -1,6 +1,6 @@
-import type { PostToolUseInput, SessionEndInput, SessionMessage, SessionStartInput, StopInput, UserPromptInput } from "@memory-lane/lifecycle"
+import type { PostToolUseInput, PreCompactInput, SessionEndInput, SessionMessage, SessionStartInput, StopInput, UserPromptInput } from "@memory-lane/lifecycle"
 
-export type CodexCommand = "user-prompt-submit" | "stop" | "post-tool-use" | "session-start" | "session-end"
+export type CodexCommand = "user-prompt-submit" | "stop" | "post-tool-use" | "session-start" | "session-end" | "pre-compact"
 
 export type ParsedCodexPayload =
   | { kind: "user-prompt-submit"; hookEventName: "UserPromptSubmit"; input: UserPromptInput }
@@ -8,6 +8,7 @@ export type ParsedCodexPayload =
   | { kind: "post-tool-use"; hookEventName: "PostToolUse"; input: PostToolUseInput }
   | { kind: "session-start"; hookEventName: "SessionStart"; input: SessionStartInput }
   | { kind: "session-end"; hookEventName: "SessionEnd"; input: SessionEndInput; confirmed?: boolean }
+  | { kind: "pre-compact"; hookEventName: "PreCompact"; input: PreCompactInput }
   | { kind: "invalid"; reason: string }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -124,6 +125,18 @@ export function parseCodexPayload(value: unknown): ParsedCodexPayload {
       input: {
         ...context,
         messages,
+      },
+    }
+  }
+
+  if (event === "PreCompact") {
+    return {
+      kind: "pre-compact",
+      hookEventName: event,
+      input: {
+        ...context,
+        trigger: stringField(obj, "trigger"),
+        messages: parseSessionMessages(obj.messages) ?? [],
       },
     }
   }

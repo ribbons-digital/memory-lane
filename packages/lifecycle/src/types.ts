@@ -1,4 +1,4 @@
-import type { ContinuityHintCode, MemoryRecord, MemorySource, ResolvedContinuityBaseline, SaveResult } from "@memory-lane/core"
+import type { ContinuityHintCode, MemoryLifecycleEvent, MemoryRecord, MemorySource, ResolvedContinuityBaseline, SaveResult } from "@memory-lane/core"
 
 export interface LifecycleContext {
   cwd: string
@@ -143,4 +143,14 @@ export interface SessionEndOptions {
   confirmed?: boolean
   includeToolOutputs?: boolean
   adapter?: string
+  lifecycleEvent?: MemoryLifecycleEvent
+  trigger?: string
+  turnId?: string
 }
+
+export interface PreCompactInput extends LifecycleContext {
+  trigger?: string
+  messages?: SessionMessage[]
+}
+
+export type PreCompactOptions = SessionEndOptions

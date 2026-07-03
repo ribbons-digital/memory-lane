@@ -1008,9 +1008,9 @@ Commands:
   migrate project-local --apply-plan <path> --yes
                   Apply a reviewed project-local migration plan
   mcp              Run the bundled Memory Lane MCP server over stdio
-  claude <user-prompt-submit|stop|post-tool-use|session-start|session-end>
+  claude <user-prompt-submit|stop|post-tool-use|session-start|session-end|pre-compact>
                   Run a Claude Code hook adapter command; reads hook JSON from stdin
-  codex <user-prompt-submit|stop|post-tool-use|session-start>
+  codex <user-prompt-submit|stop|post-tool-use|session-start|session-end|pre-compact>
                   Run a Codex hook adapter command; reads hook JSON from stdin
   session-end [--confirm]
                   Generate a session-end summary from stdin JSON; saves as pending memory${pluginLines}
