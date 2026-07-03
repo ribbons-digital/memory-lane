@@ -536,6 +536,34 @@ describe("CLI integration", () => {
     assert.equal(JSON.parse(status.stdout).data.legacyProjectMemories.totalLegacyCandidateCount, 0)
   })
 
+  it("rejects missing or malformed migration plan files before applying", () => {
+    const project = tempDir()
+    const home = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "migration-scope" }), "utf8")
+    const homeStore = path.join(home, ".memory-lane")
+    fs.mkdirSync(homeStore, { recursive: true })
+    const memoryFile = path.join(homeStore, "memory.jsonl")
+    writeMemoryRecords(memoryFile, [
+      { id: "legacy-approved", text: "Legacy approved home project memory", category: "project", scope: { type: "project", key: "migration-scope" }, status: "approved", source: "manual", kind: "project_fact", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-03T00:00:00.000Z" },
+    ] as MemoryRecord[])
+    fs.writeFileSync(path.join(homeStore, "embeddings.jsonl"), "", "utf8")
+    const beforeMemory = fs.readFileSync(memoryFile, "utf8")
+
+    const missingPath = path.join(tempDir(), "does-not-exist.json")
+    const missing = runProcess(["migrate", "project-local", "--apply-plan", missingPath, "--yes"], { env: { HOME: home } })
+    assert.notEqual(missing.status, 0)
+    assert.match(missing.stdout + missing.stderr, /Invalid project-local migration plan file/u)
+
+    const malformedPath = path.join(tempDir(), "malformed-plan.json")
+    fs.writeFileSync(malformedPath, "{ not valid json ", "utf8")
+    const malformed = runProcess(["migrate", "project-local", "--apply-plan", malformedPath, "--yes"], { env: { HOME: home } })
+    assert.notEqual(malformed.status, 0)
+    assert.match(malformed.stdout + malformed.stderr, /Invalid project-local migration plan file/u)
+
+    assert.equal(fs.readFileSync(memoryFile, "utf8"), beforeMemory)
+    assert.equal(fs.existsSync(path.join(project, ".memory-lane")), false)
+  })
+
   it("save rejects invalid category without writing", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,

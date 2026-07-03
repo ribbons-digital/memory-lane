@@ -675,7 +675,13 @@ function handleMigrate(ctx: CliContext): void {
   const applyPlanPath = flag(ctx.argv, "apply-plan")
   const writePlanPath = flag(ctx.argv, "write-plan")
   if (applyPlanPath && applyPlanPath !== "true") {
-    const raw = JSON.parse(fs.readFileSync(applyPlanPath, "utf8"))
+    let raw: any
+    try {
+      raw = JSON.parse(fs.readFileSync(applyPlanPath, "utf8"))
+    } catch {
+      console.log(formatError("Invalid project-local migration plan file.", ctx.json))
+      process.exit(1)
+    }
     const plan = raw?.planVersion ? raw : raw?.data?.migrationPlan
     if (!plan?.planVersion) {
       console.log(formatError("Invalid project-local migration plan file.", ctx.json))
