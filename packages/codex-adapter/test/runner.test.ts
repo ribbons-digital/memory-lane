@@ -381,7 +381,7 @@ test("pre-compact opt-out remains quiet", async () => {
 test("pre-compact with unreadable transcript fails open without provider call", async () => {
   await withMockSummaryServer("SHOULD_NOT_RUN", async (baseUrl, requests) => {
     const { engine, configPath } = engineFixture()
-    enableSessionEndSummary(configPath, baseUrl, true)
+    enableSessionEndSummary(configPath, baseUrl, false)
 
     const output = await runCodexHookCommand("pre-compact", {
       engine,

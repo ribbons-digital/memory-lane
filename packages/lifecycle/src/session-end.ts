@@ -84,7 +84,7 @@ function sessionSummaryContentKey(text: string): string | undefined {
   return normalized || undefined
 }
 
-function sessionSummaryProvenanceKey(input: { adapter?: string; sessionId?: string; turnId?: string; lifecycleEvent?: string; trigger?: string }): string | undefined {
+function sessionSummaryProvenanceKey(input: { adapter?: string; sessionId?: string; turnId?: string; lifecycleEvent?: string }): string | undefined {
   const lifecycleEvent = input.lifecycleEvent
   if (lifecycleEvent !== "session_end" && lifecycleEvent !== "pre_compact") return undefined
 
@@ -92,7 +92,7 @@ function sessionSummaryProvenanceKey(input: { adapter?: string; sessionId?: stri
   if (!sessionId) return undefined
 
   const parts = [input.adapter ?? "unknown", lifecycleEvent, sessionId]
-  if (lifecycleEvent === "pre_compact") parts.push(input.turnId?.trim() || input.trigger?.trim() || "unknown-trigger")
+  if (lifecycleEvent === "pre_compact") parts.push(input.turnId?.trim() || "unknown-turn")
   return parts.join(":")
 }
 
@@ -176,8 +176,7 @@ function latestMessageTimestamp(messages: SessionEndInput["messages"]): string |
   return latest
 }
 
-function preCompactTurnIdFallback(input: SessionEndInput, trigger: string | undefined): string | undefined {
-  if (!input.messages.length) return trigger?.trim() || undefined
+function preCompactTurnIdFallback(input: SessionEndInput): string | undefined {
   const digest = createHash("sha256")
     .update(JSON.stringify(input.messages.map((message) => ({
       role: message.role,
@@ -252,7 +251,7 @@ export async function handleSessionEnd(
       adapter: options.adapter ?? options.providerConfig?.provider ?? "manual",
       lifecycleEvent: options.lifecycleEvent ?? "session_end",
       sessionId: input.sessionId,
-      turnId: options.turnId ?? (options.lifecycleEvent === "pre_compact" ? preCompactTurnIdFallback(input, options.trigger) : undefined),
+      turnId: options.turnId ?? (options.lifecycleEvent === "pre_compact" ? preCompactTurnIdFallback(input) : undefined),
     },
     ...(capturedAt ? { freshness: { capturedAt } } : {}),
   }])

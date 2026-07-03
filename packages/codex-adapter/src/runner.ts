@@ -59,8 +59,7 @@ function confirmationRequiredOutput(): string {
   return systemMessageOutput("Session-end summarization requires confirmation. Rerun the Codex-shaped session-end payload with confirmed: true to save a pending summary.")
 }
 
-function createSessionEndSummaryProvider(configPath: string | undefined, env: NodeJS.ProcessEnv | undefined) {
-  const config = loadConfig(configPath)
+function createSessionEndSummaryProvider(config: ReturnType<typeof loadConfig>, env: NodeJS.ProcessEnv | undefined) {
   const summaryConfig = config.memory?.sessionEndSummary
   if (!summaryConfig?.enabled) return { status: "disabled" as const }
   if (!summaryConfig.baseUrl || !summaryConfig.model) return { status: "missing-provider" as const, config: summaryConfig }
@@ -179,7 +178,8 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         return lifecycleNoopOutput(result, debug)
       }
 
-      const summaryProvider = createSessionEndSummaryProvider(options.configPath, options.env)
+      const config = loadConfig(options.configPath)
+      const summaryProvider = createSessionEndSummaryProvider(config, options.env)
       if (summaryProvider.status === "disabled") {
         log("noop", { reason: "session-end summarization disabled" })
         return systemMessageOutput("Session summary was requested, but memory.sessionEndSummary.enabled is not enabled.")
@@ -211,7 +211,8 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
     }
 
     if (parsed.kind === "session-end") {
-      const summaryProvider = createSessionEndSummaryProvider(options.configPath, options.env)
+      const config = loadConfig(options.configPath)
+      const summaryProvider = createSessionEndSummaryProvider(config, options.env)
       if (summaryProvider.status === "disabled") {
         log("noop", { reason: "session-end summarization disabled" })
         return noopOutput("Session-end summarization is not enabled.", debug)
@@ -246,15 +247,11 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         log("noop", { reason: "pre-compact summarization disabled" })
         return noopOutput("Pre-compact summarization is not enabled.", debug)
       }
-      const summaryProvider = createSessionEndSummaryProvider(options.configPath, options.env)
-      if (summaryProvider.status === "missing-provider") {
+      const summaryProvider = createSessionEndSummaryProvider(config, options.env)
+      if (summaryProvider.status !== "configured") {
         log("noop", { reason: "pre-compact summary provider not configured" })
         const message = "Pre-compact summarization requires memory.sessionEndSummary.baseUrl and model."
         return parsed.input.trigger === "auto" ? noopOutput(message, debug) : systemMessageOutput(message)
-      }
-      if (summaryProvider.status === "disabled") {
-        log("noop", { reason: "session-end summarization disabled" })
-        return noopOutput("Pre-compact summarization is not enabled.", debug)
       }
       if (summaryProvider.config.requireConfirmation !== false) {
         log("noop", { reason: "pre-compact confirmation required" })
