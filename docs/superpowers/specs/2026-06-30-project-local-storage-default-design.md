@@ -4,13 +4,15 @@
 
 Slice 0 shipped in `v0.2.42` from PR #78 as the storage facade proof with no default-location change.
 Slice 1 shipped in `v0.2.43` from PR #80 as the project-local default for new project-scoped writes.
-Slice 2 migration diagnostics remains a gated follow-up.
+Slice 2a shipped in `v0.2.44` from PR #89 as read-only legacy project-memory diagnostics and dry-run preview.
+Mutating migration remains a gated follow-up.
 
 ## Entry gate
 
 Slice 0 was approved and implemented as an internal storage facade proof.
 Slice 1 was approved and implemented as project-local default writes.
-Do not implement Slice 2 until the user approves the next design gate.
+Slice 2a was approved and implemented as diagnostics only.
+Do not implement mutating migration until the user approves the next design gate.
 
 ## Context
 
@@ -57,8 +59,10 @@ Adopt a two-tier storage model through approved slices:
 2. **Slice 1: project-local default for project-scoped writes.** Shipped in `v0.2.43` from PR #80.
    New project-scoped memories route to `<project-root>/.memory-lane/memory.jsonl` when project scope exists and no explicit storage env vars override it.
    Global-scope preferences and personal memories remain home-scoped in `~/.memory-lane/memory.jsonl`.
+3. **Slice 2a: legacy project-memory diagnostics.** Shipped in `v0.2.44` from PR #89.
+   Home-stored project memories for the active project are reported through bounded status, doctor, MCP status, and dry-run migration preview surfaces without mutating files.
 
-This two-step path preserves the product direction while de-risking the single-store engine assumption before changing user-visible write locations.
+This sliced path preserves the product direction while de-risking the single-store engine assumption before changing user-visible write locations and then adding read-only migration diagnostics.
 
 Long-term target:
 
@@ -138,7 +142,7 @@ For the long-term project-local default:
 - Read project-local project memories from the project store.
 - Read global/personal/preference memories from the home store.
 - Keep status/scope filtering as a second boundary.
-- Existing home-scoped project memories remain accessible through current home-store behavior until a separate migration/compatibility slice is approved.
+- Existing home-scoped project memories remain accessible through current home-store behavior; Slice 2a reports them through bounded diagnostics, and mutating migration still requires a separate approval gate.
 
 For Slice 0, reads remain behaviorally equivalent to today's single home store, but they should go through the new facade contract.
 The facade must be capable of returning a merged read view to `MemoryEngine` and tracking the originating store for each folded record so update/approve/reject/delete/rescope and duplicate upgrades can re-append to the same store that owns the existing record.
@@ -171,16 +175,15 @@ This avoids conflicting rules between category, kind, explicit `--scope`, and li
 
 Do not silently move existing home-stored project memories.
 
-First implementation should not migrate or diagnose legacy rows.
-
-Plan migration/compatibility as follow-up slices after the facade proof and project-local default flip:
+Slice 2a shipped the first migration/compatibility diagnostics after the facade proof and project-local default flip:
 
 - Slice 2a detects approved/pending home-stored project memories whose scope key matches the active project;
 - Slice 2a shows bounded diagnostics in `doctor`, `status`, MCP `memory_status`, and `memory-lane migrate project-local --dry-run`;
 - mutating migration remains deferred for a later explicit `--yes` or equivalent dry-run-first flow;
 - avoid silent movement, deletion, approval, or consolidation.
 
-Those migration/compatibility features are out of scope for Slice 0 and Slice 1, and mutating migration should remain a planned follow-up once diagnostics are dogfooded.
+Those migration/compatibility diagnostics were out of scope for Slice 0 and Slice 1.
+Mutating migration remains a planned follow-up after Slice 2a dogfood.
 
 ## First implementation slice
 
@@ -215,7 +218,8 @@ Definition of done for shipped Slice 1:
 8. Keep `memory-lane init --project-local` working and idempotent; auto-init should write `.memory-lane-scope` using the resolved scope identity rather than raw cwd when available.
 9. Update README, skill docs, and HANDOFF/ROADMAP.
 
-Explicitly defer legacy home-project migration diagnostics and migration commands to planned Slice 2 unless separately reprioritized.
+Legacy home-project migration diagnostics shipped in Slice 2a.
+Explicitly defer mutating migration commands unless separately approved.
 
 ## Files likely to modify
 
@@ -286,7 +290,7 @@ Manual/dogfood checks for shipped Slice 1:
 ## Risks and mitigations
 
 - **Breaking cross-harness continuity:** resolve project root consistently and keep `.memory-lane-scope` / git root behavior authoritative.
-- **Losing visibility of old home project memories:** do not delete or migrate old rows; defer explicit compatibility diagnostics/migration until a separate slice can handle them safely.
+- **Losing visibility of old home project memories:** do not delete or migrate old rows; use shipped Slice 2a diagnostics for visibility, and defer mutation until a separate slice can handle it safely.
 - **Config confusion:** keep global config canonical for the first slice; do not add config merging.
 - **Worktree fragmentation:** prefer existing worktree-aware project scope logic; document `.memory-lane-scope` for stable identity.
 - **Surprising file creation:** only auto-create project-local storage on writes, not read-only commands.
@@ -295,12 +299,13 @@ Manual/dogfood checks for shipped Slice 1:
 
 ## Decisions for user approval
 
-1. Proceed in two slices: internal facade proof first, project-local default flip second.
+1. Proceed in slices: internal facade proof first, project-local default flip second, read-only legacy diagnostics third.
 2. Slice 0 should not change default write locations.
 3. Slice 1 project-local storage root should be derived from existing project scope resolution, not arbitrary cwd.
 4. Global config remains canonical for the first project-local default slice; no config merge model.
 5. Project-local storage may auto-create on first project write when project scope is known, but only in Slice 1.
-6. Legacy home-project migration diagnostics and migration commands are deferred to a later slice.
+6. Legacy home-project migration diagnostics shipped in Slice 2a.
+7. Mutating migration commands remain deferred to a later slice.
 
 ## Slice 1 rescope decision
 
@@ -315,4 +320,5 @@ User feedback agreed with Slice 0 as the first implementation target: an interna
 Slice 0 implementation preserves current storage behavior through `MemoryEngineStorage` and `createSingleStoreEngineStorage`.
 It shipped in `v0.2.42` after local build/test validation, release workflow `28484161404`, and installed-artifact smoke testing documented in `docs/superpowers/validation/2026-07-01-v0.2.42-release-dogfood.md`.
 Slice 1 was later approved in `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`, merged in PR #80 as `a87eff5`, and shipped in `v0.2.43` with installed-artifact dogfood documented in `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
-Slice 2 migration diagnostics remains a planned follow-up requiring its own approval gate.
+Slice 2a was later approved in `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`, merged in PR #89 as `96516ef`, and shipped in `v0.2.44` with installed-artifact dogfood documented in `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
+Mutating migration remains a planned follow-up requiring its own approval gate.
