@@ -682,7 +682,7 @@ function handleMigrate(ctx: CliContext): void {
       console.log(formatError("Invalid project-local migration plan file.", ctx.json))
       process.exit(1)
     }
-    const plan = raw?.planVersion ? raw : raw?.data?.migrationPlan
+    const plan = raw?.planVersion ? raw : undefined
     if (!plan?.planVersion) {
       console.log(formatError("Invalid project-local migration plan file.", ctx.json))
       process.exit(1)

@@ -173,8 +173,18 @@ function contentHash(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex")
 }
 
+function canonicalizeForHash(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalizeForHash)
+  if (!value || typeof value !== "object") return value
+  return Object.fromEntries(Object.keys(value as Record<string, unknown>).sort().flatMap((key) => {
+    const entry = canonicalizeForHash((value as Record<string, unknown>)[key])
+    return entry === undefined ? [] : [[key, entry]]
+  }))
+}
+
 function sourceFingerprint(record: MemoryRecord, sourcePath: string): string {
-  return createHash("sha256").update(JSON.stringify({ sourcePath, record }), "utf8").digest("hex")
+  const normalized = normalizeMemoryRecord(record) ?? record
+  return createHash("sha256").update(JSON.stringify(canonicalizeForHash({ sourcePath, record: normalized })), "utf8").digest("hex")
 }
 
 function addMilliseconds(iso: string, ms: number): string {

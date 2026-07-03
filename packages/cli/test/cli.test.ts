@@ -561,6 +561,12 @@ describe("CLI integration", () => {
     assert.notEqual(malformed.status, 0)
     assert.match(malformed.stdout + malformed.stderr, /Invalid project-local migration plan file/u)
 
+    const wrappedSummaryPath = path.join(tempDir(), "wrapped-summary.json")
+    fs.writeFileSync(wrappedSummaryPath, JSON.stringify({ ok: true, data: { legacyProjectMemories: { migrationPlan: { version: 1 } } } }), "utf8")
+    const wrappedSummary = runProcess(["migrate", "project-local", "--apply-plan", wrappedSummaryPath, "--yes"], { env: { HOME: home } })
+    assert.notEqual(wrappedSummary.status, 0)
+    assert.match(wrappedSummary.stdout + wrappedSummary.stderr, /Invalid project-local migration plan file/u)
+
     assert.equal(fs.readFileSync(memoryFile, "utf8"), beforeMemory)
     assert.equal(fs.existsSync(path.join(project, ".memory-lane")), false)
   })
