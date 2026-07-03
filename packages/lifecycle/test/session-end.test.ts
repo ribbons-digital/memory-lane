@@ -21,6 +21,25 @@ test("returns empty when requireConfirmation is true and not confirmed", async (
   assert.deepStrictEqual(result, [])
 })
 
+test("pre-compact returns empty when requireConfirmation is true and not confirmed", async () => {
+  const engine = makeEngine()
+  let called = false
+  const provider: LLMProvider = {
+    async complete() {
+      called = true
+      return "- Should not be generated."
+    },
+  }
+  const result = await handlePreCompact(engine, {
+    cwd: "/tmp",
+    sessionId: "s-pre-consent",
+    trigger: "auto",
+    messages: [{ role: "user", content: "hello" }],
+  }, { requireConfirmation: true, confirmed: false, provider })
+  assert.deepStrictEqual(result, [])
+  assert.equal(called, false)
+})
+
 test("returns empty when LLM reports NO_DURABLE_MEMORY", async () => {
   const engine = makeEngine()
   const provider: LLMProvider = { complete: async () => "NO_DURABLE_MEMORY" }
@@ -79,7 +98,7 @@ test("returns a pending pre-compact session-summary candidate", async () => {
     turnId: "t-pre",
     trigger: "auto",
     messages: [{ role: "user", content: "continue after compaction" }],
-  }, { provider, adapter: "codex" })
+  }, { provider, adapter: "codex", requireConfirmation: true, confirmed: true })
   assert.strictEqual(result.length, 1)
   assert.match(captured, /before the host compacts/u)
   assert.match(captured, /continue after compaction/u)
@@ -109,7 +128,7 @@ test("skips duplicate pre-compact summary for same adapter session and turn", as
     turnId: "t1",
     trigger: "auto",
     messages: [{ role: "user", content: "summarize before compact" }],
-  }, { provider, adapter: "codex" })
+  }, { provider, adapter: "codex", requireConfirmation: false })
   assert.deepStrictEqual(result, [])
 })
 
@@ -121,7 +140,7 @@ test("uses message digest as pre-compact provenance fallback when turn id is abs
     sessionId: "s-trigger",
     trigger: "manual",
     messages: [{ role: "user", content: "summarize before compact" }],
-  }, { provider, adapter: "claude" })
+  }, { provider, adapter: "claude", requireConfirmation: false })
   assert.strictEqual(result.length, 1)
   assert.match(result[0].provenance.turnId ?? "", /^messages-[a-f0-9]{16}$/u)
 })
@@ -143,7 +162,7 @@ test("keeps distinct pre-compact summaries without turn ids", async () => {
     sessionId: "s1",
     trigger: "auto",
     messages: [{ role: "user", content: "second pre-compact context" }],
-  }, { provider, adapter: "codex" })
+  }, { provider, adapter: "codex", requireConfirmation: false })
   assert.strictEqual(result.length, 1)
   assert.match(result[0].provenance.turnId ?? "", /^messages-[a-f0-9]{16}$/u)
   assert.notEqual(result[0].provenance.turnId, "messages-0eaf8bb3a48a6e9a")

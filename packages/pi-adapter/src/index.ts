@@ -656,6 +656,8 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         provider,
         promptTemplate: summaryConfig.promptTemplate ?? undefined,
         maxTokens: summaryConfig.maxTokens,
+        requireConfirmation: false,
+        confirmed: true,
         includeToolOutputs: summaryConfig.includeToolOutputs,
         adapter: "pi",
       }, memoryEnv())

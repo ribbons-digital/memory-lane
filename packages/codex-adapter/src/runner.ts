@@ -270,6 +270,8 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         provider: summaryProvider.provider,
         promptTemplate: summaryProvider.config.promptTemplate ?? undefined,
         maxTokens: summaryProvider.config.maxTokens,
+        requireConfirmation: false,
+        confirmed: true,
         includeToolOutputs: summaryProvider.config.includeToolOutputs,
         adapter: "codex",
       }, options.env)

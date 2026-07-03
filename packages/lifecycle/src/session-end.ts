@@ -272,8 +272,6 @@ export async function handlePreCompact(
   }, {
     ...options,
     promptTemplate: options.promptTemplate ?? DEFAULT_PRE_COMPACT_PROMPT,
-    requireConfirmation: false,
-    confirmed: true,
     lifecycleEvent: "pre_compact",
     trigger: options.trigger ?? input.trigger,
     turnId: options.turnId ?? input.turnId,
