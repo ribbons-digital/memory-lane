@@ -698,7 +698,7 @@ function handleMigrate(ctx: CliContext): void {
         preview.error = message
         console.log(JSON.stringify(preview, null, 2))
       } else {
-        console.log(formatLegacyProjectMemoryMigrationPreview(applyEngine.doctor().legacyProjectMemories as any, false, plan, applyPlanPath))
+        console.log(formatLegacyProjectMemoryMigrationPreview(applyEngine.doctor().legacyProjectMemories as any, false, plan))
         console.log(formatError(message, false))
       }
       process.exit(1)

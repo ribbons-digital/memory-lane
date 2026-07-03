@@ -532,6 +532,7 @@ describe("CLI integration", () => {
     assert.notEqual(applyWithoutYes.status, 0)
     assert.match(applyWithoutYes.stdout + applyWithoutYes.stderr, /requires --yes/u)
     assert.match(applyWithoutYes.stdout, /2 active home-stored candidate\(s\) for project migration-scope/u)
+    assert.doesNotMatch(applyWithoutYes.stdout, /Wrote review plan/u)
     assert.notEqual(applyJsonWithoutYes.status, 0)
     const applyJsonPreview = JSON.parse(applyJsonWithoutYes.stdout)
     assert.equal(applyJsonPreview.ok, false)
