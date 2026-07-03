@@ -420,6 +420,43 @@ describe("MemoryEngineStorage two-tier facade", () => {
     assert.ok(fs.readFileSync(home.memoryPath, "utf8").includes("Migrated to project-local storage."))
   })
 
+  it("blocks destination-written repairs when the home source changed", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const legacy = rec({ id: "legacy", text: "Legacy project memory", scope: { type: "project", key: "scope-key" }, updatedAt: "2026-01-03T00:00:00.000Z" })
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemory(legacy)
+    const plan = storage.createLegacyProjectMigrationPlan("scope-key")
+    createSingleStoreEngineStorage(project.memoryPath, project.embeddingsPath).appendMemory(plan.candidates[0].destinationRecord)
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemory({ ...legacy, text: "Changed", updatedAt: "2026-01-04T00:00:00.000Z" })
+
+    const repaired = storage.applyLegacyProjectMigrationPlan(plan)
+
+    assert.equal(repaired.repaired, 0)
+    assert.equal(repaired.blocked, 1)
+    assert.equal(repaired.items[0].state, "conflict")
+    assert.ok(repaired.items[0].blockers.includes("source-fingerprint-mismatch"))
+    assert.equal(fs.readFileSync(home.memoryPath, "utf8").includes("Migrated to project-local storage."), false)
+  })
+
+  it("blocks unplanned same-text project-side duplicates before applying migration", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const legacy = rec({ id: "legacy", text: "Legacy project memory", scope: { type: "project", key: "scope-key" }, updatedAt: "2026-01-03T00:00:00.000Z" })
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemory(legacy)
+    const plan = storage.createLegacyProjectMigrationPlan("scope-key")
+    createSingleStoreEngineStorage(project.memoryPath, project.embeddingsPath).appendMemory(rec({ id: "legacy", text: "Legacy project memory", scope: { type: "project", key: "scope-key" }, updatedAt: "2026-01-02T00:00:00.000Z" }))
+
+    const result = storage.applyLegacyProjectMigrationPlan(plan)
+
+    assert.equal(result.blocked, 1)
+    assert.ok(result.items[0].blockers.includes("mixed-origin-revision-chain"))
+    assert.equal(fs.readFileSync(home.memoryPath, "utf8").includes("Migrated to project-local storage."), false)
+  })
+
   it("blocks divergent project-side duplicates before applying migration", () => {
     const dir = tempDir()
     const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
@@ -450,6 +487,42 @@ describe("MemoryEngineStorage two-tier facade", () => {
     const result = storage.applyLegacyProjectMigrationPlan(plan)
 
     assert.notEqual(result.blocked, 0)
+    assert.equal(fs.existsSync(project.memoryPath), false)
+    assert.equal(fs.readFileSync(home.memoryPath, "utf8").includes("Migrated to project-local storage."), false)
+  })
+
+  it("validates malformed migration plan shape before mutating files", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const legacy = rec({ id: "legacy", text: "Legacy project memory", scope: { type: "project", key: "scope-key" }, updatedAt: "2026-01-03T00:00:00.000Z" })
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemory(legacy)
+    const plan = storage.createLegacyProjectMigrationPlan("scope-key")
+    const malformed = { ...plan, candidates: undefined }
+
+    const result = storage.applyLegacyProjectMigrationPlan(malformed as never)
+
+    assert.notEqual(result.blocked, 0)
+    assert.ok(result.items[0].blockers.includes("invalid-plan-candidates"))
+    assert.equal(fs.existsSync(project.memoryPath), false)
+    assert.equal(fs.readFileSync(home.memoryPath, "utf8").includes("Migrated to project-local storage."), false)
+  })
+
+  it("validates malformed migration plan item arrays before mutating files", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    const legacy = rec({ id: "legacy", text: "Legacy project memory", scope: { type: "project", key: "scope-key" }, updatedAt: "2026-01-03T00:00:00.000Z" })
+    createSingleStoreEngineStorage(home.memoryPath, home.embeddingsPath).appendMemory(legacy)
+    const plan = storage.createLegacyProjectMigrationPlan("scope-key")
+    const malformed = { ...plan, candidates: [{ ...plan.candidates[0], blockers: undefined }] }
+
+    const result = storage.applyLegacyProjectMigrationPlan(malformed as never)
+
+    assert.notEqual(result.blocked, 0)
+    assert.ok(result.items[0].blockers.includes("invalid-plan-blockers:legacy"))
     assert.equal(fs.existsSync(project.memoryPath), false)
     assert.equal(fs.readFileSync(home.memoryPath, "utf8").includes("Migrated to project-local storage."), false)
   })

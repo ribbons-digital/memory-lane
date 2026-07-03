@@ -412,31 +412,43 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
 
   function validateMigrationPlan(plan: LegacyProjectMigrationPlan): string[] {
     const blockers: string[] = []
+    if (!plan || typeof plan !== "object") return ["invalid-plan-shape"]
     if (plan.planVersion !== MIGRATION_PLAN_VERSION) blockers.push("invalid-plan-version")
     if (typeof plan.producerVersion !== "string" || !plan.producerVersion.trim()) blockers.push("invalid-producer-version")
     if (plan.projectScopeKey !== project?.scopeKey) blockers.push("project-scope-mismatch")
     if (plan.homeMemoryFile !== home.paths.memoryPath || plan.projectMemoryFile !== project?.paths.memoryPath) blockers.push("storage-path-mismatch")
     if (plan.homeEmbeddingFile !== home.paths.embeddingsPath || plan.projectEmbeddingFile !== project?.paths.embeddingsPath) blockers.push("embedding-path-mismatch")
+    if (!Array.isArray(plan.candidates)) {
+      blockers.push("invalid-plan-candidates")
+      return blockers
+    }
     const ids = new Set<string>()
-    for (const item of plan.candidates ?? []) {
-      if (ids.has(item.id)) blockers.push(`duplicate-plan-id:${item.id}`)
-      ids.add(item.id)
+    for (const item of plan.candidates) {
+      const itemId = item && typeof item.id === "string" ? item.id : "unknown"
+      if (!item || typeof item !== "object") {
+        blockers.push(`invalid-plan-item:${itemId}`)
+        continue
+      }
+      if (!Array.isArray(item.blockers)) blockers.push(`invalid-plan-blockers:${itemId}`)
+      if (!Array.isArray(item.hazards)) blockers.push(`invalid-plan-hazards:${itemId}`)
+      if (ids.has(itemId)) blockers.push(`duplicate-plan-id:${itemId}`)
+      ids.add(itemId)
       const source = normalizeMemoryRecord(item.sourceRecord)
       const destination = normalizeMemoryRecord(item.destinationRecord)
       const tombstone = normalizeMemoryRecord(item.sourceTombstone)
       if (!source || !destination || !tombstone) {
-        blockers.push(`invalid-plan-record:${item.id}`)
+        blockers.push(`invalid-plan-record:${itemId}`)
         continue
       }
-      if (sourceFingerprint(source, home.paths.memoryPath) !== item.sourceFingerprint) blockers.push(`source-fingerprint-does-not-match-plan-source:${item.id}`)
-      if (item.id !== source.id || item.id !== destination.id || item.id !== tombstone.id) blockers.push(`id-mismatch:${item.id}`)
-      if (source.scope.type !== "project" || source.scope.key !== plan.projectScopeKey) blockers.push(`source-scope-mismatch:${item.id}`)
-      if (destination.scope.type !== "project" || destination.scope.key !== plan.projectScopeKey) blockers.push(`destination-scope-mismatch:${item.id}`)
-      if (tombstone.scope.type !== "project" || tombstone.scope.key !== plan.projectScopeKey) blockers.push(`tombstone-scope-mismatch:${item.id}`)
-      if (destination.status !== source.status) blockers.push(`destination-status-changed:${item.id}`)
-      if (!sameRecordExceptUpdatedAt(source, destination)) blockers.push(`destination-semantic-fields-changed:${item.id}`)
-      if (tombstone.status !== "deleted" || tombstone.text !== MIGRATION_TOMBSTONE_TEXT) blockers.push(`invalid-tombstone:${item.id}`)
-      if (tombstone.updatedAt >= destination.updatedAt) blockers.push(`invalid-migration-timestamp-order:${item.id}`)
+      if (sourceFingerprint(source, home.paths.memoryPath) !== item.sourceFingerprint) blockers.push(`source-fingerprint-does-not-match-plan-source:${itemId}`)
+      if (itemId !== source.id || itemId !== destination.id || itemId !== tombstone.id) blockers.push(`id-mismatch:${itemId}`)
+      if (source.scope.type !== "project" || source.scope.key !== plan.projectScopeKey) blockers.push(`source-scope-mismatch:${itemId}`)
+      if (destination.scope.type !== "project" || destination.scope.key !== plan.projectScopeKey) blockers.push(`destination-scope-mismatch:${itemId}`)
+      if (tombstone.scope.type !== "project" || tombstone.scope.key !== plan.projectScopeKey) blockers.push(`tombstone-scope-mismatch:${itemId}`)
+      if (destination.status !== source.status) blockers.push(`destination-status-changed:${itemId}`)
+      if (!sameRecordExceptUpdatedAt(source, destination)) blockers.push(`destination-semantic-fields-changed:${itemId}`)
+      if (tombstone.status !== "deleted" || tombstone.text !== MIGRATION_TOMBSTONE_TEXT) blockers.push(`invalid-tombstone:${itemId}`)
+      if (tombstone.updatedAt >= destination.updatedAt) blockers.push(`invalid-migration-timestamp-order:${itemId}`)
     }
     return blockers
   }
@@ -680,7 +692,7 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
       if (planBlockers.length) {
         return {
           planVersion: MIGRATION_PLAN_VERSION,
-          projectScopeKey: plan.projectScopeKey ?? "unknown",
+          projectScopeKey: plan && typeof plan === "object" && typeof plan.projectScopeKey === "string" ? plan.projectScopeKey : "unknown",
           migrated: 0,
           repaired: 0,
           completedBeforeRun: 0,
@@ -709,15 +721,19 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
         const hasPlannedDestination = projectLog.some((record) => exactRecord(record, item.destinationRecord))
         const hasPlannedTombstone = homeLog.some((record) => exactRecord(record, item.sourceTombstone))
         const hasHomeRecord = homeLog.length > 0
+        const latestHome = homeLog.map((record, logIndex) => ({ entry: home, record, logIndex })).sort(compareLocatedMemory).at(-1)?.record
         const projectConflict = projectLog.some((record) => !exactRecord(record, item.destinationRecord) && (record.text !== item.sourceRecord.text || record.status !== item.sourceRecord.status))
+        const unplannedProjectRecord = projectLog.some((record) => !exactRecord(record, item.destinationRecord))
         if (projectConflict) blockers.push("duplicate-active-project-record")
+        else if (unplannedProjectRecord) blockers.push("mixed-origin-revision-chain")
         let state: LegacyProjectMigrationApplyResult["items"][number]["state"]
         if (hasPlannedDestination && (hasPlannedTombstone || !hasHomeRecord)) {
           state = "complete"
         } else if (hasPlannedDestination && !hasPlannedTombstone && hasHomeRecord) {
-          state = "destination-written"
+          if (!latestHome) blockers.push("missing-source-home-record")
+          else if (sourceFingerprint(latestHome, home.paths.memoryPath) !== item.sourceFingerprint) blockers.push("source-fingerprint-mismatch")
+          state = blockers.length ? "conflict" : "destination-written"
         } else if (!hasPlannedDestination && !hasPlannedTombstone) {
-          const latestHome = homeLog.map((record, logIndex) => ({ entry: home, record, logIndex })).sort(compareLocatedMemory).at(-1)?.record
           if (!latestHome) blockers.push("missing-source-home-record")
           else if (sourceFingerprint(latestHome, home.paths.memoryPath) !== item.sourceFingerprint) blockers.push("source-fingerprint-mismatch")
           state = blockers.length ? "conflict" : "not-started"
