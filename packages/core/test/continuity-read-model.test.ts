@@ -331,7 +331,7 @@ test("continuity read model adds actionable overlap warning metadata", () => {
 })
 
 
-test("continuity warning render plan groups by severity and reports omitted warnings", () => {
+test("continuity warning render plan prioritizes actionable warnings before info warnings", () => {
   const warnings: ContinuityWarning[] = [
     { code: "mcp-explicit-tools-only", severity: "info", message: "MCP note." },
     { code: "operating-agreement-overlap", severity: "review", message: "Overlap.", suggestedActions: ["memory-lane agreements --area project-loop --json", "memory-lane agreements --area review-gate --json", "memory-lane agreements --area pr-process --json", "memory-lane agreements --area release-process --json"] },
@@ -341,8 +341,9 @@ test("continuity warning render plan groups by severity and reports omitted warn
 
   const plan = buildContinuityWarningRenderPlan(warnings)
 
-  assert.deepEqual(plan.infoWarnings.map((warning) => warning.code), ["mcp-explicit-tools-only"])
-  assert.deepEqual(plan.actionRequiredWarnings.map((warning) => warning.code), ["operating-agreement-overlap", "scope-hygiene-candidate"])
+  assert.deepEqual(plan.warnings.map((warning) => warning.code), ["operating-agreement-overlap", "scope-hygiene-candidate", "freshness-advisory"])
+  assert.deepEqual(plan.infoWarnings.map((warning) => warning.code), [])
+  assert.deepEqual(plan.actionRequiredWarnings.map((warning) => warning.code), ["operating-agreement-overlap", "scope-hygiene-candidate", "freshness-advisory"])
   assert.equal(plan.omittedWarningCount, 1)
   assert.deepEqual([...plan.renderedInspectionActions], [
     "memory-lane agreements --area project-loop --json",

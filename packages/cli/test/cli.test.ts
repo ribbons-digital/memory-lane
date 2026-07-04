@@ -1591,7 +1591,7 @@ describe("CLI integration", () => {
         { code: "mcp-explicit-tools-only", severity: "info", message: "MCP exposes explicit tools only." },
         { code: "operating-agreement-overlap", severity: "review", message: "Overlap.", suggestedActions: ["memory-lane agreements --area project-loop --json"] },
         { code: "scope-hygiene-candidate", severity: "review", message: "Scope." },
-        { code: "freshness-advisory", severity: "review", message: "Freshness." },
+        { code: "mcp-explicit-tools-only", severity: "info", message: "Second MCP note." },
       ],
       answerGuidance: [],
       suggestedActions: ["memory-lane continuity --json", "memory-lane agreements --area project-loop --json"],

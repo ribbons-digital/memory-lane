@@ -28,7 +28,9 @@ export function buildContinuityWarningRenderPlan(
 ): ContinuityWarningRenderPlan {
   const maxWarnings = options.maxWarnings ?? 3
   const maxActionsPerWarning = options.maxActionsPerWarning ?? 3
-  const visibleWarnings = warnings.slice(0, Math.max(0, maxWarnings))
+  const actionRequired = warnings.filter(requiresContinuityWarningAction)
+  const info = warnings.filter((warning) => !requiresContinuityWarningAction(warning))
+  const visibleWarnings = [...actionRequired, ...info].slice(0, Math.max(0, maxWarnings))
   const renderedInspectionActions = new Set<string>()
   for (const warning of visibleWarnings) {
     for (const action of continuityWarningInspectionActions(warning, maxActionsPerWarning)) {
