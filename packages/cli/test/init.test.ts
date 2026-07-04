@@ -52,8 +52,20 @@ describe("init wizard", () => {
     fs.writeFileSync(nativeBinary, `#!/usr/bin/env node
 const fs = require("node:fs");
 const args = process.argv.slice(2);
-fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + "\\n");
-${commandLogic}
+let stdin = "";
+let finished = false;
+function finish() {
+  if (finished) return;
+  finished = true;
+  fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify({ args, stdin }) + "\\n");
+${commandLogic.split("\n").map((line) => `  ${line}`).join("\n")}
+  process.exit(0);
+}
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => { stdin += chunk; });
+process.stdin.on("end", finish);
+process.stdin.resume();
+if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
 `, "utf8")
     fs.chmodSync(nativeBinary, 0o755)
     return { nativeBinary, logPath }
@@ -71,8 +83,15 @@ ${commandLogic}
     })
   }
 
+  function readJsonlEntries(logPath: string): Array<{ args: string[]; stdin: string }> {
+    return fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => {
+      const parsed = JSON.parse(line)
+      return Array.isArray(parsed) ? { args: parsed as string[], stdin: "" } : parsed as { args: string[]; stdin: string }
+    })
+  }
+
   function readJsonlCalls(logPath: string): string[][] {
-    return fs.readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string[])
+    return readJsonlEntries(logPath).map((entry) => entry.args)
   }
 
   beforeEach(() => {
@@ -127,12 +146,94 @@ ${commandLogic}
       const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
       const pi = { commands: [], tools: [], events: [], registerCommand(name) { this.commands.push(name) }, registerTool(tool) { this.tools.push(tool.name) }, on(name) { this.events.push(name) } };
       fn(pi);
-      if (!pi.commands.includes("memory") || !pi.tools.includes("memory_save") || !pi.tools.includes("memory_continuity") || !pi.tools.includes("memory_get") || !pi.events.includes("before_agent_start")) process.exit(1);
+      if (!pi.commands.includes("memory") || !pi.tools.includes("memory_save") || !pi.tools.includes("memory_continuity") || !pi.tools.includes("memory_get") || !pi.events.includes("before_agent_start") || !pi.events.includes("session_before_compact")) process.exit(1);
     `
     execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", smoke], {
       encoding: "utf8",
       env: { ...process.env, PI_EXTENSION_FILE: piExt },
     })
+  })
+
+  it("generated pi CLI bridge forwards session_before_compact to pi pre-compact", () => {
+    const { nativeBinary, logPath } = writeNativeMemoryLaneStub("precompact-calls.jsonl", `if (args[0] === "pi" && args[1] === "pre-compact") {
+  console.log(JSON.stringify({ ok: true, data: { saved: 1 } }));
+} else {
+  console.log(JSON.stringify({ data: {} }));
+}`)
+
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const notifications = [];
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      if (typeof handlers.session_before_compact !== "function") throw new Error("expected session_before_compact handler");
+      const result = await handlers.session_before_compact({
+        reason: "manual",
+        turnId: "turn-generated",
+        preparation: {
+          messagesToSummarize: [
+            { role: "user", content: [{ type: "text", text: "User compaction text" }] },
+            { role: "assistant", content: "Assistant compaction text" },
+          ],
+          turnPrefixMessages: [
+            { role: "tool", content: [{ type: "text", text: "Tool compaction text" }], toolName: "bash" },
+          ],
+        },
+      }, {
+        cwd: "/tmp/pi-generated-bridge-project",
+        ui: { notify(message, level) { notifications.push({ message, level }) } },
+        sessionManager: { getSessionFile() { return "/tmp/pi-session.json" }, getBranch() { return [] } },
+      });
+      if (result !== undefined) throw new Error("expected precompact bridge to leave host compaction untouched");
+      const started = Date.now();
+      while (!notifications.some((item) => item.message.includes("pending pre-compact summary") && item.level === "info") && Date.now() - started < 1000) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      if (!notifications.some((item) => item.message.includes("pending pre-compact summary") && item.level === "info")) throw new Error("expected pending summary notification");
+    `)
+
+    const entries = readJsonlEntries(logPath)
+    assert.equal(entries.length, 1)
+    assert.deepEqual(entries[0].args, ["pi", "pre-compact", "--json", "--project", "/tmp/pi-generated-bridge-project"])
+    const payload = JSON.parse(entries[0].stdin)
+    assert.equal(payload.cwd, "/tmp/pi-generated-bridge-project")
+    assert.equal(payload.session_id, "/tmp/pi-session.json")
+    assert.equal(payload.turn_id, "turn-generated")
+    assert.equal(payload.trigger, "manual")
+    assert.deepEqual(payload.messages.map((message: any) => message.role), ["user", "assistant", "tool"])
+    assert.equal(payload.messages[0].content, "User compaction text")
+    assert.equal(payload.messages[1].content, "Assistant compaction text")
+    assert.equal(payload.messages[2].content, "Tool compaction text")
+    assert.equal(payload.messages[2].toolName, "bash")
+  })
+
+  it("generated pi CLI bridge does not block compaction on slow pre-compact work", () => {
+    const { nativeBinary } = writeNativeMemoryLaneStub("slow-precompact-calls.jsonl", `if (args[0] === "pi" && args[1] === "pre-compact") {
+  const until = Date.now() + 600;
+  while (Date.now() < until) {}
+  console.log(JSON.stringify({ ok: true, data: { saved: 0 } }));
+} else {
+  console.log(JSON.stringify({ data: {} }));
+}`)
+
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const started = Date.now();
+      const result = await handlers.session_before_compact({
+        preparation: { messagesToSummarize: [{ role: "user", content: "Slow compaction text" }] },
+      }, { cwd: "/tmp/pi-generated-bridge-project" });
+      const duration = Date.now() - started;
+      if (result !== undefined) throw new Error("expected precompact bridge to leave host compaction untouched");
+      if (duration > 500) throw new Error("expected precompact bridge to return before slow pre-compact work completes, took " + duration + "ms");
+    `)
   })
 
   it("routes broad pi before_agent_start continuity prompts to continuity query", () => {

@@ -2,7 +2,7 @@
 
 ## Current state
 
-- Branch context: `main` is synced through `83b9b3d feat: add pre-compact session summaries (#95)`.
+- Branch context: `main` is synced through `4e0b2fb Add CodeRabbit configuration (#98)`, with active work on `fix/generated-pi-precompact-bridge`.
 - Latest release: `v0.2.45` at tag `v0.2.45` / commit `83b9b3d`; release workflow `28647421095` passed and published 8 assets.
 - Installed-artifact validation for `v0.2.45` passed with a pre-upgrade smoke, `memory-lane upgrade --yes`, a post-upgrade smoke, and Slice 2b plan/apply migration protocol dogfood.
 - PR #85 merged as `6da6105`, completing Fable 5 Waves 1-3 hardening: JSON harness config merges/backups, fail-safe Claude/Codex hook initialization, bounded embedding settlement on CLI/MCP shutdown, compaction preserving invalid rows, stale embedding invalidation correctness, provider timeout validation, and docs/status sync.
@@ -54,9 +54,10 @@ The shipped slice adds reviewed plan generation, explicit `--apply-plan <path> -
 Pre-compact session-summary support is merged in PR #95 as `83b9b3d` and released in `v0.2.45`.
 Claude, Codex, and native Pi can save pending `session_summary` memories before compaction when session-summary configuration allows unconfirmed pre-compact summaries.
 
-Current implementation slice is screenshot-driven continuity rendering hygiene.
-The slice reproduces duplicated continuity output and buried warning behavior with CLI/Pi/generated bridge fixtures, then fixes renderer-level dedupe and warning promotion without adding automatic supersession or silent memory mutation.
-After this slice merges, the likely next action is release prep and installed-artifact dogfood for the continuity rendering hygiene fix.
+Continuity rendering hygiene merged in PR #97 as `9c0040b`, and PR #98 added CodeRabbit configuration as `4e0b2fb`.
+Current implementation slice is generated Pi pre-compact bridge parity.
+The slice adds `memory-lane pi pre-compact`, wires release-style generated Pi bridges to `session_before_compact`, saves pending `session_summary` memories with pi `pre_compact` provenance, reuses the lifecycle pre-compact turn digest for dedupe, and keeps Pi host compaction untouched.
+After this slice merges, the likely next action is release prep and installed-artifact dogfood for generated Pi pre-compact bridge behavior.
 
 ## Load-bearing constraints
 
@@ -69,6 +70,8 @@ After this slice merges, the likely next action is release prep and installed-ar
 
 ## Current verification evidence
 
+- Generated Pi pre-compact bridge slice verification passed locally: `pnpm --filter @memory-lane/lifecycle build`, `pnpm --filter @memory-lane/cli build`, `pnpm --filter @memory-lane/cli test`, and `pnpm --filter @memory-lane/lifecycle test`.
+- Fable 5 diff review via `claude --model claude-fable-5 -p ...` found no blockers after follow-up fixes for shared pre-compact digest reuse, generated bridge timeout, normalized Pi hook ids, and child stdin error handling.
 - `v0.2.45` release workflow `28647421095` passed and published 8 assets from `83b9b3d`; CI workflow `28647261055` passed.
 - Installed `v0.2.45` validation passed: pre-upgrade `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, Slice 2b plan generation, apply refusal without `--yes`, explicit apply, idempotent re-apply, and final legacy-candidate count of 0.
 - Validation doc: `docs/superpowers/validation/2026-07-03-v0.2.45-release-dogfood.md`.

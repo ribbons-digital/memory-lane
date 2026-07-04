@@ -126,8 +126,16 @@ function existingSessionSummaryKeys(engine: MemoryEngine): { provenance: Set<str
   return { provenance, content }
 }
 
-function filterDuplicateSessionSummaries(engine: MemoryEngine, candidates: SessionEndCandidate[]): SessionEndCandidate[] {
-  const existing = existingSessionSummaryKeys(engine)
+function hasSessionSummaryProvenance(existing: { provenance: Set<string> }, provenance: { adapter?: string; sessionId?: string; turnId?: string; lifecycleEvent?: string }): boolean {
+  const provenanceKey = sessionSummaryProvenanceKey(provenance)
+  return Boolean(provenanceKey && existing.provenance.has(provenanceKey))
+}
+
+export function hasExistingSessionSummaryProvenance(engine: MemoryEngine, provenance: { adapter?: string; sessionId?: string; turnId?: string; lifecycleEvent?: string }): boolean {
+  return hasSessionSummaryProvenance(existingSessionSummaryKeys(engine), provenance)
+}
+
+function filterDuplicateSessionSummariesWithExisting(existing: { provenance: Set<string>; content: Set<string> }, candidates: SessionEndCandidate[]): SessionEndCandidate[] {
   const seenProvenance = new Set<string>()
   const seenContent = new Set<string>()
 
@@ -146,6 +154,10 @@ function filterDuplicateSessionSummaries(engine: MemoryEngine, candidates: Sessi
 
     return true
   })
+}
+
+function filterDuplicateSessionSummaries(engine: MemoryEngine, candidates: SessionEndCandidate[]): SessionEndCandidate[] {
+  return filterDuplicateSessionSummariesWithExisting(existingSessionSummaryKeys(engine), candidates)
 }
 
 function resolveProvider(options: SessionEndOptions, env: NodeJS.ProcessEnv): LLMProvider | undefined {
@@ -176,7 +188,7 @@ function latestMessageTimestamp(messages: SessionEndInput["messages"]): string |
   return latest
 }
 
-function preCompactTurnIdFallback(input: SessionEndInput): string | undefined {
+export function preCompactTurnIdFallback(input: SessionEndInput): string | undefined {
   const digest = createHash("sha256")
     .update(JSON.stringify(input.messages.map((message) => ({
       role: message.role,
@@ -223,6 +235,12 @@ export async function handleSessionEnd(
     throw new Error("Session-end summarization is enabled but no LLM provider is configured")
   }
 
+  const lifecycleEvent = options.lifecycleEvent ?? "session_end"
+  const adapter = options.adapter ?? options.providerConfig?.provider ?? "manual"
+  const turnId = options.turnId ?? (lifecycleEvent === "pre_compact" ? preCompactTurnIdFallback(input) : undefined)
+  const existingSummaries = existingSessionSummaryKeys(engine)
+  if (hasSessionSummaryProvenance(existingSummaries, { adapter, lifecycleEvent, sessionId: input.sessionId, turnId })) return []
+
   const transcript = renderTranscript(input.messages, options.includeToolOutputs ?? false)
   if (!transcript.trim()) return []
 
@@ -240,7 +258,7 @@ export async function handleSessionEnd(
   const text = [heading, "", cleaned].join("\n")
   const capturedAt = latestMessageTimestamp(input.messages)
 
-  return filterDuplicateSessionSummaries(engine, [{
+  return filterDuplicateSessionSummariesWithExisting(existingSummaries, [{
     text,
     category: "project",
     scopeType: scope ? "project" : "global",
@@ -248,10 +266,10 @@ export async function handleSessionEnd(
     status: "pending",
     source: "session-summary",
     provenance: {
-      adapter: options.adapter ?? options.providerConfig?.provider ?? "manual",
-      lifecycleEvent: options.lifecycleEvent ?? "session_end",
+      adapter,
+      lifecycleEvent,
       sessionId: input.sessionId,
-      turnId: options.turnId ?? (options.lifecycleEvent === "pre_compact" ? preCompactTurnIdFallback(input) : undefined),
+      turnId,
     },
     ...(capturedAt ? { freshness: { capturedAt } } : {}),
   }])

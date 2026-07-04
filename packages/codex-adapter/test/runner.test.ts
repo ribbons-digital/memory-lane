@@ -635,7 +635,7 @@ test("stop session-summary duplicate remains quiet without saving another memory
     })
 
     assert.equal(output, "{}")
-    assert.equal(requests.length, 1)
+    assert.equal(requests.length, 0)
     const saved = engine.list({ all: true })
     assert.equal(saved.length, 1)
     assert.equal(saved[0].provenance?.sessionId, "s")
