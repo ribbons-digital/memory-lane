@@ -340,7 +340,7 @@ export function buildContinuityHints(memories: MemoryRecord[], options: Continui
       count: overlap.primaryIds.length + overlap.relatedIds.length,
       memoryIds: [...overlap.primaryIds, ...overlap.relatedIds].slice(0, maxIds),
       workflowArea: overlap.workflowArea,
-      suggestedActions: [`memory-lane agreements --area ${overlap.workflowArea}`],
+      suggestedActions: [`memory-lane agreements --area ${overlap.workflowArea} --json`],
     })
   }
 
@@ -863,7 +863,7 @@ Current hints report:
 - project/global preference overlap in the same workflow area;
 - newer approved memories when `--since <ISO timestamp>` is provided.
 
-Hints invite inspection with commands such as `memory-lane dashboard`, `memory-lane agreements --area <area>`, `memory-lane agreements --all`, and `memory-lane list --json`. They do not perform cleanup, hide superseded memories, change recall ranking, or suggest mutation commands by default.
+Hints invite inspection with commands such as `memory-lane dashboard`, `memory-lane agreements --area <area> --json`, `memory-lane agreements --all`, and `memory-lane list --json`. They do not perform cleanup, hide superseded memories, change recall ranking, or suggest mutation commands by default.
 ```
 
 - [ ] **Step 2: Update skill doc**

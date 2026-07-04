@@ -100,7 +100,7 @@ Output should include:
 - primary ids
 - related candidate ids
 - counts
-- suggested inspection command: `memory-lane agreements --area <area>`
+- suggested inspection command: `memory-lane agreements --area <area> --json`
 
 This is informational only. Related candidates are not automatically stale or wrong.
 
@@ -138,7 +138,7 @@ Allowed default suggestions:
 
 - `memory-lane dashboard --json`
 - `memory-lane status --json --since <timestamp>`
-- `memory-lane agreements --area <area>`
+- `memory-lane agreements --area <area> --json`
 - `memory-lane agreements --all`
 - `memory-lane list --json`
 - `memory-lane recall <query>`

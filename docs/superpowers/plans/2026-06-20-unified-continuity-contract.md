@@ -186,6 +186,8 @@ export interface ContinuityWarning {
   severity: "info" | "review" | "warning"
   message: string
   memoryIds?: string[]
+  workflowAreas?: WorkflowArea[]
+  suggestedActions?: string[]
 }
 
 export interface ContinuityHarnessGuidance {
@@ -344,7 +346,12 @@ function buildWarnings(input: {
     warnings.push({ code: "scope-hygiene-candidate", severity: "review", message: "Some visible global memories look project-specific; inspect scope hygiene before relying on them." })
   }
   if (input.hintCodes.has("operating-agreement-overlap")) {
-    warnings.push({ code: "operating-agreement-overlap", severity: "review", message: "Multiple operating agreement candidates overlap; inspect agreements before applying workflow guidance." })
+    warnings.push({
+      code: "operating-agreement-overlap",
+      severity: "review",
+      message: "Multiple operating agreement candidates overlap; inspect agreements before applying workflow guidance.",
+      suggestedActions: ["memory-lane agreements --json"],
+    })
   }
   if (input.caller === "mcp") {
     warnings.push({ code: "mcp-explicit-tools-only", severity: "info", message: "MCP exposes explicit tools only; it does not run lifecycle hooks or automatic context injection." })
