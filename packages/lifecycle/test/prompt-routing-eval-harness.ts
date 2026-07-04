@@ -147,7 +147,7 @@ function uniqueTags(tags: PromptRoutingFailureTag[]): PromptRoutingFailureTag[] 
 }
 
 function ratio(numerator: number, denominator: number): number {
-  return denominator === 0 ? 1 : numerator / denominator
+  return denominator === 0 ? Number.NaN : numerator / denominator
 }
 
 function failureTagCounts(results: PromptRoutingScenarioResult[]): Record<string, number> {
@@ -209,6 +209,7 @@ export function summarizeResults(results: PromptRoutingScenarioResult[]): Prompt
 }
 
 export function buildPromptRoutingEvalReport(scenarios: PromptRoutingEvalScenario[] = corpus): PromptRoutingEvalReport {
+  if (scenarios.length === 0) throw new Error("prompt routing eval requires at least one scenario")
   const scenarioResults = scenarios.map(evaluateScenario)
   return {
     generatedAt: GENERATED_AT,
@@ -220,9 +221,13 @@ export function buildPromptRoutingEvalReport(scenarios: PromptRoutingEvalScenari
 }
 
 export function reportIsSatisfactory(report: PromptRoutingEvalReport): boolean {
-  return report.summary.failCount === 0
+  return report.summary.scenarioCount > 0
+    && report.summary.failCount === 0
     && report.summary.zeroToleranceFailures === 0
+    && Number.isFinite(report.summary.routeAccuracy)
     && report.summary.routeAccuracy === 1
+    && Number.isFinite(report.summary.intentFamilyAccuracy)
     && report.summary.intentFamilyAccuracy === 1
+    && Number.isFinite(report.summary.meanRequiredReasonRecall)
     && report.summary.meanRequiredReasonRecall === 1
 }

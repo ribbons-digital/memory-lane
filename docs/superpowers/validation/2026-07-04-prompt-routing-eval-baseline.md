@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented in isolated worktree `/Users/shiang/.config/superpowers/worktrees/memory-lane/prompt-routing-evals` on branch `prompt-routing-evals`.
+Implemented on branch `prompt-routing-evals`.
 
 This slice adds a deterministic prompt routing eval harness and report runner.
 It does not change production routing behavior.

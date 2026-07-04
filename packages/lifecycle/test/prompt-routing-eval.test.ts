@@ -29,8 +29,32 @@ test("prompt routing eval report reaches satisfactory thresholds", () => {
   assert.equal(report.summary.routeAccuracy, 1)
   assert.equal(report.summary.intentFamilyAccuracy, 1)
   assert.equal(report.summary.meanRequiredReasonRecall, 1)
-  assert.equal(report.summary.failureTagCounts && Object.keys(report.summary.failureTagCounts).length, 0)
+  assert.equal(Object.keys(report.summary.failureTagCounts).length, 0)
   assert.equal(reportIsSatisfactory(report), true)
+})
+
+test("prompt routing eval report rejects no-data and failing summaries", () => {
+  assert.throws(() => buildPromptRoutingEvalReport([]), /requires at least one scenario/)
+
+  const emptySummary = summarizeResults([])
+  assert.equal(reportIsSatisfactory({
+    generatedAt: GENERATED_AT,
+    corpusId: CORPUS_ID,
+    mode: "local-fixtures",
+    scenarioResults: [],
+    summary: emptySummary,
+  }), false)
+
+  const report = buildPromptRoutingEvalReport()
+  assert.equal(reportIsSatisfactory({
+    ...report,
+    summary: {
+      ...report.summary,
+      failCount: 1,
+      zeroToleranceFailures: 1,
+      routeAccuracy: 10 / 11,
+    },
+  }), false)
 })
 
 test("prompt routing eval detects wrong route and missing reason failures", () => {
