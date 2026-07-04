@@ -2,22 +2,23 @@
 
 ## Status
 
-Approved and implemented in this slice.
+Approved, implemented in PR #94, and shipped in `v0.2.45`.
 Fable 5 reviewed the draft, blockers were resolved, and the user approved implementation.
+Installed-artifact validation is documented in `docs/superpowers/validation/2026-07-03-v0.2.45-release-dogfood.md`.
 
 Slice 0 shipped in `v0.2.42` as the storage facade proof.
 Slice 1 shipped in `v0.2.43` as project-local default writes for new project-scoped memories.
 Slice 2a shipped in `v0.2.44` as read-only legacy diagnostics and dry-run preview.
 
-Slice 2b defines the mutating migration protocol required before Memory Lane may move legacy home-stored project memories into project-local storage.
+Slice 2b is the mutating migration protocol required before Memory Lane may move legacy home-stored project memories into project-local storage.
 The implementation is limited to this reviewed plan/apply protocol.
 
 ## Entry gate
 
-The entry gate is open because Slice 2a is released and dogfooded.
-The installed artifact can already enumerate active legacy current-project memories through CLI `status`, CLI `doctor`, MCP `memory_status`, and `memory-lane migrate project-local --dry-run`.
+The entry gate opened after Slice 2a was released and dogfooded.
+The installed artifact can enumerate active legacy current-project memories through CLI `status`, CLI `doctor`, MCP `memory_status`, and `memory-lane migrate project-local --dry-run`.
 
-The implementation gate is open after Fable 5 review and explicit user approval.
+The implementation gate was satisfied by Fable 5 review and explicit user approval.
 No command may silently move, delete, approve, reject, consolidate, or rescope memories outside the approved plan/apply protocol.
 
 ## Problem

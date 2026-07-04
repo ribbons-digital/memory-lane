@@ -39,7 +39,7 @@ Important paper details:
 
 | Step | Paper goal | Memory Lane today | Verdict |
 |---|---|---|---|
-| Write | Record attempts/feedback as durable learning | Captures explicit saves, corrections, checkpoints, procedures, postmortems, and session summaries | Partial / strong in high-signal cases |
+| Write | Record attempts/feedback as durable learning | Captures explicit saves, corrections, checkpoints, procedures, postmortems, session summaries, and pre-compact summaries | Partial / strong in high-signal cases |
 | Consolidate | Distill raw episodes into reusable principles and resolve conflicts | Has dedup keys, roles, operating agreements, freshness, revisions, and summaries, but no cross-memory synthesis | Main gap |
 | Recall | Read relevant lessons before future tasks | Has semantic/lexical recall, continuity read model, workstream discovery, lifecycle injection, and MCP/CLI/Pi surfaces | Strong |
 | Apply | Use lessons to avoid repeated dead ends | Injects bounded context/guidance and steers harnesses to continuity/agreement/status tools | Strong but mostly passive |
@@ -62,7 +62,7 @@ Memory Lane has multiple write/capture paths:
 | Procedure capture | Queues pending `procedure` memories from failed-then-recovered tool workflows | `packages/lifecycle/src/tool-outcomes.ts` |
 | Postmortem learning | Queues correction/procedure candidates from symptom + cause + prevention + verification evidence | `packages/lifecycle/src/postmortem-learning.ts` |
 | Checkpoint capture | Queues progress/checkpoint candidates for releases, merges, verification, doc syncs | `packages/lifecycle/src/checkpoint-capture.ts` |
-| Session summaries | Confirmed LLM-generated pending `session_summary` memories that await review/approval | `packages/lifecycle/src/session-end.ts` |
+| Session summaries | Confirmed or configured pre-compact LLM-generated pending `session_summary` memories that await review/approval | `packages/lifecycle/src/session-end.ts` |
 
 The capture style is intentionally conservative:
 
@@ -105,7 +105,7 @@ Memory Lane has several consolidation-like mechanisms:
 | Operating agreements | Selects workflow/process memories by area | `packages/core/src/operating-agreements.ts` |
 | Freshness/hints | Surfaces stale/expired/superseded/overlap/scope-hygiene signals | `packages/core/src/freshness.ts`, `packages/core/src/continuity-hints.ts` |
 | Revision primitives | Manual `update`, `replace`, `supersede`, `rescope` flows | `packages/core/src/engine.ts`, CLI commands |
-| Session summary generation | Compresses session context into pending summaries | `packages/lifecycle/src/session-end.ts` |
+| Session summary generation | Compresses session-end and pre-compact context into pending summaries | `packages/lifecycle/src/session-end.ts` |
 
 ### Gap against the paper
 

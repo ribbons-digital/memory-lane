@@ -40,6 +40,8 @@ Recent completion evidence:
 - Installed-artifact `v0.2.43` dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, route classification, and generated Pi bridge continuity checks; validation: `docs/superpowers/validation/2026-07-02-v0.2.43-release-dogfood.md`.
 - Release `v0.2.44` (`2788c4e`) passed workflow `28628495514`, shipping project-local storage Slice 2a legacy diagnostics from PR #89.
 - Installed-artifact `v0.2.44` dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, CLI and MCP legacy diagnostics, dry-run migration preview, and non-dry-run migration refusal; validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
+- Release `v0.2.45` (`83b9b3d`) passed workflow `28647421095`, shipping project-local storage Slice 2b review-first migration from PR #94 and pre-compact session summaries from PR #95.
+- Installed-artifact `v0.2.45` validation passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, Slice 2b dry-run plan generation, apply refusal without `--yes`, explicit apply, idempotent re-apply, and final legacy-candidate count of 0; validation: `docs/superpowers/validation/2026-07-03-v0.2.45-release-dogfood.md`.
 - Installed-artifact `v0.2.41` continuity dogfood after `memory-lane upgrade --yes` passed: broad next-work continuity has empty workstream candidates plus `no-topic`, stale release/checkpoint ids are absent from operating guidance, and topic-specific queries still return candidates.
 - Phase-completion docs sync landed in `309021e docs: declare phase 21 complete`.
 - PR #69 (`4ebf447`) completed the docs/context-budget slice: root `ROADMAP.md` is compact, historical roadmap detail through Phase 20.5 is archived, and skill guidance uses bounded reads.
@@ -81,31 +83,34 @@ Slice plan:
    New project-scoped writes route project-side by default, global-scope preference/personal writes stay home-side, project/home reads merge with deterministic folding, existing ids mutate in their origin store, embeddings/compaction follow owning stores, and read-only CLI/MCP/plugin paths avoid fallback creation while respecting per-request project context.
 3. **Slice 2a - legacy project-memory diagnostics.** Shipped in `v0.2.44` / PR #89.
    Legacy home-stored project memories for the active project are detected through bounded `status` / `doctor` diagnostics, and `memory-lane migrate project-local --dry-run` provides a mutation-free preview; silent move/delete/approve/consolidate remains out of scope.
-4. **Slice 2b - review-first legacy migration protocol.** In implementation.
+4. **Slice 2b - review-first legacy migration protocol.** Shipped in `v0.2.45` / PR #94.
    Approved spec: `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
    The implementation adds a reviewable `--dry-run --write-plan` flow and an explicit `--apply-plan <path> --yes` apply path.
 
-Current release state: Slice 0 is merged and released in `v0.2.42`; Slice 1 is merged and released in `v0.2.43` alongside continuity routing/context hygiene PR #82 (`a808231`); Slice 2a is merged and released in `v0.2.44` from PR #89 (`96516ef`); Slice 2b is in implementation.
-Installed-artifact `v0.2.44` dogfood passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, CLI and MCP legacy diagnostics, dry-run migration preview, and non-dry-run migration refusal.
-Validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
+Current release state: Slice 0 is merged and released in `v0.2.42`; Slice 1 is merged and released in `v0.2.43` alongside continuity routing/context hygiene PR #82 (`a808231`); Slice 2a is merged and released in `v0.2.44` from PR #89 (`96516ef`); Slice 2b is merged in PR #94 (`036fcde`) and released in `v0.2.45` alongside pre-compact session summaries from PR #95 (`83b9b3d`).
+Installed-artifact `v0.2.45` validation passed in order: pre-upgrade baseline `memory-lane --smoke-test`, `memory-lane upgrade --yes`, post-upgrade `memory-lane --smoke-test`, Slice 2b dry-run plan generation, apply refusal without `--yes`, explicit apply, idempotent re-apply, and final legacy-candidate count of 0.
+Validation: `docs/superpowers/validation/2026-07-03-v0.2.45-release-dogfood.md`.
 Fable 5 Waves 1-3 hardening merged in PR #85 as `6da6105`: config merge/backups, hook fail-safe initialization, bounded background embedding shutdown, invalid-row preserving compaction, stale embedding invalidation checks, provider timeout validation, MCP shutdown settling, and docs/status sync.
 Fable 5 Wave 4 maintainability/UX follow-through merged in PR #86 as `e2d4aec`: stale status docs were trued up, `.memory-lane-scope` is ignored by default, project-local docs clarify scope identity handling, and the Obsidian CLI command cluster was extracted without intended behavior changes.
 
 Slice 2a legacy project-memory diagnostics is complete, released in `v0.2.44`, and dogfooded from the installed artifact.
+Slice 2b review-first legacy migration protocol is complete, released in `v0.2.45`, and dogfooded from the installed artifact.
 Fable 5 reviewed the planning direction, full spec, and implementation.
+Approved Slice 2b spec: `docs/superpowers/specs/2026-07-03-project-local-storage-slice-2b-migration-protocol-design.md`.
 Approved Slice 2a spec: `docs/superpowers/specs/2026-07-02-project-local-storage-slice-2a-legacy-diagnostics-design.md`.
 Approved Slice 1 spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
-Release validation: `docs/superpowers/validation/2026-07-02-v0.2.44-release-dogfood.md`.
-Confirmed migration and cross-store rescope moves remain deferred unless they follow the approved Slice 2b review-first plan/apply protocol.
-Current action: implement Slice 2b from the approved Fable-reviewed spec.
-Keep implementation limited to reviewed plan generation, explicit apply, idempotent migration, tests, and docs; general cross-store rescope remains deferred.
+Release validation: `docs/superpowers/validation/2026-07-03-v0.2.45-release-dogfood.md`.
+General cross-store rescope moves remain deferred unless a future approved slice explicitly includes them.
+Current recommended next work: a screenshot-driven continuity rendering hygiene slice.
+Start with an end-to-end repro of duplicated latest progress/project continuity output, duplicated global workflow context, and buried continuity warnings, then fix shared rendering/dedupe behavior without automatic supersession or silent memory mutation.
 
 Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in `v0.2.41`; pause retrieval-ranking work unless new dogfood/eval evidence justifies another proposal.
 
 ## Other viable future tracks
 
 - **Continuity routing/context hygiene follow-ups:** PR #82 shipped in `v0.2.43`.
-  Future work should stay backlog-only unless dogfood exposes regressions; no LLM classifier behavior shipped in this slice.
+  A pi-herd dogfood screenshot exposed duplicated continuity rendering and buried warning behavior, so the next recommended slice is an end-to-end rendering hygiene fix.
+  Scope should stay review-first and avoid LLM classifier behavior, automatic supersession, or silent memory mutation.
 - **Review-first consolidation proposals:** identify overlapping/superseded memories and suggest manual `update` / `replace` / `supersede` commands. Keep review-first; no auto-consolidation or auto-approval.
 - **Docs/context-budget follow-up:** consider README splitting or generated current-state docs if README becomes the next major context source.
 - **Hardening backlog:** installer/init wizard improvements, Claude Desktop MCP config path tests, import dry-run secret warnings, and broader read-only taxonomy checks.
