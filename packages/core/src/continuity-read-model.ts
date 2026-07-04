@@ -201,18 +201,17 @@ function buildWarnings(input: {
     warnings.push({ code: "scope-hygiene-candidate", severity: "review", message: "Some visible global memories look project-specific; inspect scope hygiene before relying on them." })
   }
   if (input.hintCodes.has("operating-agreement-overlap")) {
-    const workflowAreas = unique(input.hints
-      .filter((hint) => hint.code === "operating-agreement-overlap" && hint.workflowArea)
+    const overlapHints = input.hints.filter((hint) => hint.code === "operating-agreement-overlap")
+    const workflowAreas = unique(overlapHints
+      .filter((hint) => hint.workflowArea)
       .map((hint) => hint.workflowArea!))
-    const suggestedActions = workflowAreas.length
-      ? workflowAreas.map((area) => `memory-lane agreements --area ${area} --json`)
-      : ["memory-lane agreements --json"]
+    const suggestedActions = unique(overlapHints.flatMap((hint) => hint.suggestedActions ?? []))
     warnings.push({
       code: "operating-agreement-overlap",
       severity: "review",
       message: "Multiple operating agreement candidates overlap; inspect agreements before applying workflow guidance.",
       ...(workflowAreas.length ? { workflowAreas } : {}),
-      suggestedActions,
+      suggestedActions: suggestedActions.length ? suggestedActions : ["memory-lane agreements --json"],
     })
   }
   if (input.caller === "mcp") {

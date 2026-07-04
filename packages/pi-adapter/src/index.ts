@@ -2,7 +2,7 @@ import { Type } from "typebox"
 import { classifyPromptRoute, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy } from "@memory-lane/lifecycle"
 import type { PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
 import {
-  MemoryEngine, createSingleStoreEngineStorage, createTwoTierEngineStorage, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableEngineStoragePaths, type SaveResult,
+  MemoryEngine, buildContinuityWarningRenderPlan, continuityWarningInspectionActions, createSingleStoreEngineStorage, createTwoTierEngineStorage, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableEngineStoragePaths, type SaveResult,
 } from "@memory-lane/core"
 import { isPiDebugEnabled, piDebugPath, writePiDebugLog } from "./debug.js"
 
@@ -145,26 +145,28 @@ function memoryLaneContextMessage(content: string, details: Record<string, unkno
   }
 }
 
-function piWarningInspectionActions(warning: any): string[] {
-  return warning?.suggestedActions?.length ? warning.suggestedActions : []
-}
-
 function piRenderedWarningInspectionActions(warnings: any[]): Set<string> {
-  const actions = new Set<string>()
-  for (const warning of warnings.slice(0, 3)) {
-    for (const action of piWarningInspectionActions(warning).slice(0, 3)) actions.add(action)
-  }
-  return actions
+  return buildContinuityWarningRenderPlan(warnings).renderedInspectionActions
 }
 
 function renderPiWarningBlock(warnings: any[]): string[] {
   if (!warnings.length) return []
-  const lines = ["", "Action required before applying continuity guidance:"]
-  for (const warning of warnings.slice(0, 3)) {
+  const plan = buildContinuityWarningRenderPlan(warnings)
+  const lines: string[] = []
+  const renderWarning = (warning: any) => {
     lines.push(`- ${warning.code}: ${warning.message}`)
     if (warning.code === "operating-agreement-overlap") lines.push("  Do not treat overlapping workflow guidance as authoritative until inspected.")
-    for (const action of piWarningInspectionActions(warning).slice(0, 3)) lines.push(`  Inspect: ${action}`)
+    for (const action of continuityWarningInspectionActions(warning).slice(0, 3)) lines.push(`  Inspect: ${action}`)
   }
+  if (plan.actionRequiredWarnings.length) {
+    lines.push("", "Action required before applying continuity guidance:")
+    for (const warning of plan.actionRequiredWarnings) renderWarning(warning)
+  }
+  if (plan.infoWarnings.length) {
+    lines.push("", "Continuity notes:")
+    for (const warning of plan.infoWarnings) renderWarning(warning)
+  }
+  if (plan.omittedWarningCount > 0) lines.push(`${plan.omittedWarningCount} more warnings omitted`)
   return lines
 }
 

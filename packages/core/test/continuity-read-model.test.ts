@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { buildContinuityReadModel, MemoryEngine, type MemoryRecord } from "../src/index.js"
+import { buildContinuityReadModel, buildContinuityWarningRenderPlan, MemoryEngine, type ContinuityWarning, type MemoryRecord } from "../src/index.js"
 import { tempDir } from "./helpers.js"
 
 function memory(overrides: Partial<MemoryRecord> & { id: string; text?: string }): MemoryRecord {
@@ -328,6 +328,27 @@ test("continuity read model adds actionable overlap warning metadata", () => {
   assert.deepEqual(warning?.workflowAreas, ["project-loop"])
   assert.deepEqual(warning?.suggestedActions, ["memory-lane agreements --area project-loop --json"])
   assert.ok(result.suggestedActions.includes("memory-lane agreements --area project-loop --json"))
+})
+
+
+test("continuity warning render plan groups by severity and reports omitted warnings", () => {
+  const warnings: ContinuityWarning[] = [
+    { code: "mcp-explicit-tools-only", severity: "info", message: "MCP note." },
+    { code: "operating-agreement-overlap", severity: "review", message: "Overlap.", suggestedActions: ["memory-lane agreements --area project-loop --json", "memory-lane agreements --area review-gate --json", "memory-lane agreements --area pr-process --json", "memory-lane agreements --area release-process --json"] },
+    { code: "scope-hygiene-candidate", severity: "review", message: "Scope." },
+    { code: "freshness-advisory", severity: "review", message: "Freshness." },
+  ]
+
+  const plan = buildContinuityWarningRenderPlan(warnings)
+
+  assert.deepEqual(plan.infoWarnings.map((warning) => warning.code), ["mcp-explicit-tools-only"])
+  assert.deepEqual(plan.actionRequiredWarnings.map((warning) => warning.code), ["operating-agreement-overlap", "scope-hygiene-candidate"])
+  assert.equal(plan.omittedWarningCount, 1)
+  assert.deepEqual([...plan.renderedInspectionActions], [
+    "memory-lane agreements --area project-loop --json",
+    "memory-lane agreements --area review-gate --json",
+    "memory-lane agreements --area pr-process --json",
+  ])
 })
 
 

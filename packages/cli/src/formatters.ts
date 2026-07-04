@@ -2,7 +2,7 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { buildContinuityHints, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryRecord, type MemoryRecordWithReviewHygiene, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type UpdatePreview, type RescopeResult, type SupersedeResult, type ReplaceResult, type LegacyProjectMemoryDiagnostics, type LegacyProjectMigrationApplyResult, type LegacyProjectMigrationPlan } from "@memory-lane/core"
+import { buildContinuityHints, buildContinuityWarningRenderPlan, continuityWarningInspectionActions, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryRecord, type MemoryRecordWithReviewHygiene, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type UpdatePreview, type RescopeResult, type SupersedeResult, type ReplaceResult, type LegacyProjectMemoryDiagnostics, type LegacyProjectMigrationApplyResult, type LegacyProjectMigrationPlan } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 
 export const VERSION = "0.1.0"
@@ -784,20 +784,26 @@ function compactReferences(references: ContinuityReadModel["workstreamDiscovery"
   return parts.join(", ")
 }
 
-function warningInspectionActions(warning: ContinuityReadModel["warnings"][number]): string[] {
-  return warning.suggestedActions?.length ? warning.suggestedActions : []
-}
-
 function renderContinuityWarnings(warnings: ContinuityReadModel["warnings"]): string[] {
   if (!warnings.length) return []
-  const lines = ["", colorize("Action required before applying continuity guidance", "yellow")]
-  for (const warning of warnings) {
+  const plan = buildContinuityWarningRenderPlan(warnings)
+  const lines: string[] = []
+  const renderWarning = (warning: ContinuityReadModel["warnings"][number]) => {
     lines.push(`  ${figures.warning} ${warning.code}: ${warning.message}`)
     if (warning.code === "operating-agreement-overlap") {
       lines.push("    Do not treat overlapping workflow guidance as authoritative until inspected.")
     }
-    for (const action of warningInspectionActions(warning)) lines.push(`    ${figures.pointerSmall} ${action}`)
+    for (const action of continuityWarningInspectionActions(warning)) lines.push(`    ${figures.pointerSmall} ${action}`)
   }
+  if (plan.actionRequiredWarnings.length) {
+    lines.push("", colorize("Action required before applying continuity guidance", "yellow"))
+    for (const warning of plan.actionRequiredWarnings) renderWarning(warning)
+  }
+  if (plan.infoWarnings.length) {
+    lines.push("", colorize("Continuity notes", "bold"))
+    for (const warning of plan.infoWarnings) renderWarning(warning)
+  }
+  if (plan.omittedWarningCount > 0) lines.push(`  ${plan.omittedWarningCount} more warnings omitted`)
   return lines
 }
 
@@ -871,7 +877,7 @@ export function formatContinuityReadModel(model: ContinuityReadModel, json: bool
   const freshnessActionOutput = formatFreshnessAdvisoryActionOutput(model.freshness)
   if (freshnessActionOutput.lines.length) lines.push("", ...freshnessActionOutput.lines)
   const allFreshnessActions = new Set(formatFreshnessAdvisoryActionOutput(model.freshness, { maxActions: Number.POSITIVE_INFINITY }).actions)
-  const warningActions = new Set(model.warnings.flatMap(warningInspectionActions))
+  const warningActions = buildContinuityWarningRenderPlan(model.warnings).renderedInspectionActions
   const suggestedActions = model.suggestedActions.filter((action) => !allFreshnessActions.has(action) && !warningActions.has(action))
   lines.push("", colorize("Suggested actions", "bold"), ...suggestedActions.map((action) => `  ${figures.pointerSmall} ${action}`))
   return lines.join("\n")

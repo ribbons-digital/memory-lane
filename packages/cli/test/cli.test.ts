@@ -1579,6 +1579,33 @@ describe("CLI integration", () => {
     assert.ok(output.stdout.indexOf("Action required before applying continuity guidance") < output.stdout.indexOf("Operating guidance"))
   })
 
+  it("continuity human output renders info warnings as notes and reports omitted warnings", () => {
+    const model = {
+      projectScope: "cli-info-warning",
+      status: { visibleApprovedCount: 0, pendingContinuityCount: 0 },
+      latestApproved: {},
+      latestProgress: undefined,
+      operatingGuidance: [],
+      pendingContinuity: [],
+      warnings: [
+        { code: "mcp-explicit-tools-only", severity: "info", message: "MCP exposes explicit tools only." },
+        { code: "operating-agreement-overlap", severity: "review", message: "Overlap.", suggestedActions: ["memory-lane agreements --area project-loop --json"] },
+        { code: "scope-hygiene-candidate", severity: "review", message: "Scope." },
+        { code: "freshness-advisory", severity: "review", message: "Freshness." },
+      ],
+      answerGuidance: [],
+      suggestedActions: ["memory-lane continuity --json", "memory-lane agreements --area project-loop --json"],
+      freshness: { visibleApprovedCount: 0, newerApprovedCount: 0, newerProjectApprovedCount: 0, newerGlobalApprovedCount: 0, newerGlobalPreferenceCount: 0, advisory: { expiredCount: 0, staleCount: 0, expired: [], stale: [] } },
+    } as unknown as ContinuityReadModel
+
+    const output = formatContinuityReadModel(model, false)
+
+    assert.match(output, /Action required before applying continuity guidance/u)
+    assert.match(output, /Continuity notes/u)
+    assert.match(output, /1 more warnings omitted/u)
+    assert.equal((output.match(/memory-lane agreements --area project-loop --json/gu) ?? []).length, 1)
+  })
+
   it("continuity human output includes truncated operating guidance inspection instruction", () => {
     const dir = tempDir()
     const project = path.join(dir, "project")
