@@ -1,6 +1,6 @@
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
-import { execFileSync, spawnSync } from "node:child_process"
+import { execFileSync, spawn, spawnSync } from "node:child_process"
 import * as http from "node:http"
 import * as fs from "node:fs"
 import * as os from "node:os"
@@ -35,6 +35,26 @@ function runProcess(args: string[], options?: { env?: NodeJS.ProcessEnv; stdin?:
   })
 }
 
+function runProcessAsync(args: string[], options?: { env?: NodeJS.ProcessEnv; stdin?: string; cwd?: string }): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  const cli = path.resolve(__dirname, "../dist/index.js")
+  const env = { ...process.env, ...options?.env }
+  for (const key of Object.keys(env)) {
+    if (env[key] === undefined) delete env[key]
+  }
+  return new Promise((resolve, reject) => {
+    const child = spawn("node", [cli, ...args], { cwd: options?.cwd, env, stdio: ["pipe", "pipe", "pipe"] })
+    let stdout = ""
+    let stderr = ""
+    child.stdout.setEncoding("utf8")
+    child.stderr.setEncoding("utf8")
+    child.stdout.on("data", (chunk) => { stdout += chunk })
+    child.stderr.on("data", (chunk) => { stderr += chunk })
+    child.on("error", reject)
+    child.on("close", (status) => resolve({ status, stdout, stderr }))
+    child.stdin.end(options?.stdin)
+  })
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
@@ -50,6 +70,28 @@ async function withHangingServer<T>(fn: (baseUrl: string) => Promise<T>): Promis
   }
   try {
     return await fn(`http://127.0.0.1:${address.port}/v1`)
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+  }
+}
+
+async function withMockSummaryServer<T>(summary: string, fn: (baseUrl: string, requests: unknown[]) => Promise<T>): Promise<T> {
+  const requests: unknown[] = []
+  const server = http.createServer((req, res) => {
+    let body = ""
+    req.setEncoding("utf8")
+    req.on("data", (chunk) => { body += chunk })
+    req.on("end", () => {
+      try { requests.push(JSON.parse(body)) } catch { requests.push(body) }
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ choices: [{ message: { content: summary } }] }))
+    })
+  })
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("Expected TCP server address")
+  try {
+    return await fn(`http://127.0.0.1:${address.port}/v1`, requests)
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
   }
@@ -2532,6 +2574,91 @@ describe("CLI integration", () => {
     })
     assert.equal(result.status, 0)
     assert.match(result.stdout, /requires memory\.sessionEndSummary\.baseUrl and model/)
+  })
+
+  it("pi unknown event returns usage error", () => {
+    const result = runProcess(["pi", "unknown-event"], {
+      env: {
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+    })
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout + result.stderr, /Unknown Pi hook event/)
+  })
+
+  it("pi pre-compact accepts hook payload on stdin", () => {
+    fs.writeFileSync(cfgFile, JSON.stringify({ memory: { sessionEndSummary: { enabled: true } } }), "utf8")
+    const result = runProcess(["pi", "pre-compact", "--json"], {
+      env: {
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      },
+      stdin: JSON.stringify({
+        cwd: process.cwd(),
+        session_id: "pi-session-1",
+        turn_id: "pi-turn-1",
+        trigger: "manual",
+        messages: [{ role: "user", content: "Continue the Memory Lane Pi precompact fix." }],
+      }),
+    })
+    assert.equal(result.status, 0)
+    const parsed = JSON.parse(result.stdout)
+    assert.equal(parsed.data.saved, 0)
+    assert.match(parsed.data.message, /requires memory\.sessionEndSummary\.baseUrl and model/)
+  })
+
+  it("pi pre-compact saves pending summary with pi provenance and dedupes repeated turn", async () => {
+    await withMockSummaryServer("- Decisions made: preserve generated Pi precompact continuity.", async (baseUrl, requests) => {
+      fs.writeFileSync(cfgFile, JSON.stringify({
+        memory: {
+          sessionEndSummary: {
+            enabled: true,
+            baseUrl,
+            model: "summary-model",
+            requireConfirmation: false,
+          },
+        },
+      }), "utf8")
+      const env = {
+        MEMORY_LANE_FILE: memFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+        MEMORY_LANE_CONFIG: cfgFile,
+      }
+      const payload = JSON.stringify({
+        cwd: process.cwd(),
+        session_id: "pi-session-2",
+        turn_id: "pi-turn-2",
+        trigger: "auto",
+        messages: [
+          { role: "user", content: "Fix the generated Pi bridge precompact hook." },
+          { role: "assistant", content: "Implemented the generated bridge hook." },
+        ],
+      })
+
+      const first = await runProcessAsync(["pi", "pre-compact", "--json"], { env, stdin: payload })
+      assert.equal(first.status, 0, first.stderr)
+      assert.equal(JSON.parse(first.stdout).data.saved, 1)
+
+      const second = await runProcessAsync(["pi", "pre-compact", "--json"], { env, stdin: payload })
+      assert.equal(second.status, 0, second.stderr)
+      assert.equal(JSON.parse(second.stdout).data.saved, 0)
+
+      const review = JSON.parse(run(["review", "--json", "--provenance", "pi/pre_compact"], env))
+      assert.equal(review.meta.count, 1)
+      const memory = review.data.memories[0]
+      assert.equal(memory.kind, "session_summary")
+      assert.equal(memory.source, "session-summary")
+      assert.equal(memory.status, "pending")
+      assert.equal(memory.provenance.adapter, "pi")
+      assert.equal(memory.provenance.lifecycleEvent, "pre_compact")
+      assert.equal(memory.provenance.sessionId, "pi-session-2")
+      assert.equal(memory.provenance.turnId, "pi-turn-2")
+      assert.match(memory.text, /generated Pi precompact continuity/)
+      assert.equal(requests.length, 1)
+    })
   })
 
   it("claude unknown event returns usage error", () => {

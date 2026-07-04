@@ -101,17 +101,17 @@ Approved Slice 2a spec: `docs/superpowers/specs/2026-07-02-project-local-storage
 Approved Slice 1 spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
 Release validation: `docs/superpowers/validation/2026-07-03-v0.2.45-release-dogfood.md`.
 General cross-store rescope moves remain deferred unless a future approved slice explicitly includes them.
-Current implementation slice: screenshot-driven continuity rendering hygiene.
-The slice starts with fixture-backed repros of duplicated latest progress/project continuity output, duplicated global workflow context, and buried continuity warnings.
-It fixes renderer-level dedupe and actionable warning promotion while keeping automatic supersession, silent memory mutation, selection/ranking rewrites, LLM classifiers, and schema expansion out of scope.
-After this slice merges, the likely next action is release prep and installed-artifact dogfood for the continuity rendering hygiene fix.
+Continuity rendering hygiene merged in PR #97 as `9c0040b`; CodeRabbit configuration merged in PR #98 as `4e0b2fb`.
+Current implementation slice: generated Pi pre-compact bridge parity.
+The slice adds `memory-lane pi pre-compact`, wires release-style generated Pi bridges to `session_before_compact`, saves pending `session_summary` memories with pi `pre_compact` provenance, reuses the lifecycle pre-compact turn digest for dedupe, and keeps Pi host compaction untouched.
+After this slice merges, the likely next action is release prep and installed-artifact dogfood for generated Pi pre-compact bridge behavior.
 
 Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in `v0.2.41`; pause retrieval-ranking work unless new dogfood/eval evidence justifies another proposal.
 
 ## Other viable future tracks
 
-- **Continuity routing/context hygiene follow-ups:** PR #82 shipped in `v0.2.43`.
-  A pi-herd dogfood screenshot exposed duplicated continuity rendering and buried warning behavior, so the current slice is an end-to-end rendering hygiene fix.
+- **Continuity routing/context hygiene follow-ups:** PR #82 shipped in `v0.2.43`, and duplicate continuity rendering hygiene merged in PR #97.
+  Current follow-up work is generated Pi pre-compact bridge parity so release-style generated Pi bridges match native Pi pre-compact session-summary support.
   Scope stays review-first and avoids LLM classifier behavior, automatic supersession, or silent memory mutation.
 - **Review-first consolidation proposals:** identify overlapping/superseded memories and suggest manual `update` / `replace` / `supersede` commands. Keep review-first; no auto-consolidation or auto-approval.
 - **Docs/context-budget follow-up:** consider README splitting or generated current-state docs if README becomes the next major context source.

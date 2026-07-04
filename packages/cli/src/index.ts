@@ -6,6 +6,7 @@ import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import { classifyPromptRoute, handleSessionEnd, createOpenAICompatibleProvider } from "@memory-lane/lifecycle"
+import { runPiHookCommand } from "./pi-hook.js"
 import { handleMcp } from "./commands/mcp.js"
 import { handleInit } from "./commands/init.js"
 import { handleUninstall } from "./commands/uninstall.js"
@@ -726,6 +727,7 @@ function handleMigrate(ctx: CliContext): void {
 
 const claudeHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start", "session-end", "pre-compact"])
 const codexHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start", "session-end", "pre-compact"])
+const piHookCommands = new Set<string>(["pre-compact"])
 
 async function handleCodex(ctx: CliContext): Promise<void> {
   const event = ctx.rest[0]
@@ -759,6 +761,22 @@ async function handleClaude(ctx: CliContext): Promise<void> {
   console.log(output)
 }
 
+async function handlePi(ctx: CliContext): Promise<void> {
+  const event = ctx.rest[0]
+  if (!piHookCommands.has(event)) {
+    console.log(formatError("Unknown Pi hook event. Usage: memory-lane pi pre-compact", ctx.json))
+    process.exit(2)
+  }
+  const payloadText = await readStdin()
+  const output = await runPiHookCommand(event as "pre-compact", {
+    engine: ctx.engine,
+    payloadText,
+    env: process.env,
+    configPath: ctx.configPath,
+  })
+  console.log(output)
+}
+
 type CommandHandler = (ctx: CliContext) => void | Promise<void>
 
 // These inspection commands must work in read-only desktop/client sandboxes without home-storage write probes.
@@ -777,7 +795,7 @@ function usesReadOnlyStorageResolution(command: string, argv: string[]): boolean
 }
 
 function isHookInvocation(command: string): boolean {
-  return command === "claude" || command === "codex"
+  return command === "claude" || command === "codex" || command === "pi"
 }
 
 const HOOK_SETTLE_TIMEOUT_MS = 2_000
@@ -838,6 +856,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   migrate: handleMigrate,
   claude: handleClaude,
   codex: handleCodex,
+  pi: handlePi,
   mcp: handleMcp,
   "session-end": handleSessionEndCommand,
 }
