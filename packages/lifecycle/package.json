@@ -17,7 +17,8 @@
   "scripts": {
     "build": "tsc",
     "test": "node --test --import tsx test/*.test.ts",
-    "eval:injection": "tsx test/lifecycle-injection-eval-runner.ts"
+    "eval:injection": "tsx test/lifecycle-injection-eval-runner.ts",
+    "eval:prompt-routing": "tsx test/prompt-routing-eval-runner.ts"
   },
   "dependencies": {
     "@memory-lane/core": "workspace:*"
