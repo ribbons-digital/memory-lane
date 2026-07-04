@@ -284,7 +284,7 @@ export function handleSessionStart(
     ...operatingAgreements.primary.map((agreement) => agreement.id),
     ...operatingAgreements.relatedCandidates.map((agreement) => agreement.id),
   ])
-  const baselineCandidates = approved.filter((memory) => !operatingAgreementIds.has(memory.id) && !(automaticActive && isUnsafeAutomaticHandoffPointer(memory, projectScope)))
+  const baselineCandidates = approved.filter((memory) => !operatingAgreementIds.has(memory.id) && (memory.scope.type === "global" || memory.scope.key === projectScope) && !memory.revision?.supersededBy && !(automaticActive && isUnsafeAutomaticHandoffPointer(memory, projectScope)))
   const sessionStartPreferenceMaxChars = policy.preferenceMaxChars.sessionStart ?? 600
   const sessionStartPreferenceMaxItems = policy.preferenceMaxItems.sessionStart ?? 2
   const fullBodyBudgetChars = Math.min(remainingChars, sessionStartPreferenceMaxChars)

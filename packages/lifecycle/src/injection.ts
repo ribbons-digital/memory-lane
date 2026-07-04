@@ -279,10 +279,15 @@ function preferenceBudget(limits: MemoryInjectionLimits): { maxItems: number; ma
   }
 }
 
+function isActiveMemory(memory: MemoryRecord): boolean {
+  return memory.status === "approved" && !memory.revision?.supersededBy
+}
+
+
 function appendLayeredMemory(memory: MemoryRecord, limits: MemoryInjectionLimits, state: LayeredSelectionState): void {
   if (state.selected.length >= limits.maxItems) return
+  if (!isActiveMemory(memory)) return
   if (containsLikelySecret(memory.text)) return
-
   const key = normalizedMemoryKey(memory.text)
   if (!key || state.seen.has(key) || state.seenIds.has(memory.id)) return
 
@@ -699,7 +704,7 @@ export function selectAlwaysOnMemories(memories: MemoryRecord[], options?: Memor
     preferenceMaxItems: Math.min(options?.preferenceMaxItems ?? SESSION_START_ALWAYS_ON_MAX_ITEMS, SESSION_START_ALWAYS_ON_MAX_ITEMS),
     preferenceMaxChars: Math.min(options?.preferenceMaxChars ?? SESSION_START_ALWAYS_ON_MAX_CHARS, SESSION_START_ALWAYS_ON_MAX_CHARS),
   })
-  const eligible = memories.filter((memory) => memory.status === "approved" && isAlwaysOnMemory(memory))
+  const eligible = memories.filter((memory) => isActiveMemory(memory) && isAlwaysOnMemory(memory))
   const state: LayeredSelectionState = {
     selected: [],
     seen: new Set<string>(),
@@ -746,7 +751,7 @@ interface DescriptorSelectionState {
 
 function appendDescriptor(memory: MemoryRecord, limits: { maxItems: number; maxChars: number }, state: DescriptorSelectionState): void {
   if (state.selected.length >= limits.maxItems) return
-  if (memory.status !== "approved") return
+  if (!isActiveMemory(memory)) return
   if (state.seenIds.has(memory.id)) return
   if (containsLikelySecret(memory.text)) return
   if (hasSecretDescriptorMetadata(memory)) return
@@ -770,7 +775,7 @@ export function selectDescriptorMemories(memories: MemoryRecord[], options?: Bas
   const maxItems = Math.max(0, Math.min(options?.maxItems ?? SESSION_START_DESCRIPTOR_MAX_ITEMS, SESSION_START_DESCRIPTOR_MAX_ITEMS))
   const maxChars = Math.max(0, Math.min(options?.hardMaxChars ?? SESSION_START_DESCRIPTOR_MAX_CHARS, SESSION_START_DESCRIPTOR_MAX_CHARS))
   const excludedIds = new Set(options?.priorityMemories?.filter((memory) => isAlwaysOnMemory(memory)).map((memory) => memory.id) ?? [])
-  const eligible = memories.filter((memory) => memory.status === "approved" && !excludedIds.has(memory.id) && !containsLikelySecret(memory.text))
+  const eligible = memories.filter((memory) => isActiveMemory(memory) && !excludedIds.has(memory.id) && !containsLikelySecret(memory.text))
   const state: DescriptorSelectionState = {
     selected: [],
     seenIds: new Set<string>(),
