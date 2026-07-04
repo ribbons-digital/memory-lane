@@ -18,7 +18,8 @@
   "scripts": {
     "build": "tsc",
     "test": "node --test --import tsx test/*.test.ts",
-    "test:watch": "node --test --watch --import tsx test/*.test.ts"
+    "test:watch": "node --test --watch --import tsx test/*.test.ts",
+    "eval:retrieval": "tsx test/retrieval-eval-runner.ts"
   },
   "dependencies": {
     "@memory-lane/obsidian-mirror": "workspace:*"
