@@ -784,6 +784,23 @@ function compactReferences(references: ContinuityReadModel["workstreamDiscovery"
   return parts.join(", ")
 }
 
+function warningInspectionActions(warning: ContinuityReadModel["warnings"][number]): string[] {
+  return warning.suggestedActions?.length ? warning.suggestedActions : []
+}
+
+function renderContinuityWarnings(warnings: ContinuityReadModel["warnings"]): string[] {
+  if (!warnings.length) return []
+  const lines = ["", colorize("Action required before applying continuity guidance", "yellow")]
+  for (const warning of warnings) {
+    lines.push(`  ${figures.warning} ${warning.code}: ${warning.message}`)
+    if (warning.code === "operating-agreement-overlap") {
+      lines.push("    Do not treat overlapping workflow guidance as authoritative until inspected.")
+    }
+    for (const action of warningInspectionActions(warning)) lines.push(`    ${figures.pointerSmall} ${action}`)
+  }
+  return lines
+}
+
 export function formatContinuityReadModel(model: ContinuityReadModel, json: boolean, extraMeta?: Record<string, unknown>): string {
   if (json) {
     return JSON.stringify({ ok: true, data: model, meta: meta(extraMeta) }, null, 2)
@@ -796,18 +813,26 @@ export function formatContinuityReadModel(model: ContinuityReadModel, json: bool
     ].join("\n"), { title: "Memory Lane Continuity", titleAlignment: "center", padding: 1, borderStyle: "round", borderColor: supportsColor() ? "cyan" : undefined }),
   ]
 
+  const renderedIds = new Set<string>()
   if (model.latestProgress) {
     lines.push("", colorize("Latest progress", "bold"), `  [${model.latestProgress.id}] ${model.latestProgress.preview}`)
+    renderedIds.add(model.latestProgress.id)
   }
-  if (model.latestApproved.project) {
+  if (model.latestApproved.project && !renderedIds.has(model.latestApproved.project.id)) {
     lines.push("", colorize("Latest approved", "bold"), `  [${model.latestApproved.project.id}] ${model.latestApproved.project.preview}`)
+    renderedIds.add(model.latestApproved.project.id)
   }
+  lines.push(...renderContinuityWarnings(model.warnings))
   if (model.operatingGuidance?.length) {
     lines.push("", colorize("Operating guidance", "bold"))
-    for (const item of model.operatingGuidance) lines.push(`  [${item.id}] ${item.preview}`)
+    for (const item of model.operatingGuidance) {
+      lines.push(`  [${item.id}] ${item.preview}`)
+      renderedIds.add(item.id)
+    }
   }
-  if (model.latestApproved.global) {
+  if (model.latestApproved.global && !renderedIds.has(model.latestApproved.global.id)) {
     lines.push("", colorize("Latest approved (global)", "bold"), `  [${model.latestApproved.global.id}] ${model.latestApproved.global.preview}`)
+    renderedIds.add(model.latestApproved.global.id)
   }
   if (model.pendingContinuity.length) {
     lines.push("", colorize("Pending continuity", "bold"))
@@ -837,10 +862,6 @@ export function formatContinuityReadModel(model: ContinuityReadModel, json: bool
     }
     for (const warning of model.workstreamDiscovery.warnings) lines.push(`  ${figures.warning} ${warning.code}: ${warning.message}`)
   }
-  if (model.warnings.length) {
-    lines.push("", colorize("Warnings", "yellow"))
-    for (const warning of model.warnings) lines.push(`  ${figures.warning} ${warning.code}: ${warning.message}`)
-  }
   if (model.answerGuidance.length) {
     lines.push("", colorize("Answer guidance", "bold"))
     for (const guidance of model.answerGuidance) lines.push(`  ${figures.pointerSmall} ${guidance}`)
@@ -848,7 +869,8 @@ export function formatContinuityReadModel(model: ContinuityReadModel, json: bool
   const freshnessActionOutput = formatFreshnessAdvisoryActionOutput(model.freshness)
   if (freshnessActionOutput.lines.length) lines.push("", ...freshnessActionOutput.lines)
   const allFreshnessActions = new Set(formatFreshnessAdvisoryActionOutput(model.freshness, { maxActions: Number.POSITIVE_INFINITY }).actions)
-  const suggestedActions = model.suggestedActions.filter((action) => !allFreshnessActions.has(action))
+  const warningActions = new Set(model.warnings.flatMap(warningInspectionActions))
+  const suggestedActions = model.suggestedActions.filter((action) => !allFreshnessActions.has(action) && !warningActions.has(action))
   lines.push("", colorize("Suggested actions", "bold"), ...suggestedActions.map((action) => `  ${figures.pointerSmall} ${action}`))
   return lines.join("\n")
 }

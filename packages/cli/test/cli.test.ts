@@ -1553,6 +1553,32 @@ describe("CLI integration", () => {
     assert.match(humanOutput.stdout, /Latest approved/u)
   })
 
+  it("continuity human output dedupes continuity sections and promotes actionable warnings", () => {
+    const dir = tempDir()
+    const project = path.join(dir, "project")
+    fs.mkdirSync(project)
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-continuity-dedupe" }))
+    const mem = path.join(dir, "memory.jsonl")
+    const env = { MEMORY_LANE_FILE: mem, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json"), NO_COLOR: "1" }
+    writeMemoryRecords(mem, [
+      { id: "release", text: "Released v0.2.45 with continuity dogfood complete.", category: "project", scope: { type: "project", key: "cli-continuity-dedupe" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-26T12:00:00.000Z", updatedAt: "2026-06-26T12:00:00.000Z" },
+      { id: "project-loop", text: "Project loop workflow: run review before implementation.", category: "project", scope: { type: "project", key: "cli-continuity-dedupe" }, status: "approved", source: "manual", kind: "procedure", createdAt: "2026-06-26T11:00:00.000Z", updatedAt: "2026-06-26T11:00:00.000Z" },
+      { id: "global-loop", text: "Global project loop workflow preference: run review before implementation.", category: "preference", scope: { type: "global" }, status: "approved", source: "manual", kind: "workflow_rule", createdAt: "2026-06-26T10:30:00.000Z", updatedAt: "2026-06-26T10:30:00.000Z" },
+    ] as MemoryRecord[])
+
+    const output = runProcess(["continuity"], { env, cwd: project })
+    assert.equal(output.status, 0, output.stderr)
+    assert.match(output.stdout, /Latest progress/u)
+    assert.equal(output.stdout.match(/\[release\]/gu)?.length, 1)
+    assert.doesNotMatch(output.stdout, /Latest approved\n\s+\[release\]/u)
+    assert.equal(output.stdout.match(/\[global-loop\]/gu)?.length, 1)
+    assert.doesNotMatch(output.stdout, /Latest approved \(global\)\n\s+\[global-loop\]/u)
+    assert.match(output.stdout, /Action required before applying continuity guidance/u)
+    assert.match(output.stdout, /memory-lane agreements --area project-loop --json/u)
+    assert.equal((output.stdout.match(/memory-lane agreements --area project-loop --json/gu) ?? []).length, 1)
+    assert.ok(output.stdout.indexOf("Action required before applying continuity guidance") < output.stdout.indexOf("Operating guidance"))
+  })
+
   it("continuity human output includes truncated operating guidance inspection instruction", () => {
     const dir = tempDir()
     const project = path.join(dir, "project")
@@ -1633,7 +1659,8 @@ describe("CLI integration", () => {
     assert.equal(output.status, 0, output.stderr)
     assert.match(output.stdout, /Memory Lane Continuity/u)
     assert.match(output.stdout, /Project: cli-continuity-human/u)
-    assert.match(output.stdout, /Latest approved/u)
+    assert.match(output.stdout, /Latest progress/u)
+    assert.doesNotMatch(output.stdout, /Latest approved\n\s+\[approved\]/u)
     assert.match(output.stdout, /Pending continuity/u)
     assert.doesNotMatch(output.stdout, /Review-mode handoff proposal/u)
     assert.match(output.stdout, /freshness-advisory/u)

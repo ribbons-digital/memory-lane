@@ -458,6 +458,32 @@ test("renderContinuityNotice omits unsafe suggested action text", () => {
   ])
 })
 
+test("renderContinuityNotice allows area-scoped agreement inspection", () => {
+  const result = renderContinuityNotice({
+    hints: continuityHints({
+      hintCount: 1,
+      hints: [{
+        code: "operating-agreement-overlap",
+        severity: "review",
+        message: "PRIVATE AGREEMENT MESSAGE SHOULD NOT RENDER",
+        count: 2,
+        memoryIds: ["agreement-secret-id", "related-secret-id"],
+        workflowArea: "project-loop",
+        suggestedActions: ["memory-lane agreements --area project-loop --json"],
+      }],
+      suggestedActions: ["memory-lane agreements --area project-loop --json"],
+      supersededVisible: [],
+      newerApproved: undefined,
+    }),
+    maxChars: 900,
+  })
+
+  assert.equal(result.injected, true)
+  assert.match(result.text, /memory-lane agreements --area project-loop --json/u)
+  assert.doesNotMatch(result.text, /PRIVATE|secret-id/u)
+  assert.deepEqual(result.suggestedActions, ["memory-lane agreements --area project-loop --json"])
+})
+
 test("renderContinuityNotice renders project/global preference overlap from hint code", () => {
   const result = renderContinuityNotice({
     hints: continuityHints({

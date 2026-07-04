@@ -317,6 +317,19 @@ test("continuity read model marks truncated operating guidance and instructs ful
   assert.match(result.answerGuidance.join("\n"), /memory-lane show opus-review-rule/u)
 })
 
+test("continuity read model adds actionable overlap warning metadata", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "Released v0.2.32 with Pi continuity dogfood complete.", kind: "project_checkpoint", updatedAt: "2026-06-26T10:00:00.000Z" }),
+    memory({ id: "project-loop", text: "Project loop workflow: run review before implementation.", kind: "procedure", updatedAt: "2026-06-26T11:00:00.000Z" }),
+    memory({ id: "global-loop", text: "Global project loop workflow preference: run review before implementation.", category: "preference", scope: { type: "global" }, kind: "workflow_rule", updatedAt: "2026-06-26T12:00:00.000Z" }),
+  ], { projectScopeKey: "project-a" })
+
+  const warning = result.warnings.find((item) => item.code === "operating-agreement-overlap")
+  assert.deepEqual(warning?.workflowAreas, ["project-loop"])
+  assert.deepEqual(warning?.suggestedActions, ["memory-lane agreements --area project-loop --json"])
+  assert.ok(result.suggestedActions.includes("memory-lane agreements --area project-loop --json"))
+})
+
 
 test("continuity read model excludes non-manual global preferences from operating guidance", () => {
   const result = buildContinuityReadModel([

@@ -319,6 +319,32 @@ test("memory_continuity tool renders collapsed operating guidance items", async 
   }
 })
 
+test("memory_continuity tool dedupes rendered ids and promotes actionable warnings", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const ctx = baseCtx(env.dir)
+
+  const records = [
+    { id: "release1", text: "Released v0.2.45 with continuity dogfood complete.", category: "project", scope: { type: "project", key: "pi-test-project" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-26T12:00:00.000Z", updatedAt: "2026-06-26T12:00:00.000Z" },
+    { id: "projloop", text: "Project loop workflow: run review before implementation.", category: "project", scope: { type: "project", key: "pi-test-project" }, status: "approved", source: "manual", kind: "procedure", createdAt: "2026-06-26T11:00:00.000Z", updatedAt: "2026-06-26T11:00:00.000Z" },
+    { id: "globloop", text: "Global project loop workflow preference: run review before implementation.", category: "preference", scope: { type: "global" }, status: "approved", source: "manual", kind: "workflow_rule", createdAt: "2026-06-26T10:30:00.000Z", updatedAt: "2026-06-26T10:30:00.000Z" },
+  ]
+  fs.writeFileSync(path.join(env.dir, "memory.jsonl"), records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
+
+  const continuityTool = pi.tools.get("memory_continuity")
+  const result = await continuityTool.execute("tool-2", { query: "what should we work on next?" }, undefined, () => {}, ctx)
+  const text = result.content[0].text
+
+  assert.equal(text.match(/\[release1\]/gu)?.length, 1)
+  assert.equal(text.match(/\[globloop\]/gu)?.length, 1)
+  assert.doesNotMatch(text, /Relevant global workflow context: \[globloop\]/u)
+  assert.match(text, /Action required before applying continuity guidance:/u)
+  assert.match(text, /Inspect: memory-lane agreements --area project-loop --json/u)
+  assert.ok(text.indexOf("Action required before applying continuity guidance:") < text.indexOf("Operating guidance:"))
+})
+
 test("memory_continuity tool renders truncated operating guidance inspection instruction", async () => {
   const env = makeTempEnv()
   cleanup = env.restore

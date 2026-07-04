@@ -101,16 +101,18 @@ Approved Slice 2a spec: `docs/superpowers/specs/2026-07-02-project-local-storage
 Approved Slice 1 spec: `docs/superpowers/specs/2026-07-01-project-local-storage-slice-1-default-writes-design.md`.
 Release validation: `docs/superpowers/validation/2026-07-03-v0.2.45-release-dogfood.md`.
 General cross-store rescope moves remain deferred unless a future approved slice explicitly includes them.
-Current recommended next work: a screenshot-driven continuity rendering hygiene slice.
-Start with an end-to-end repro of duplicated latest progress/project continuity output, duplicated global workflow context, and buried continuity warnings, then fix shared rendering/dedupe behavior without automatic supersession or silent memory mutation.
+Current implementation slice: screenshot-driven continuity rendering hygiene.
+The slice starts with fixture-backed repros of duplicated latest progress/project continuity output, duplicated global workflow context, and buried continuity warnings.
+It fixes renderer-level dedupe and actionable warning promotion while keeping automatic supersession, silent memory mutation, selection/ranking rewrites, LLM classifiers, and schema expansion out of scope.
+After this slice merges, the likely next action is release prep and installed-artifact dogfood for the continuity rendering hygiene fix.
 
 Retrieval-quality status: currentness tie-break merged in PR #75 and shipped in `v0.2.41`; pause retrieval-ranking work unless new dogfood/eval evidence justifies another proposal.
 
 ## Other viable future tracks
 
 - **Continuity routing/context hygiene follow-ups:** PR #82 shipped in `v0.2.43`.
-  A pi-herd dogfood screenshot exposed duplicated continuity rendering and buried warning behavior, so the next recommended slice is an end-to-end rendering hygiene fix.
-  Scope should stay review-first and avoid LLM classifier behavior, automatic supersession, or silent memory mutation.
+  A pi-herd dogfood screenshot exposed duplicated continuity rendering and buried warning behavior, so the current slice is an end-to-end rendering hygiene fix.
+  Scope stays review-first and avoids LLM classifier behavior, automatic supersession, or silent memory mutation.
 - **Review-first consolidation proposals:** identify overlapping/superseded memories and suggest manual `update` / `replace` / `supersede` commands. Keep review-first; no auto-consolidation or auto-approval.
 - **Docs/context-budget follow-up:** consider README splitting or generated current-state docs if README becomes the next major context source.
 - **Hardening backlog:** installer/init wizard improvements, Claude Desktop MCP config path tests, import dry-run secret warnings, and broader read-only taxonomy checks.

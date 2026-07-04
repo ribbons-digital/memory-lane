@@ -54,8 +54,9 @@ The shipped slice adds reviewed plan generation, explicit `--apply-plan <path> -
 Pre-compact session-summary support is merged in PR #95 as `83b9b3d` and released in `v0.2.45`.
 Claude, Codex, and native Pi can save pending `session_summary` memories before compaction when session-summary configuration allows unconfirmed pre-compact summaries.
 
-Current recommended next work is a screenshot-driven continuity rendering hygiene slice.
-Start by reproducing the duplicated continuity output and buried warning behavior end-to-end, then fix shared renderer/dedupe behavior without adding automatic supersession or silent memory mutation.
+Current implementation slice is screenshot-driven continuity rendering hygiene.
+The slice reproduces duplicated continuity output and buried warning behavior with CLI/Pi/generated bridge fixtures, then fixes renderer-level dedupe and warning promotion without adding automatic supersession or silent memory mutation.
+After this slice merges, the likely next action is release prep and installed-artifact dogfood for the continuity rendering hygiene fix.
 
 ## Load-bearing constraints
 
