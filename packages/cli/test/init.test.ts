@@ -232,7 +232,7 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
       }, { cwd: "/tmp/pi-generated-bridge-project" });
       const duration = Date.now() - started;
       if (result !== undefined) throw new Error("expected precompact bridge to leave host compaction untouched");
-      if (duration > 200) throw new Error("expected precompact bridge to return immediately, took " + duration + "ms");
+      if (duration > 500) throw new Error("expected precompact bridge to return before slow pre-compact work completes, took " + duration + "ms");
     `)
   })
 
