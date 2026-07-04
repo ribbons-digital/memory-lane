@@ -12,6 +12,30 @@ import {
   type InjectionScenarioResult,
 } from "./lifecycle-injection-eval-harness.ts"
 
+function injectionResult(overrides: Partial<InjectionScenarioResult> & { id: string }): InjectionScenarioResult {
+  const result: InjectionScenarioResult = {
+    id: overrides.id,
+    event: "prompt",
+    policyMode: "selective",
+    passed: true,
+    actualMemoryIds: [],
+    requiredMemoryIds: [],
+    acceptableMemoryIds: [],
+    forbiddenMemoryIds: [],
+    missingRequired: [],
+    forbiddenInjected: [],
+    requiredTextMissing: [],
+    forbiddenTextPresent: [],
+    requiredTextTotal: 0,
+    forbiddenTextTotal: 0,
+    contextChars: 10,
+    maxContextChars: 100,
+    failureTags: [],
+    ...overrides,
+  }
+  return result
+}
+
 test("lifecycle injection eval corpus is structurally valid", () => {
   assert.ok(corpus.length >= 6)
   for (const scenario of corpus) {
@@ -39,25 +63,14 @@ test("lifecycle injection eval report reaches satisfactory thresholds", async ()
 })
 
 test("lifecycle injection eval detects unsatisfactory forbidden injection", () => {
-  const result: InjectionScenarioResult = {
+  const result = injectionResult({
     id: "bad-forbidden",
-    event: "prompt",
-    policyMode: "selective",
     passed: false,
     actualMemoryIds: ["cross-project-memory"],
-    requiredMemoryIds: [],
-    acceptableMemoryIds: [],
     forbiddenMemoryIds: ["cross-project-memory"],
-    missingRequired: [],
     forbiddenInjected: ["cross-project-memory"],
-    requiredTextMissing: [],
-    forbiddenTextPresent: [],
-    requiredTextTotal: 0,
-    forbiddenTextTotal: 0,
-    contextChars: 10,
-    maxContextChars: 100,
     failureTags: ["forbidden-injected", "cross-project-leak"],
-  }
+  })
   const summary = summarizeResults([result])
   assert.equal(summary.failCount, 1)
   assert.equal(summary.zeroToleranceFailures, 2)
@@ -66,25 +79,19 @@ test("lifecycle injection eval detects unsatisfactory forbidden injection", () =
 })
 
 test("lifecycle injection eval summary uses full text check totals", () => {
-  const summary = summarizeResults([{
+  const summary = summarizeResults([injectionResult({
     id: "partial-text-checks",
-    event: "prompt",
-    policyMode: "selective",
     passed: false,
     actualMemoryIds: ["required-memory", "forbidden-memory"],
     requiredMemoryIds: ["required-memory"],
-    acceptableMemoryIds: [],
     forbiddenMemoryIds: ["forbidden-memory"],
-    missingRequired: [],
     forbiddenInjected: ["forbidden-memory"],
     requiredTextMissing: ["missing text"],
     forbiddenTextPresent: ["leaked text"],
     requiredTextTotal: 2,
     forbiddenTextTotal: 3,
-    contextChars: 10,
-    maxContextChars: 100,
     failureTags: ["missing-required", "forbidden-injected"],
-  }])
+  })])
 
   assert.equal(summary.meanRequiredRecall, 2 / 3)
   assert.equal(summary.meanForbiddenLeakRate, 2 / 4)
