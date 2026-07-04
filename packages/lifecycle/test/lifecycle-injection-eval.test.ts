@@ -52,6 +52,8 @@ test("lifecycle injection eval detects unsatisfactory forbidden injection", () =
     forbiddenInjected: ["cross-project-memory"],
     requiredTextMissing: [],
     forbiddenTextPresent: [],
+    requiredTextTotal: 0,
+    forbiddenTextTotal: 0,
     contextChars: 10,
     maxContextChars: 100,
     failureTags: ["forbidden-injected", "cross-project-leak"],
@@ -61,6 +63,31 @@ test("lifecycle injection eval detects unsatisfactory forbidden injection", () =
   assert.equal(summary.zeroToleranceFailures, 2)
   assert.equal(summary.meanForbiddenLeakRate, 1)
   assert.equal(ZERO_TOLERANCE_FAILURE_TAGS.has("cross-project-leak"), true)
+})
+
+test("lifecycle injection eval summary uses full text check totals", () => {
+  const summary = summarizeResults([{
+    id: "partial-text-checks",
+    event: "prompt",
+    policyMode: "selective",
+    passed: false,
+    actualMemoryIds: ["required-memory", "forbidden-memory"],
+    requiredMemoryIds: ["required-memory"],
+    acceptableMemoryIds: [],
+    forbiddenMemoryIds: ["forbidden-memory"],
+    missingRequired: [],
+    forbiddenInjected: ["forbidden-memory"],
+    requiredTextMissing: ["missing text"],
+    forbiddenTextPresent: ["leaked text"],
+    requiredTextTotal: 2,
+    forbiddenTextTotal: 3,
+    contextChars: 10,
+    maxContextChars: 100,
+    failureTags: ["missing-required", "forbidden-injected"],
+  }])
+
+  assert.equal(summary.meanRequiredRecall, 2 / 3)
+  assert.equal(summary.meanForbiddenLeakRate, 2 / 4)
 })
 
 test("individual lifecycle injection scenarios expose selected context decisions", async () => {

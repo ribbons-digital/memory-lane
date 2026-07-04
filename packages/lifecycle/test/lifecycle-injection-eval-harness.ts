@@ -74,6 +74,8 @@ export interface InjectionScenarioResult {
   forbiddenInjected: string[]
   requiredTextMissing: string[]
   forbiddenTextPresent: string[]
+  requiredTextTotal: number
+  forbiddenTextTotal: number
   contextChars: number
   maxContextChars?: number
   failureTags: InjectionFailureTag[]
@@ -193,7 +195,7 @@ export const corpus: InjectionEvalScenario[] = [
     requiredMemoryIds: ["global-terse-preference"],
     acceptableMemoryIds: ["current-progress", "prompt-verification-procedure", "project-workflow-rule"],
     forbiddenMemoryIds: ["pending-draft", "rejected-draft", "deleted-draft", "cross-project-memory", "secret-looking-memory", "superseded-progress"],
-    requiredText: ["<memory-context mode=\"selective\" event=\"sessionStart\">"],
+    requiredText: ["<memory-context mode=\"selective\" event=\"sessionStart\">", "Some approved memories are superseded historical guidance"],
     forbiddenText: ["PENDING MEMORY BODY", "REJECTED MEMORY BODY", "DELETED MEMORY BODY", "CROSS PROJECT MEMORY BODY", "SECRET MEMORY BODY", "SUPERSEDED PROGRESS BODY"],
     expectedDecision: { event: "sessionStart", mode: "selective" },
     maxContextChars: 1700,
@@ -314,8 +316,10 @@ export async function evaluateScenario(scenario: InjectionEvalScenario): Promise
   const forbiddenMemoryIds = scenario.forbiddenMemoryIds ?? []
   const missingRequired = requiredMemoryIds.filter((id) => !actualMemoryIds.includes(id))
   const forbiddenInjected = forbiddenMemoryIds.filter((id) => actualMemoryIds.includes(id))
-  const requiredTextMissing = (scenario.requiredText ?? []).filter((text) => !context.includes(text))
-  const forbiddenTextPresent = (scenario.forbiddenText ?? []).filter((text) => context.includes(text))
+  const requiredText = scenario.requiredText ?? []
+  const forbiddenText = scenario.forbiddenText ?? []
+  const requiredTextMissing = requiredText.filter((text) => !context.includes(text))
+  const forbiddenTextPresent = forbiddenText.filter((text) => context.includes(text))
   const contextChars = context.length
   const budgetOverrun = scenario.maxContextChars !== undefined ? Math.max(0, contextChars - scenario.maxContextChars) : 0
   const failureTags: InjectionFailureTag[] = []
@@ -345,6 +349,8 @@ export async function evaluateScenario(scenario: InjectionEvalScenario): Promise
     forbiddenInjected,
     requiredTextMissing,
     forbiddenTextPresent,
+    requiredTextTotal: requiredText.length,
+    forbiddenTextTotal: forbiddenText.length,
     contextChars,
     ...(scenario.maxContextChars !== undefined ? { maxContextChars: scenario.maxContextChars } : {}),
     failureTags: tags,
@@ -365,9 +371,9 @@ function failureTagCounts(results: InjectionScenarioResult[]): Record<string, nu
 }
 
 export function summarizeResults(results: InjectionScenarioResult[]): InjectionEvalReport["summary"] {
-  const requiredTotal = results.reduce((sum, result) => sum + result.requiredMemoryIds.length + result.requiredTextMissing.length, 0)
-  const requiredFound = results.reduce((sum, result) => sum + result.requiredMemoryIds.length - result.missingRequired.length, 0)
-  const forbiddenTotal = results.reduce((sum, result) => sum + result.forbiddenMemoryIds.length + result.forbiddenTextPresent.length, 0)
+  const requiredTotal = results.reduce((sum, result) => sum + result.requiredMemoryIds.length + result.requiredTextTotal, 0)
+  const requiredFound = results.reduce((sum, result) => sum + result.requiredMemoryIds.length - result.missingRequired.length + result.requiredTextTotal - result.requiredTextMissing.length, 0)
+  const forbiddenTotal = results.reduce((sum, result) => sum + result.forbiddenMemoryIds.length + result.forbiddenTextTotal, 0)
   const forbiddenLeaked = results.reduce((sum, result) => sum + result.forbiddenInjected.length + result.forbiddenTextPresent.length, 0)
   return {
     scenarioCount: results.length,
