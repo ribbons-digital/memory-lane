@@ -823,12 +823,14 @@ export function formatContinuityReadModel(model: ContinuityReadModel, json: bool
     renderedIds.add(model.latestApproved.project.id)
   }
   lines.push(...renderContinuityWarnings(model.warnings))
-  if (model.operatingGuidance?.length) {
-    lines.push("", colorize("Operating guidance", "bold"))
-    for (const item of model.operatingGuidance) {
-      lines.push(`  [${item.id}] ${item.preview}`)
-      renderedIds.add(item.id)
-    }
+  const operatingGuidanceLines: string[] = []
+  for (const item of model.operatingGuidance ?? []) {
+    if (renderedIds.has(item.id)) continue
+    operatingGuidanceLines.push(`  [${item.id}] ${item.preview}`)
+    renderedIds.add(item.id)
+  }
+  if (operatingGuidanceLines.length) {
+    lines.push("", colorize("Operating guidance", "bold"), ...operatingGuidanceLines)
   }
   if (model.latestApproved.global && !renderedIds.has(model.latestApproved.global.id)) {
     lines.push("", colorize("Latest approved (global)", "bold"), `  [${model.latestApproved.global.id}] ${model.latestApproved.global.preview}`)

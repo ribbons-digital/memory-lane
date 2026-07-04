@@ -286,7 +286,7 @@ test("memory_continuity tool returns canonical continuity context", async () => 
   assert.equal(result.details.latestApproved.project.id.length, 8)
 })
 
-test("memory_continuity tool renders collapsed operating guidance items", async () => {
+test("memory_continuity tool dedupes collapsed operating guidance items", async () => {
   const env = makeTempEnv()
   cleanup = env.restore
   const pi = createFakePi()
@@ -312,8 +312,7 @@ test("memory_continuity tool renders collapsed operating guidance items", async 
   const continuityTool = pi.tools.get("memory_continuity")
   const result = await continuityTool.execute("tool-2", { query: "what were we last working on?" }, undefined, () => {}, ctx)
 
-  assert.match(result.content[0].text, /Operating guidance:/u)
-  assert.match(result.content[0].text, /\[guide005\]/u)
+  assert.equal(result.content[0].text.match(/\[guide005\]/gu)?.length, 1)
   for (const id of ["guide001", "guide002", "guide003", "guide004"]) {
     assert.doesNotMatch(result.content[0].text, new RegExp(`\\[${id}\\]`, "u"))
   }

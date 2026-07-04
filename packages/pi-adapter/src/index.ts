@@ -149,6 +149,14 @@ function piWarningInspectionActions(warning: any): string[] {
   return warning?.suggestedActions?.length ? warning.suggestedActions : []
 }
 
+function piRenderedWarningInspectionActions(warnings: any[]): Set<string> {
+  const actions = new Set<string>()
+  for (const warning of warnings.slice(0, 3)) {
+    for (const action of piWarningInspectionActions(warning).slice(0, 3)) actions.add(action)
+  }
+  return actions
+}
+
 function renderPiWarningBlock(warnings: any[]): string[] {
   if (!warnings.length) return []
   const lines = ["", "Action required before applying continuity guidance:"]
@@ -183,13 +191,14 @@ function renderPiContinuityContext(model: any): string {
   lines.push(...renderPiWarningBlock(warnings))
 
   const operatingGuidance = model?.operatingGuidance ?? []
-  if (operatingGuidance.length) {
-    lines.push("", "Operating guidance:")
-    for (const item of operatingGuidance.slice(0, 5)) {
-      lines.push(`- [${item.id}] ${item.preview}`)
-      renderedIds.add(item.id)
-    }
+  const operatingGuidanceLines: string[] = []
+  for (const item of operatingGuidance) {
+    if (renderedIds.has(item.id)) continue
+    operatingGuidanceLines.push(`- [${item.id}] ${item.preview}`)
+    renderedIds.add(item.id)
+    if (operatingGuidanceLines.length >= 5) break
   }
+  if (operatingGuidanceLines.length) lines.push("", "Operating guidance:", ...operatingGuidanceLines)
 
   const latestGlobal = model?.latestApproved?.global
   if (latestGlobal && !renderedIds.has(latestGlobal.id)) lines.push("", `Relevant global workflow context: [${latestGlobal.id}] ${latestGlobal.preview}`)
@@ -212,7 +221,7 @@ function renderPiContinuityContext(model: any): string {
     for (const guidance of answerGuidance.slice(0, 5)) lines.push(`- ${guidance}`)
   }
 
-  const warningActions = new Set(warnings.flatMap(piWarningInspectionActions))
+  const warningActions = piRenderedWarningInspectionActions(warnings)
   const actions = (model?.suggestedActions ?? []).filter((action: string) => !warningActions.has(action))
   if (actions.length) {
     lines.push("", "Suggested authoritative inspection:")

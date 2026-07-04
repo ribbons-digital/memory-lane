@@ -1548,8 +1548,8 @@ describe("CLI integration", () => {
     assert.equal(humanOutput.status, 0, humanOutput.stderr)
     assert.match(humanOutput.stdout, /Latest progress/u)
     assert.match(humanOutput.stdout, /\[release\]/u)
-    assert.match(humanOutput.stdout, /Operating guidance/u)
-    assert.match(humanOutput.stdout, /\[correction\]/u)
+    assert.equal(humanOutput.stdout.match(/\[correction\]/gu)?.length, 1)
+    assert.doesNotMatch(humanOutput.stdout, /Operating guidance/u)
     assert.match(humanOutput.stdout, /Latest approved/u)
   })
 
@@ -1738,6 +1738,44 @@ describe("CLI integration", () => {
     assert.match(output.stdout, /memory-lane supersede <new-id> expired-continuity-2 --dry-run/u)
     assert.match(output.stdout, /2 more stale\/expired advisory records omitted; use memory-lane status --json for full ids\./u)
     assert.doesNotMatch(output.stdout, /expired-continuity-1|expired-continuity-0/u)
+  })
+
+  it("continuity human output skips operating guidance already rendered elsewhere", () => {
+    const model: ContinuityReadModel = {
+      projectScope: "manual-model",
+      generatedAt: "2026-06-22T00:00:00.000Z",
+      status: { visibleApprovedCount: 2, pendingReviewCount: 0, pendingContinuityCount: 0 },
+      latestApproved: { project: { id: "procedure", preview: "Run review before implementation." } },
+      operatingGuidance: [
+        { id: "procedure", preview: "Run review before implementation." },
+        { id: "followup", preview: "Check CI before merge." },
+      ],
+      pendingContinuity: [],
+      freshness: {
+        projectScope: "manual-model",
+        advisory: { referenceNow: "2026-06-22T00:00:00.000Z", withFreshnessCount: 0, currentCount: 0, staleCount: 0, expiredCount: 0, stale: [], expired: [] },
+        visibleApprovedCount: 2,
+        newerApprovedCount: 0,
+        newerProjectApprovedCount: 0,
+        newerGlobalApprovedCount: 0,
+        newerGlobalPreferenceCount: 0,
+        newerByKind: {},
+        newerBySource: {},
+        newerByProvenance: {},
+        newestNewerApproved: [],
+      },
+      operatingAgreements: { projectScope: "manual-model", primaryCount: 0, relatedCandidateCount: 0, omittedPrimaryCount: 0, omittedRelatedCandidateCount: 0, workflowAreas: [], primary: [], relatedCandidates: [], notes: [] },
+      continuityHints: { projectScope: "manual-model", hintCount: 0, hints: [], supersededVisible: [], operatingAgreementOverlaps: [], projectGlobalPreferenceOverlaps: [], scopeHygieneCandidates: [], suggestedActions: [], notes: [] },
+      warnings: [],
+      suggestedActions: [],
+      answerGuidance: [],
+      harnessGuidance: { summary: [], cli: [], mcp: [] },
+      notes: [],
+    }
+
+    const output = formatContinuityReadModel(model, false)
+    assert.equal(output.match(/\[procedure\]/gu)?.length, 1)
+    assert.match(output, /\[followup\]/u)
   })
 
   it("continuity human output does not label non-freshness dry-run actions as freshness advisories", () => {
