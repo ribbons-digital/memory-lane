@@ -145,13 +145,17 @@ function memoryLaneContextMessage(content: string, details: Record<string, unkno
   }
 }
 
+function piWarningInspectionActions(warning: any): string[] {
+  return warning?.suggestedActions?.length ? warning.suggestedActions : []
+}
+
 function renderPiWarningBlock(warnings: any[]): string[] {
   if (!warnings.length) return []
   const lines = ["", "Action required before applying continuity guidance:"]
   for (const warning of warnings.slice(0, 3)) {
     lines.push(`- ${warning.code}: ${warning.message}`)
     if (warning.code === "operating-agreement-overlap") lines.push("  Do not treat overlapping workflow guidance as authoritative until inspected.")
-    for (const action of (warning.suggestedActions ?? []).slice(0, 3)) lines.push(`  Inspect: ${action}`)
+    for (const action of piWarningInspectionActions(warning).slice(0, 3)) lines.push(`  Inspect: ${action}`)
   }
   return lines
 }
@@ -208,7 +212,8 @@ function renderPiContinuityContext(model: any): string {
     for (const guidance of answerGuidance.slice(0, 5)) lines.push(`- ${guidance}`)
   }
 
-  const actions = model?.suggestedActions ?? []
+  const warningActions = new Set(warnings.flatMap(piWarningInspectionActions))
+  const actions = (model?.suggestedActions ?? []).filter((action: string) => !warningActions.has(action))
   if (actions.length) {
     lines.push("", "Suggested authoritative inspection:")
     for (const action of actions.slice(0, 4)) lines.push(`- ${action}`)

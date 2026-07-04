@@ -342,6 +342,7 @@ test("memory_continuity tool dedupes rendered ids and promotes actionable warnin
   assert.doesNotMatch(text, /Relevant global workflow context: \[globloop\]/u)
   assert.match(text, /Action required before applying continuity guidance:/u)
   assert.match(text, /Inspect: memory-lane agreements --area project-loop --json/u)
+  assert.equal(text.match(/memory-lane agreements --area project-loop --json/gu)?.length, 1)
   assert.ok(text.indexOf("Action required before applying continuity guidance:") < text.indexOf("Operating guidance:"))
 })
 

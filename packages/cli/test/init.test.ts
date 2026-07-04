@@ -184,6 +184,7 @@ ${commandLogic}
         if (!result.message.content.includes("Action required before applying continuity guidance:")) throw new Error("expected promoted warning block");
         if (result.message.content.indexOf("Action required before applying continuity guidance:") > result.message.content.indexOf("Operating guidance:")) throw new Error("expected warnings before operating guidance");
         if (!result.message.content.includes("Inspect: memory-lane agreements --area project-loop --json")) throw new Error("expected actionable warning inspection command");
+        if ((result.message.content.match(/memory-lane agreements --area project-loop --json/g) ?? []).length !== 1) throw new Error("expected warning inspection command once");
       }
       const toolResult = await tools.memory_continuity.execute("tool-1", { query: "what were we last working on?" }, undefined, undefined, { cwd: process.cwd() });
       if (!toolResult.content[0].text.includes("Memory Lane continuity context")) throw new Error("expected continuity tool context");
@@ -191,6 +192,7 @@ ${commandLogic}
       if (!toolResult.content[0].text.includes("latest1")) throw new Error("expected continuity tool candidate");
       if (!toolResult.content[0].text.includes("guide5")) throw new Error("expected continuity tool to render five operating guidance items");
       if (toolResult.content[0].text.includes("Relevant global workflow context: [guide5]")) throw new Error("expected continuity tool to dedupe global workflow context");
+      if ((toolResult.content[0].text.match(/memory-lane agreements --area project-loop --json/g) ?? []).length !== 1) throw new Error("expected continuity tool warning inspection command once");
     `)
 
     const calls = readJsonlCalls(logPath)
