@@ -141,13 +141,14 @@ ${commandLogic}
 } else if (args[0] === "route") {
   console.log(JSON.stringify({ data: { route: { route: "continuity", confidence: 1, reasons: ["test"] } } }));
 } else if (args[0] === "continuity") {
-  console.log(JSON.stringify({ data: { latestApproved: { project: { id: "latest1", preview: "PR #51 merged and v0.2.28 released." } }, latestProgress: { id: "latest1", preview: "PR #51 merged and v0.2.28 released." }, operatingGuidance: [
+  console.log(JSON.stringify({ data: { latestProgress: { id: "latest1", preview: "PR #51 merged and v0.2.28 released." }, operatingGuidance: [
+    { id: "latest1", preview: "PR #51 merged and v0.2.28 released." },
     { id: "guide1", preview: "Operating guidance 1." },
     { id: "guide2", preview: "Operating guidance 2." },
     { id: "guide3", preview: "Operating guidance 3." },
     { id: "guide4", preview: "Operating guidance 4." },
     { id: "guide5", preview: "Operating guidance 5." },
-  ], workstreamDiscovery: { candidates: [{ id: "latest1", preview: "PR #51 merged and v0.2.28 released." }], suggestedActions: ["memory-lane continuity --json"] }, suggestedActions: ["memory-lane continuity --json"], answerGuidance: ["Verify against repository state."] } }));
+  ], latestApproved: { project: { id: "latest1", preview: "PR #51 merged and v0.2.28 released." }, global: { id: "guide5", preview: "Operating guidance 5." } }, warnings: [{ code: "operating-agreement-overlap", message: "Multiple operating agreement candidates overlap; inspect agreements before applying workflow guidance.", suggestedActions: ["memory-lane agreements --area project-loop --json", "memory-lane agreements --area global-loop --json", "memory-lane agreements --area scope-loop --json", "memory-lane agreements --area capped-loop --json"] }], workstreamDiscovery: { candidates: [{ id: "latest1", preview: "PR #51 merged and v0.2.28 released." }], suggestedActions: ["memory-lane continuity --json"] }, suggestedActions: ["memory-lane continuity --json", "memory-lane agreements --area project-loop --json", "memory-lane agreements --area global-loop --json", "memory-lane agreements --area scope-loop --json", "memory-lane agreements --area capped-loop --json"], answerGuidance: ["Verify against repository state."] } }));
 } else if (args[0] === "recall") {
   console.log(JSON.stringify({ data: { memories: [{ id: "wrong", text: "Plain recall should not be used for broad continuity." }] } }));
 } else {
@@ -178,12 +179,23 @@ ${commandLogic}
         if (!result.message.content.includes("Latest project progress")) throw new Error("expected latest progress context");
         if (!result.message.content.includes("latest1")) throw new Error("expected continuity candidate");
         if (!result.message.content.includes("guide5")) throw new Error("expected generated bridge to render five operating guidance items");
+        if ((result.message.content.match(/latest1/g) ?? []).length !== 2) throw new Error("expected latest1 only in latest progress and workstream candidate");
+        if (result.message.content.includes("Latest approved project continuity")) throw new Error("expected generated bridge to dedupe latest project continuity");
+        if (result.message.content.includes("Relevant global workflow context: [guide5]")) throw new Error("expected generated bridge to dedupe global workflow context");
+        if (!result.message.content.includes("Action required before applying continuity guidance:")) throw new Error("expected promoted warning block");
+        if (result.message.content.indexOf("Action required before applying continuity guidance:") > result.message.content.indexOf("Operating guidance:")) throw new Error("expected warnings before operating guidance");
+        if (!result.message.content.includes("Inspect: memory-lane agreements --area project-loop --json")) throw new Error("expected actionable warning inspection command");
+        if ((result.message.content.match(/memory-lane agreements --area project-loop --json/g) ?? []).length !== 1) throw new Error("expected warning inspection command once");
+        if (!result.message.content.includes("- memory-lane agreements --area capped-loop --json")) throw new Error("expected capped warning action to fall through to authoritative inspection");
       }
       const toolResult = await tools.memory_continuity.execute("tool-1", { query: "what were we last working on?" }, undefined, undefined, { cwd: process.cwd() });
       if (!toolResult.content[0].text.includes("Memory Lane continuity context")) throw new Error("expected continuity tool context");
       if (!toolResult.content[0].text.includes("Latest project progress")) throw new Error("expected latest progress tool context");
       if (!toolResult.content[0].text.includes("latest1")) throw new Error("expected continuity tool candidate");
       if (!toolResult.content[0].text.includes("guide5")) throw new Error("expected continuity tool to render five operating guidance items");
+      if (toolResult.content[0].text.includes("Relevant global workflow context: [guide5]")) throw new Error("expected continuity tool to dedupe global workflow context");
+      if ((toolResult.content[0].text.match(/memory-lane agreements --area project-loop --json/g) ?? []).length !== 1) throw new Error("expected continuity tool warning inspection command once");
+      if (!toolResult.content[0].text.includes("- memory-lane agreements --area capped-loop --json")) throw new Error("expected continuity tool capped warning action to fall through");
     `)
 
     const calls = readJsonlCalls(logPath)

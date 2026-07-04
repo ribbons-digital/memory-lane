@@ -2,7 +2,7 @@ import { Type } from "typebox"
 import { classifyPromptRoute, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy } from "@memory-lane/lifecycle"
 import type { PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
 import {
-  MemoryEngine, createSingleStoreEngineStorage, createTwoTierEngineStorage, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableEngineStoragePaths, type SaveResult,
+  MemoryEngine, buildContinuityWarningRenderPlan, continuityWarningInspectionActions, createSingleStoreEngineStorage, createTwoTierEngineStorage, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableEngineStoragePaths, type SaveResult,
 } from "@memory-lane/core"
 import { isPiDebugEnabled, piDebugPath, writePiDebugLog } from "./debug.js"
 
@@ -145,26 +145,65 @@ function memoryLaneContextMessage(content: string, details: Record<string, unkno
   }
 }
 
+function piRenderedWarningInspectionActions(warnings: any[]): Set<string> {
+  return buildContinuityWarningRenderPlan(warnings).renderedInspectionActions
+}
+
+function renderPiWarningBlock(warnings: any[]): string[] {
+  if (!warnings.length) return []
+  const plan = buildContinuityWarningRenderPlan(warnings)
+  const lines: string[] = []
+  const renderWarning = (warning: any) => {
+    lines.push(`- ${warning.code}: ${warning.message}`)
+    if (warning.code === "operating-agreement-overlap") lines.push("  Do not treat overlapping workflow guidance as authoritative until inspected.")
+    for (const action of continuityWarningInspectionActions(warning).slice(0, 3)) lines.push(`  Inspect: ${action}`)
+  }
+  if (plan.actionRequiredWarnings.length) {
+    lines.push("", "Action required before applying continuity guidance:")
+    for (const warning of plan.actionRequiredWarnings) renderWarning(warning)
+  }
+  if (plan.infoWarnings.length) {
+    lines.push("", "Continuity notes:")
+    for (const warning of plan.infoWarnings) renderWarning(warning)
+  }
+  if (plan.omittedWarningCount > 0) lines.push(`${plan.omittedWarningCount} more warnings omitted`)
+  return lines
+}
+
 function renderPiContinuityContext(model: any): string {
   const lines = [
     "Memory Lane continuity context",
     "",
     "Use this read-only continuity state before answering prior-work, next-action, or project-status questions. Verify against current repository state when available.",
   ]
+  const renderedIds = new Set<string>()
 
   const latestProgress = model?.latestProgress
   const latestProject = model?.latestApproved?.project
-  if (latestProgress) lines.push("", `Latest project progress: [${latestProgress.id}] ${latestProgress.preview}`)
-  if (latestProject && latestProject.id !== latestProgress?.id) lines.push("", `Latest approved project continuity: [${latestProject.id}] ${latestProject.preview}`)
-
-  const operatingGuidance = model?.operatingGuidance ?? []
-  if (operatingGuidance.length) {
-    lines.push("", "Operating guidance:")
-    for (const item of operatingGuidance.slice(0, 5)) lines.push(`- [${item.id}] ${item.preview}`)
+  if (latestProgress) {
+    lines.push("", `Latest project progress: [${latestProgress.id}] ${latestProgress.preview}`)
+    renderedIds.add(latestProgress.id)
+  }
+  if (latestProject && !renderedIds.has(latestProject.id)) {
+    lines.push("", `Latest approved project continuity: [${latestProject.id}] ${latestProject.preview}`)
+    renderedIds.add(latestProject.id)
   }
 
+  const warnings = model?.warnings ?? []
+  lines.push(...renderPiWarningBlock(warnings))
+
+  const operatingGuidance = model?.operatingGuidance ?? []
+  const operatingGuidanceLines: string[] = []
+  for (const item of operatingGuidance) {
+    if (renderedIds.has(item.id)) continue
+    operatingGuidanceLines.push(`- [${item.id}] ${item.preview}`)
+    renderedIds.add(item.id)
+    if (operatingGuidanceLines.length >= 5) break
+  }
+  if (operatingGuidanceLines.length) lines.push("", "Operating guidance:", ...operatingGuidanceLines)
+
   const latestGlobal = model?.latestApproved?.global
-  if (latestGlobal) lines.push("", `Relevant global workflow context: [${latestGlobal.id}] ${latestGlobal.preview}`)
+  if (latestGlobal && !renderedIds.has(latestGlobal.id)) lines.push("", `Relevant global workflow context: [${latestGlobal.id}] ${latestGlobal.preview}`)
 
   const candidates = model?.workstreamDiscovery?.candidates ?? []
   if (candidates.length) {
@@ -178,19 +217,14 @@ function renderPiContinuityContext(model: any): string {
     for (const item of pending.slice(0, 3)) lines.push(`- [${item.id}] ${item.preview}`)
   }
 
-  const warnings = model?.warnings ?? []
-  if (warnings.length) {
-    lines.push("", "Continuity warnings:")
-    for (const warning of warnings.slice(0, 3)) lines.push(`- ${warning.code}: ${warning.message}`)
-  }
-
   const answerGuidance = model?.answerGuidance ?? []
   if (answerGuidance.length) {
     lines.push("", "Answer guidance:")
     for (const guidance of answerGuidance.slice(0, 5)) lines.push(`- ${guidance}`)
   }
 
-  const actions = model?.suggestedActions ?? []
+  const warningActions = piRenderedWarningInspectionActions(warnings)
+  const actions = (model?.suggestedActions ?? []).filter((action: string) => !warningActions.has(action))
   if (actions.length) {
     lines.push("", "Suggested authoritative inspection:")
     for (const action of actions.slice(0, 4)) lines.push(`- ${action}`)

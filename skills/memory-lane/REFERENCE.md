@@ -74,7 +74,10 @@ memory-lane continuity --query "resume building package manager" --json
 
 MCP-capable harnesses should call `memory_continuity({ projectPath })` for broad status prompts, or include `query` for topic-specific workstream discovery. CLI-only harnesses may use the command above; correct continuity behavior does not require direct MCP usage.
 
-When present, prefer `latestProgress` for broad “last worked on / where are we” answers. Treat `latestApproved.project` as a legacy compatibility slot that may still contain corrections/procedures, and apply bounded `operatingGuidance` as workflow guidance rather than as the main progress answer. Active selected slots use non-superseded approved memories, collapse operating guidance to one preview per workflow area, and prefer safe descriptor metadata for previews when available.
+When present, prefer `latestProgress` for broad “last worked on / where are we” answers.
+Treat `latestApproved.project` as a legacy compatibility slot that may still contain corrections/procedures, and apply bounded `operatingGuidance` as workflow guidance rather than as the main progress answer.
+Active selected slots use non-superseded approved memories, collapse operating guidance to one preview per workflow area, de-duplicate repeated ids in human continuity context, and prefer safe descriptor metadata for previews when available.
+If continuity surfaces `Action required before applying continuity guidance`, inspect the listed commands before applying overlapping workflow guidance.
 
 ### Operating agreements
 
@@ -82,7 +85,7 @@ When you need the current project workflow, review gates, PR process, release pr
 
 ```bash
 memory-lane agreements
-memory-lane agreements --area project-loop
+memory-lane agreements --area project-loop --json
 ```
 
 The command returns approved operating agreement text for the current project plus global scope. `memory-lane status --json`, `memory-lane doctor --json`, and MCP `memory_status` only expose text-free agreement metadata.

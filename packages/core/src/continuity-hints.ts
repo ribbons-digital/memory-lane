@@ -150,7 +150,7 @@ export function buildContinuityHints(memories: MemoryRecord[], options: Continui
       count: overlap.primaryIds.length + overlap.relatedIds.length,
       memoryIds: [...overlap.primaryIds, ...overlap.relatedIds].slice(0, maxIds),
       workflowArea: overlap.workflowArea,
-      suggestedActions: [`memory-lane agreements --area ${overlap.workflowArea}`],
+      suggestedActions: [`memory-lane agreements --area ${overlap.workflowArea} --json`],
     })
   }
 

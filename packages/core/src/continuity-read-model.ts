@@ -135,7 +135,7 @@ function requiredContinuityActions(hasPendingContinuity: boolean): string[] {
   return ["memory-lane review --json", ...REQUIRED_CONTINUITY_ACTIONS.filter((action) => action !== "memory-lane review --json")]
 }
 
-function unique(values: string[]): string[] {
+function unique<T extends string>(values: T[]): T[] {
   return [...new Set(values)]
 }
 
@@ -168,6 +168,7 @@ function buildWarnings(input: {
   projectScope?: string
   latestProject?: ContinuityMemoryPreview
   pendingContinuityCandidates: MemoryRecord[]
+  hints: ReturnType<typeof buildContinuityHints>["hints"]
   hintCodes: Set<string>
   caller?: string
 }): ContinuityWarning[] {
@@ -200,7 +201,18 @@ function buildWarnings(input: {
     warnings.push({ code: "scope-hygiene-candidate", severity: "review", message: "Some visible global memories look project-specific; inspect scope hygiene before relying on them." })
   }
   if (input.hintCodes.has("operating-agreement-overlap")) {
-    warnings.push({ code: "operating-agreement-overlap", severity: "review", message: "Multiple operating agreement candidates overlap; inspect agreements before applying workflow guidance." })
+    const overlapHints = input.hints.filter((hint) => hint.code === "operating-agreement-overlap")
+    const workflowAreas = unique(overlapHints
+      .filter((hint) => hint.workflowArea)
+      .map((hint) => hint.workflowArea!))
+    const suggestedActions = unique(overlapHints.flatMap((hint) => hint.suggestedActions ?? []))
+    warnings.push({
+      code: "operating-agreement-overlap",
+      severity: "review",
+      message: "Multiple operating agreement candidates overlap; inspect agreements before applying workflow guidance.",
+      ...(workflowAreas.length ? { workflowAreas } : {}),
+      suggestedActions: suggestedActions.length ? suggestedActions : ["memory-lane agreements --json"],
+    })
   }
   if (input.caller === "mcp") {
     warnings.push({ code: "mcp-explicit-tools-only", severity: "info", message: "MCP exposes explicit tools only; it does not run lifecycle hooks or automatic context injection." })
@@ -252,7 +264,7 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
   const truncatedOperatingGuidanceIds = operatingGuidance.filter((item) => item.truncated).map((item) => item.id)
   const latestGlobal = approvedGlobal.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
   const hintCodes = new Set(continuityHints.hints.map((hint) => hint.code))
-  const warnings = buildWarnings({ projectScope, latestProject, pendingContinuityCandidates, hintCodes, caller: options.caller })
+  const warnings = buildWarnings({ projectScope, latestProject, pendingContinuityCandidates, hints: continuityHints.hints, hintCodes, caller: options.caller })
   const discoveryQuery = options.query?.trim()
   const workstreamDiscovery = discoveryQuery
     ? discoverWorkstreams(activeVisibleApproved, { projectScopeKey: projectScope, query: discoveryQuery, previewMaxChars })

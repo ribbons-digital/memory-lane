@@ -1548,9 +1548,62 @@ describe("CLI integration", () => {
     assert.equal(humanOutput.status, 0, humanOutput.stderr)
     assert.match(humanOutput.stdout, /Latest progress/u)
     assert.match(humanOutput.stdout, /\[release\]/u)
-    assert.match(humanOutput.stdout, /Operating guidance/u)
-    assert.match(humanOutput.stdout, /\[correction\]/u)
+    assert.equal(humanOutput.stdout.match(/\[correction\]/gu)?.length, 1)
+    assert.doesNotMatch(humanOutput.stdout, /Operating guidance/u)
     assert.match(humanOutput.stdout, /Latest approved/u)
+  })
+
+  it("continuity human output dedupes continuity sections and promotes actionable warnings", () => {
+    const dir = tempDir()
+    const project = path.join(dir, "project")
+    fs.mkdirSync(project)
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "cli-continuity-dedupe" }))
+    const mem = path.join(dir, "memory.jsonl")
+    const env = { MEMORY_LANE_FILE: mem, MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"), MEMORY_LANE_CONFIG: path.join(dir, "config.json"), NO_COLOR: "1" }
+    writeMemoryRecords(mem, [
+      { id: "release", text: "Released v0.2.45 with continuity dogfood complete.", category: "project", scope: { type: "project", key: "cli-continuity-dedupe" }, status: "approved", source: "manual", kind: "project_checkpoint", createdAt: "2026-06-26T12:00:00.000Z", updatedAt: "2026-06-26T12:00:00.000Z" },
+      { id: "project-loop", text: "Project loop workflow: run review before implementation.", category: "project", scope: { type: "project", key: "cli-continuity-dedupe" }, status: "approved", source: "manual", kind: "procedure", createdAt: "2026-06-26T11:00:00.000Z", updatedAt: "2026-06-26T11:00:00.000Z" },
+      { id: "global-loop", text: "Global project loop workflow preference: run review before implementation.", category: "preference", scope: { type: "global" }, status: "approved", source: "manual", kind: "workflow_rule", createdAt: "2026-06-26T10:30:00.000Z", updatedAt: "2026-06-26T10:30:00.000Z" },
+    ] as MemoryRecord[])
+
+    const output = runProcess(["continuity"], { env, cwd: project })
+    assert.equal(output.status, 0, output.stderr)
+    assert.match(output.stdout, /Latest progress/u)
+    assert.equal(output.stdout.match(/\[release\]/gu)?.length, 1)
+    assert.doesNotMatch(output.stdout, /Latest approved\n\s+\[release\]/u)
+    assert.equal(output.stdout.match(/\[global-loop\]/gu)?.length, 1)
+    assert.doesNotMatch(output.stdout, /Latest approved \(global\)\n\s+\[global-loop\]/u)
+    assert.match(output.stdout, /Action required before applying continuity guidance/u)
+    assert.match(output.stdout, /memory-lane agreements --area project-loop --json/u)
+    assert.equal((output.stdout.match(/memory-lane agreements --area project-loop --json/gu) ?? []).length, 1)
+    assert.ok(output.stdout.indexOf("Action required before applying continuity guidance") < output.stdout.indexOf("Operating guidance"))
+  })
+
+  it("continuity human output renders info warnings as notes and reports omitted warnings", () => {
+    const model = {
+      projectScope: "cli-info-warning",
+      status: { visibleApprovedCount: 0, pendingContinuityCount: 0 },
+      latestApproved: {},
+      latestProgress: undefined,
+      operatingGuidance: [],
+      pendingContinuity: [],
+      warnings: [
+        { code: "mcp-explicit-tools-only", severity: "info", message: "MCP exposes explicit tools only." },
+        { code: "operating-agreement-overlap", severity: "review", message: "Overlap.", suggestedActions: ["memory-lane agreements --area project-loop --json"] },
+        { code: "scope-hygiene-candidate", severity: "review", message: "Scope." },
+        { code: "mcp-explicit-tools-only", severity: "info", message: "Second MCP note." },
+      ],
+      answerGuidance: [],
+      suggestedActions: ["memory-lane continuity --json", "memory-lane agreements --area project-loop --json"],
+      freshness: { visibleApprovedCount: 0, newerApprovedCount: 0, newerProjectApprovedCount: 0, newerGlobalApprovedCount: 0, newerGlobalPreferenceCount: 0, advisory: { expiredCount: 0, staleCount: 0, expired: [], stale: [] } },
+    } as unknown as ContinuityReadModel
+
+    const output = formatContinuityReadModel(model, false)
+
+    assert.match(output, /Action required before applying continuity guidance/u)
+    assert.match(output, /Continuity notes/u)
+    assert.match(output, /1 more warnings omitted/u)
+    assert.equal((output.match(/memory-lane agreements --area project-loop --json/gu) ?? []).length, 1)
   })
 
   it("continuity human output includes truncated operating guidance inspection instruction", () => {
@@ -1633,7 +1686,8 @@ describe("CLI integration", () => {
     assert.equal(output.status, 0, output.stderr)
     assert.match(output.stdout, /Memory Lane Continuity/u)
     assert.match(output.stdout, /Project: cli-continuity-human/u)
-    assert.match(output.stdout, /Latest approved/u)
+    assert.match(output.stdout, /Latest progress/u)
+    assert.doesNotMatch(output.stdout, /Latest approved\n\s+\[approved\]/u)
     assert.match(output.stdout, /Pending continuity/u)
     assert.doesNotMatch(output.stdout, /Review-mode handoff proposal/u)
     assert.match(output.stdout, /freshness-advisory/u)
@@ -1711,6 +1765,44 @@ describe("CLI integration", () => {
     assert.match(output.stdout, /memory-lane supersede <new-id> expired-continuity-2 --dry-run/u)
     assert.match(output.stdout, /2 more stale\/expired advisory records omitted; use memory-lane status --json for full ids\./u)
     assert.doesNotMatch(output.stdout, /expired-continuity-1|expired-continuity-0/u)
+  })
+
+  it("continuity human output skips operating guidance already rendered elsewhere", () => {
+    const model: ContinuityReadModel = {
+      projectScope: "manual-model",
+      generatedAt: "2026-06-22T00:00:00.000Z",
+      status: { visibleApprovedCount: 2, pendingReviewCount: 0, pendingContinuityCount: 0 },
+      latestApproved: { project: { id: "procedure", preview: "Run review before implementation." } },
+      operatingGuidance: [
+        { id: "procedure", preview: "Run review before implementation." },
+        { id: "followup", preview: "Check CI before merge." },
+      ],
+      pendingContinuity: [],
+      freshness: {
+        projectScope: "manual-model",
+        advisory: { referenceNow: "2026-06-22T00:00:00.000Z", withFreshnessCount: 0, currentCount: 0, staleCount: 0, expiredCount: 0, stale: [], expired: [] },
+        visibleApprovedCount: 2,
+        newerApprovedCount: 0,
+        newerProjectApprovedCount: 0,
+        newerGlobalApprovedCount: 0,
+        newerGlobalPreferenceCount: 0,
+        newerByKind: {},
+        newerBySource: {},
+        newerByProvenance: {},
+        newestNewerApproved: [],
+      },
+      operatingAgreements: { projectScope: "manual-model", primaryCount: 0, relatedCandidateCount: 0, omittedPrimaryCount: 0, omittedRelatedCandidateCount: 0, workflowAreas: [], primary: [], relatedCandidates: [], notes: [] },
+      continuityHints: { projectScope: "manual-model", hintCount: 0, hints: [], supersededVisible: [], operatingAgreementOverlaps: [], projectGlobalPreferenceOverlaps: [], scopeHygieneCandidates: [], suggestedActions: [], notes: [] },
+      warnings: [],
+      suggestedActions: [],
+      answerGuidance: [],
+      harnessGuidance: { summary: [], cli: [], mcp: [] },
+      notes: [],
+    }
+
+    const output = formatContinuityReadModel(model, false)
+    assert.equal(output.match(/\[procedure\]/gu)?.length, 1)
+    assert.match(output, /\[followup\]/u)
   })
 
   it("continuity human output does not label non-freshness dry-run actions as freshness advisories", () => {

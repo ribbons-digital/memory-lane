@@ -179,7 +179,18 @@ EOF
 
 Replace `/absolute/path/to/memory-lane` with your checkout path, then run `/reload` in pi. The timestamp query avoids stale module caches while iterating locally. Re-run `pnpm build` after changing Memory Lane source, then `/reload` pi again.
 
-The local checkout pi adapter provides manual `memory_save`, `memory_suggest`, `memory_continuity`, and `memory_recall` tools plus `/memory ...` commands, including `/memory continuity [query]`. Release-style generated pi bridges expose the same continuity tool, proxy `/memory continuity ...` through the CLI, and use `memory-lane route --prompt <text> --json` for shared prompt-routing parity. It also injects project context through pi's `before_agent_start` event. Broad continuity prompts such as “what were we last working on?”, “where did we leave off?”, and “what's next?” route to canonical Memory Lane continuity (`memory-lane continuity --json`, or `memory-lane continuity --query ...` for topic-specific workstreams) before topic-specific recall, while ordinary targeted prompts continue to use bounded recall. To reduce memory noise, pi `input` only saves explicit memory requests such as “Remember that ...”; ordinary prompt submissions are not auto-saved. `turn_end` and `tool_result` still capture higher-signal lifecycle evidence such as completed durable project statements, successful workflow commands (e.g., `pnpm test`, `pnpm build`, `pnpm install`), and strong checkpoint evidence such as completed releases or merged PRs through the shared lifecycle policy. Inferred checkpoint captures are pending by default and require review before they affect approved continuity. For session summaries, pi uses the explicit `/memory session-summary` command: it reads the current branch through pi's session manager, asks for interactive confirmation, and saves any generated summary as a pending `session_summary` memory with pi `session_end` provenance. The native pi adapter also listens to `session_before_compact` and can save a pending pre-compact `session_summary` with pi `pre_compact` provenance when `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`; it does not override pi's own compaction summary. It does not automatically summarize on `agent_end` or `session_shutdown`. The release-style generated pi extension is intentionally a self-contained CLI bridge so pi never tries to import the native `memory-lane` binary as TypeScript.
+The local checkout pi adapter provides manual `memory_save`, `memory_suggest`, `memory_continuity`, and `memory_recall` tools plus `/memory ...` commands, including `/memory continuity [query]`.
+Release-style generated pi bridges expose the same continuity tool, proxy `/memory continuity ...` through the CLI, and use `memory-lane route --prompt <text> --json` for shared prompt-routing parity.
+It also injects project context through pi's `before_agent_start` event.
+Broad continuity prompts such as “what were we last working on?”, “where did we leave off?”, and “what's next?” route to canonical Memory Lane continuity (`memory-lane continuity --json`, or `memory-lane continuity --query ...` for topic-specific workstreams) before topic-specific recall, while ordinary targeted prompts continue to use bounded recall.
+Both repo-local and generated pi continuity rendering de-duplicate repeated continuity ids and promote actionable warning inspection commands before operating guidance.
+To reduce memory noise, pi `input` only saves explicit memory requests such as “Remember that ...”; ordinary prompt submissions are not auto-saved.
+`turn_end` and `tool_result` still capture higher-signal lifecycle evidence such as completed durable project statements, successful workflow commands (e.g., `pnpm test`, `pnpm build`, `pnpm install`), and strong checkpoint evidence such as completed releases or merged PRs through the shared lifecycle policy.
+Inferred checkpoint captures are pending by default and require review before they affect approved continuity.
+For session summaries, pi uses the explicit `/memory session-summary` command: it reads the current branch through pi's session manager, asks for interactive confirmation, and saves any generated summary as a pending `session_summary` memory with pi `session_end` provenance.
+The native pi adapter also listens to `session_before_compact` and can save a pending pre-compact `session_summary` with pi `pre_compact` provenance when `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`; it does not override pi's own compaction summary.
+It does not automatically summarize on `agent_end` or `session_shutdown`.
+The release-style generated pi extension is intentionally a self-contained CLI bridge so pi never tries to import the native `memory-lane` binary as TypeScript.
 
 #### Claude Code CLI: paste hooks manually
 
@@ -491,7 +502,8 @@ memory-lane dashboard [--all]     Compact continuity/review overview without lon
 memory-lane continuity [--json] [--query <text>]
                                   Canonical continuity read model, with optional workstream discovery
 memory-lane route --prompt <text> Internal prompt routing decision for harness adapters
-memory-lane agreements            Show approved operating agreements for the current project/global scope
+memory-lane agreements [--area <area>] [--json]
+                                  Show approved operating agreements for the current project/global scope
 memory-lane update <id>           Revise an active memory with the same id
 memory-lane rescope|move <id> --scope global|project [--dry-run|--yes]
                                   Correct memory scope with the same id
@@ -574,7 +586,7 @@ Use `memory-lane agreements` to explicitly inspect approved workflow/process mem
 ```bash
 memory-lane agreements
 memory-lane agreements --json
-memory-lane agreements --area project-loop
+memory-lane agreements --area project-loop --json
 memory-lane agreements --all
 ```
 
@@ -582,11 +594,19 @@ memory-lane agreements --all
 
 ### Continuity read model
 
-Use `memory-lane continuity --json` as the canonical CLI surface for continuity questions such as “what were we last working on?”, “what changed?”, “what did we accomplish?”, “what should we do next?”, and project status/resumption checks. The read model combines latest progress (`latestProgress`), legacy latest approved project/global continuity (`latestApproved`), bounded operating guidance (`operatingGuidance`), pending continuity review candidates, freshness, operating-agreement metadata, continuity hints, warnings, suggested actions, and harness guidance in one bounded response. Active selected slots use non-superseded approved memories, collapse operating guidance to one preview per workflow area, and prefer safe descriptor metadata for previews when available.
+Use `memory-lane continuity --json` as the canonical CLI surface for continuity questions such as “what were we last working on?”, “what changed?”, “what did we accomplish?”, “what should we do next?”, and project status/resumption checks.
+The read model combines latest progress (`latestProgress`), legacy latest approved project/global continuity (`latestApproved`), bounded operating guidance (`operatingGuidance`), pending continuity review candidates, freshness, operating-agreement metadata, continuity hints, warnings, suggested actions, and harness guidance in one bounded response.
+Active selected slots use non-superseded approved memories, collapse operating guidance to one preview per workflow area, de-duplicate the same memory id across the major human-rendered continuity sections, and prefer safe descriptor metadata for previews when available.
+Human CLI output promotes warnings that require inspection into an `Action required before applying continuity guidance` block before operating guidance.
+For operating-agreement overlap warnings, inspect the per-area `memory-lane agreements --area <area> --json` actions before treating overlapping workflow guidance as authoritative.
 
 For topic-specific workstream questions such as “resume building X” or “where was X implemented?”, pass a query: `memory-lane continuity --query "resume building X" --json`. This adds a bounded `workstreamDiscovery` block derived from non-superseded approved current-project continuity memories, with compact previews, match reasons, provenance/revision metadata, and derived PR/branch/commit/release references when present. Human output includes the same section compactly.
 
-For MCP clients, call `memory_continuity({ projectPath })` first for general continuity questions, or `memory_continuity({ projectPath, query: "resume building X" })` for the workstream discovery variant. Pass `projectPath` when the desktop/client process is not already scoped to the project. Do not answer continuity questions from `memory_recall` alone. Use recall only as a topic-specific follow-up after continuity inspection, for example when the continuity read model points to an area that needs more detail. Lexical fallback recall keeps lexical score primary; for currentness-like release/status/checkpoint queries, exact lexical-score ties between project checkpoints prefer newer `updatedAt` so older status checkpoints do not outrank equally relevant current checkpoints.
+For MCP clients, call `memory_continuity({ projectPath })` first for general continuity questions, or `memory_continuity({ projectPath, query: "resume building X" })` for the workstream discovery variant.
+Pass `projectPath` when the desktop/client process is not already scoped to the project.
+Do not answer continuity questions from `memory_recall` alone.
+Use recall only as a topic-specific follow-up after continuity inspection, for example when the continuity read model points to an area that needs more detail.
+Lexical fallback recall keeps lexical score primary; for currentness-like release/status/checkpoint queries, exact lexical-score ties between project checkpoints prefer newer `updatedAt` so older status checkpoints do not outrank equally relevant current checkpoints.
 
 The continuity read model is read-only. It may include bounded previews of selected memory records, including pending checkpoint candidates and approved workstream discovery pointers, but it does not inject additional memory bodies into lifecycle prompts, approve pending memories, mutate records, clean up scopes, rewrite retrieval, index raw transcripts, create workstream ids, or replace the review queue. Pending checkpoint captures become approved continuity only after review approval.
 
@@ -607,7 +627,9 @@ Current hints report:
 
 Scope hygiene hints are text-free inspection signals only. Memory Lane does not automatically rescope or clean up those memories; use `memory-lane show <id>` or `memory-lane list --json` to inspect them before deciding whether to rescope, update, supersede, or leave them alone. Use `memory-lane rescope <id> --scope project --project <path> --dry-run` to preview a same-id scope correction, then rerun with `--yes` only after review.
 
-Hints invite inspection with commands such as `memory-lane dashboard`, `memory-lane show <id>`, `memory-lane agreements --area <area>`, `memory-lane agreements --all`, and `memory-lane list --json`. Freshness advisory hints may also include per-id dry-run revision commands already available in the CLI; human `continuity` groups those commands separately as manual dry-run freshness actions. They do not perform cleanup, remove superseded memories from explicit inspection surfaces, change recall ranking, or suggest destructive reject/delete commands.
+Hints invite inspection with commands such as `memory-lane dashboard`, `memory-lane show <id>`, `memory-lane agreements --area <area> --json`, `memory-lane agreements --all`, and `memory-lane list --json`.
+Freshness advisory hints may also include per-id dry-run revision commands already available in the CLI; human `continuity` groups those commands separately as manual dry-run freshness actions.
+They do not perform cleanup, remove superseded memories from explicit inspection surfaces, change recall ranking, or suggest destructive reject/delete commands.
 
 ### Session-end summarization
 

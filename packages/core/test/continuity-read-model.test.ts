@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { buildContinuityReadModel, MemoryEngine, type MemoryRecord } from "../src/index.js"
+import { buildContinuityReadModel, buildContinuityWarningRenderPlan, MemoryEngine, type ContinuityWarning, type MemoryRecord } from "../src/index.js"
 import { tempDir } from "./helpers.js"
 
 function memory(overrides: Partial<MemoryRecord> & { id: string; text?: string }): MemoryRecord {
@@ -315,6 +315,41 @@ test("continuity read model marks truncated operating guidance and instructs ful
   assert.doesNotMatch(guidance?.preview ?? "", /claude -p --model=claude-opus-4-8/u)
   assert.match(result.answerGuidance.join("\n"), /opus-review-rule/u)
   assert.match(result.answerGuidance.join("\n"), /memory-lane show opus-review-rule/u)
+})
+
+test("continuity read model adds actionable overlap warning metadata", () => {
+  const result = buildContinuityReadModel([
+    memory({ id: "checkpoint", text: "Released v0.2.32 with Pi continuity dogfood complete.", kind: "project_checkpoint", updatedAt: "2026-06-26T10:00:00.000Z" }),
+    memory({ id: "project-loop", text: "Project loop workflow: run review before implementation.", kind: "procedure", updatedAt: "2026-06-26T11:00:00.000Z" }),
+    memory({ id: "global-loop", text: "Global project loop workflow preference: run review before implementation.", category: "preference", scope: { type: "global" }, kind: "workflow_rule", updatedAt: "2026-06-26T12:00:00.000Z" }),
+  ], { projectScopeKey: "project-a" })
+
+  const warning = result.warnings.find((item) => item.code === "operating-agreement-overlap")
+  assert.deepEqual(warning?.workflowAreas, ["project-loop"])
+  assert.deepEqual(warning?.suggestedActions, ["memory-lane agreements --area project-loop --json"])
+  assert.ok(result.suggestedActions.includes("memory-lane agreements --area project-loop --json"))
+})
+
+
+test("continuity warning render plan prioritizes actionable warnings before info warnings", () => {
+  const warnings: ContinuityWarning[] = [
+    { code: "mcp-explicit-tools-only", severity: "info", message: "MCP note." },
+    { code: "operating-agreement-overlap", severity: "review", message: "Overlap.", suggestedActions: ["memory-lane agreements --area project-loop --json", "memory-lane agreements --area review-gate --json", "memory-lane agreements --area pr-process --json", "memory-lane agreements --area release-process --json"] },
+    { code: "scope-hygiene-candidate", severity: "review", message: "Scope." },
+    { code: "freshness-advisory", severity: "review", message: "Freshness." },
+  ]
+
+  const plan = buildContinuityWarningRenderPlan(warnings)
+
+  assert.deepEqual(plan.warnings.map((warning) => warning.code), ["operating-agreement-overlap", "scope-hygiene-candidate", "freshness-advisory"])
+  assert.deepEqual(plan.infoWarnings.map((warning) => warning.code), [])
+  assert.deepEqual(plan.actionRequiredWarnings.map((warning) => warning.code), ["operating-agreement-overlap", "scope-hygiene-candidate", "freshness-advisory"])
+  assert.equal(plan.omittedWarningCount, 1)
+  assert.deepEqual([...plan.renderedInspectionActions], [
+    "memory-lane agreements --area project-loop --json",
+    "memory-lane agreements --area review-gate --json",
+    "memory-lane agreements --area pr-process --json",
+  ])
 })
 
 

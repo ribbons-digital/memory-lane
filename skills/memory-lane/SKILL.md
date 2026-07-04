@@ -16,7 +16,9 @@ Use this bounded path for prompts like “what were we working on?”, “where 
    memory-lane continuity --json
    ```
    Use `memory_continuity({ query })` / `memory-lane continuity --query "<topic>" --json` only for topic-specific workstream discovery prompts such as “resume building X”.
-2. Prefer `latestProgress` for current progress. Treat `latestApproved.project` as a legacy compatibility slot that may contain corrections/procedures.
+2. Prefer `latestProgress` for current progress.
+   Treat `latestApproved.project` as a legacy compatibility slot that may contain corrections/procedures.
+   If continuity renders `Action required before applying continuity guidance` or warning-level `suggestedActions`, inspect those commands before treating overlapping workflow guidance as authoritative.
 3. Verify against compact repo state with bounded reads:
    - `HANDOFF.md` → status card: current state, next work, constraints.
    - `ROADMAP.md` → active index: current status and next track first.
@@ -70,7 +72,7 @@ memory-lane migrate project-local --dry-run --write-plan <path> --project <proje
 memory-lane migrate project-local --apply-plan <path> --yes
 memory-lane dashboard
 memory-lane agreements
-memory-lane agreements --area project-loop
+memory-lane agreements --area project-loop --json
 
 # Explicit revision operations
 memory-lane update <id> --text "refined memory" --reason "clarified"
@@ -109,6 +111,7 @@ Use `--dry-run` where available before changing scope or relationships. Active c
 - Use `memory-lane continuity --json` / `memory_continuity({})` for broad workstream state.
 - Use `memory-lane continuity --query "..." --json` / `memory_continuity({ query })` for topic-specific workstream discovery.
 - Use `memory-lane agreements` for project workflow, review gates, PR process, release process, or tooling workflow rules.
+  If continuity warns about overlapping operating agreements, use the exact per-area `memory-lane agreements --area <area> --json` action before applying the guidance.
 - Use `memory-lane status --json`, `memory-lane doctor --json`, or MCP `memory_status` for text-free continuity/staleness metadata.
   Legacy project-memory diagnostics on the same surfaces may include bounded sample previews.
   Use `memory-lane dashboard` only when a compact human-facing overview is appropriate.
@@ -123,7 +126,10 @@ Automatic lifecycle context is controlled by `memory.contextPolicy`:
 - `policy-only` injects guidance to use Memory Lane tools without memory bodies.
 - `off` disables automatic lifecycle context while preserving explicit CLI/MCP tools and save hooks.
 
-Prompt-time broad continuity guidance is not a memory body. It is a cue to inspect continuity/status/dashboard/roadmap before answering from chat context alone. Broad project-position/next-work prompts should receive guidance without ordinary recall bodies; topic-specific prompts can still include bounded relevant memory. Generated Pi bridges use the shared `memory-lane route --prompt <text> --json` CLI decision so they stay in parity with repo-local adapters.
+Prompt-time broad continuity guidance is not a memory body.
+It is a cue to inspect continuity/status/dashboard/roadmap before answering from chat context alone.
+Broad project-position/next-work prompts should receive guidance without ordinary recall bodies; topic-specific prompts can still include bounded relevant memory.
+Generated Pi bridges use the shared `memory-lane route --prompt <text> --json` CLI decision so they stay in parity with repo-local adapters, including deduped continuity rendering and promoted warning inspection actions.
 
 At `SessionStart`, Memory Lane may inject a compact `Continuity notice` in `policy-only` or `selective` modes. In `selective` mode, it can also render tiny always-on memories plus a `Memory Index` of descriptor cards; structured descriptors use stored `description` and `fetchHint` metadata when present, otherwise generated previews. The notice shares the existing SessionStart budget and omits memory ids, memory text, transcripts, and tool outputs.
 

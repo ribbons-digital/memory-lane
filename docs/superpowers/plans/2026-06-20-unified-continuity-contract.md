@@ -186,6 +186,8 @@ export interface ContinuityWarning {
   severity: "info" | "review" | "warning"
   message: string
   memoryIds?: string[]
+  workflowAreas?: WorkflowArea[]
+  suggestedActions?: string[]
 }
 
 export interface ContinuityHarnessGuidance {
@@ -315,6 +317,7 @@ function buildWarnings(input: {
   projectScope?: string
   latestProject?: ContinuityMemoryPreview
   pendingContinuity: ContinuityMemoryPreview[]
+  hints: ContinuityHint[]
   hintCodes: Set<string>
   caller?: string
 }): ContinuityWarning[] {
@@ -344,7 +347,18 @@ function buildWarnings(input: {
     warnings.push({ code: "scope-hygiene-candidate", severity: "review", message: "Some visible global memories look project-specific; inspect scope hygiene before relying on them." })
   }
   if (input.hintCodes.has("operating-agreement-overlap")) {
-    warnings.push({ code: "operating-agreement-overlap", severity: "review", message: "Multiple operating agreement candidates overlap; inspect agreements before applying workflow guidance." })
+    const workflowAreas = unique(input.hints
+      .filter((hint) => hint.code === "operating-agreement-overlap" && hint.workflowArea)
+      .map((hint) => hint.workflowArea!))
+    warnings.push({
+      code: "operating-agreement-overlap",
+      severity: "review",
+      message: "Multiple operating agreement candidates overlap; inspect agreements before applying workflow guidance.",
+      workflowAreas,
+      suggestedActions: workflowAreas.length
+        ? workflowAreas.map((area) => `memory-lane agreements --area ${area} --json`)
+        : ["memory-lane agreements --json"],
+    })
   }
   if (input.caller === "mcp") {
     warnings.push({ code: "mcp-explicit-tools-only", severity: "info", message: "MCP exposes explicit tools only; it does not run lifecycle hooks or automatic context injection." })
@@ -377,7 +391,7 @@ export function buildContinuityReadModel(memories: MemoryRecord[], options: Cont
   const latestProject = approvedProject.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
   const latestGlobal = approvedGlobal.map((memory) => preview(memory, previewMaxChars)).find(Boolean)
   const hintCodes = new Set(continuityHints.hints.map((hint) => hint.code))
-  const warnings = buildWarnings({ projectScope, latestProject, pendingContinuity, hintCodes, caller: options.caller })
+  const warnings = buildWarnings({ projectScope, latestProject, pendingContinuity, hints, hintCodes, caller: options.caller })
 
   const suggestedActions = unique([
     "memory-lane continuity --json",

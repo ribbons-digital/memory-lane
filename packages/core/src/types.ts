@@ -341,6 +341,8 @@ export interface ContinuityWarning {
   severity: "info" | "review" | "warning"
   message: string
   memoryIds?: string[]
+  workflowAreas?: WorkflowArea[]
+  suggestedActions?: string[]
 }
 
 export interface ContinuityHarnessGuidance {

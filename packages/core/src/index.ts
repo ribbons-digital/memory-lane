@@ -3,6 +3,7 @@ export { classifyCheckpointCandidate, type CheckpointCandidateKind, type Checkpo
 export { buildFreshnessStatus, classifyFreshness } from "./freshness.js"
 export { buildContinuityHints } from "./continuity-hints.js"
 export { buildContinuityReadModel } from "./continuity-read-model.js"
+export { buildContinuityWarningRenderPlan, continuityWarningInspectionActions, requiresContinuityWarningAction, type ContinuityWarningRenderPlan, type ContinuityWarningRenderPlanOptions } from "./continuity-warning-rendering.js"
 export { discoverWorkstreams, type WorkstreamDiscoveryOptions } from "./workstream-discovery.js"
 export { buildPreferenceDiagnostics, isPreferenceLikeMemory } from "./preference-diagnostics.js"
 export { revisionNow, sameIdRevision, revisionLabel, hasRealUpdateChange } from "./revisions.js"

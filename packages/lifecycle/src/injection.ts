@@ -856,7 +856,7 @@ export interface ContinuityNoticeInput {
 const SAFE_INSPECTION_ACTIONS = [
   /^memory-lane status(?: --json)?(?: --since \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)?$/u,
   /^memory-lane dashboard$/u,
-  /^memory-lane agreements$/u,
+  /^memory-lane agreements(?: --area [a-z-]+)?(?: --json)?$/u,
   /^memory-lane list(?: --json)?$/u,
   /^memory-lane review(?: --json)?$/u,
 ] as const
