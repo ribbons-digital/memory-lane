@@ -13,7 +13,7 @@ import {
   type ProjectScope,
 } from "../src/index.js"
 import { tempDir } from "./helpers.js"
-import { summarizeEvalGate } from "./eval-report-helpers.js"
+import { isGateSatisfactory, summarizeEvalGate } from "./eval-report-helpers.js"
 
 export const PROJECT_SCOPE_KEY = "eval/project"
 export const GENERATED_AT = "2026-06-27T12:00:00.000Z"
@@ -443,11 +443,7 @@ export async function buildEvalReport(evalCorpus: EvalCorpus): Promise<EvalRepor
 }
 
 export function reportIsSatisfactory(report: EvalReport): boolean {
-  return report.summary.scenarioCount > 0
-    && report.summary.passCount + report.summary.failCount === report.summary.scenarioCount
-    && report.summary.failCount === 0
-    && report.summary.zeroToleranceFailures === 0
-    && report.summary.satisfactory === true
+  return isGateSatisfactory(report.summary)
     && Number.isFinite(report.summary.meanRecallAtK)
     && Number.isFinite(report.summary.meanPrecisionAtK)
     && Number.isFinite(report.summary.meanNdcgAtK)

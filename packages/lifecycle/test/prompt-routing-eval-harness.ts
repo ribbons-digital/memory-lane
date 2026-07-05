@@ -1,4 +1,4 @@
-import { summarizeEvalGate } from "../../core/test/eval-report-helpers.js"
+import { isGateSatisfactory, summarizeEvalGate } from "../../core/test/eval-report-helpers.js"
 import {
   classifyPromptRoute,
   renderContinuityIntentGuidance,
@@ -11,12 +11,10 @@ export const CORPUS_ID = "prompt-routing-baseline-v1"
 
 export type PromptRoutingFailureTag = "wrong-route" | "wrong-intent-family" | "missing-reason" | "unexpected-reason" | "wrong-guidance"
 
-export const ZERO_TOLERANCE_FAILURE_TAGS: Record<PromptRoutingFailureTag, true | undefined> = {
+export const ZERO_TOLERANCE_FAILURE_TAGS: Partial<Record<PromptRoutingFailureTag, true>> = {
   "wrong-route": true,
   "wrong-intent-family": true,
   "wrong-guidance": true,
-  "missing-reason": undefined,
-  "unexpected-reason": undefined,
 }
 
 export interface PromptRoutingEvalScenario {
@@ -228,11 +226,7 @@ export function buildPromptRoutingEvalReport(scenarios: PromptRoutingEvalScenari
 }
 
 export function reportIsSatisfactory(report: PromptRoutingEvalReport): boolean {
-  return report.summary.scenarioCount > 0
-    && report.summary.passCount + report.summary.failCount === report.summary.scenarioCount
-    && report.summary.failCount === 0
-    && report.summary.zeroToleranceFailures === 0
-    && report.summary.satisfactory === true
+  return isGateSatisfactory(report.summary)
     && Number.isFinite(report.summary.routeAccuracy)
     && report.summary.routeAccuracy === 1
     && Number.isFinite(report.summary.intentFamilyAccuracy)

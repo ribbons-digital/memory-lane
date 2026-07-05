@@ -12,6 +12,8 @@ export interface EvalGateSummary {
   satisfactory: boolean
 }
 
+export type EvalGateFields = Pick<EvalGateSummary, "scenarioCount" | "passCount" | "failCount" | "zeroToleranceFailures" | "satisfactory">
+
 export function ratio(numerator: number, denominator: number): number {
   return denominator === 0 ? Number.NaN : numerator / denominator
 }
@@ -28,21 +30,33 @@ export function isEvalResultPassed(result: EvalResultWithFailureTags): boolean {
   return result.passed ?? result.failureTags.length === 0
 }
 
+export function isGateSatisfactory(summary: EvalGateFields): boolean {
+  return summary.scenarioCount > 0
+    && summary.passCount + summary.failCount === summary.scenarioCount
+    && summary.failCount === 0
+    && summary.zeroToleranceFailures === 0
+    && summary.satisfactory === true
+}
+
 export function summarizeEvalGate<Tag extends string>(
   results: readonly EvalResultWithFailureTags<Tag>[],
-  zeroToleranceFailureTags: ReadonlySet<Tag> | Record<Tag, true | undefined>,
+  zeroToleranceFailureTags: ReadonlySet<Tag> | Partial<Record<Tag, true>>,
 ): EvalGateSummary {
   const isZeroTolerance = zeroToleranceFailureTags instanceof Set
     ? (tag: Tag) => zeroToleranceFailureTags.has(tag)
     : (tag: Tag) => zeroToleranceFailureTags[tag] === true
   const failCount = results.filter((result) => !isEvalResultPassed(result)).length
   const zeroToleranceFailures = results.reduce((sum, result) => sum + result.failureTags.filter(isZeroTolerance).length, 0)
-  return {
+  const summary = {
     scenarioCount: results.length,
     passCount: results.length - failCount,
     failCount,
     zeroToleranceFailures,
     failureTagCounts: countFailureTags(results),
-    satisfactory: results.length > 0 && failCount === 0 && zeroToleranceFailures === 0,
+    satisfactory: true,
+  }
+  return {
+    ...summary,
+    satisfactory: isGateSatisfactory(summary),
   }
 }

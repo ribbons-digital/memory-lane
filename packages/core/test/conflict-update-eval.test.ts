@@ -69,6 +69,27 @@ test("conflict/update eval rejects no-data and failing summaries", async () => {
   }
   assert.equal(failingReport.summary.satisfactory, false)
   assert.equal(reportIsSatisfactory(failingReport), false)
+
+  const staleSatisfactoryReport = {
+    generatedAt: GENERATED_AT,
+    corpusId: CORPUS_ID,
+    mode: MODE,
+    scenarioResults: [],
+    summary: {
+      scenarioCount: 2,
+      passCount: 1,
+      failCount: 1,
+      zeroToleranceFailures: 1,
+      currentFactFirstRate: 1,
+      falsePremiseSafetyRate: 1,
+      staleFactLeakRate: 0,
+      supersededMemoryLeakRate: 0,
+      failureTagCounts: { "stale-over-current": 1 },
+      satisfactory: true,
+    },
+  }
+  assert.equal(staleSatisfactoryReport.summary.satisfactory, true)
+  assert.equal(reportIsSatisfactory(staleSatisfactoryReport), false)
 })
 
 const expandedScenarioContracts = [
