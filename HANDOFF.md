@@ -2,33 +2,29 @@
 
 ## Current state
 
-- Branch context: active implementation branch `eval/conflict-update-microbench`.
+- Branch context: active status-sync branch `docs/post-pr-105-status-sync`.
 - PR #104 merged as `425fcac`, removed internal `docs/` files from repository tracking, kept `docs/plugins/README.md` tracked as user-facing documentation, ignored the rest of on-disk `docs/`, and synced status docs.
+- PR #105 merged as `106ca50`, expanded the deterministic conflict/update microbench to v2, and shipped same-id update, correction-record, supersession-chain, cross-scope false-premise, folded-text, and leak-rate coverage.
 - Latest known release: `v0.2.46` from main commit `cadd261`, after PR #99 fixed generated Pi pre-compact bridge session-summary behavior.
 - Project-local storage defaults are implemented through Slice 2b: PR #80, PR #89, and PR #94 shipped the write default, legacy diagnostics, and review-first migration protocol.
 - Continuity routing/context hygiene shipped in PR #82; duplicate continuity rendering hygiene shipped in PR #97.
 - Generated Pi pre-compact bridge parity shipped in PR #99 and is no longer the next implementation slice.
 - Prompt-routing eval baseline merged in PR #102.
-- Conflict/update recall eval baseline merged in PR #103.
-- Conflict/update microbench expansion is in progress on `eval/conflict-update-microbench`.
+- Conflict/update eval coverage shipped through PR #103 and PR #105.
 - Internal feature specs, validation notes, and archived handoffs under `docs/` are intentionally removed from repository tracking.
 - User-facing plugin documentation remains at `docs/plugins/README.md` and is linked from the main README.
 
 ## Current decision / next work
 
-The active slice is conflict/update microbench expansion.
-It is deterministic, local-fixture-only, and read-only unless a fixture exposes a real production recall bug.
-Do not add LongMemEval, embeddings, LLM judges, production ranking rewrites, or auto-consolidation in this slice.
+The current branch scope is post-PR #105 status sync only.
+It should not change product behavior.
 
-Current acceptance shape:
+After this status sync, the recommended next product slice is a design/spec slice for review-first consolidation proposals.
+That slice should turn existing overlap and superseded-memory hints into bounded, human-reviewable `update`, `replace`, or `supersede` recommendations.
+It should remain proposal-only and read-only for the first implementation slice.
+Do not add auto-apply, auto-approval, LLM synthesis, schema changes, persisted proposal ids, broader contradiction detection, or retrieval-ranking rewrites.
 
-1. Conflict/update corpus includes same-id update coverage using duplicate raw record ids so folding must select the current version.
-2. Conflict/update corpus includes explicit correction-record coverage.
-3. Conflict/update corpus includes multiple-supersession-chain coverage.
-4. Conflict/update corpus includes cross-scope false-premise coverage.
-5. Conflict/update summary reports current-fact-first rate, false-premise safety rate, stale-fact leak rate, and superseded-memory leak rate.
-6. Tests assert the same-id scenario returns the current folded text, not only the duplicate id.
-7. Verification keeps semantic retrieval disabled and shows zero zero-tolerance failures.
+Opus 4.8 second opinion agreed with this direction after PR #105 because the live continuity hints already report operating-agreement overlap, the revision verbs already exist, and the new deterministic conflict/update eval coverage gives a guardrail against stale-current mistakes.
 
 ## Load-bearing constraints
 
@@ -48,6 +44,7 @@ Current acceptance shape:
 - Conflict/update microbench expansion verification: `pnpm --filter @memory-lane/core build` passed.
 - Conflict/update microbench expansion verification: `pnpm build` passed.
 - Conflict/update microbench expansion verification: `git diff --check` passed.
+- PR #105 merged as `106ca50`; post-merge cleanup synced local `main`, deleted local and remote `eval/conflict-update-microbench`, and confirmed clean `main...origin/main`.
 - PR #104 first pass verification: `pnpm build` passed.
 - PR #104 first pass verification: `pnpm test` passed.
 - PR #104 first pass verification: targeted CLI Pi dogfood tests passed from `packages/cli` with 122 tests.
@@ -63,5 +60,5 @@ Current acceptance shape:
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.46` / commit `cadd261`
-- Current implementation branch: `eval/conflict-update-microbench`
-- Latest deterministic eval baselines: PR #102 and PR #103, plus the active conflict/update microbench expansion branch.
+- Current status-sync branch: `docs/post-pr-105-status-sync`
+- Latest deterministic eval baselines: PR #102, PR #103, and PR #105.

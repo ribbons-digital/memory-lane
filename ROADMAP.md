@@ -42,6 +42,7 @@ Recent shipped work:
 - PR #102 added the deterministic prompt-routing eval baseline.
 - PR #103 added the deterministic conflict/update recall eval baseline.
 - PR #104 removed internal `docs/` files from repository tracking, kept `docs/plugins/README.md` tracked, ignored the rest of `docs/`, and synced status docs.
+- PR #105 expanded the deterministic conflict/update microbench with same-id updates, correction records, supersession chains, cross-scope false premises, folded-text assertions, and stale/superseded leak-rate reporting.
 
 ## Active track - Project-local Storage Defaults
 
@@ -75,18 +76,17 @@ Deterministic eval coverage now includes:
 - retrieval and continuity baseline coverage from PR #70;
 - retrieval currentness tie-break coverage from PR #75;
 - prompt-routing baseline coverage from PR #102;
-- conflict/update recall baseline coverage from PR #103.
-- Current branch `eval/conflict-update-microbench` expands the conflict/update microbench with deterministic fixture-only coverage for same-id updates, correction records, supersession chains, cross-scope false premises, and leak-rate reporting.
+- conflict/update recall baseline coverage from PR #103;
+- conflict/update microbench expansion coverage from PR #105.
 
-The active eval slice is the conflict/update microbench expansion.
-It should stay deterministic and fixture-only until a failing fixture proves production recall needs to change.
-Target shape:
+No active eval implementation slice is currently open.
+The deterministic conflict/update microbench is clean, so retrieval-ranking changes remain paused until dogfood or eval evidence exposes a concrete production recall bug.
 
-- add same-id update scenarios with duplicate raw record ids so the folded current version must win;
-- add explicit correction-record scenarios;
-- add multiple-supersession-chain scenarios;
-- add cross-scope false-premise scenarios;
-- report current-fact-first rate, stale-fact leak rate, false-premise safety rate, and superseded-memory leak rate.
+Likely next product slice:
+
+- **Review-first consolidation proposals spec:** design a proposal-only surface that turns existing overlap and superseded-memory hints into bounded, human-reviewable `update`, `replace`, or `supersede` recommendations.
+- Keep it read-only and proposal-only in the first implementation slice.
+- Do not add auto-apply, auto-approval, LLM synthesis, schema changes, persisted proposal ids, or broader contradiction detection.
 
 Do not add LongMemEval, embeddings, LLM judges, production ranking rewrites, or auto-consolidation until deterministic local evals remain stable and expose a reason to broaden.
 
