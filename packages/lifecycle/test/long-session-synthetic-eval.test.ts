@@ -8,6 +8,7 @@ import {
   buildLongSessionEvalReport,
   corpus,
   evaluateScenario,
+  memory,
   reportIsSatisfactory,
   summarizeResults,
   type LongSessionFailureTag,
@@ -191,6 +192,108 @@ function longSessionScenarioResult(overrides: Partial<LongSessionScenarioResult>
   }
   return result
 }
+
+test("long-session summary keeps required recall perfect without inventing forbidden leaks", () => {
+  const requiredOnlyStep = longSessionStepResult({
+    id: "required-only-step",
+    actualMemoryIds: ["required-memory"],
+    requiredMemoryIds: ["required-memory"],
+  })
+  const summary = summarizeResults([longSessionScenarioResult({
+    id: "required-only-result",
+    stepResults: [requiredOnlyStep],
+  })])
+
+  assert.equal(summary.meanRequiredRecall, 1)
+  assert.equal(summary.meanForbiddenLeakRate, 0)
+  assert.equal(summary.satisfactory, true)
+})
+
+test("long-session corpus validation keeps memory ids scenario-local", () => {
+  const scenarios: LongSessionScenario[] = [
+    {
+      id: "record-owner-scenario",
+      description: "Owns a record whose id another scenario must not be allowed to reference.",
+      benchmark: { ability: "lifecycle-injection", lane: "lifecycle-injection" },
+      policy: { mode: "selective" },
+      records: [memory({ id: "cross-scenario-record", text: "Only this scenario may reference this record." })],
+      steps: [
+        {
+          id: "owner-step",
+          event: "prompt",
+          prompt: "What record belongs to this scenario?",
+          requiredMemoryIds: ["cross-scenario-record"],
+        },
+      ],
+    },
+    {
+      id: "invalid-borrower-scenario",
+      description: "References a record id that exists only in a different scenario.",
+      benchmark: { ability: "lifecycle-injection", lane: "lifecycle-injection" },
+      policy: { mode: "selective" },
+      records: [memory({ id: "borrower-local-record", text: "The borrower scenario has only its own local record." })],
+      steps: [
+        {
+          id: "borrowed-reference-step",
+          event: "prompt",
+          prompt: "This step incorrectly references another scenario's record.",
+          requiredMemoryIds: ["cross-scenario-record"],
+        },
+      ],
+    },
+  ]
+
+  assert.throws(
+    () => assertCorpusStructurallyValid(scenarios),
+    /borrowed-reference-step references unknown memory id cross-scenario-record/u,
+  )
+})
+
+test("session-start rendered descriptor ids do not match superseded id substrings", async () => {
+  const result = await evaluateScenario({
+    id: "session-start-descriptor-id-boundary",
+    description: "A compact descriptor id extends a superseded id prefix without causing substring recall.",
+    benchmark: { ability: "lifecycle-injection", lane: "lifecycle-injection" },
+    policy: { mode: "selective", maxItems: { sessionStart: 2, prompt: 2 }, maxChars: { sessionStart: 1200, prompt: 1200 } },
+    records: [
+      memory({
+        id: "prefix-memory",
+        kind: "decision",
+        text: "SUPERSEDED PREFIX MEMORY BODY: use the obsolete descriptor id.",
+        updatedAt: "2026-07-05T09:10:00.000Z",
+        revision: { supersededBy: "prefix-memory-extended", reason: "A later descriptor superseded the prefix id", revisedAt: "2026-07-05T09:20:00.000Z", revisedBy: "manual" },
+      }),
+      memory({
+        id: "prefix-memory-extended",
+        kind: "decision",
+        text: "Current extended descriptor body should be represented by descriptor metadata at session start.",
+        updatedAt: "2026-07-05T09:20:00.000Z",
+        revision: { supersedes: ["prefix-memory"], reason: "Boundary-safe descriptor id", revisedAt: "2026-07-05T09:20:00.000Z", revisedBy: "manual" },
+        descriptor: {
+          description: "Current extended descriptor summary",
+          fetchHint: "when checking descriptor id boundaries",
+        },
+      }),
+    ],
+    steps: [
+      {
+        id: "session-start-descriptor-boundary",
+        event: "sessionStart",
+        requiredMemoryIds: ["prefix-memory-extended"],
+        forbiddenMemoryIds: ["prefix-memory"],
+        requiredText: ["Current extended descriptor summary"],
+        forbiddenText: ["SUPERSEDED PREFIX MEMORY BODY"],
+        expectedDecision: { event: "sessionStart", mode: "selective" },
+      },
+    ],
+  })
+  const step = stepResultById(result, "session-start-descriptor-boundary")
+
+  assert.equal(result.passed, true)
+  assertStepPassed(step)
+  assertIncludesAll(step.actualMemoryIds, ["prefix-memory-extended"], step.id)
+  assertIncludesNone(step.actualMemoryIds, ["prefix-memory"], step.id)
+})
 
 test("long-session synthetic eval corpus is structurally valid and covers issue 113 behaviors", () => {
   assertCorpusStructurallyValid(corpus)

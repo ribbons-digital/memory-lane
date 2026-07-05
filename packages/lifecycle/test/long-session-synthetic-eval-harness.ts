@@ -453,7 +453,7 @@ function createEngine(scenario: LongSessionScenario): { engine: MemoryEngine; pr
 }
 
 function contextContainsMemory(context: string, memory: MemoryRecord): boolean {
-  return context.includes(memory.id) || context.includes(memory.text)
+  return context.includes(`[${memory.id}]`) || context.includes(memory.text)
 }
 
 function uniqueTags(tags: LongSessionFailureTag[]): LongSessionFailureTag[] {
@@ -570,8 +570,8 @@ export async function evaluateScenario(scenario: LongSessionScenario): Promise<L
   }
 }
 
-function ratio(numerator: number, denominator: number): number {
-  return denominator === 0 ? 1 : numerator / denominator
+function ratio(numerator: number, denominator: number, zeroDenominatorDefault: number): number {
+  return denominator === 0 ? zeroDenominatorDefault : numerator / denominator
 }
 
 export function summarizeResults(results: LongSessionScenarioResult[]): LongSessionEvalReport["summary"] {
@@ -580,8 +580,8 @@ export function summarizeResults(results: LongSessionScenarioResult[]): LongSess
   const forbiddenTotal = results.reduce((sum, result) => sum + result.stepResults.reduce((stepSum, step) => stepSum + step.forbiddenMemoryIds.length + step.forbiddenContinuityIds.length + step.forbiddenTextTotal, 0), 0)
   const forbiddenLeaked = results.reduce((sum, result) => sum + result.stepResults.reduce((stepSum, step) => stepSum + step.forbiddenInjected.length + step.forbiddenContinuityPresent.length + step.forbiddenTextPresent.length, 0), 0)
   const gateSummary = summarizeEvalGate(results, ZERO_TOLERANCE_FAILURE_TAGS)
-  const meanRequiredRecall = ratio(Math.max(0, requiredTotal - requiredMissing), requiredTotal)
-  const meanForbiddenLeakRate = ratio(forbiddenLeaked, forbiddenTotal)
+  const meanRequiredRecall = ratio(Math.max(0, requiredTotal - requiredMissing), requiredTotal, 1)
+  const meanForbiddenLeakRate = ratio(forbiddenLeaked, forbiddenTotal, 0)
   const maxContextBudgetOverrun = Math.max(0, ...results.map((result) => result.maxContextBudgetOverrun))
   const durableStoreMutations = results.filter((result) => result.durableStoreTouched).length
   const satisfactory = gateSummary.satisfactory
@@ -621,9 +621,9 @@ export function reportIsSatisfactory(report: LongSessionEvalReport): boolean {
 }
 
 export function assertCorpusStructurallyValid(scenarios: LongSessionScenario[] = corpus): void {
-  const ids = new Set(scenarios.flatMap((scenario) => scenario.records.map((record) => record.id)))
   assertBenchmarkMetadata({ ability: "lifecycle-injection", lane: "lifecycle-injection" }, "lifecycle-injection", "long-session-synthetic")
   for (const scenario of scenarios) {
+    const ids = new Set(scenario.records.map((record) => record.id))
     assertBenchmarkMetadata(scenario.benchmark, "lifecycle-injection", scenario.id)
     if (scenario.steps.length === 0) throw new Error(`${scenario.id} needs at least one step`)
     for (const record of scenario.records) {
