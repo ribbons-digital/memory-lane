@@ -78,14 +78,15 @@ Deterministic eval coverage now includes:
 - prompt-routing baseline coverage from PR #102;
 - conflict/update recall baseline coverage from PR #103;
 - conflict/update microbench expansion coverage from PR #105;
-- adversarial retrieval benchmark hardening from PR #116.
+- adversarial retrieval benchmark hardening from PR #116;
+- eval report contract unification from PR #118.
 
 No active eval implementation slice is currently open.
 The deterministic retrieval and conflict/update adversarial microbenches are clean, so retrieval-ranking changes remain paused until dogfood or eval evidence exposes a concrete production recall bug.
 
 Likely next eval/benchmark slice:
 
-- **Eval report contract unification:** normalize report shape and pass/fail gates across retrieval, conflict/update, prompt-routing, and lifecycle-injection benchmarks so they can be compared and fail consistently.
+- **Prompt-routing adversarial coverage:** expand the lifecycle prompt-routing eval with ambiguous and adversarial prompts so broad continuity, explicit recall/status prompts, low-signal greetings, technical prompts, and false friends have deterministic coverage before broader memory benchmarks are added.
 - Keep the slice local-fixture-only and production-code-neutral unless a benchmark exposes a real bug that needs a separately approved fix.
 
 Do not add LongMemEval, embeddings, LLM judges, production ranking rewrites, or auto-consolidation until deterministic local evals remain stable and expose a reason to broaden.

@@ -2,10 +2,10 @@
 
 ## Current state
 
-- Branch context: active status-sync branch `docs/post-pr-116-status-sync`.
-- PR #116 merged adversarial retrieval benchmark hardening as main commit `5a291b8`.
-- PR #116 added deterministic retrieval near-miss coverage, retrieval `failureTagTotal` pass/fail gating, non-zero `eval:retrieval` exit on unsatisfactory reports, and conflict/update false-premise deployment-region coverage.
-- PR #105 conflict/update microbench expansion merged before PR #116.
+- Branch context: active status-sync branch `docs/post-pr-118-status-sync`.
+- PR #118 merged eval report contract unification as main commit `d63f39f`.
+- PR #118 normalized eval summary shape and pass/fail gates across retrieval, conflict/update, prompt-routing, and lifecycle-injection benchmarks, added shared gate helper coverage, and added `eval:lifecycle-injection` alias coverage.
+- PR #116 adversarial retrieval benchmark hardening and PR #105 conflict/update microbench expansion merged before PR #118.
 - PR #104 removed internal `docs/` files from repository tracking, kept `docs/plugins/README.md` tracked as user-facing documentation, ignored the rest of on-disk `docs/`, and synced status docs.
 - Latest known release: `v0.2.46` from main commit `cadd261`, after PR #99 fixed generated Pi pre-compact bridge session-summary behavior.
 - Project-local storage defaults are implemented through Slice 2b: PR #80, PR #89, and PR #94 shipped the write default, legacy diagnostics, and review-first migration protocol.
@@ -16,12 +16,12 @@
 
 ## Current decision / next work
 
-The current branch scope is post-PR #116 status sync only.
+The current branch scope is post-PR #118 status sync only.
 It should not change product behavior.
 
 After this status sync, the recommended next product slice stays on the eval/benchmark track.
-The next slice should be eval report contract unification.
-It should normalize report shape and pass/fail gates across retrieval, conflict/update, prompt-routing, and lifecycle-injection benchmarks so benchmark outcomes can be compared and can fail consistently.
+The next slice should be prompt-routing adversarial coverage from issue #110.
+It should expand the lifecycle prompt-routing eval with ambiguous and adversarial prompts so broad continuity, explicit recall/status prompts, low-signal greetings, technical prompts, and false friends have deterministic coverage before broader memory benchmarks are added.
 Keep it local-fixture-only and production-code-neutral unless a benchmark exposes a real bug that needs a separately approved fix.
 
 The project goal for evals is to improve Memory Lane behavior, not to add decorative scaffolding.
@@ -40,12 +40,11 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 
 ## Current verification evidence
 
-- PR #116 adversarial retrieval benchmark hardening verification: `pnpm --filter @memory-lane/core eval:retrieval` passed with `failCount: 0`, `failureTagTotal: 0`, and `failureTagCounts: {}`.
-- PR #116 adversarial retrieval benchmark hardening verification: `pnpm --filter @memory-lane/core eval:conflict-update` passed with 7 scenarios, 7 passes, `zeroToleranceFailures: 0`, `currentFactFirstRate: 1`, `falsePremiseSafetyRate: 1`, `staleFactLeakRate: 0`, and `supersededMemoryLeakRate: 0`.
-- PR #116 adversarial retrieval benchmark hardening verification: `pnpm --filter @memory-lane/core test -- retrieval-continuity-eval.test.ts` passed; because the package script uses the `test/*.test.ts` glob, it ran the core test suite with 400 passing tests.
-- PR #116 adversarial retrieval benchmark hardening verification: `pnpm --filter @memory-lane/core test -- conflict-update-eval.test.ts` passed; because the package script uses the `test/*.test.ts` glob, it ran the core test suite with 400 passing tests.
-- PR #116 adversarial retrieval benchmark hardening verification: `pnpm --filter @memory-lane/core build` passed.
-- PR #116 adversarial retrieval benchmark hardening verification: `git diff --check` passed.
+- PR #118 eval report contract unification verification: `pnpm --filter @memory-lane/core exec node --test --import tsx test/eval-report-helpers.test.ts test/conflict-update-eval.test.ts` passed with 18 tests.
+- PR #118 eval report contract unification verification: `pnpm --filter @memory-lane/lifecycle test -- prompt-routing-eval.test.ts lifecycle-injection-eval.test.ts` passed with 191 tests.
+- PR #118 eval report contract unification verification: `pnpm --filter @memory-lane/core build`, `pnpm --filter @memory-lane/lifecycle build`, all four eval runner scripts, `git diff --check`, and CodeRabbit uncommitted review passed.
+- PR #118 merged as `d63f39f`; post-merge cleanup synced local `main`, deleted local and remote `eval/unify-report-contracts`, and opened status-sync branch `docs/post-pr-118-status-sync`.
+- PR #116 adversarial retrieval benchmark hardening verification passed `pnpm --filter @memory-lane/core eval:retrieval`, `pnpm --filter @memory-lane/core eval:conflict-update`, targeted core eval tests, `pnpm --filter @memory-lane/core build`, and `git diff --check`.
 - PR #116 merged as `5a291b8`; post-merge cleanup synced local `main`, deleted local and remote `eval/retrieval-adversarial-hardening`, and confirmed clean `main...origin/main`.
 - PR #104 first pass verification: `pnpm build` passed.
 - PR #104 first pass verification: `pnpm test` passed.
@@ -62,5 +61,5 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.46` / commit `cadd261`
-- Current status-sync branch: `docs/post-pr-116-status-sync`
-- Latest deterministic eval baselines: PR #102, PR #103, PR #105, and PR #116.
+- Current status-sync branch: `docs/post-pr-118-status-sync`
+- Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, and PR #118.
