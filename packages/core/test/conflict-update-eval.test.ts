@@ -28,6 +28,8 @@ test("conflict/update eval report has deterministic satisfactory summary shape",
   assert.equal(report.summary.zeroToleranceFailures, 0)
   assert.equal(report.summary.currentFactFirstRate, 1)
   assert.equal(report.summary.falsePremiseSafetyRate, 1)
+  assert.equal(report.summary.staleFactLeakRate, 0)
+  assert.equal(report.summary.supersededMemoryLeakRate, 0)
   assert.deepEqual(report.summary.failureTagCounts, {})
   assert.equal(reportIsSatisfactory(report), true)
 })
@@ -56,10 +58,51 @@ test("conflict/update eval rejects no-data and failing summaries", async () => {
       zeroToleranceFailures: 1,
       currentFactFirstRate: 0,
       falsePremiseSafetyRate: 0,
+      staleFactLeakRate: 1,
+      supersededMemoryLeakRate: 1,
       failureTagCounts: { "current-fact-not-first": 1 },
     },
   }), false)
 })
+
+const expandedScenarioContracts = [
+  {
+    id: "same-id-project-status-update",
+    expectedFirstId: "same-id-editor-default",
+    expectedFirstTextIncludes: "VS Code Insiders",
+  },
+  {
+    id: "explicit-correction-database-choice",
+    expectedFirstId: "database-choice-current-sqlite",
+    expectedFirstTextIncludes: null,
+  },
+  {
+    id: "supersession-chain-auth-provider",
+    expectedFirstId: "auth-provider-current-access",
+    expectedFirstTextIncludes: null,
+  },
+  {
+    id: "cross-scope-false-premise-token-storage",
+    expectedFirstId: "token-storage-current-cookie",
+    expectedFirstTextIncludes: null,
+  },
+] as const
+
+for (const { id, expectedFirstId, expectedFirstTextIncludes } of expandedScenarioContracts) {
+  test(`conflict/update eval scenario ${id} returns the corrective fact without forbidden leaks`, async () => {
+    const scenario = corpus.scenarios.find((item) => item.id === id)
+    assert.ok(scenario)
+    const result = await evaluateScenario(scenario)
+
+    assert.equal(result.actualIds[0], expectedFirstId)
+    if (expectedFirstTextIncludes !== null) {
+      assert.ok(result.actualFirstText)
+      assert.equal(result.actualFirstText.includes(expectedFirstTextIncludes), true)
+    }
+    assert.deepEqual(result.returnedForbiddenIds, [])
+    assert.deepEqual(result.failureTags, [])
+  })
+}
 
 test("current fact beats stale superseded fact with equal lexical overlap", async () => {
   const scenario = corpus.scenarios.find((item) => item.id === "current-deployment-status")

@@ -41,7 +41,7 @@ Recent shipped work:
 - PR #99 shipped generated Pi pre-compact bridge parity and released it in `v0.2.46`.
 - PR #102 added the deterministic prompt-routing eval baseline.
 - PR #103 added the deterministic conflict/update recall eval baseline.
-- PR #104 is the current docs hygiene PR: remove internal `docs/` files from repository tracking, keep `docs/plugins/README.md` tracked, ignore the rest of `docs/`, and sync status docs.
+- PR #104 removed internal `docs/` files from repository tracking, kept `docs/plugins/README.md` tracked, ignored the rest of `docs/`, and synced status docs.
 
 ## Active track - Project-local Storage Defaults
 
@@ -76,12 +76,13 @@ Deterministic eval coverage now includes:
 - retrieval currentness tie-break coverage from PR #75;
 - prompt-routing baseline coverage from PR #102;
 - conflict/update recall baseline coverage from PR #103.
+- Current branch `eval/conflict-update-microbench` expands the conflict/update microbench with deterministic fixture-only coverage for same-id updates, correction records, supersession chains, cross-scope false premises, and leak-rate reporting.
 
-The likely next eval slice is a conflict/update microbench expansion.
+The active eval slice is the conflict/update microbench expansion.
 It should stay deterministic and fixture-only until a failing fixture proves production recall needs to change.
 Target shape:
 
-- add same-id update scenarios;
+- add same-id update scenarios with duplicate raw record ids so the folded current version must win;
 - add explicit correction-record scenarios;
 - add multiple-supersession-chain scenarios;
 - add cross-scope false-premise scenarios;
