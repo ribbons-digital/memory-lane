@@ -197,6 +197,22 @@ export const corpus = {
       revision: { supersedes: ["auth-provider-middle-oauth"], reason: "second auth migration", revisedAt: "2026-07-03T12:00:00.000Z", revisedBy: "manual" },
     }),
     evalMemory({
+      id: "deploy-region-stale-eu",
+      kind: "project_fact",
+      createdAt: "2026-07-02T12:30:00.000Z",
+      updatedAt: "2026-07-02T12:30:00.000Z",
+      text: "Deployment region switched to eu-west for production. This false premise is superseded.",
+      revision: { supersededBy: "deploy-region-current-us", reason: "region correction", revisedAt: "2026-07-03T12:30:00.000Z", revisedBy: "manual" },
+    }),
+    evalMemory({
+      id: "deploy-region-current-us",
+      kind: "correction",
+      createdAt: "2026-07-03T12:30:00.000Z",
+      updatedAt: "2026-07-03T12:30:00.000Z",
+      text: "Correction: deployment region remains us-east for production; eu-west was rejected.",
+      revision: { supersedes: ["deploy-region-stale-eu"], reason: "region correction", revisedAt: "2026-07-03T12:30:00.000Z", revisedBy: "manual" },
+    }),
+    evalMemory({
       id: "token-storage-other-localstorage",
       kind: "project_fact",
       scope: { type: "project", key: OTHER_PROJECT_SCOPE_KEY },
@@ -280,6 +296,19 @@ export const corpus = {
       forbiddenIds: ["auth-provider-old-password", "auth-provider-middle-oauth"],
     },
     {
+      id: "false-premise-deploy-region-near-miss",
+      kind: "false-premise-refutation",
+      lane: "recall",
+      query: "when did deployment region switch to eu-west for production?",
+      k: 2,
+      labels: {
+        "deploy-region-current-us": "required",
+        "deploy-region-stale-eu": "forbidden",
+      },
+      expectedFirstId: "deploy-region-current-us",
+      forbiddenIds: ["deploy-region-stale-eu"],
+    },
+    {
       id: "cross-scope-false-premise-token-storage",
       kind: "cross-scope-false-premise",
       lane: "recall",
@@ -338,8 +367,8 @@ export function assertCorpusStructurallyValid(): void {
   for (const record of corpus.records) idCounts.set(record.id, (idCounts.get(record.id) ?? 0) + 1)
 
   assert.equal(corpus.id, CORPUS_ID)
-  assert.equal(corpus.records.length, 13)
-  assert.equal(corpus.scenarios.length, 6)
+  assert.equal(corpus.records.length, 15)
+  assert.equal(corpus.scenarios.length, 7)
   assert.equal(idCounts.get("same-id-editor-default"), 2)
   const foldedSameIdRecord = foldMemoryRecords(corpus.records).find((record) => record.id === "same-id-editor-default")
   assert.ok(foldedSameIdRecord)

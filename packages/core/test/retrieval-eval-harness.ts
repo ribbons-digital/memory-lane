@@ -16,7 +16,7 @@ import { tempDir } from "./helpers.js"
 
 export const PROJECT_SCOPE_KEY = "eval/project"
 export const GENERATED_AT = "2026-06-27T12:00:00.000Z"
-export const CORPUS_ID = "retrieval-continuity-baseline-v1"
+export const CORPUS_ID = "retrieval-continuity-baseline-v2"
 export const KNOWN_FAILURE_TAGS = new Set(["missing-required", "forbidden-returned", "wrong-slot", "stale-over-current", "topic-mismatch"])
 
 export type EvalLane = "continuity" | "recall"
@@ -72,6 +72,9 @@ export interface EvalReport {
   queryResults: EvalQueryResult[]
   summary: {
     queryCount: number
+    passCount: number
+    failCount: number
+    failureTagTotal: number
     meanRecallAtK?: number
     meanPrecisionAtK?: number
     meanNdcgAtK?: number
@@ -130,6 +133,14 @@ export const corpus: EvalCorpus = {
       text: "Workflow correction: to create GitHub PR descriptions and fix PR body formatting, write the Markdown body to a temporary file and use gh pr create --body-file or gh pr edit --body-file. See PR #70.",
     }),
     memory({
+      id: "eval-pr-body-legacy-near-miss",
+      kind: "project_fact",
+      createdAt: "2026-06-26T09:00:00.000Z",
+      updatedAt: "2026-06-26T09:00:00.000Z",
+      text: "Legacy GitHub PR descriptions note: paste generated release notes directly into the PR body. This older note is a near miss for PR body formatting but is not the active rule.",
+      revision: { supersededBy: "eval-pr-body-rule", reason: "PR body workflow correction", revisedAt: "2026-06-27T09:00:00.000Z", revisedBy: "manual" },
+    }),
+    memory({
       id: "eval-pr-process-agreement",
       kind: "workflow_rule",
       createdAt: "2026-06-27T09:30:00.000Z",
@@ -184,13 +195,14 @@ export const corpus: EvalCorpus = {
       id: "continuity-pr-body-workstream",
       lane: "continuity",
       query: "where did we fix PR body formatting?",
-      k: 3,
+      k: 1,
       labels: {
         "eval-pr-body-rule": "required",
         "eval-pr-process-agreement": "acceptable",
         "eval-release-v038": "distractor",
+        "eval-pr-body-legacy-near-miss": "forbidden",
       },
-      continuityExpectations: [{ slot: "workstreamDiscovery.candidates", required: ["eval-pr-body-rule"], forbidden: ["eval-release-v038"] }],
+      continuityExpectations: [{ slot: "workstreamDiscovery.candidates", required: ["eval-pr-body-rule"] }],
     },
     {
       id: "recall-pr-description-rule",
@@ -218,7 +230,7 @@ export const corpus: EvalCorpus = {
       id: "recall-current-release-status",
       lane: "recall",
       query: "what is the current Memory Lane release status?",
-      k: 3,
+      k: 1,
       labels: {
         "eval-release-v038": "required",
         "eval-docs-sync-v038": "acceptable",
@@ -301,6 +313,7 @@ export function failureTagsForRanked(query: EvalQuery, actualIds: string[]): str
   return unique(tags)
 }
 
+
 export function scoreNonZeroIds(query: EvalQuery, memories: MemoryRecord[]): string[] {
   return memories
     .filter((record) => lexicalScore(query.query, record.text) > 0)
@@ -333,6 +346,7 @@ export async function evaluateRecall(query: EvalQuery, records: MemoryRecord[]):
   const result = await engine.recall(query.query, { projectScope })
   assert.equal(result.semantic.used, false)
   const actualIds = scoreNonZeroIds(query, result.memories)
+  const failureTags = failureTagsForRanked(query, actualIds)
   return {
     id: query.id,
     lane: query.lane,
@@ -342,7 +356,7 @@ export async function evaluateRecall(query: EvalQuery, records: MemoryRecord[]):
     recallAtK: recallAtK(query.labels, actualIds),
     precisionAtK: precisionAtK(query, actualIds),
     ndcgAtK: ndcgAtK(query, actualIds),
-    failureTags: failureTagsForRanked(query, actualIds),
+    failureTags,
   }
 }
 
@@ -372,6 +386,7 @@ export function evaluateContinuity(query: EvalQuery, records: MemoryRecord[]): E
   if (slotResults.some((result) => result.forbiddenPresent.length)) slotFailureTags.push("forbidden-returned")
   if (requiredProgressInOtherSlot || slotResults.some((result) => result.slot === "latestProgress" && result.forbiddenPresent.length)) slotFailureTags.push("wrong-slot")
 
+  const failureTags = unique([...slotFailureTags, ...(rankedExpectation ? failureTagsForRanked(query, rankedIds) : [])])
   return {
     id: query.id,
     lane: query.lane,
@@ -382,7 +397,7 @@ export function evaluateContinuity(query: EvalQuery, records: MemoryRecord[]): E
     precisionAtK: rankedExpectation ? precisionAtK(query, rankedIds) : undefined,
     ndcgAtK: rankedExpectation ? ndcgAtK(query, rankedIds) : undefined,
     slotResults,
-    failureTags: unique([...slotFailureTags, ...(rankedExpectation ? failureTagsForRanked(query, rankedIds) : [])]),
+    failureTags,
   }
 }
 
@@ -400,6 +415,7 @@ export async function buildEvalReport(evalCorpus: EvalCorpus): Promise<EvalRepor
   for (const result of queryResults) {
     for (const tag of result.failureTags) failureTagCounts[tag] = (failureTagCounts[tag] ?? 0) + 1
   }
+  const failedResults = queryResults.filter((result) => result.failureTags.length)
   return {
     generatedAt: GENERATED_AT,
     corpusId: evalCorpus.id,
@@ -407,12 +423,24 @@ export async function buildEvalReport(evalCorpus: EvalCorpus): Promise<EvalRepor
     queryResults,
     summary: {
       queryCount: queryResults.length,
+      passCount: queryResults.length - failedResults.length,
+      failCount: failedResults.length,
+      failureTagTotal: failedResults.reduce((sum, result) => sum + result.failureTags.length, 0),
       meanRecallAtK: ratio(recallValues.reduce((sum, value) => sum + value, 0), recallValues.length),
       meanPrecisionAtK: ratio(precisionValues.reduce((sum, value) => sum + value, 0), precisionValues.length),
       meanNdcgAtK: ratio(ndcgValues.reduce((sum, value) => sum + value, 0), ndcgValues.length),
       failureTagCounts,
     },
   }
+}
+
+export function reportIsSatisfactory(report: EvalReport): boolean {
+  return report.summary.queryCount > 0
+    && report.summary.failCount === 0
+    && report.summary.failureTagTotal === 0
+    && Number.isFinite(report.summary.meanRecallAtK)
+    && Number.isFinite(report.summary.meanPrecisionAtK)
+    && Number.isFinite(report.summary.meanNdcgAtK)
 }
 
 export function assertCorpusStructurallyValid(evalCorpus: EvalCorpus): void {
