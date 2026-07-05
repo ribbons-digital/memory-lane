@@ -79,14 +79,15 @@ Deterministic eval coverage now includes:
 - conflict/update recall baseline coverage from PR #103;
 - conflict/update microbench expansion coverage from PR #105;
 - adversarial retrieval benchmark hardening from PR #116;
-- eval report contract unification from PR #118.
+- eval report contract unification from PR #118;
+- prompt-routing adversarial coverage from PR #120.
 
 No active eval implementation slice is currently open.
 The deterministic retrieval and conflict/update adversarial microbenches are clean, so retrieval-ranking changes remain paused until dogfood or eval evidence exposes a concrete production recall bug.
 
 Likely next eval/benchmark slice:
 
-- **Prompt-routing adversarial coverage:** expand the lifecycle prompt-routing eval with ambiguous and adversarial prompts so broad continuity, explicit recall/status prompts, low-signal greetings, technical prompts, and false friends have deterministic coverage before broader memory benchmarks are added.
+- **Lifecycle-injection adversarial coverage:** expand the lifecycle-injection eval with deterministic adversarial fixtures for session-start versus prompt behavior, selective versus policy-only versus off modes, budget pressure, superseded progress leakage, cross-project leakage, non-approved memory leakage, secret-like memory suppression, and noisy context.
 - Keep the slice local-fixture-only and production-code-neutral unless a benchmark exposes a real bug that needs a separately approved fix.
 
 Do not add LongMemEval, embeddings, LLM judges, production ranking rewrites, or auto-consolidation until deterministic local evals remain stable and expose a reason to broaden.
