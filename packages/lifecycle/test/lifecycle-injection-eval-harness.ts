@@ -1,4 +1,4 @@
-import { isGateSatisfactory, summarizeEvalGate } from "../../core/test/eval-report-helpers.js"
+import { isGateSatisfactory, summarizeEvalGate, type BenchmarkMetadata } from "../../core/test/eval-report-helpers.js"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import {
@@ -60,6 +60,7 @@ export interface InjectionEvalScenario {
     omittedReasons?: string[]
   }
   maxContextChars?: number
+  benchmark: BenchmarkMetadata
 }
 
 export interface InjectionScenarioResult {
@@ -81,6 +82,7 @@ export interface InjectionScenarioResult {
   maxContextChars?: number
   failureTags: InjectionFailureTag[]
   contextDecision?: LifecycleResult["contextDecision"]
+  benchmark: BenchmarkMetadata
 }
 
 export interface InjectionEvalReport {
@@ -191,6 +193,7 @@ export function baseRecords(): MemoryRecord[] {
 export const corpus: InjectionEvalScenario[] = [
   {
     id: "session-start-selective-governance",
+    benchmark: { ability: "lifecycle-injection", lane: "lifecycle-injection" },
     event: "sessionStart",
     policy: { mode: "selective", maxChars: { sessionStart: 1600, prompt: 3000 } },
     records: baseRecords(),
@@ -204,6 +207,7 @@ export const corpus: InjectionEvalScenario[] = [
   },
   {
     id: "session-start-policy-only-no-bodies",
+    benchmark: { ability: "lifecycle-injection", lane: "lifecycle-injection" },
     event: "sessionStart",
     policy: { mode: "policy-only" },
     records: baseRecords(),
@@ -215,6 +219,7 @@ export const corpus: InjectionEvalScenario[] = [
   },
   {
     id: "session-start-off-no-context",
+    benchmark: { ability: "lifecycle-injection", lane: "lifecycle-injection" },
     event: "sessionStart",
     policy: { mode: "off" },
     records: baseRecords(),
@@ -225,6 +230,7 @@ export const corpus: InjectionEvalScenario[] = [
   },
   {
     id: "prompt-selective-targeted-recall",
+    benchmark: { ability: "direct-recall", lane: "lifecycle-injection" },
     event: "prompt",
     policy: { mode: "selective", maxChars: { sessionStart: 1600, prompt: 1400 } },
     prompt: "How do we run lifecycle eval verification?",
@@ -239,6 +245,7 @@ export const corpus: InjectionEvalScenario[] = [
   },
   {
     id: "prompt-broad-next-work-continuity-only",
+    benchmark: { ability: "continuity-status", lane: "lifecycle-injection" },
     event: "prompt",
     policy: { mode: "selective" },
     prompt: "What should we work on next?",
@@ -251,6 +258,7 @@ export const corpus: InjectionEvalScenario[] = [
   },
   {
     id: "prompt-policy-only-continuity-no-bodies",
+    benchmark: { ability: "lifecycle-injection", lane: "lifecycle-injection" },
     event: "prompt",
     policy: { mode: "policy-only" },
     prompt: "Where are we in the project?",
@@ -263,6 +271,7 @@ export const corpus: InjectionEvalScenario[] = [
   },
   {
     id: "prompt-off-no-context",
+    benchmark: { ability: "lifecycle-injection", lane: "lifecycle-injection" },
     event: "prompt",
     policy: { mode: "off" },
     prompt: "How do we run lifecycle eval verification?",
@@ -274,6 +283,7 @@ export const corpus: InjectionEvalScenario[] = [
   },
   {
     id: "prompt-selective-budget-pressure",
+    benchmark: { ability: "lifecycle-injection", lane: "lifecycle-injection" },
     event: "prompt",
     policy: { mode: "selective", maxItems: { sessionStart: 4, prompt: 2 }, maxChars: { sessionStart: 1600, prompt: 760 } },
     prompt: "How do we run lifecycle eval verification?",
@@ -296,6 +306,7 @@ export const corpus: InjectionEvalScenario[] = [
   },
   {
     id: "prompt-selective-cross-project-noise-filtered",
+    benchmark: { ability: "cross-scope-safety", lane: "lifecycle-injection" },
     event: "prompt",
     policy: { mode: "selective", maxItems: { sessionStart: 4, prompt: 4 }, maxChars: { sessionStart: 1600, prompt: 1300 } },
     prompt: "How do we run lifecycle eval verification for this project?",
@@ -318,6 +329,7 @@ export const corpus: InjectionEvalScenario[] = [
   },
   {
     id: "prompt-selective-non-approved-and-secret-filtered",
+    benchmark: { ability: "privacy-secret-suppression", lane: "lifecycle-injection" },
     event: "prompt",
     policy: { mode: "selective", maxItems: { sessionStart: 4, prompt: 5 }, maxChars: { sessionStart: 1600, prompt: 1600 } },
     prompt: "How do we run lifecycle eval verification without leaking pending or secret records?",
@@ -346,6 +358,7 @@ export const corpus: InjectionEvalScenario[] = [
   },
   {
     id: "prompt-selective-superseded-progress-filtered",
+    benchmark: { ability: "temporal-currentness", lane: "lifecycle-injection" },
     event: "prompt",
     policy: { mode: "selective", maxItems: { sessionStart: 4, prompt: 5 }, maxChars: { sessionStart: 1600, prompt: 1500 } },
     prompt: "What is the current lifecycle injection eval progress?",
@@ -360,6 +373,7 @@ export const corpus: InjectionEvalScenario[] = [
   },
   {
     id: "prompt-broad-status-continuity-only",
+    benchmark: { ability: "continuity-status", lane: "lifecycle-injection" },
     event: "prompt",
     policy: { mode: "selective" },
     prompt: "Where are we in the project?",
@@ -466,6 +480,7 @@ export async function evaluateScenario(scenario: InjectionEvalScenario): Promise
     ...(scenario.maxContextChars !== undefined ? { maxContextChars: scenario.maxContextChars } : {}),
     failureTags: tags,
     contextDecision: lifecycleResult.contextDecision,
+    benchmark: scenario.benchmark,
   }
 }
 

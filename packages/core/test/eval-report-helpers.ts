@@ -1,3 +1,24 @@
+// Test-only benchmark taxonomy attached to local eval fixtures and copied into reports.
+// It keeps report grouping separate from runtime route names, recall lanes, and production APIs.
+
+export type BenchmarkLane = "retrieval" | "continuity" | "prompt-routing" | "lifecycle-injection"
+
+export type BenchmarkAbility =
+  | "direct-recall"
+  | "continuity-status"
+  | "prompt-routing"
+  | "lifecycle-injection"
+  | "temporal-currentness"
+  | "knowledge-update"
+  | "false-premise-abstention"
+  | "cross-scope-safety"
+  | "privacy-secret-suppression"
+
+export interface BenchmarkMetadata {
+  ability: BenchmarkAbility
+  lane: BenchmarkLane
+}
+
 export interface EvalResultWithFailureTags<Tag extends string = string> {
   passed?: boolean
   failureTags: readonly Tag[]

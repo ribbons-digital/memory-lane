@@ -1,4 +1,4 @@
-import { isGateSatisfactory, summarizeEvalGate } from "../../core/test/eval-report-helpers.js"
+import { isGateSatisfactory, summarizeEvalGate, type BenchmarkMetadata } from "../../core/test/eval-report-helpers.js"
 import {
   classifyPromptRoute,
   renderContinuityIntentGuidance,
@@ -25,6 +25,7 @@ export interface PromptRoutingEvalScenario {
   requiredReasons?: string[]
   forbiddenReasons?: string[]
   expectsContinuityGuidance?: boolean
+  benchmark: BenchmarkMetadata
 }
 
 export interface PromptRoutingScenarioResult {
@@ -39,6 +40,7 @@ export interface PromptRoutingScenarioResult {
   missingReasons: string[]
   unexpectedReasons: string[]
   failureTags: PromptRoutingFailureTag[]
+  benchmark: BenchmarkMetadata
 }
 
 export interface PromptRoutingEvalReport {
@@ -61,6 +63,7 @@ export interface PromptRoutingEvalReport {
 
 export const corpus: PromptRoutingEvalScenario[] = [
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "continuity-resume",
     prompt: "Let's resume building prompt continuity intents",
     expectedRoute: "continuity",
@@ -69,6 +72,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: true,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "continuity-lookup",
     prompt: "Where was lifecycle continuity implemented?",
     expectedRoute: "continuity",
@@ -77,6 +81,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: true,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "continuity-lookup-thread",
     prompt: "Find the thread where prompt routing was implemented",
     expectedRoute: "continuity",
@@ -85,6 +90,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: true,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "continuity-lookup-previous-decision",
     prompt: "Find the session where lifecycle injection was implemented",
     expectedRoute: "continuity",
@@ -93,6 +99,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: true,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "continuity-project-position",
     prompt: "Where are we in the project?",
     expectedRoute: "continuity",
@@ -101,6 +108,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: true,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "continuity-project-position-leave-off",
     prompt: "where did we leave off?",
     expectedRoute: "continuity",
@@ -109,6 +117,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: true,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "continuity-project-position-progress",
     prompt: "what is the latest progress?",
     expectedRoute: "continuity",
@@ -117,6 +126,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: true,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "continuity-current-status",
     prompt: "Where are we on current project status?",
     expectedRoute: "continuity",
@@ -125,6 +135,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: true,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "continuity-next-work",
     prompt: "What should we work on next?",
     expectedRoute: "continuity",
@@ -133,6 +144,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: true,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "continuity-next-scope",
     prompt: "what's the next item we should work on and what's its scope?",
     expectedRoute: "continuity",
@@ -141,6 +153,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: true,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "continuity-next-slice",
     prompt: "what's the next slice?",
     expectedRoute: "continuity",
@@ -149,6 +162,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: true,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "memory-management-list",
     prompt: "show my memories",
     expectedRoute: "memory-management",
@@ -156,6 +170,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: false,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "memory-management-review",
     prompt: "what memory is pending review?",
     expectedRoute: "memory-management",
@@ -163,6 +178,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: false,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "memory-management-approved-status",
     prompt: "what memory is approved?",
     expectedRoute: "memory-management",
@@ -170,6 +186,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: false,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "low-signal-thanks",
     prompt: "thank you",
     expectedRoute: "low-signal",
@@ -177,6 +194,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: false,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "low-signal-greeting",
     prompt: "hi",
     expectedRoute: "low-signal",
@@ -184,6 +202,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: false,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "low-signal-greeting-expanded",
     prompt: "hello there",
     expectedRoute: "low-signal",
@@ -191,6 +210,7 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: false,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "low-signal-ack",
     prompt: "sounds good",
     expectedRoute: "low-signal",
@@ -198,42 +218,49 @@ export const corpus: PromptRoutingEvalScenario[] = [
     expectsContinuityGuidance: false,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "ordinary-task",
     prompt: "implement the eval runner",
     expectedRoute: "ordinary",
     expectsContinuityGuidance: false,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "ordinary-technical-question",
     prompt: "How do I run tests?",
     expectedRoute: "ordinary",
     expectsContinuityGuidance: false,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "ordinary-technical-nextjs",
     prompt: "what is the Next.js routing API?",
     expectedRoute: "ordinary",
     expectsContinuityGuidance: false,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "ordinary-technical-current-time",
     prompt: "how do I get the current time in JavaScript?",
     expectedRoute: "ordinary",
     expectsContinuityGuidance: false,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "ordinary-false-friend-reminder",
     prompt: "remember to run the targeted tests before pushing",
     expectedRoute: "ordinary",
     expectsContinuityGuidance: false,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "ordinary-false-friend-remind-me",
     prompt: "remind me what command runs the lifecycle prompt routing eval",
     expectedRoute: "ordinary",
     expectsContinuityGuidance: false,
   },
   {
+    benchmark: { ability: "prompt-routing", lane: "prompt-routing" },
     id: "ordinary-false-friend-recall-memory",
     prompt: "recall my memory about release gates",
     expectedRoute: "ordinary",
@@ -280,6 +307,7 @@ export function evaluateScenario(scenario: PromptRoutingEvalScenario): PromptRou
     missingReasons,
     unexpectedReasons,
     failureTags: tags,
+    benchmark: scenario.benchmark,
   }
 }
 

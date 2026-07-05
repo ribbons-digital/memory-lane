@@ -105,6 +105,7 @@ test("prompt routing eval corpus is structurally valid", () => {
     assert.ok(scenario.id)
     assert.ok(scenario.prompt)
     assert.ok(scenario.expectedRoute)
+    assert.deepEqual(scenario.benchmark, { ability: "prompt-routing", lane: "prompt-routing" })
   }
 })
 
@@ -123,6 +124,10 @@ test("prompt routing eval report reaches satisfactory thresholds", () => {
   assert.equal(report.summary.routeAccuracy, 1)
   assert.equal(report.summary.intentFamilyAccuracy, 1)
   assert.equal(report.summary.meanRequiredReasonRecall, 1)
+  for (const result of report.scenarioResults) {
+    const scenario = scenarioById(result.id)
+    assert.deepEqual(result.benchmark, scenario.benchmark)
+  }
 })
 
 test("prompt routing eval report rejects no-data and failing summaries", () => {

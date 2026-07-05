@@ -3,7 +3,7 @@ import { containsLikelySecret } from "../src/secret-detection.js"
 import { retrieveSemanticMemories } from "../src/retrieval.js"
 import { foldMemoryRecords } from "../src/storage.js"
 import type { MemoryRecord, SemanticMemoryConfig } from "../src/types.js"
-import { isGateSatisfactory, summarizeEvalGate } from "./eval-report-helpers.js"
+import { isGateSatisfactory, summarizeEvalGate, type BenchmarkMetadata } from "./eval-report-helpers.js"
 
 export const GENERATED_AT = "2026-07-04T13:00:00.000Z"
 export const CORPUS_ID = "conflict-update-microbench-v2"
@@ -53,6 +53,7 @@ export interface ConflictUpdateScenario {
   expectedFirstId: string
   expectedFirstTextIncludes?: string
   forbiddenIds: string[]
+  benchmark: BenchmarkMetadata
 }
 
 export interface ConflictUpdateScenarioResult {
@@ -69,6 +70,7 @@ export interface ConflictUpdateScenarioResult {
   expectedFirstId: string
   returnedForbiddenIds: string[]
   failureTags: ConflictFailureTag[]
+  benchmark: BenchmarkMetadata
 }
 
 export interface ConflictUpdateReport {
@@ -232,6 +234,7 @@ export const corpus = {
   scenarios: [
     {
       id: "current-deployment-status",
+      benchmark: { ability: "temporal-currentness", lane: "retrieval" },
       kind: "current-beats-superseded",
       lane: "recall",
       query: "what is the current deployment status?",
@@ -245,6 +248,7 @@ export const corpus = {
     },
     {
       id: "false-premise-package-manager-switch",
+      benchmark: { ability: "false-premise-abstention", lane: "retrieval" },
       kind: "false-premise-refutation",
       lane: "recall",
       query: "when did project package manager switch to npm?",
@@ -258,6 +262,7 @@ export const corpus = {
     },
     {
       id: "same-id-project-status-update",
+      benchmark: { ability: "knowledge-update", lane: "retrieval" },
       kind: "same-id-update",
       lane: "recall",
       query: "what is the current editor default for slice implementation?",
@@ -271,6 +276,7 @@ export const corpus = {
     },
     {
       id: "explicit-correction-database-choice",
+      benchmark: { ability: "knowledge-update", lane: "retrieval" },
       kind: "explicit-correction",
       lane: "recall",
       query: "when did database choice switch to postgres?",
@@ -284,6 +290,7 @@ export const corpus = {
     },
     {
       id: "supersession-chain-auth-provider",
+      benchmark: { ability: "temporal-currentness", lane: "retrieval" },
       kind: "multiple-supersession-chain",
       lane: "recall",
       query: "what is the current auth provider for the dashboard?",
@@ -298,6 +305,7 @@ export const corpus = {
     },
     {
       id: "false-premise-deploy-region-near-miss",
+      benchmark: { ability: "false-premise-abstention", lane: "retrieval" },
       kind: "false-premise-refutation",
       lane: "recall",
       query: "when did deployment region switch to eu-west for production?",
@@ -311,6 +319,7 @@ export const corpus = {
     },
     {
       id: "cross-scope-false-premise-token-storage",
+      benchmark: { ability: "cross-scope-safety", lane: "retrieval" },
       kind: "cross-scope-false-premise",
       lane: "recall",
       query: "did token storage switch to localStorage?",
@@ -400,6 +409,8 @@ export function assertCorpusStructurallyValid(): void {
   for (const scenario of corpus.scenarios) {
     assert.equal(scenario.lane, "recall")
     assert.ok(scenario.k > 0)
+    assert.ok(scenario.benchmark.ability, `${scenario.id} needs benchmark ability`)
+    assert.equal(scenario.benchmark.lane, "retrieval", `${scenario.id} benchmark lane`)
     assert.equal(ids.has(scenario.expectedFirstId), true, `${scenario.id} expectedFirstId is unknown`)
     assert.equal(scenario.labels[scenario.expectedFirstId], "required")
     for (const id of scenario.forbiddenIds) assert.equal(scenario.labels[id], "forbidden", `${scenario.id} forbidden id ${id} needs a forbidden label`)
@@ -464,6 +475,7 @@ export async function evaluateScenario(scenario: ConflictUpdateScenario): Promis
     expectedFirstId: scenario.expectedFirstId,
     returnedForbiddenIds,
     failureTags,
+    benchmark: scenario.benchmark,
   }
 }
 

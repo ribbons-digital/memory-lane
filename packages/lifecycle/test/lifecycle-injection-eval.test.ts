@@ -31,6 +31,7 @@ function injectionResult(overrides: Partial<InjectionScenarioResult> & { id: str
     contextChars: 10,
     maxContextChars: 100,
     failureTags: [],
+    benchmark: { ability: "lifecycle-injection", lane: "lifecycle-injection" },
     ...overrides,
   }
   return result
@@ -67,6 +68,8 @@ test("lifecycle injection eval corpus is structurally valid", () => {
     assert.ok(scenario.records.length > 0)
     assert.ok(scenario.policy.mode)
     if (scenario.event === "prompt") assert.ok(scenario.prompt)
+    assert.ok(scenario.benchmark.ability)
+    assert.equal(scenario.benchmark.lane, "lifecycle-injection")
     assert.equal(new Set(scenario.records.map((record) => record.id)).size, scenario.records.length)
   }
 })
@@ -126,6 +129,10 @@ test("lifecycle injection eval report reaches satisfactory thresholds", async ()
   assert.equal(report.summary.meanRequiredRecall, 1)
   assert.equal(report.summary.meanForbiddenLeakRate, 0)
   assert.equal(report.summary.maxContextBudgetOverrun, 0)
+  for (const result of report.scenarioResults) {
+    const scenario = scenarioById(result.id)
+    assert.deepEqual(result.benchmark, scenario.benchmark)
+  }
 })
 
 test("lifecycle injection eval detects unsatisfactory forbidden injection", () => {
