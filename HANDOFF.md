@@ -2,7 +2,7 @@
 
 ## Current state
 
-- Branch context: active status-sync branch `docs/post-pr-120-status-sync`.
+- Branch context: no active product branch; local `main` was clean after PR #121 cleanup.
 - PR #120 merged prompt-routing adversarial coverage as main commit `104c0ee`.
 - PR #120 expanded the lifecycle prompt-routing eval to 25 deterministic local-fixture scenarios and added table-driven adversarial group checks for continuity, lookup, memory-management, low-signal, technical, and false-friend prompts.
 - PR #118 eval report contract unification, PR #116 adversarial retrieval benchmark hardening, and PR #105 conflict/update microbench expansion merged before PR #120.
@@ -16,10 +16,10 @@
 
 ## Current decision / next work
 
-The current branch scope is post-PR #120 status sync only.
-It should not change product behavior.
+The current repo state is post-PR #121 cleanup on `main`.
+There is no active implementation branch.
 
-After this status sync, the recommended next product slice stays on the eval/benchmark track.
+The recommended next product slice stays on the eval/benchmark track.
 The next slice should be lifecycle-injection adversarial coverage from issue #111.
 It should expand the lifecycle-injection eval with deterministic adversarial fixtures for session-start versus prompt behavior, selective versus policy-only versus off modes, budget pressure, superseded progress leakage, cross-project leakage, non-approved memory leakage, secret-like memory suppression, and noisy context.
 Keep it local-fixture-only and production-code-neutral unless a benchmark exposes a real bug that needs a separately approved fix.
@@ -43,7 +43,7 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - PR #120 prompt-routing adversarial coverage verification: `pnpm --filter @memory-lane/lifecycle exec node --test --import tsx test/prompt-routing-eval.test.ts` passed with 5 tests.
 - PR #120 prompt-routing adversarial coverage verification: `pnpm --filter @memory-lane/lifecycle eval:prompt-routing` passed with 25 scenarios, 25 passes, 0 failures, and `satisfactory: true`.
 - PR #120 prompt-routing adversarial coverage verification: `pnpm --filter @memory-lane/lifecycle build`, `git diff --check`, and CodeRabbit uncommitted review passed.
-- PR #120 merged as `104c0ee`; post-merge cleanup synced local `main`, deleted local and remote `eval/prompt-routing-adversarial`, and opened status-sync branch `docs/post-pr-120-status-sync`.
+- PR #120 merged as `104c0ee`; post-merge cleanup synced local `main`, deleted local and remote `eval/prompt-routing-adversarial`, opened status-sync PR #121, then synced clean `main` after PR #121 merged as `1d48aab`.
 - PR #116 adversarial retrieval benchmark hardening verification passed `pnpm --filter @memory-lane/core eval:retrieval`, `pnpm --filter @memory-lane/core eval:conflict-update`, targeted core eval tests, `pnpm --filter @memory-lane/core build`, and `git diff --check`.
 - PR #116 merged as `5a291b8`; post-merge cleanup synced local `main`, deleted local and remote `eval/retrieval-adversarial-hardening`, and confirmed clean `main...origin/main`.
 - PR #104 first pass verification: `pnpm build` passed.
@@ -61,5 +61,5 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.46` / commit `cadd261`
-- Current status-sync branch: `docs/post-pr-120-status-sync`
+- Current repo status: clean `main` after PR #121 cleanup; no active implementation branch.
 - Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, and PR #120.
