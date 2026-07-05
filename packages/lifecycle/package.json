@@ -19,6 +19,7 @@
     "test": "node --test --import tsx test/*.test.ts",
     "eval:injection": "tsx test/lifecycle-injection-eval-runner.ts",
     "eval:lifecycle-injection": "tsx test/lifecycle-injection-eval-runner.ts",
+    "eval:long-session-synthetic": "tsx test/long-session-synthetic-eval-runner.ts",
     "eval:prompt-routing": "tsx test/prompt-routing-eval-runner.ts"
   },
   "dependencies": {
