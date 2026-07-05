@@ -24,20 +24,23 @@ test("conflict/update eval report has deterministic satisfactory summary shape",
   assert.equal(report.mode, MODE)
   assert.equal(report.scenarioResults.length, corpus.scenarios.length)
   assert.equal(report.summary.scenarioCount, corpus.scenarios.length)
+  assert.equal(report.summary.passCount, corpus.scenarios.length)
   assert.equal(report.summary.failCount, 0)
   assert.equal(report.summary.zeroToleranceFailures, 0)
+  assert.deepEqual(report.summary.failureTagCounts, {})
+  assert.equal(report.summary.satisfactory, true)
+  assert.equal(report.summary.satisfactory, reportIsSatisfactory(report))
   assert.equal(report.summary.currentFactFirstRate, 1)
   assert.equal(report.summary.falsePremiseSafetyRate, 1)
   assert.equal(report.summary.staleFactLeakRate, 0)
   assert.equal(report.summary.supersededMemoryLeakRate, 0)
-  assert.deepEqual(report.summary.failureTagCounts, {})
-  assert.equal(reportIsSatisfactory(report), true)
 })
 
 test("conflict/update eval rejects no-data and failing summaries", async () => {
   await assert.rejects(() => buildConflictUpdateEvalReport([]), /requires at least one scenario/u)
 
   const emptySummary = summarizeResults([])
+  assert.equal(emptySummary.satisfactory, false)
   assert.equal(reportIsSatisfactory({
     generatedAt: GENERATED_AT,
     corpusId: CORPUS_ID,
@@ -46,7 +49,7 @@ test("conflict/update eval rejects no-data and failing summaries", async () => {
     summary: emptySummary,
   }), false)
 
-  assert.equal(reportIsSatisfactory({
+  const failingReport = {
     generatedAt: GENERATED_AT,
     corpusId: CORPUS_ID,
     mode: MODE,
@@ -61,8 +64,11 @@ test("conflict/update eval rejects no-data and failing summaries", async () => {
       staleFactLeakRate: 1,
       supersededMemoryLeakRate: 1,
       failureTagCounts: { "current-fact-not-first": 1 },
+      satisfactory: false,
     },
-  }), false)
+  }
+  assert.equal(failingReport.summary.satisfactory, false)
+  assert.equal(reportIsSatisfactory(failingReport), false)
 })
 
 const expandedScenarioContracts = [

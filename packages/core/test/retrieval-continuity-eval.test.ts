@@ -81,14 +81,18 @@ test("retrieval/continuity eval report has deterministic structural shape", asyn
   assert.equal(report.corpusId, CORPUS_ID)
   assert.equal(report.mode, "default-no-embedding")
   assert.equal(report.queryResults.length, corpus.queries.length)
-  assert.equal(report.summary.queryCount, corpus.queries.length)
+  assert.equal(report.summary.scenarioCount, corpus.queries.length)
+  assert.equal(report.summary.passCount, corpus.queries.length)
+  assert.equal(report.summary.failCount, 0)
+  assert.equal(report.summary.zeroToleranceFailures, 0)
+  assert.deepEqual(report.summary.failureTagCounts, {})
+  assert.equal(report.summary.satisfactory, true)
+  assert.equal(report.summary.satisfactory, reportIsSatisfactory(report))
+  assert.equal(Object.hasOwn(report.summary, "queryCount"), false)
+  assert.equal(Object.hasOwn(report.summary, "failureTagTotal"), false)
   assert.equal(typeof report.summary.meanRecallAtK, "number")
   assert.equal(typeof report.summary.meanPrecisionAtK, "number")
   assert.equal(typeof report.summary.meanNdcgAtK, "number")
-  assert.equal(report.summary.passCount, corpus.queries.length)
-  assert.equal(report.summary.failCount, 0)
-  assert.equal(report.summary.failureTagTotal, 0)
-  assert.deepEqual(report.summary.failureTagCounts, {})
 
   for (const result of report.queryResults) {
     const query = corpus.queries.find((item) => item.id === result.id)
@@ -121,6 +125,8 @@ test("retrieval/continuity eval report gate accepts the healthy corpus", async (
   const report = await buildEvalReport(corpus)
 
   assert.equal(reportIsSatisfactory(report), true)
+  assert.equal(report.summary.satisfactory, true)
+  assert.equal(report.summary.satisfactory, reportIsSatisfactory(report))
   assert.equal(report.queryResults.every((result) => result.failureTags.length === 0), true)
   assert.deepEqual(report.summary.failureTagCounts, {})
 })
@@ -170,7 +176,7 @@ test("retrieval/continuity canary checks expose ranked failure tags without poll
   assert.equal(reportIsSatisfactory(healthyReport), true)
 })
 
-test("retrieval/continuity eval report gate rejects introduced failure tags", async () => {
+test("retrieval/continuity eval report gate rejects failure counters even with stale satisfactory flag", async () => {
   const report = await buildEvalReport(corpus)
   const target = report.queryResults.find((result) => result.id === "recall-pr-description-rule")
   assert.ok(target)
@@ -183,11 +189,13 @@ test("retrieval/continuity eval report gate rejects introduced failure tags", as
     summary: {
       ...report.summary,
       failCount: 1,
-      failureTagTotal: 1,
+      zeroToleranceFailures: 1,
       failureTagCounts: { "forbidden-returned": 1 },
+      satisfactory: true,
     },
   }
 
+  assert.equal(failingReport.summary.satisfactory, true)
   assert.equal(reportIsSatisfactory(failingReport), false)
 })
 

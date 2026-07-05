@@ -13,11 +13,14 @@ import {
   type ProjectScope,
 } from "../src/index.js"
 import { tempDir } from "./helpers.js"
+import { summarizeEvalGate } from "./eval-report-helpers.js"
 
 export const PROJECT_SCOPE_KEY = "eval/project"
 export const GENERATED_AT = "2026-06-27T12:00:00.000Z"
 export const CORPUS_ID = "retrieval-continuity-baseline-v2"
-export const KNOWN_FAILURE_TAGS = new Set(["missing-required", "forbidden-returned", "wrong-slot", "stale-over-current", "topic-mismatch"])
+export type RetrievalFailureTag = "missing-required" | "forbidden-returned" | "wrong-slot" | "stale-over-current" | "topic-mismatch"
+export const ZERO_TOLERANCE_FAILURE_TAGS = new Set<RetrievalFailureTag>(["missing-required", "forbidden-returned", "wrong-slot", "stale-over-current"])
+export const KNOWN_FAILURE_TAGS = new Set<RetrievalFailureTag>([...ZERO_TOLERANCE_FAILURE_TAGS, "topic-mismatch"])
 
 export type EvalLane = "continuity" | "recall"
 export type RelevanceLabel = "required" | "acceptable" | "distractor" | "forbidden"
@@ -62,7 +65,7 @@ export interface EvalQueryResult {
   precisionAtK?: number
   ndcgAtK?: number
   slotResults?: SlotResult[]
-  failureTags: string[]
+  failureTags: RetrievalFailureTag[]
 }
 
 export interface EvalReport {
@@ -71,14 +74,15 @@ export interface EvalReport {
   mode: "default-no-embedding"
   queryResults: EvalQueryResult[]
   summary: {
-    queryCount: number
+    scenarioCount: number
     passCount: number
     failCount: number
-    failureTagTotal: number
+    zeroToleranceFailures: number
     meanRecallAtK?: number
     meanPrecisionAtK?: number
     meanNdcgAtK?: number
     failureTagCounts: Record<string, number>
+    satisfactory: boolean
   }
 }
 
@@ -296,8 +300,8 @@ export function precisionAtK(query: EvalQuery, actualIds: string[]): number {
   return ratio(relevantCount, actualIds.length)
 }
 
-export function failureTagsForRanked(query: EvalQuery, actualIds: string[]): string[] {
-  const tags: string[] = []
+export function failureTagsForRanked(query: EvalQuery, actualIds: string[]): RetrievalFailureTag[] {
+  const tags: RetrievalFailureTag[] = []
   const required = Object.entries(query.labels).filter(([, label]) => label === "required").map(([id]) => id)
   const missing = required.filter((id) => !actualIds.includes(id))
   if (missing.length) tags.push("missing-required")
@@ -411,33 +415,39 @@ export async function buildEvalReport(evalCorpus: EvalCorpus): Promise<EvalRepor
   const recallValues = queryResults.flatMap((result) => result.recallAtK === undefined ? [] : [result.recallAtK])
   const precisionValues = queryResults.flatMap((result) => result.precisionAtK === undefined ? [] : [result.precisionAtK])
   const ndcgValues = queryResults.flatMap((result) => result.ndcgAtK === undefined ? [] : [result.ndcgAtK])
-  const failureTagCounts: Record<string, number> = {}
-  for (const result of queryResults) {
-    for (const tag of result.failureTags) failureTagCounts[tag] = (failureTagCounts[tag] ?? 0) + 1
-  }
-  const failedResults = queryResults.filter((result) => result.failureTags.length)
+  const gateSummary = summarizeEvalGate(queryResults, ZERO_TOLERANCE_FAILURE_TAGS)
+  const meanRecallAtK = ratio(recallValues.reduce((sum, value) => sum + value, 0), recallValues.length)
+  const meanPrecisionAtK = ratio(precisionValues.reduce((sum, value) => sum + value, 0), precisionValues.length)
+  const meanNdcgAtK = ratio(ndcgValues.reduce((sum, value) => sum + value, 0), ndcgValues.length)
+  const satisfactory = gateSummary.satisfactory
+    && Number.isFinite(meanRecallAtK)
+    && Number.isFinite(meanPrecisionAtK)
+    && Number.isFinite(meanNdcgAtK)
   return {
     generatedAt: GENERATED_AT,
     corpusId: evalCorpus.id,
     mode: "default-no-embedding",
     queryResults,
     summary: {
-      queryCount: queryResults.length,
-      passCount: queryResults.length - failedResults.length,
-      failCount: failedResults.length,
-      failureTagTotal: failedResults.reduce((sum, result) => sum + result.failureTags.length, 0),
-      meanRecallAtK: ratio(recallValues.reduce((sum, value) => sum + value, 0), recallValues.length),
-      meanPrecisionAtK: ratio(precisionValues.reduce((sum, value) => sum + value, 0), precisionValues.length),
-      meanNdcgAtK: ratio(ndcgValues.reduce((sum, value) => sum + value, 0), ndcgValues.length),
-      failureTagCounts,
+      scenarioCount: gateSummary.scenarioCount,
+      passCount: gateSummary.passCount,
+      failCount: gateSummary.failCount,
+      zeroToleranceFailures: gateSummary.zeroToleranceFailures,
+      meanRecallAtK,
+      meanPrecisionAtK,
+      meanNdcgAtK,
+      failureTagCounts: gateSummary.failureTagCounts,
+      satisfactory,
     },
   }
 }
 
 export function reportIsSatisfactory(report: EvalReport): boolean {
-  return report.summary.queryCount > 0
+  return report.summary.scenarioCount > 0
+    && report.summary.passCount + report.summary.failCount === report.summary.scenarioCount
     && report.summary.failCount === 0
-    && report.summary.failureTagTotal === 0
+    && report.summary.zeroToleranceFailures === 0
+    && report.summary.satisfactory === true
     && Number.isFinite(report.summary.meanRecallAtK)
     && Number.isFinite(report.summary.meanPrecisionAtK)
     && Number.isFinite(report.summary.meanNdcgAtK)

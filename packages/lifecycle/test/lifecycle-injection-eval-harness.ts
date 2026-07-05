@@ -1,3 +1,4 @@
+import { summarizeEvalGate } from "../../core/test/eval-report-helpers.js"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import {
@@ -96,6 +97,7 @@ export interface InjectionEvalReport {
     meanForbiddenLeakRate: number
     maxContextBudgetOverrun: number
     failureTagCounts: Record<string, number>
+    satisfactory: boolean
   }
 }
 
@@ -362,28 +364,30 @@ function ratio(numerator: number, denominator: number): number {
   return denominator === 0 ? 1 : numerator / denominator
 }
 
-function failureTagCounts(results: InjectionScenarioResult[]): Record<string, number> {
-  const counts: Record<string, number> = {}
-  for (const result of results) {
-    for (const tag of result.failureTags) counts[tag] = (counts[tag] ?? 0) + 1
-  }
-  return counts
-}
 
 export function summarizeResults(results: InjectionScenarioResult[]): InjectionEvalReport["summary"] {
   const requiredTotal = results.reduce((sum, result) => sum + result.requiredMemoryIds.length + result.requiredTextTotal, 0)
   const requiredFound = results.reduce((sum, result) => sum + result.requiredMemoryIds.length - result.missingRequired.length + result.requiredTextTotal - result.requiredTextMissing.length, 0)
   const forbiddenTotal = results.reduce((sum, result) => sum + result.forbiddenMemoryIds.length + result.forbiddenTextTotal, 0)
   const forbiddenLeaked = results.reduce((sum, result) => sum + result.forbiddenInjected.length + result.forbiddenTextPresent.length, 0)
+  const gateSummary = summarizeEvalGate(results, ZERO_TOLERANCE_FAILURE_TAGS)
+  const meanRequiredRecall = ratio(requiredFound, requiredTotal)
+  const meanForbiddenLeakRate = ratio(forbiddenLeaked, forbiddenTotal)
+  const maxContextBudgetOverrun = Math.max(0, ...results.map((result) => result.maxContextChars === undefined ? 0 : result.contextChars - result.maxContextChars))
+  const satisfactory = gateSummary.satisfactory
+    && meanRequiredRecall === 1
+    && meanForbiddenLeakRate === 0
+    && maxContextBudgetOverrun === 0
   return {
-    scenarioCount: results.length,
-    passCount: results.filter((result) => result.passed).length,
-    failCount: results.filter((result) => !result.passed).length,
-    zeroToleranceFailures: results.reduce((sum, result) => sum + result.failureTags.filter((tag) => ZERO_TOLERANCE_FAILURE_TAGS.has(tag)).length, 0),
-    meanRequiredRecall: ratio(requiredFound, requiredTotal),
-    meanForbiddenLeakRate: ratio(forbiddenLeaked, forbiddenTotal),
-    maxContextBudgetOverrun: Math.max(0, ...results.map((result) => result.maxContextChars === undefined ? 0 : result.contextChars - result.maxContextChars)),
-    failureTagCounts: failureTagCounts(results),
+    scenarioCount: gateSummary.scenarioCount,
+    passCount: gateSummary.passCount,
+    failCount: gateSummary.failCount,
+    zeroToleranceFailures: gateSummary.zeroToleranceFailures,
+    meanRequiredRecall,
+    meanForbiddenLeakRate,
+    maxContextBudgetOverrun,
+    failureTagCounts: gateSummary.failureTagCounts,
+    satisfactory,
   }
 }
 
@@ -400,8 +404,11 @@ export async function buildInjectionEvalReport(scenarios: InjectionEvalScenario[
 }
 
 export function reportIsSatisfactory(report: InjectionEvalReport): boolean {
-  return report.summary.failCount === 0
+  return report.summary.scenarioCount > 0
+    && report.summary.passCount + report.summary.failCount === report.summary.scenarioCount
+    && report.summary.failCount === 0
     && report.summary.zeroToleranceFailures === 0
+    && report.summary.satisfactory === true
     && report.summary.meanRequiredRecall === 1
     && report.summary.meanForbiddenLeakRate === 0
     && report.summary.maxContextBudgetOverrun === 0
