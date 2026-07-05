@@ -11,6 +11,7 @@ import {
   summarizeResults,
   type InjectionScenarioResult,
 } from "./lifecycle-injection-eval-harness.ts"
+import { assertBenchmarkMetadata, assertBenchmarkParity } from "../../core/test/eval-report-helpers.js"
 
 function injectionResult(overrides: Partial<InjectionScenarioResult> & { id: string }): InjectionScenarioResult {
   const result: InjectionScenarioResult = {
@@ -68,8 +69,7 @@ test("lifecycle injection eval corpus is structurally valid", () => {
     assert.ok(scenario.records.length > 0)
     assert.ok(scenario.policy.mode)
     if (scenario.event === "prompt") assert.ok(scenario.prompt)
-    assert.ok(scenario.benchmark.ability)
-    assert.equal(scenario.benchmark.lane, "lifecycle-injection")
+    assertBenchmarkMetadata(scenario.benchmark, "lifecycle-injection", scenario.id)
     assert.equal(new Set(scenario.records.map((record) => record.id)).size, scenario.records.length)
   }
 })
@@ -129,10 +129,7 @@ test("lifecycle injection eval report reaches satisfactory thresholds", async ()
   assert.equal(report.summary.meanRequiredRecall, 1)
   assert.equal(report.summary.meanForbiddenLeakRate, 0)
   assert.equal(report.summary.maxContextBudgetOverrun, 0)
-  for (const result of report.scenarioResults) {
-    const scenario = scenarioById(result.id)
-    assert.deepEqual(result.benchmark, scenario.benchmark)
-  }
+  assertBenchmarkParity(report.scenarioResults, corpus)
 })
 
 test("lifecycle injection eval detects unsatisfactory forbidden injection", () => {

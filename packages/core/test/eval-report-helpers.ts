@@ -1,3 +1,5 @@
+import assert from "node:assert/strict"
+
 // Test-only benchmark taxonomy attached to local eval fixtures and copied into reports.
 // It keeps report grouping separate from runtime route names, recall lanes, and production APIs.
 
@@ -17,6 +19,22 @@ export type BenchmarkAbility =
 export interface BenchmarkMetadata {
   ability: BenchmarkAbility
   lane: BenchmarkLane
+}
+
+export function assertBenchmarkMetadata(metadata: BenchmarkMetadata, expectedLane: BenchmarkLane, id = "benchmark"): void {
+  assert.ok(metadata.ability, `${id} needs benchmark ability`)
+  assert.equal(metadata.lane, expectedLane, `${id} benchmark lane`)
+}
+
+export function assertBenchmarkParity(
+  results: readonly { id: string; benchmark: BenchmarkMetadata }[],
+  sources: readonly { id: string; benchmark: BenchmarkMetadata }[],
+): void {
+  for (const result of results) {
+    const source = sources.find((item) => item.id === result.id)
+    assert.ok(source, `${result.id} has no source benchmark metadata`)
+    assert.deepEqual(result.benchmark, source.benchmark)
+  }
 }
 
 export interface EvalResultWithFailureTags<Tag extends string = string> {

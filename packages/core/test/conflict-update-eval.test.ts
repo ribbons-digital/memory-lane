@@ -11,6 +11,7 @@ import {
   reportIsSatisfactory,
   summarizeResults,
 } from "./conflict-update-eval-harness.js"
+import { assertBenchmarkParity } from "./eval-report-helpers.js"
 
 test("conflict/update eval corpus is structurally valid and sanitized", () => {
   assertCorpusStructurallyValid()
@@ -34,11 +35,7 @@ test("conflict/update eval report has deterministic satisfactory summary shape",
   assert.equal(report.summary.falsePremiseSafetyRate, 1)
   assert.equal(report.summary.staleFactLeakRate, 0)
   assert.equal(report.summary.supersededMemoryLeakRate, 0)
-  for (const result of report.scenarioResults) {
-    const scenario = corpus.scenarios.find((item) => item.id === result.id)
-    assert.ok(scenario)
-    assert.deepEqual(result.benchmark, scenario.benchmark)
-  }
+  assertBenchmarkParity(report.scenarioResults, corpus.scenarios)
 })
 
 test("conflict/update eval rejects no-data and failing summaries", async () => {

@@ -13,7 +13,7 @@ import {
   type ProjectScope,
 } from "../src/index.js"
 import { tempDir } from "./helpers.js"
-import { isGateSatisfactory, summarizeEvalGate, type BenchmarkMetadata } from "./eval-report-helpers.js"
+import { assertBenchmarkMetadata, isGateSatisfactory, summarizeEvalGate, type BenchmarkLane, type BenchmarkMetadata } from "./eval-report-helpers.js"
 
 export const PROJECT_SCOPE_KEY = "eval/project"
 export const GENERATED_AT = "2026-06-27T12:00:00.000Z"
@@ -477,8 +477,8 @@ export function assertCorpusStructurallyValid(evalCorpus: EvalCorpus): void {
 
   for (const query of evalCorpus.queries) {
     assert.ok(query.k > 0)
-    assert.ok(query.benchmark.ability, `${query.id} needs benchmark ability`)
-    assert.ok(query.benchmark.lane, `${query.id} needs benchmark lane`)
+    const expectedBenchmarkLane: BenchmarkLane = query.lane === "recall" ? "retrieval" : "continuity"
+    assertBenchmarkMetadata(query.benchmark, expectedBenchmarkLane, query.id)
     for (const id of Object.keys(query.labels)) assert.equal(ids.has(id), true, `${query.id} labels unknown id ${id}`)
     assert.equal(Object.values(query.labels).some((label) => label === "required"), true, `${query.id} needs at least one required label`)
     for (const expectation of query.continuityExpectations ?? []) {

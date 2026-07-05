@@ -3,7 +3,7 @@ import { containsLikelySecret } from "../src/secret-detection.js"
 import { retrieveSemanticMemories } from "../src/retrieval.js"
 import { foldMemoryRecords } from "../src/storage.js"
 import type { MemoryRecord, SemanticMemoryConfig } from "../src/types.js"
-import { isGateSatisfactory, summarizeEvalGate, type BenchmarkMetadata } from "./eval-report-helpers.js"
+import { assertBenchmarkMetadata, isGateSatisfactory, summarizeEvalGate, type BenchmarkMetadata } from "./eval-report-helpers.js"
 
 export const GENERATED_AT = "2026-07-04T13:00:00.000Z"
 export const CORPUS_ID = "conflict-update-microbench-v2"
@@ -409,8 +409,7 @@ export function assertCorpusStructurallyValid(): void {
   for (const scenario of corpus.scenarios) {
     assert.equal(scenario.lane, "recall")
     assert.ok(scenario.k > 0)
-    assert.ok(scenario.benchmark.ability, `${scenario.id} needs benchmark ability`)
-    assert.equal(scenario.benchmark.lane, "retrieval", `${scenario.id} benchmark lane`)
+    assertBenchmarkMetadata(scenario.benchmark, "retrieval", scenario.id)
     assert.equal(ids.has(scenario.expectedFirstId), true, `${scenario.id} expectedFirstId is unknown`)
     assert.equal(scenario.labels[scenario.expectedFirstId], "required")
     for (const id of scenario.forbiddenIds) assert.equal(scenario.labels[id], "forbidden", `${scenario.id} forbidden id ${id} needs a forbidden label`)

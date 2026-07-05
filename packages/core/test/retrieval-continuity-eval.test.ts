@@ -22,6 +22,7 @@ import {
   ndcgAtK,
   type EvalQuery,
 } from "./retrieval-eval-harness.js"
+import { assertBenchmarkParity } from "./eval-report-helpers.js"
 
 test("retrieval/continuity eval corpus is structurally valid and sanitized", () => {
   assert.equal(corpus.records.length, 8)
@@ -94,12 +95,13 @@ test("retrieval/continuity eval report has deterministic structural shape", asyn
   assert.equal(typeof report.summary.meanRecallAtK, "number")
   assert.equal(typeof report.summary.meanPrecisionAtK, "number")
   assert.equal(typeof report.summary.meanNdcgAtK, "number")
+  assertBenchmarkParity(report.queryResults, corpus.queries)
+
 
   for (const result of report.queryResults) {
     const query = corpus.queries.find((item) => item.id === result.id)
     assert.ok(query)
     assert.equal(result.lane, query.lane)
-    assert.deepEqual(result.benchmark, query.benchmark)
     assert.equal(result.query, query.query)
     assert.equal(result.k, query.k)
     assert.equal(result.actualIds.every((id) => corpus.records.some((record) => record.id === id)), true)
