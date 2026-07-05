@@ -19,12 +19,13 @@
 The current branch scope is post-PR #105 status sync only.
 It should not change product behavior.
 
-After this status sync, the recommended next product slice is a design/spec slice for review-first consolidation proposals.
-That slice should turn existing overlap and superseded-memory hints into bounded, human-reviewable `update`, `replace`, or `supersede` recommendations.
-It should remain proposal-only and read-only for the first implementation slice.
-Do not add auto-apply, auto-approval, LLM synthesis, schema changes, persisted proposal ids, broader contradiction detection, or retrieval-ranking rewrites.
+After this status sync, the recommended next product slice stays on the eval/benchmark track.
+The next slice should be adversarial retrieval benchmark hardening.
+It should add deterministic near-miss distractors to the core retrieval and conflict/update corpora so stale-over-current, topic-mismatch, and superseded-leak sensors have reachable negative cases.
+It should add a satisfactory gate and non-zero failure exit to `eval:retrieval`, matching the newer conflict/update, prompt-routing, and lifecycle-injection eval runners.
+Keep it local-fixture-only and production-code-neutral unless a new benchmark exposes a real recall bug that needs a separately approved fix.
 
-Opus 4.8 second opinion agreed with this direction after PR #105 because the live continuity hints already report operating-agreement overlap, the revision verbs already exist, and the new deterministic conflict/update eval coverage gives a guardrail against stale-current mistakes.
+Opus 4.8 second opinion agreed with this revised eval-first direction after the user rejected shifting away from evals/benchmarks.
 
 ## Load-bearing constraints
 

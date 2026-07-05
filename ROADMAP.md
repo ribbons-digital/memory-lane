@@ -82,11 +82,11 @@ Deterministic eval coverage now includes:
 No active eval implementation slice is currently open.
 The deterministic conflict/update microbench is clean, so retrieval-ranking changes remain paused until dogfood or eval evidence exposes a concrete production recall bug.
 
-Likely next product slice:
+Likely next eval/benchmark slice:
 
-- **Review-first consolidation proposals spec:** design a proposal-only surface that turns existing overlap and superseded-memory hints into bounded, human-reviewable `update`, `replace`, or `supersede` recommendations.
-- Keep it read-only and proposal-only in the first implementation slice.
-- Do not add auto-apply, auto-approval, LLM synthesis, schema changes, persisted proposal ids, or broader contradiction detection.
+- **Adversarial retrieval benchmark hardening:** add deterministic near-miss distractors to the core retrieval and conflict/update corpora so stale-over-current, topic-mismatch, and superseded-leak sensors have reachable negative cases.
+- Add a satisfactory gate and non-zero failure exit to `eval:retrieval`, matching the newer conflict/update, prompt-routing, and lifecycle-injection eval runners.
+- Keep the slice local-fixture-only and production-code-neutral unless a new benchmark exposes a real recall bug that needs a separately approved fix.
 
 Do not add LongMemEval, embeddings, LLM judges, production ranking rewrites, or auto-consolidation until deterministic local evals remain stable and expose a reason to broaden.
 
