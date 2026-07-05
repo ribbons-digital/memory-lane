@@ -16,7 +16,7 @@ export async function retrieveSemanticMemories(
   provider?: EmbeddingProvider,
   signal?: AbortSignal,
 ): Promise<RecallResult> {
-  const visible = filterMemoriesForContext(memories, projectKey)
+  const visible = filterMemoriesForContext(memories, projectKey).filter((memory) => !memory.revision?.supersededBy)
   if (!visible.length) {
     return { memories: [], semantic: { enabled: config.enabled, used: false } }
   }
