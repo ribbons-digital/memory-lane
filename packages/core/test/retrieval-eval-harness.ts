@@ -13,7 +13,7 @@ import {
   type ProjectScope,
 } from "../src/index.js"
 import { tempDir } from "./helpers.js"
-import { isGateSatisfactory, summarizeEvalGate } from "./eval-report-helpers.js"
+import { assertBenchmarkMetadata, isGateSatisfactory, summarizeEvalGate, type BenchmarkLane, type BenchmarkMetadata } from "./eval-report-helpers.js"
 
 export const PROJECT_SCOPE_KEY = "eval/project"
 export const GENERATED_AT = "2026-06-27T12:00:00.000Z"
@@ -40,6 +40,7 @@ export interface EvalQuery {
   k: number
   labels: Record<string, RelevanceLabel>
   continuityExpectations?: ContinuityExpectation[]
+  benchmark: BenchmarkMetadata
 }
 
 export interface EvalCorpus {
@@ -66,6 +67,7 @@ export interface EvalQueryResult {
   ndcgAtK?: number
   slotResults?: SlotResult[]
   failureTags: RetrievalFailureTag[]
+  benchmark: BenchmarkMetadata
 }
 
 export interface EvalReport {
@@ -170,6 +172,7 @@ export const corpus: EvalCorpus = {
     {
       id: "continuity-broad-status",
       lane: "continuity",
+      benchmark: { ability: "continuity-status", lane: "continuity" },
       query: "where are we in the project?",
       k: 3,
       labels: {
@@ -183,6 +186,7 @@ export const corpus: EvalCorpus = {
     {
       id: "continuity-next-work",
       lane: "continuity",
+      benchmark: { ability: "continuity-status", lane: "continuity" },
       query: "what should we work on next?",
       k: 3,
       labels: {
@@ -198,6 +202,7 @@ export const corpus: EvalCorpus = {
     {
       id: "continuity-pr-body-workstream",
       lane: "continuity",
+      benchmark: { ability: "direct-recall", lane: "continuity" },
       query: "where did we fix PR body formatting?",
       k: 1,
       labels: {
@@ -211,6 +216,7 @@ export const corpus: EvalCorpus = {
     {
       id: "recall-pr-description-rule",
       lane: "recall",
+      benchmark: { ability: "direct-recall", lane: "retrieval" },
       query: "how should I create GitHub PR descriptions?",
       k: 3,
       labels: {
@@ -222,6 +228,7 @@ export const corpus: EvalCorpus = {
     {
       id: "recall-docs-context-budget-release",
       lane: "recall",
+      benchmark: { ability: "direct-recall", lane: "retrieval" },
       query: "what release shipped docs context-budget?",
       k: 3,
       labels: {
@@ -233,6 +240,7 @@ export const corpus: EvalCorpus = {
     {
       id: "recall-current-release-status",
       lane: "recall",
+      benchmark: { ability: "temporal-currentness", lane: "retrieval" },
       query: "what is the current Memory Lane release status?",
       k: 1,
       labels: {
@@ -361,6 +369,7 @@ export async function evaluateRecall(query: EvalQuery, records: MemoryRecord[]):
     precisionAtK: precisionAtK(query, actualIds),
     ndcgAtK: ndcgAtK(query, actualIds),
     failureTags,
+    benchmark: query.benchmark,
   }
 }
 
@@ -402,6 +411,7 @@ export function evaluateContinuity(query: EvalQuery, records: MemoryRecord[]): E
     ndcgAtK: rankedExpectation ? ndcgAtK(query, rankedIds) : undefined,
     slotResults,
     failureTags,
+    benchmark: query.benchmark,
   }
 }
 
@@ -467,6 +477,8 @@ export function assertCorpusStructurallyValid(evalCorpus: EvalCorpus): void {
 
   for (const query of evalCorpus.queries) {
     assert.ok(query.k > 0)
+    const expectedBenchmarkLane: BenchmarkLane = query.lane === "recall" ? "retrieval" : "continuity"
+    assertBenchmarkMetadata(query.benchmark, expectedBenchmarkLane, query.id)
     for (const id of Object.keys(query.labels)) assert.equal(ids.has(id), true, `${query.id} labels unknown id ${id}`)
     assert.equal(Object.values(query.labels).some((label) => label === "required"), true, `${query.id} needs at least one required label`)
     for (const expectation of query.continuityExpectations ?? []) {

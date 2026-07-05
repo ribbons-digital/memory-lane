@@ -22,6 +22,7 @@ import {
   ndcgAtK,
   type EvalQuery,
 } from "./retrieval-eval-harness.js"
+import { assertBenchmarkParity } from "./eval-report-helpers.js"
 
 test("retrieval/continuity eval corpus is structurally valid and sanitized", () => {
   assert.equal(corpus.records.length, 8)
@@ -61,6 +62,7 @@ test("ranked eval metrics include NDCG so ordering improvements are visible", ()
   const query: EvalQuery = {
     id: "metric-ordering",
     lane: "recall",
+    benchmark: { ability: "temporal-currentness", lane: "retrieval" },
     query: "current release status",
     k: 3,
     labels: {
@@ -93,6 +95,8 @@ test("retrieval/continuity eval report has deterministic structural shape", asyn
   assert.equal(typeof report.summary.meanRecallAtK, "number")
   assert.equal(typeof report.summary.meanPrecisionAtK, "number")
   assert.equal(typeof report.summary.meanNdcgAtK, "number")
+  assertBenchmarkParity(report.queryResults, corpus.queries)
+
 
   for (const result of report.queryResults) {
     const query = corpus.queries.find((item) => item.id === result.id)
@@ -141,6 +145,7 @@ test("retrieval/continuity canary checks expose ranked failure tags without poll
       query: {
         id: "canary-stale-over-current",
         lane: "recall",
+        benchmark: { ability: "temporal-currentness", lane: "retrieval" },
         query: "current release status",
         k: 2,
         labels: {
@@ -156,6 +161,7 @@ test("retrieval/continuity canary checks expose ranked failure tags without poll
       query: {
         id: "canary-topic-mismatch",
         lane: "recall",
+        benchmark: { ability: "direct-recall", lane: "retrieval" },
         query: "current release status",
         k: 3,
         labels: {
@@ -221,6 +227,7 @@ test("currentness tie-break preserves folded order outside checkpoint updatedAt 
   const currentnessQuery: EvalQuery = {
     id: "currentness-negative-gate",
     lane: "recall",
+    benchmark: { ability: "temporal-currentness", lane: "retrieval" },
     query: "current release status",
     k: 2,
     labels: {
@@ -237,6 +244,7 @@ test("currentness tie-break preserves folded order outside checkpoint updatedAt 
   const nonCurrentnessQuery: EvalQuery = {
     id: "non-currentness-checkpoint-gate",
     lane: "recall",
+    benchmark: { ability: "direct-recall", lane: "retrieval" },
     query: "release shipped docs context-budget",
     k: 2,
     labels: {
@@ -261,6 +269,7 @@ test("recall eval excludes non-approved and cross-project memories from automati
   const query: EvalQuery = {
     id: "visibility-governance",
     lane: "recall",
+    benchmark: { ability: "cross-scope-safety", lane: "retrieval" },
     query: "current deployment runbook",
     k: 5,
     labels: {
@@ -290,6 +299,7 @@ test("continuity eval excludes superseded progress from latest progress", () => 
   const query: EvalQuery = {
     id: "superseded-progress",
     lane: "continuity",
+    benchmark: { ability: "temporal-currentness", lane: "continuity" },
     query: "where are we in the project?",
     k: 3,
     labels: {

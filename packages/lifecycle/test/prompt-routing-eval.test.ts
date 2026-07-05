@@ -10,6 +10,7 @@ import {
   summarizeResults,
 } from "./prompt-routing-eval-harness.ts"
 import type { PromptRoutingEvalScenario, PromptRoutingScenarioResult } from "./prompt-routing-eval-harness.ts"
+import { assertBenchmarkMetadata, assertBenchmarkParity } from "../../core/test/eval-report-helpers.js"
 
 type ScenarioRoute = PromptRoutingEvalScenario["expectedRoute"]
 type ScenarioIntentFamily = NonNullable<PromptRoutingEvalScenario["expectedIntentFamily"]>
@@ -105,6 +106,8 @@ test("prompt routing eval corpus is structurally valid", () => {
     assert.ok(scenario.id)
     assert.ok(scenario.prompt)
     assert.ok(scenario.expectedRoute)
+    assertBenchmarkMetadata(scenario.benchmark, "prompt-routing", scenario.id)
+    assert.equal(scenario.benchmark.ability, "prompt-routing")
   }
 })
 
@@ -123,6 +126,7 @@ test("prompt routing eval report reaches satisfactory thresholds", () => {
   assert.equal(report.summary.routeAccuracy, 1)
   assert.equal(report.summary.intentFamilyAccuracy, 1)
   assert.equal(report.summary.meanRequiredReasonRecall, 1)
+  assertBenchmarkParity(report.scenarioResults, corpus)
 })
 
 test("prompt routing eval report rejects no-data and failing summaries", () => {
