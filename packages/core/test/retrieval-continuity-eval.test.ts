@@ -17,13 +17,14 @@ import {
   evaluateContinuity,
   evaluateRecall,
   failureTagsForRanked,
+  reportIsSatisfactory,
   memory,
   ndcgAtK,
   type EvalQuery,
 } from "./retrieval-eval-harness.js"
 
 test("retrieval/continuity eval corpus is structurally valid and sanitized", () => {
-  assert.equal(corpus.records.length, 7)
+  assert.equal(corpus.records.length, 8)
   assert.equal(corpus.queries.length, 6)
   assertCorpusStructurallyValid(corpus)
 })
@@ -52,7 +53,8 @@ test("current release status baseline has equal lexical scores with oldest-creat
   assert.equal(staleScore, 1)
   assert.equal(currentScore, 1)
   assert.deepEqual(lexicalOnlyIds.slice(0, 2), ["eval-stale-v037", "eval-release-v038"])
-  assert.deepEqual(failureTagsForRanked(query, lexicalOnlyIds.slice(0, query.k)), ["forbidden-returned", "stale-over-current", "topic-mismatch"])
+  const canaryQuery: EvalQuery = { ...query, k: 2 }
+  assert.deepEqual(failureTagsForRanked(canaryQuery, lexicalOnlyIds.slice(0, canaryQuery.k)), ["forbidden-returned", "stale-over-current"])
 })
 
 test("ranked eval metrics include NDCG so ordering improvements are visible", () => {
@@ -83,6 +85,10 @@ test("retrieval/continuity eval report has deterministic structural shape", asyn
   assert.equal(typeof report.summary.meanRecallAtK, "number")
   assert.equal(typeof report.summary.meanPrecisionAtK, "number")
   assert.equal(typeof report.summary.meanNdcgAtK, "number")
+  assert.equal(report.summary.passCount, corpus.queries.length)
+  assert.equal(report.summary.failCount, 0)
+  assert.equal(report.summary.zeroToleranceFailures, 0)
+  assert.deepEqual(report.summary.failureTagCounts, {})
 
   for (const result of report.queryResults) {
     const query = corpus.queries.find((item) => item.id === result.id)
@@ -111,13 +117,88 @@ test("retrieval/continuity eval report has deterministic structural shape", asyn
   }
 })
 
-test("currentness recall tie-break ranks newest release checkpoint ahead of stale checkpoint", async () => {
+test("retrieval/continuity eval report gate accepts the healthy corpus", async () => {
   const report = await buildEvalReport(corpus)
-  const currentReleaseStatus = report.queryResults.find((result) => result.id === "recall-current-release-status")
-  assert.ok(currentReleaseStatus)
+
+  assert.equal(reportIsSatisfactory(report), true)
+  assert.equal(report.queryResults.every((result) => result.failureTags.length === 0), true)
+  assert.deepEqual(report.summary.failureTagCounts, {})
+})
+
+test("retrieval/continuity canary checks expose ranked failure tags without polluting the healthy report", async () => {
+  const healthyReport = await buildEvalReport(corpus)
+  assert.equal(reportIsSatisfactory(healthyReport), true)
+
+  const canaries: Array<{ name: string; query: EvalQuery; actualIds: string[]; expectedFailureTags: string[] }> = [
+    {
+      name: "forbidden stale result before current result",
+      query: {
+        id: "canary-stale-over-current",
+        lane: "recall",
+        query: "current release status",
+        k: 2,
+        labels: {
+          current: "required",
+          stale: "forbidden",
+        },
+      },
+      actualIds: ["stale", "current"],
+      expectedFailureTags: ["forbidden-returned", "stale-over-current"],
+    },
+    {
+      name: "mostly unrelated results",
+      query: {
+        id: "canary-topic-mismatch",
+        lane: "recall",
+        query: "current release status",
+        k: 3,
+        labels: {
+          current: "required",
+          offTopicA: "distractor",
+          offTopicB: "distractor",
+        },
+      },
+      actualIds: ["offTopicA", "offTopicB", "current"],
+      expectedFailureTags: ["topic-mismatch"],
+    },
+  ]
+
+  for (const { name, query, actualIds, expectedFailureTags } of canaries) {
+    assert.deepEqual(failureTagsForRanked(query, actualIds), expectedFailureTags, name)
+  }
+
+  assert.equal(reportIsSatisfactory(healthyReport), true)
+})
+
+test("retrieval/continuity eval report gate rejects introduced failure tags", async () => {
+  const report = await buildEvalReport(corpus)
+  const target = report.queryResults.find((result) => result.id === "recall-pr-description-rule")
+  assert.ok(target)
+
+  const failingReport = {
+    ...report,
+    queryResults: report.queryResults.map((result) => result.id === target.id
+      ? { ...result, failureTags: ["forbidden-returned"] }
+      : result),
+    summary: {
+      ...report.summary,
+      failCount: 1,
+      zeroToleranceFailures: 1,
+      failureTagCounts: { "forbidden-returned": 1 },
+    },
+  }
+
+  assert.equal(reportIsSatisfactory(failingReport), false)
+})
+
+test("currentness recall tie-break ranks newest release checkpoint ahead of stale checkpoint", async () => {
+  const query = corpus.queries.find((item) => item.id === "recall-current-release-status")
+  assert.ok(query)
+  const currentReleaseStatus = await evaluateRecall({ ...query, k: 2, labels: { ...query.labels, "eval-stale-v037": "acceptable" } }, corpus.records)
   assert.deepEqual(currentReleaseStatus.actualIds.slice(0, 2), ["eval-release-v038", "eval-stale-v037"])
-  assert.equal(currentReleaseStatus.failureTags.includes("stale-over-current"), false)
-  assert.equal(currentReleaseStatus.failureTags.includes("forbidden-returned"), true)
+  assert.deepEqual(currentReleaseStatus.failureTags, [])
+
+  const report = await buildEvalReport(corpus)
 
   const prDescription = report.queryResults.find((result) => result.id === "recall-pr-description-rule")
   assert.ok(prDescription)

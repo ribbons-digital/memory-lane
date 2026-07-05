@@ -123,3 +123,17 @@ test("false-premise update prompt returns the corrective current fact instead of
   assert.deepEqual(result.returnedForbiddenIds, [])
   assert.deepEqual(result.failureTags, [])
 })
+
+test("adversarial near-miss false-premise scenario returns corrective current fact without stale leaks", async () => {
+  const scenario = corpus.scenarios.find((item) => item.id === "false-premise-deploy-region-near-miss")
+  assert.ok(scenario)
+  assert.equal(scenario.expectedFirstId, "deploy-region-current-us")
+  assert.deepEqual(scenario.forbiddenIds, ["deploy-region-stale-eu"])
+
+  const result = await evaluateScenario(scenario)
+
+  assert.equal(result.actualIds[0], "deploy-region-current-us")
+  assert.equal(result.actualIds.includes("deploy-region-stale-eu"), false)
+  assert.deepEqual(result.returnedForbiddenIds, [])
+  assert.deepEqual(result.failureTags, [])
+})
