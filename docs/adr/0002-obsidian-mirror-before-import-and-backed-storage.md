@@ -1,3 +1,0 @@
-# Obsidian Mirror Before Import and Backed Storage
-
-Memory Lane will add Obsidian support first as an opt-in one-way mirror from the JSONL memory store into generated Markdown files, rather than making Obsidian Markdown the source of truth. JSONL remains the operational memory store because it already provides validated append-only writes, status folding, compaction, hook safety, and deterministic behavior; Obsidian import and Obsidian-backed storage are deferred until conflict handling, deletion semantics, and user-authored Markdown workflows are deliberately designed. Hooks must stay silent and deterministic, so Obsidian setup is explicit through CLI commands rather than prompted from lifecycle hooks.
