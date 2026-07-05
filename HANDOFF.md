@@ -2,10 +2,10 @@
 
 ## Current state
 
-- Branch context: no active product branch; this handoff tracks post-PR #123 state.
-- PR #123 merged lifecycle-injection adversarial coverage as main commit `1e28794`.
-- PR #123 expanded the lifecycle-injection eval to 12 deterministic local-fixture scenarios and added focused checks for policy-only body-free behavior, budget pressure, privacy leaks, noisy broad-continuity context, sessionStart versus prompt routing, and every zero-tolerance injection failure tag.
-- PR #120 prompt-routing adversarial coverage, PR #118 eval report contract unification, PR #116 adversarial retrieval benchmark hardening, and PR #105 conflict/update microbench expansion merged before PR #123.
+- Branch context: no active product branch; this handoff tracks post-PR #125 state.
+- PR #125 merged benchmark taxonomy and fixture manifest metadata as main commit `f08ba13`.
+- PR #125 added test-only `benchmark: { ability, lane }` metadata to retrieval, conflict/update, prompt-routing, and lifecycle-injection eval fixtures, copied it into report results, and added shared metadata assertion helpers.
+- PR #123 lifecycle-injection adversarial coverage, PR #120 prompt-routing adversarial coverage, PR #118 eval report contract unification, PR #116 adversarial retrieval benchmark hardening, and PR #105 conflict/update microbench expansion merged before PR #125.
 - PR #104 removed internal `docs/` files from repository tracking, kept `docs/plugins/README.md` tracked as user-facing documentation, ignored the rest of on-disk `docs/`, and synced status docs.
 - Latest known release: `v0.2.46` from main commit `cadd261`, after PR #99 fixed generated Pi pre-compact bridge session-summary behavior.
 - Project-local storage defaults are implemented through Slice 2b: PR #80, PR #89, and PR #94 shipped the write default, legacy diagnostics, and review-first migration protocol.
@@ -16,13 +16,12 @@
 
 ## Current decision / next work
 
-The current repo state is post-PR #123 cleanup on `main`.
+The current repo state is post-PR #125 cleanup on `main`.
 There is no active implementation branch.
 
 The recommended next product slice stays on the eval/benchmark track.
-The next slice should be benchmark taxonomy and fixture manifest coverage from issue #112.
-It should add test-only metadata to eval scenarios across retrieval, conflict/update, prompt-routing, and lifecycle-injection harnesses so reports can group failures by lane and memory ability.
-Keep it local-fixture-only, production-API-neutral, and free of external benchmark dependencies.
+The next slice should be deterministic local long-session synthetic benchmark coverage from issue #113.
+It should build bounded multi-session histories using existing Memory Lane engine and lifecycle surfaces, emit the unified eval report contract with taxonomy metadata from PR #125, and avoid network access, embeddings, LLM judges, and default CI wiring unless explicitly approved.
 
 The project goal for evals is to improve Memory Lane behavior, not to add decorative scaffolding.
 Each eval slice should state whether it ran deterministic fixtures, live Memory Lane store data, embeddings, synthetic long-session benchmarks, or external benchmarks.
@@ -40,9 +39,11 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 
 ## Current verification evidence
 
-- PR #123 lifecycle-injection adversarial coverage verification: `pnpm --filter @memory-lane/lifecycle exec node --test --import tsx test/lifecycle-injection-eval.test.ts` passed with 11 tests.
-- PR #123 lifecycle-injection adversarial coverage verification: `pnpm --filter @memory-lane/lifecycle eval:lifecycle-injection` passed with 12 scenarios, 12 passes, 0 failures, and `satisfactory: true`.
-- PR #123 lifecycle-injection adversarial coverage verification: `pnpm --filter @memory-lane/lifecycle build`, `git diff --check`, and CodeRabbit uncommitted review passed after one fixture nit was fixed.
+- PR #125 benchmark taxonomy verification passed targeted core eval tests, targeted lifecycle eval tests, all four eval runner commands, `pnpm --filter @memory-lane/core build`, `pnpm --filter @memory-lane/lifecycle build`, `git diff --check`, and CodeRabbit uncommitted review with 0 findings after the shared-helper nitpick follow-up.
+- PR #125 merged as `f08ba13`; post-merge cleanup synced local `main`, deleted local and remote `eval/fixture-taxonomy`, and confirmed clean `main...origin/main` before this status-sync branch was created.
+- PR #123 lifecycle-injection adversarial coverage verification passed `pnpm --filter @memory-lane/lifecycle exec node --test --import tsx test/lifecycle-injection-eval.test.ts` with 11 tests.
+- PR #123 lifecycle-injection adversarial coverage verification passed `pnpm --filter @memory-lane/lifecycle eval:lifecycle-injection` with 12 scenarios, 12 passes, 0 failures, and `satisfactory: true`.
+- PR #123 lifecycle-injection adversarial coverage verification passed `pnpm --filter @memory-lane/lifecycle build`, `git diff --check`, and CodeRabbit uncommitted review after one fixture nit was fixed.
 - PR #123 merged as `1e28794`; post-merge cleanup synced local `main` and deleted local and remote `eval/lifecycle-injection-adversarial`.
 - PR #116 adversarial retrieval benchmark hardening verification passed `pnpm --filter @memory-lane/core eval:retrieval`, `pnpm --filter @memory-lane/core eval:conflict-update`, targeted core eval tests, `pnpm --filter @memory-lane/core build`, and `git diff --check`.
 - PR #116 merged as `5a291b8`; post-merge cleanup synced local `main`, deleted local and remote `eval/retrieval-adversarial-hardening`, and confirmed clean `main...origin/main`.
@@ -61,5 +62,5 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.46` / commit `cadd261`
-- Current repo status: clean `main` after PR #123 cleanup; no active implementation branch.
-- Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, and PR #123.
+- Current repo status: clean `main` after PR #125 cleanup; no active implementation branch before this status-sync branch.
+- Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, and PR #125.
