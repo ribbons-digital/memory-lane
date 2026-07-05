@@ -2,30 +2,30 @@
 
 ## Current state
 
-- Branch context: active status-sync branch `docs/post-pr-105-status-sync`.
-- PR #104 merged as `425fcac`, removed internal `docs/` files from repository tracking, kept `docs/plugins/README.md` tracked as user-facing documentation, ignored the rest of on-disk `docs/`, and synced status docs.
-- PR #105 merged as `106ca50`, expanded the deterministic conflict/update microbench to v2, and shipped same-id update, correction-record, supersession-chain, cross-scope false-premise, folded-text, and leak-rate coverage.
+- Branch context: active status-sync branch `docs/post-pr-116-status-sync`.
+- PR #116 merged adversarial retrieval benchmark hardening as main commit `5a291b8`.
+- PR #116 added deterministic retrieval near-miss coverage, retrieval `failureTagTotal` pass/fail gating, non-zero `eval:retrieval` exit on unsatisfactory reports, and conflict/update false-premise deployment-region coverage.
+- PR #105 conflict/update microbench expansion merged before PR #116.
+- PR #104 removed internal `docs/` files from repository tracking, kept `docs/plugins/README.md` tracked as user-facing documentation, ignored the rest of on-disk `docs/`, and synced status docs.
 - Latest known release: `v0.2.46` from main commit `cadd261`, after PR #99 fixed generated Pi pre-compact bridge session-summary behavior.
 - Project-local storage defaults are implemented through Slice 2b: PR #80, PR #89, and PR #94 shipped the write default, legacy diagnostics, and review-first migration protocol.
 - Continuity routing/context hygiene shipped in PR #82; duplicate continuity rendering hygiene shipped in PR #97.
 - Generated Pi pre-compact bridge parity shipped in PR #99 and is no longer the next implementation slice.
-- Prompt-routing eval baseline merged in PR #102.
-- Conflict/update eval coverage shipped through PR #103 and PR #105.
 - Internal feature specs, validation notes, and archived handoffs under `docs/` are intentionally removed from repository tracking.
 - User-facing plugin documentation remains at `docs/plugins/README.md` and is linked from the main README.
 
 ## Current decision / next work
 
-The current branch scope is post-PR #105 status sync only.
+The current branch scope is post-PR #116 status sync only.
 It should not change product behavior.
 
 After this status sync, the recommended next product slice stays on the eval/benchmark track.
-The next slice should be adversarial retrieval benchmark hardening.
-It should add deterministic near-miss distractors to the core retrieval and conflict/update corpora so stale-over-current, topic-mismatch, and superseded-leak sensors have reachable negative cases.
-It should add a satisfactory gate and non-zero failure exit to `eval:retrieval`, matching the newer conflict/update, prompt-routing, and lifecycle-injection eval runners.
-Keep it local-fixture-only and production-code-neutral unless a new benchmark exposes a real recall bug that needs a separately approved fix.
+The next slice should be eval report contract unification.
+It should normalize report shape and pass/fail gates across retrieval, conflict/update, prompt-routing, and lifecycle-injection benchmarks so benchmark outcomes can be compared and can fail consistently.
+Keep it local-fixture-only and production-code-neutral unless a benchmark exposes a real bug that needs a separately approved fix.
 
-Opus 4.8 second opinion agreed with this revised eval-first direction after the user rejected shifting away from evals/benchmarks.
+The project goal for evals is to improve Memory Lane behavior, not to add decorative scaffolding.
+Each eval slice should state whether it ran deterministic fixtures, live Memory Lane store data, embeddings, synthetic long-session benchmarks, or external benchmarks.
 
 ## Load-bearing constraints
 
@@ -40,12 +40,13 @@ Opus 4.8 second opinion agreed with this revised eval-first direction after the 
 
 ## Current verification evidence
 
-- Conflict/update microbench expansion verification: `pnpm --filter @memory-lane/core eval:conflict-update` passed with 6 scenarios, 6 passes, `zeroToleranceFailures: 0`, `currentFactFirstRate: 1`, `falsePremiseSafetyRate: 1`, `staleFactLeakRate: 0`, and `supersededMemoryLeakRate: 0`.
-- Conflict/update microbench expansion verification: `pnpm --filter @memory-lane/core test -- conflict-update-eval.test.ts` passed; because the package script uses the `test/*.test.ts` glob, it ran the core test suite with 396 passing tests.
-- Conflict/update microbench expansion verification: `pnpm --filter @memory-lane/core build` passed.
-- Conflict/update microbench expansion verification: `pnpm build` passed.
-- Conflict/update microbench expansion verification: `git diff --check` passed.
-- PR #105 merged as `106ca50`; post-merge cleanup synced local `main`, deleted local and remote `eval/conflict-update-microbench`, and confirmed clean `main...origin/main`.
+- PR #116 adversarial retrieval benchmark hardening verification: `pnpm --filter @memory-lane/core eval:retrieval` passed with `failCount: 0`, `failureTagTotal: 0`, and `failureTagCounts: {}`.
+- PR #116 adversarial retrieval benchmark hardening verification: `pnpm --filter @memory-lane/core eval:conflict-update` passed with 7 scenarios, 7 passes, `zeroToleranceFailures: 0`, `currentFactFirstRate: 1`, `falsePremiseSafetyRate: 1`, `staleFactLeakRate: 0`, and `supersededMemoryLeakRate: 0`.
+- PR #116 adversarial retrieval benchmark hardening verification: `pnpm --filter @memory-lane/core test -- retrieval-continuity-eval.test.ts` passed; because the package script uses the `test/*.test.ts` glob, it ran the core test suite with 400 passing tests.
+- PR #116 adversarial retrieval benchmark hardening verification: `pnpm --filter @memory-lane/core test -- conflict-update-eval.test.ts` passed; because the package script uses the `test/*.test.ts` glob, it ran the core test suite with 400 passing tests.
+- PR #116 adversarial retrieval benchmark hardening verification: `pnpm --filter @memory-lane/core build` passed.
+- PR #116 adversarial retrieval benchmark hardening verification: `git diff --check` passed.
+- PR #116 merged as `5a291b8`; post-merge cleanup synced local `main`, deleted local and remote `eval/retrieval-adversarial-hardening`, and confirmed clean `main...origin/main`.
 - PR #104 first pass verification: `pnpm build` passed.
 - PR #104 first pass verification: `pnpm test` passed.
 - PR #104 first pass verification: targeted CLI Pi dogfood tests passed from `packages/cli` with 122 tests.
@@ -61,5 +62,5 @@ Opus 4.8 second opinion agreed with this revised eval-first direction after the 
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.46` / commit `cadd261`
-- Current status-sync branch: `docs/post-pr-105-status-sync`
-- Latest deterministic eval baselines: PR #102, PR #103, and PR #105.
+- Current status-sync branch: `docs/post-pr-116-status-sync`
+- Latest deterministic eval baselines: PR #102, PR #103, PR #105, and PR #116.
