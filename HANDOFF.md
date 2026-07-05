@@ -2,33 +2,33 @@
 
 ## Current state
 
-- Branch context: active PR branch `chore/untrack-internal-docs-pi-dogfood` updates PR #104.
-- PR #104 removes internal `docs/` files from repository tracking, keeps `docs/plugins/README.md` tracked as user-facing documentation, ignores the rest of on-disk `docs/`, and syncs `ROADMAP.md` plus `HANDOFF.md`.
+- Branch context: active implementation branch `eval/conflict-update-microbench`.
+- PR #104 merged as `425fcac`, removed internal `docs/` files from repository tracking, kept `docs/plugins/README.md` tracked as user-facing documentation, ignored the rest of on-disk `docs/`, and synced status docs.
 - Latest known release: `v0.2.46` from main commit `cadd261`, after PR #99 fixed generated Pi pre-compact bridge session-summary behavior.
 - Project-local storage defaults are implemented through Slice 2b: PR #80, PR #89, and PR #94 shipped the write default, legacy diagnostics, and review-first migration protocol.
 - Continuity routing/context hygiene shipped in PR #82; duplicate continuity rendering hygiene shipped in PR #97.
 - Generated Pi pre-compact bridge parity shipped in PR #99 and is no longer the next implementation slice.
 - Prompt-routing eval baseline merged in PR #102.
 - Conflict/update recall eval baseline merged in PR #103.
+- Conflict/update microbench expansion is in progress on `eval/conflict-update-microbench`.
 - Internal feature specs, validation notes, and archived handoffs under `docs/` are intentionally removed from repository tracking.
 - User-facing plugin documentation remains at `docs/plugins/README.md` and is linked from the main README.
 
 ## Current decision / next work
 
-The current PR #104 scope is docs hygiene and status sync only.
-It should not change product behavior.
+The active slice is conflict/update microbench expansion.
+It is deterministic, local-fixture-only, and read-only unless a fixture exposes a real production recall bug.
+Do not add LongMemEval, embeddings, LLM judges, production ranking rewrites, or auto-consolidation in this slice.
 
-PR #104 acceptance shape:
+Current acceptance shape:
 
-1. `.gitignore` ignores `docs/*` while unignoring `docs/plugins/` and `docs/plugins/README.md`.
-2. `docs/plugins/README.md` is tracked.
-3. No other `docs/` files are tracked.
-4. `ROADMAP.md` and `HANDOFF.md` no longer point at deleted internal docs.
-5. Verification proves the ignored on-disk docs state and the restored tracked plugin README.
-
-After PR #104, the likely next product slice is conflict/update microbench expansion.
-Keep it deterministic, local-fixture-only, and read-only unless a fixture exposes a real production recall bug.
-Do not add LongMemEval, embeddings, LLM judges, or ranking rewrites in that slice.
+1. Conflict/update corpus includes same-id update coverage using duplicate raw record ids so folding must select the current version.
+2. Conflict/update corpus includes explicit correction-record coverage.
+3. Conflict/update corpus includes multiple-supersession-chain coverage.
+4. Conflict/update corpus includes cross-scope false-premise coverage.
+5. Conflict/update summary reports current-fact-first rate, false-premise safety rate, stale-fact leak rate, and superseded-memory leak rate.
+6. Tests assert the same-id scenario returns the current folded text, not only the duplicate id.
+7. Verification keeps semantic retrieval disabled and shows zero zero-tolerance failures.
 
 ## Load-bearing constraints
 
@@ -43,6 +43,11 @@ Do not add LongMemEval, embeddings, LLM judges, or ranking rewrites in that slic
 
 ## Current verification evidence
 
+- Conflict/update microbench expansion verification: `pnpm --filter @memory-lane/core eval:conflict-update` passed with 6 scenarios, 6 passes, `zeroToleranceFailures: 0`, `currentFactFirstRate: 1`, `falsePremiseSafetyRate: 1`, `staleFactLeakRate: 0`, and `supersededMemoryLeakRate: 0`.
+- Conflict/update microbench expansion verification: `pnpm --filter @memory-lane/core test -- conflict-update-eval.test.ts` passed; because the package script uses the `test/*.test.ts` glob, it ran the core test suite with 396 passing tests.
+- Conflict/update microbench expansion verification: `pnpm --filter @memory-lane/core build` passed.
+- Conflict/update microbench expansion verification: `pnpm build` passed.
+- Conflict/update microbench expansion verification: `git diff --check` passed.
 - PR #104 first pass verification: `pnpm build` passed.
 - PR #104 first pass verification: `pnpm test` passed.
 - PR #104 first pass verification: targeted CLI Pi dogfood tests passed from `packages/cli` with 122 tests.
@@ -58,5 +63,5 @@ Do not add LongMemEval, embeddings, LLM judges, or ranking rewrites in that slic
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.46` / commit `cadd261`
-- Current docs hygiene PR: #104
-- Latest deterministic eval baselines: PR #102 and PR #103
+- Current implementation branch: `eval/conflict-update-microbench`
+- Latest deterministic eval baselines: PR #102 and PR #103, plus the active conflict/update microbench expansion branch.
