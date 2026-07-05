@@ -87,7 +87,7 @@ test("retrieval/continuity eval report has deterministic structural shape", asyn
   assert.equal(typeof report.summary.meanNdcgAtK, "number")
   assert.equal(report.summary.passCount, corpus.queries.length)
   assert.equal(report.summary.failCount, 0)
-  assert.equal(report.summary.zeroToleranceFailures, 0)
+  assert.equal(report.summary.failureTagTotal, 0)
   assert.deepEqual(report.summary.failureTagCounts, {})
 
   for (const result of report.queryResults) {
@@ -183,7 +183,7 @@ test("retrieval/continuity eval report gate rejects introduced failure tags", as
     summary: {
       ...report.summary,
       failCount: 1,
-      zeroToleranceFailures: 1,
+      failureTagTotal: 1,
       failureTagCounts: { "forbidden-returned": 1 },
     },
   }

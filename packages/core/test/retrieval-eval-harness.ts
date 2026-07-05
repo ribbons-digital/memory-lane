@@ -74,7 +74,7 @@ export interface EvalReport {
     queryCount: number
     passCount: number
     failCount: number
-    zeroToleranceFailures: number
+    failureTagTotal: number
     meanRecallAtK?: number
     meanPrecisionAtK?: number
     meanNdcgAtK?: number
@@ -200,6 +200,7 @@ export const corpus: EvalCorpus = {
         "eval-pr-body-rule": "required",
         "eval-pr-process-agreement": "acceptable",
         "eval-release-v038": "distractor",
+        "eval-pr-body-legacy-near-miss": "forbidden",
       },
       continuityExpectations: [{ slot: "workstreamDiscovery.candidates", required: ["eval-pr-body-rule"] }],
     },
@@ -424,7 +425,7 @@ export async function buildEvalReport(evalCorpus: EvalCorpus): Promise<EvalRepor
       queryCount: queryResults.length,
       passCount: queryResults.length - failedResults.length,
       failCount: failedResults.length,
-      zeroToleranceFailures: failedResults.reduce((sum, result) => sum + result.failureTags.length, 0),
+      failureTagTotal: failedResults.reduce((sum, result) => sum + result.failureTags.length, 0),
       meanRecallAtK: ratio(recallValues.reduce((sum, value) => sum + value, 0), recallValues.length),
       meanPrecisionAtK: ratio(precisionValues.reduce((sum, value) => sum + value, 0), precisionValues.length),
       meanNdcgAtK: ratio(ndcgValues.reduce((sum, value) => sum + value, 0), ndcgValues.length),
@@ -436,7 +437,7 @@ export async function buildEvalReport(evalCorpus: EvalCorpus): Promise<EvalRepor
 export function reportIsSatisfactory(report: EvalReport): boolean {
   return report.summary.queryCount > 0
     && report.summary.failCount === 0
-    && report.summary.zeroToleranceFailures === 0
+    && report.summary.failureTagTotal === 0
     && Number.isFinite(report.summary.meanRecallAtK)
     && Number.isFinite(report.summary.meanPrecisionAtK)
     && Number.isFinite(report.summary.meanNdcgAtK)
