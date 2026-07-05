@@ -2,26 +2,27 @@
 
 ## Current state
 
-- Branch context: no active product branch; this handoff tracks post-PR #125 state.
+- Branch context: no active product branch; this handoff tracks post-PR #127 state.
+- PR #127 merged deterministic local long-session synthetic benchmark coverage as main commit `c8c65ea`.
+- PR #127 added `pnpm --filter @memory-lane/lifecycle eval:long-session-synthetic`.
+- PR #127 added a stable local JSON report with benchmark taxonomy metadata, temp-only MemoryEngine stores, and coverage for temporal currentness, repeated knowledge updates, multi-session continuity, false-premise abstention, cross-scope safety, and bounded long context.
 - PR #125 merged benchmark taxonomy and fixture manifest metadata as main commit `f08ba13`.
-- PR #125 added test-only `benchmark: { ability, lane }` metadata to retrieval, conflict/update, prompt-routing, and lifecycle-injection eval fixtures, copied it into report results, and added shared metadata assertion helpers.
 - PR #123 lifecycle-injection adversarial coverage, PR #120 prompt-routing adversarial coverage, PR #118 eval report contract unification, PR #116 adversarial retrieval benchmark hardening, and PR #105 conflict/update microbench expansion merged before PR #125.
 - PR #104 removed internal `docs/` files from repository tracking, kept `docs/plugins/README.md` tracked as user-facing documentation, ignored the rest of on-disk `docs/`, and synced status docs.
 - Latest known release: `v0.2.46` from main commit `cadd261`, after PR #99 fixed generated Pi pre-compact bridge session-summary behavior.
 - Project-local storage defaults are implemented through Slice 2b: PR #80, PR #89, and PR #94 shipped the write default, legacy diagnostics, and review-first migration protocol.
 - Continuity routing/context hygiene shipped in PR #82; duplicate continuity rendering hygiene shipped in PR #97.
-- Generated Pi pre-compact bridge parity shipped in PR #99 and is no longer the next implementation slice.
 - Internal feature specs, validation notes, and archived handoffs under `docs/` are intentionally removed from repository tracking.
-- User-facing plugin documentation remains at `docs/plugins/README.md` and is linked from the main README.
 
 ## Current decision / next work
 
-The current repo state is post-PR #125 cleanup on `main`.
+The current repo state is post-PR #127 cleanup on `main`.
 There is no active implementation branch.
 
 The recommended next product slice stays on the eval/benchmark track.
-The next slice should be deterministic local long-session synthetic benchmark coverage from issue #113.
-It should build bounded multi-session histories using existing Memory Lane engine and lifecycle surfaces, emit the unified eval report contract with taxonomy metadata from PR #125, and avoid network access, embeddings, LLM judges, and default CI wiring unless explicitly approved.
+The next slice should be external long-memory benchmark adapter design from issue #114.
+It should define exactly which Memory Lane behavior an external benchmark evaluates, map categories back to the local taxonomy, and state data, judge, network, CI, runtime, and cost policy before any adapter implementation.
+It should keep adapter implementation, LongMemEval ingestion, embeddings, LLM judges, network-dependent runners, external datasets, and production behavior changes out of scope unless explicitly approved.
 
 The project goal for evals is to improve Memory Lane behavior, not to add decorative scaffolding.
 Each eval slice should state whether it ran deterministic fixtures, live Memory Lane store data, embeddings, synthetic long-session benchmarks, or external benchmarks.
@@ -39,8 +40,8 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 
 ## Current verification evidence
 
-- PR #125 benchmark taxonomy verification passed targeted core eval tests, targeted lifecycle eval tests, all four eval runner commands, `pnpm --filter @memory-lane/core build`, `pnpm --filter @memory-lane/lifecycle build`, `git diff --check`, and CodeRabbit uncommitted review with 0 findings after the shared-helper nitpick follow-up.
-- PR #125 merged as `f08ba13`; post-merge cleanup synced local `main`, deleted local and remote `eval/fixture-taxonomy`, and confirmed clean `main...origin/main` before this status-sync branch was created.
+- PR #127 long-session synthetic benchmark verification passed `pnpm --filter @memory-lane/lifecycle exec node --test --import tsx test/long-session-synthetic-eval.test.ts` with 13 tests, `pnpm --filter @memory-lane/lifecycle eval:long-session-synthetic` with 6 scenarios, 7 steps, and `satisfactory: true`, `pnpm --filter @memory-lane/lifecycle build`, staged whitespace checks, and Opus 4.8 implementation re-review with no blockers or should-fix items.
+- PR #127 merged as `c8c65ea`; post-merge cleanup synced local `main`, deleted local and remote `eval/long-session-synthetic`, and opened a status-sync branch.
 - PR #123 lifecycle-injection adversarial coverage verification passed `pnpm --filter @memory-lane/lifecycle exec node --test --import tsx test/lifecycle-injection-eval.test.ts` with 11 tests.
 - PR #123 lifecycle-injection adversarial coverage verification passed `pnpm --filter @memory-lane/lifecycle eval:lifecycle-injection` with 12 scenarios, 12 passes, 0 failures, and `satisfactory: true`.
 - PR #123 lifecycle-injection adversarial coverage verification passed `pnpm --filter @memory-lane/lifecycle build`, `git diff --check`, and CodeRabbit uncommitted review after one fixture nit was fixed.
