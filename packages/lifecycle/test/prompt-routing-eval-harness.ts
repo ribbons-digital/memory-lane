@@ -1,3 +1,4 @@
+import { isGateSatisfactory, summarizeEvalGate } from "../../core/test/eval-report-helpers.js"
 import {
   classifyPromptRoute,
   renderContinuityIntentGuidance,
@@ -10,12 +11,10 @@ export const CORPUS_ID = "prompt-routing-baseline-v1"
 
 export type PromptRoutingFailureTag = "wrong-route" | "wrong-intent-family" | "missing-reason" | "unexpected-reason" | "wrong-guidance"
 
-export const ZERO_TOLERANCE_FAILURE_TAGS: Record<PromptRoutingFailureTag, true | undefined> = {
+export const ZERO_TOLERANCE_FAILURE_TAGS: Partial<Record<PromptRoutingFailureTag, true>> = {
   "wrong-route": true,
   "wrong-intent-family": true,
   "wrong-guidance": true,
-  "missing-reason": undefined,
-  "unexpected-reason": undefined,
 }
 
 export interface PromptRoutingEvalScenario {
@@ -56,6 +55,7 @@ export interface PromptRoutingEvalReport {
     intentFamilyAccuracy: number
     meanRequiredReasonRecall: number
     failureTagCounts: Record<string, number>
+    satisfactory: boolean
   }
 }
 
@@ -150,13 +150,6 @@ function ratio(numerator: number, denominator: number): number {
   return denominator === 0 ? Number.NaN : numerator / denominator
 }
 
-function failureTagCounts(results: PromptRoutingScenarioResult[]): Record<string, number> {
-  const counts: Record<string, number> = {}
-  for (const result of results) {
-    for (const tag of result.failureTags) counts[tag] = (counts[tag] ?? 0) + 1
-  }
-  return counts
-}
 
 export function evaluateScenario(scenario: PromptRoutingEvalScenario): PromptRoutingScenarioResult {
   const decision = classifyPromptRoute(scenario.prompt)
@@ -196,15 +189,27 @@ export function summarizeResults(results: PromptRoutingScenarioResult[]): Prompt
   const requiredReasonFound = results.reduce((sum, result) => sum + result.requiredReasons.length - result.missingReasons.length, 0)
   const expectedIntentTotal = results.filter((result) => result.expectedIntentFamily !== undefined).length
   const correctIntentTotal = results.filter((result) => result.expectedIntentFamily !== undefined && result.expectedIntentFamily === result.actualIntentFamily).length
+  const gateSummary = summarizeEvalGate(results, ZERO_TOLERANCE_FAILURE_TAGS)
+  const routeAccuracy = ratio(results.filter((result) => result.expectedRoute === result.actualRoute).length, results.length)
+  const intentFamilyAccuracy = ratio(correctIntentTotal, expectedIntentTotal)
+  const meanRequiredReasonRecall = ratio(requiredReasonFound, requiredReasonTotal)
+  const satisfactory = gateSummary.satisfactory
+    && Number.isFinite(routeAccuracy)
+    && routeAccuracy === 1
+    && Number.isFinite(intentFamilyAccuracy)
+    && intentFamilyAccuracy === 1
+    && Number.isFinite(meanRequiredReasonRecall)
+    && meanRequiredReasonRecall === 1
   return {
-    scenarioCount: results.length,
-    passCount: results.filter((result) => result.passed).length,
-    failCount: results.filter((result) => !result.passed).length,
-    zeroToleranceFailures: results.reduce((sum, result) => sum + result.failureTags.filter((tag) => ZERO_TOLERANCE_FAILURE_TAGS[tag]).length, 0),
-    routeAccuracy: ratio(results.filter((result) => result.expectedRoute === result.actualRoute).length, results.length),
-    intentFamilyAccuracy: ratio(correctIntentTotal, expectedIntentTotal),
-    meanRequiredReasonRecall: ratio(requiredReasonFound, requiredReasonTotal),
-    failureTagCounts: failureTagCounts(results),
+    scenarioCount: gateSummary.scenarioCount,
+    passCount: gateSummary.passCount,
+    failCount: gateSummary.failCount,
+    zeroToleranceFailures: gateSummary.zeroToleranceFailures,
+    routeAccuracy,
+    intentFamilyAccuracy,
+    meanRequiredReasonRecall,
+    failureTagCounts: gateSummary.failureTagCounts,
+    satisfactory,
   }
 }
 
@@ -221,9 +226,7 @@ export function buildPromptRoutingEvalReport(scenarios: PromptRoutingEvalScenari
 }
 
 export function reportIsSatisfactory(report: PromptRoutingEvalReport): boolean {
-  return report.summary.scenarioCount > 0
-    && report.summary.failCount === 0
-    && report.summary.zeroToleranceFailures === 0
+  return isGateSatisfactory(report.summary)
     && Number.isFinite(report.summary.routeAccuracy)
     && report.summary.routeAccuracy === 1
     && Number.isFinite(report.summary.intentFamilyAccuracy)

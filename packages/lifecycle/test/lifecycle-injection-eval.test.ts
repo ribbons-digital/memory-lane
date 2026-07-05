@@ -53,13 +53,15 @@ test("lifecycle injection eval report reaches satisfactory thresholds", async ()
   assert.equal(report.corpusId, CORPUS_ID)
   assert.equal(report.mode, "local-fixtures")
   assert.equal(report.summary.scenarioCount, corpus.length)
+  assert.equal(report.summary.passCount, corpus.length)
   assert.equal(report.summary.failCount, 0)
   assert.equal(report.summary.zeroToleranceFailures, 0)
+  assert.deepEqual(report.summary.failureTagCounts, {})
+  assert.equal(report.summary.satisfactory, true)
+  assert.equal(report.summary.satisfactory, reportIsSatisfactory(report))
   assert.equal(report.summary.meanRequiredRecall, 1)
   assert.equal(report.summary.meanForbiddenLeakRate, 0)
   assert.equal(report.summary.maxContextBudgetOverrun, 0)
-  assert.deepEqual(report.summary.failureTagCounts, {})
-  assert.equal(reportIsSatisfactory(report), true)
 })
 
 test("lifecycle injection eval detects unsatisfactory forbidden injection", () => {
@@ -74,6 +76,20 @@ test("lifecycle injection eval detects unsatisfactory forbidden injection", () =
   const summary = summarizeResults([result])
   assert.equal(summary.failCount, 1)
   assert.equal(summary.zeroToleranceFailures, 2)
+  assert.equal(summary.scenarioCount, 1)
+  assert.equal(summary.passCount, 0)
+  assert.deepEqual(summary.failureTagCounts, {
+    "forbidden-injected": 1,
+    "cross-project-leak": 1,
+  })
+  assert.equal(summary.satisfactory, false)
+  assert.equal(reportIsSatisfactory({
+    generatedAt: GENERATED_AT,
+    corpusId: CORPUS_ID,
+    mode: "local-fixtures",
+    scenarioResults: [result],
+    summary,
+  }), false)
   assert.equal(summary.meanForbiddenLeakRate, 1)
   assert.equal(ZERO_TOLERANCE_FAILURE_TAGS.has("cross-project-leak"), true)
 })

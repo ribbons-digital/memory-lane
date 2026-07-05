@@ -3,6 +3,7 @@ import { containsLikelySecret } from "../src/secret-detection.js"
 import { retrieveSemanticMemories } from "../src/retrieval.js"
 import { foldMemoryRecords } from "../src/storage.js"
 import type { MemoryRecord, SemanticMemoryConfig } from "../src/types.js"
+import { isGateSatisfactory, summarizeEvalGate } from "./eval-report-helpers.js"
 
 export const GENERATED_AT = "2026-07-04T13:00:00.000Z"
 export const CORPUS_ID = "conflict-update-microbench-v2"
@@ -33,14 +34,13 @@ export type ConflictScenarioKind = typeof SCENARIO_KINDS[number]
 export type ConflictFailureTag = "current-fact-not-first" | "superseded-returned" | "missing-required" | "forbidden-returned" | "stale-over-current" | "stale-version-returned" | "topic-mismatch"
 export type RelevanceLabel = "required" | "acceptable" | "distractor" | "forbidden"
 
-export const ZERO_TOLERANCE_FAILURE_TAGS: Record<ConflictFailureTag, true | undefined> = {
+export const ZERO_TOLERANCE_FAILURE_TAGS: Partial<Record<ConflictFailureTag, true>> = {
   "current-fact-not-first": true,
   "superseded-returned": true,
   "missing-required": true,
   "forbidden-returned": true,
   "stale-over-current": true,
   "stale-version-returned": true,
-  "topic-mismatch": undefined,
 }
 
 export interface ConflictUpdateScenario {
@@ -86,6 +86,7 @@ export interface ConflictUpdateReport {
     staleFactLeakRate: number
     supersededMemoryLeakRate: number
     failureTagCounts: Record<string, number>
+    satisfactory: boolean
   }
 }
 
@@ -324,33 +325,39 @@ export const corpus = {
   ] satisfies ConflictUpdateScenario[],
 }
 
-function countFailureTags(results: ConflictUpdateScenarioResult[]): Record<string, number> {
-  const counts: Record<string, number> = {}
-  for (const result of results) {
-    for (const tag of result.failureTags) counts[tag] = (counts[tag] ?? 0) + 1
-  }
-  return counts
-}
 
 export function summarizeResults(results: ConflictUpdateScenarioResult[]): ConflictUpdateReport["summary"] {
   const falsePremiseResults = results.filter((result) => result.kind === "false-premise-refutation" || result.kind === "cross-scope-false-premise")
+  const gateSummary = summarizeEvalGate(results, ZERO_TOLERANCE_FAILURE_TAGS)
+  const currentFactFirstRate = results.length === 0 ? Number.NaN : results.filter((result) => result.actualIds[0] === result.expectedFirstId).length / results.length
+  const falsePremiseSafetyRate = falsePremiseResults.length === 0 ? Number.NaN : falsePremiseResults.filter((result) => result.passed).length / falsePremiseResults.length
+  const staleFactLeakRate = results.length === 0 ? Number.NaN : results.filter((result) => result.failureTags.includes("stale-over-current")).length / results.length
+  const supersededMemoryLeakRate = results.length === 0 ? Number.NaN : results.filter((result) => result.failureTags.includes("superseded-returned")).length / results.length
+  const satisfactory = gateSummary.satisfactory
+    && Number.isFinite(currentFactFirstRate)
+    && currentFactFirstRate === 1
+    && Number.isFinite(falsePremiseSafetyRate)
+    && falsePremiseSafetyRate === 1
+    && Number.isFinite(staleFactLeakRate)
+    && staleFactLeakRate === 0
+    && Number.isFinite(supersededMemoryLeakRate)
+    && supersededMemoryLeakRate === 0
   return {
-    scenarioCount: results.length,
-    passCount: results.filter((result) => result.passed).length,
-    failCount: results.filter((result) => !result.passed).length,
-    zeroToleranceFailures: results.reduce((sum, result) => sum + result.failureTags.filter((tag) => ZERO_TOLERANCE_FAILURE_TAGS[tag]).length, 0),
-    currentFactFirstRate: results.length === 0 ? Number.NaN : results.filter((result) => result.actualIds[0] === result.expectedFirstId).length / results.length,
-    falsePremiseSafetyRate: falsePremiseResults.length === 0 ? Number.NaN : falsePremiseResults.filter((result) => result.passed).length / falsePremiseResults.length,
-    staleFactLeakRate: results.length === 0 ? Number.NaN : results.filter((result) => result.failureTags.includes("stale-over-current")).length / results.length,
-    supersededMemoryLeakRate: results.length === 0 ? Number.NaN : results.filter((result) => result.failureTags.includes("superseded-returned")).length / results.length,
-    failureTagCounts: countFailureTags(results),
+    scenarioCount: gateSummary.scenarioCount,
+    passCount: gateSummary.passCount,
+    failCount: gateSummary.failCount,
+    zeroToleranceFailures: gateSummary.zeroToleranceFailures,
+    currentFactFirstRate,
+    falsePremiseSafetyRate,
+    staleFactLeakRate,
+    supersededMemoryLeakRate,
+    failureTagCounts: gateSummary.failureTagCounts,
+    satisfactory,
   }
 }
 
 export function reportIsSatisfactory(report: ConflictUpdateReport): boolean {
-  return report.summary.scenarioCount > 0
-    && report.summary.failCount === 0
-    && report.summary.zeroToleranceFailures === 0
+  return isGateSatisfactory(report.summary)
     && Number.isFinite(report.summary.currentFactFirstRate)
     && report.summary.currentFactFirstRate === 1
     && Number.isFinite(report.summary.falsePremiseSafetyRate)

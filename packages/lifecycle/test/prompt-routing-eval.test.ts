@@ -25,18 +25,22 @@ test("prompt routing eval report reaches satisfactory thresholds", () => {
   assert.equal(report.corpusId, CORPUS_ID)
   assert.equal(report.mode, "local-fixtures")
   assert.equal(report.summary.scenarioCount, corpus.length)
+  assert.equal(report.summary.passCount, corpus.length)
   assert.equal(report.summary.failCount, 0)
+  assert.equal(report.summary.zeroToleranceFailures, 0)
+  assert.deepEqual(report.summary.failureTagCounts, {})
+  assert.equal(report.summary.satisfactory, true)
+  assert.equal(report.summary.satisfactory, reportIsSatisfactory(report))
   assert.equal(report.summary.routeAccuracy, 1)
   assert.equal(report.summary.intentFamilyAccuracy, 1)
   assert.equal(report.summary.meanRequiredReasonRecall, 1)
-  assert.equal(Object.keys(report.summary.failureTagCounts).length, 0)
-  assert.equal(reportIsSatisfactory(report), true)
 })
 
 test("prompt routing eval report rejects no-data and failing summaries", () => {
   assert.throws(() => buildPromptRoutingEvalReport([]), /requires at least one scenario/)
 
   const emptySummary = summarizeResults([])
+  assert.equal(emptySummary.satisfactory, false)
   assert.equal(reportIsSatisfactory({
     generatedAt: GENERATED_AT,
     corpusId: CORPUS_ID,
@@ -46,15 +50,18 @@ test("prompt routing eval report rejects no-data and failing summaries", () => {
   }), false)
 
   const report = buildPromptRoutingEvalReport()
-  assert.equal(reportIsSatisfactory({
+  const failingReport = {
     ...report,
     summary: {
       ...report.summary,
       failCount: 1,
       zeroToleranceFailures: 1,
       routeAccuracy: 10 / 11,
+      satisfactory: false,
     },
-  }), false)
+  }
+  assert.equal(failingReport.summary.satisfactory, false)
+  assert.equal(reportIsSatisfactory(failingReport), false)
 })
 
 test("prompt routing eval detects wrong route and missing reason failures", () => {
@@ -72,7 +79,10 @@ test("prompt routing eval detects wrong route and missing reason failures", () =
     failureTags: ["wrong-route", "wrong-intent-family", "missing-reason"],
   }])
 
+  assert.equal(summary.scenarioCount, 1)
+  assert.equal(summary.passCount, 0)
   assert.equal(summary.failCount, 1)
+  assert.equal(summary.zeroToleranceFailures, 2)
   assert.equal(summary.routeAccuracy, 0)
   assert.equal(summary.intentFamilyAccuracy, 0)
   assert.equal(summary.meanRequiredReasonRecall, 0)
@@ -81,6 +91,7 @@ test("prompt routing eval detects wrong route and missing reason failures", () =
     "wrong-intent-family": 1,
     "missing-reason": 1,
   })
+  assert.equal(summary.satisfactory, false)
 })
 
 test("individual prompt routing scenarios expose route decisions", () => {
