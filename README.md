@@ -123,6 +123,7 @@ pnpm install
 pnpm build
 ```
 
+For local binary builds, run `pnpm build:binary` after `pnpm build`.
 Compiled binaries embed release metadata from `MEMORY_LANE_VERSION`, an exact Git tag, or a short commit fallback; development builds without that metadata report `0.0.0-dev`.
 
 ### Link the CLI globally
@@ -553,6 +554,7 @@ memory-lane migrate project-local --apply-plan <path> --yes
                                   Apply a reviewed project-local migration plan
 memory-lane reindex [--force]     Embed approved memories missing current vectors; --force recomputes
 memory-lane init --project-local  Initialize sandbox-friendly project-local storage
+memory-lane upgrade [--yes]       Download the latest binary and re-apply existing harness configs
 memory-lane session-end --confirm Generate a pending session summary from stdin JSON
 memory-lane obsidian ...          Manage optional Obsidian mirror/import workflows
 ```
