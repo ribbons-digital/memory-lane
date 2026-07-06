@@ -2,11 +2,11 @@
 
 ## Current state
 
-- Branch context: active implementation branch `eval/longmemeval-smoke-adapter`; this handoff tracks issue #115 optional external long-memory smoke adapter work.
+- Branch context: active status-sync branch `docs/pr130-status-sync`; PR #130 merged issue #115 and this branch updates post-merge status docs.
+- PR #130 merged optional external long-memory smoke adapter coverage as main commit `950a71e`.
 - PR #129 merged issue #114 external benchmark adapter design as main commit `bef9230`.
 - PR #127 merged deterministic local long-session synthetic benchmark coverage as main commit `c8c65ea`.
 - PR #127 added `pnpm --filter @memory-lane/lifecycle eval:long-session-synthetic`.
-- PR #127 added a stable local JSON report with benchmark taxonomy metadata, temp-only MemoryEngine stores, and coverage for temporal currentness, repeated knowledge updates, multi-session continuity, false-premise abstention, cross-scope safety, and bounded long context.
 - PR #125 merged benchmark taxonomy and fixture manifest metadata as main commit `f08ba13`.
 - PR #104 removed internal `docs/` files from repository tracking, kept `docs/plugins/README.md` tracked as user-facing documentation, ignored the rest of on-disk `docs/`, and synced status docs.
 - Latest known release: `v0.2.46` from main commit `cadd261`, after PR #99 fixed generated Pi pre-compact bridge session-summary behavior.
@@ -16,13 +16,14 @@
 
 ## Current decision / next work
 
-The current repo state is issue #115 implementation on branch `eval/longmemeval-smoke-adapter`.
-The binding design is captured in issue #114 comment `https://github.com/ribbons-digital/memory-lane/issues/114#issuecomment-4888147243`.
+The current repo state is post-PR #130 status sync on branch `docs/pr130-status-sync`.
+Issue #115 is closed with comment `Closed by PR #130, main commit 950a71e.`
 
-The issue #115 adapter adds `pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset <path>`.
+The issue #115 adapter added `pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset <path>`.
 It requires a local dataset path by `--dataset` or `MEMORY_LANE_LONG_MEMORY_SMOKE_DATASET`, does not auto-download data, and reports `networkRequired: false`, `modelRequired: false`, and `judgeRequired: false`.
-It supports a tiny LongMemEval-compatible smoke subset using `question_id`, `haystack_session_ids`, `haystack_sessions`, and `answer_session_ids`.
-It evaluates deterministic retrieval session-id recall only, maps categories back to the test-only benchmark taxonomy, skips `_abs` abstention records into `abstentionResults`, writes only temp MemoryEngine stores, and leaves production retrieval and lifecycle code unchanged.
+It supports a tiny LongMemEval-compatible smoke subset using `question_id`, `haystack_session_ids`, `haystack_sessions`, `haystack_dates`, `answer_session_ids`, and `_abs` abstention records.
+It evaluates deterministic retrieval session-id recall only, maps categories back to the test-only benchmark taxonomy, skips abstention records into `abstentionResults`, writes only temp MemoryEngine stores, and leaves production retrieval and lifecycle code unchanged.
+no-mistakes fixed three review findings before merge: preserve haystack dates, make temporal smoke records exercise currentness, and size temporary retrieval `topK` to requested `k`.
 
 The project goal for evals is to improve Memory Lane behavior, not to add decorative scaffolding.
 Each eval slice should state whether it ran deterministic fixtures, live Memory Lane store data, embeddings, synthetic long-session benchmarks, or external benchmarks.
@@ -40,9 +41,10 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 
 ## Current verification evidence
 
-- Issue #115 adapter verification passed `pnpm --filter @memory-lane/core exec node --test --import tsx test/external-long-memory-smoke.test.ts` with 7 tests.
-- Issue #115 manual runner smoke passed `pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset /var/folders/f6/lm8c20wn4yv1hyk_23y65yk40000gn/T/memory-lane-long-memory-smoke-fixture.json --limit 2 --k 2` with 1 evaluated scenario, 1 abstention, `meanSessionRecallAtK: 1`, and `satisfactory: true`.
-- Issue #115 core verification passed `pnpm --filter @memory-lane/core test` with 413 tests and `pnpm --filter @memory-lane/core build`.
+- PR #130 no-mistakes gate reached `outcome: checks-passed`, opened PR #130, and CI passed before merge.
+- PR #130 no-mistakes review fixed three findings: preserve LongMemEval haystack dates, exercise temporal smoke currentness dates, and fix smoke recall `topK` sizing.
+- PR #130 test evidence included `pnpm --filter @memory-lane/core exec node --test --import tsx test/external-long-memory-smoke.test.ts`, a manual `eval:long-memory-smoke` run against a LongMemEval-compatible fixture, an explicit missing-dataset failure check, and `pnpm --filter @memory-lane/core test`.
+- Issue #115 closed with comment `Closed by PR #130, main commit 950a71e.`
 - Issue #114 design capture posted to GitHub issue comment `https://github.com/ribbons-digital/memory-lane/issues/114#issuecomment-4888147243`.
   The design selects a retrieval/read-model-first external benchmark adapter, optional manual runner mode, local dataset path only, deterministic retrieval/session-id metrics, no default CI, no model judge, no auto-download, no committed dataset, and no production behavior changes.
 - PR #123 lifecycle-injection adversarial coverage verification passed `pnpm --filter @memory-lane/lifecycle exec node --test --import tsx test/lifecycle-injection-eval.test.ts` with 11 tests.
@@ -66,5 +68,5 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.46` / commit `cadd261`
-- Current repo status: active issue #115 implementation branch `eval/longmemeval-smoke-adapter`.
-- Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, and PR #127.
+- Current repo status: post-PR #130 status-sync branch `docs/pr130-status-sync`.
+- Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, PR #127, and PR #130.
