@@ -154,6 +154,25 @@ test("temporal smoke records use haystack dates for currentness tie-breaks", asy
   assert.equal(report.scenarioResults[0]?.recallAtK, 1)
 })
 
+test("sizes temporary retrieval topK to requested recall k", async () => {
+  const sessionIds = Array.from({ length: 10 }, (_, index) => `session-${index + 1}`)
+  const datasetPath = writeDataset("large-k-longmemeval-smoke.json", {
+    records: [{
+      question_id: "large-k-recall",
+      category: "single-session-user",
+      question: "Which session mentions the answer?",
+      answer_session_ids: ["session-10"],
+      haystack_session_ids: sessionIds,
+      haystack_sessions: sessionIds.map((sessionId) => [{ role: "user", content: `Unrelated transcript for ${sessionId}.` }]),
+    }],
+  })
+
+  const report = await buildLongMemorySmokeReport({ datasetPath, limit: 1, k: 10 })
+
+  assert.equal(report.scenarioResults[0]?.actualSessionIds.length, 10)
+  assert.equal(report.scenarioResults[0]?.recallAtK, 1)
+})
+
 test("reports recall misses without failing the adapter gate", async () => {
   const datasetPath = writeDataset("recall-miss-longmemeval-smoke.json", {
     records: [{

@@ -243,9 +243,16 @@ function memoryForSession(recordId: string, session: { id: string; text: string;
   }
 }
 
-function writeConfig(dir: string): string {
+function writeConfig(dir: string, topK: number): string {
   const configPath = path.join(dir, "config.json")
-  fs.writeFileSync(configPath, JSON.stringify(DEFAULT_CONFIG), "utf8")
+  const config = {
+    ...DEFAULT_CONFIG,
+    semantic: {
+      ...DEFAULT_CONFIG.semantic,
+      retrieval: { ...DEFAULT_CONFIG.semantic.retrieval, topK: Math.max(DEFAULT_CONFIG.semantic.retrieval.topK, topK) },
+    },
+  }
+  fs.writeFileSync(configPath, JSON.stringify(config), "utf8")
   return configPath
 }
 
@@ -266,7 +273,7 @@ async function retrieveSessionIds(question: string, memories: MemoryRecord[], k:
   const engine = new MemoryEngine({
     memoryPath: writeMemoryLog(dir, memories),
     embeddingsPath: path.join(dir, "embeddings.jsonl"),
-    configPath: writeConfig(dir),
+    configPath: writeConfig(dir, k),
   })
   const projectScope: ProjectScope = { key: PROJECT_SCOPE_KEY, root: fixtureRoot, cwd: fixtureRoot }
   const result = await engine.recall(question, { projectScope })
