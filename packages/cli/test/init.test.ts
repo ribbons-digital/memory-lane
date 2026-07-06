@@ -6,6 +6,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
+import { VERSION } from "../src/version.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -538,6 +539,7 @@ esac
 
     const manifest = JSON.parse(fs.readFileSync(path.join(home, ".memory-lane/install.json"), "utf8"))
     assert.equal(manifest.binaryPath, binaryPath)
+    assert.equal(manifest.version, VERSION)
     assert.ok(Array.isArray(manifest.integrations))
     assert.ok(manifest.integrations.some((i: any) => i.harness === "pi"))
   })

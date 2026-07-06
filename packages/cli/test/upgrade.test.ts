@@ -4,6 +4,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { tempDir } from "../../core/test/helpers.js"
 import { reapplyInstallManifest, reapplyManifestWithInstalledBinary, type InstallManifest } from "../src/commands/upgrade.js"
+import { VERSION } from "../src/version.js"
 
 function createFakeMemoryLaneSourceRoot(): { root: string; skillDir: string; skillPath: string; sentinel: string } {
   const root = tempDir()
@@ -81,6 +82,7 @@ describe("upgrade", () => {
     assert.equal(result.configuredCount, 2)
     assert.deepEqual(result.manifest.integrations.map((i) => i.harness), ["claude-desktop", "pi"])
     assert.equal(result.manifest.binaryPath, binaryPath)
+    assert.equal(result.manifest.version, VERSION)
 
     const claudeConfig = JSON.parse(fs.readFileSync(correctClaudeDesktopConfig, "utf8"))
     assert.equal(claudeConfig.theme, "dark")

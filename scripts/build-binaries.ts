@@ -48,6 +48,15 @@ function sha256(filePath: string): string {
   hash.update(fs.readFileSync(filePath))
   return hash.digest("hex")
 }
+function releaseVersion(): string {
+  if (process.env.MEMORY_LANE_VERSION) return process.env.MEMORY_LANE_VERSION.replace(/^v/u, "")
+  const exactTag = spawnSync("git", ["describe", "--tags", "--exact-match", "HEAD"], { encoding: "utf8" })
+  if (exactTag.status === 0) return exactTag.stdout.trim().replace(/^v/u, "")
+  const shortSha = spawnSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" })
+  if (shortSha.status === 0) return `0.0.0-${shortSha.stdout.trim()}`
+  return "0.0.0-dev"
+}
+
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
@@ -65,6 +74,8 @@ async function main(): Promise<void> {
       ? targets.filter((t) => t.suffix === selected)
       : targets
 
+  const version = releaseVersion()
+  const defineVersion = JSON.stringify(version)
   const checksums: string[] = []
 
   for (const target of toBuild) {
@@ -79,6 +90,8 @@ async function main(): Promise<void> {
       "packages/cli/src/index.ts",
       "--outfile",
       binaryPath,
+      "--define",
+      `process.env.MEMORY_LANE_VERSION=${defineVersion}`,
     ])
 
     const archiveName = target.platform === "win32" ? `${binaryName}.zip` : `${binaryName}.tar.gz`

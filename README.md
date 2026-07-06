@@ -85,6 +85,7 @@ irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/inst
 ```
 
 After installing, run `memory-lane init` again any time to reconfigure or add new integrations.
+`init` records the running CLI version in `~/.memory-lane/install.json` so future upgrades can refresh the manifest with the newly installed release version.
 When `init` writes JSON harness configs, it preserves unrelated settings and hooks, replaces older Memory Lane hook entries, and creates a one-time `<config>.memory-lane.bak` backup before the first successful write.
 If an existing JSON config is malformed, `init` leaves it untouched and reports the parse error instead of overwriting it.
 
@@ -96,7 +97,11 @@ Run the built-in upgrade command to download the latest binary and re-apply only
 memory-lane upgrade
 ```
 
-Use `memory-lane upgrade --yes` to run non-interactively. On macOS and Linux this re-runs the installer and then refreshes your existing configs. On Windows it downloads the new binary and prompts you to run `memory-lane init --yes` in a fresh terminal (because Windows locks the running executable).
+Use `memory-lane upgrade --yes` to run non-interactively.
+On macOS and Linux this re-runs the installer and then refreshes your existing configs.
+On Windows, when an install manifest is present, the upgrade downloads the new binary and reapplies the existing harness configs automatically.
+`memory-lane init --yes` is only the fallback when no manifest exists.
+When existing configs are refreshed, the install manifest version is updated to the version embedded in the new binary.
 
 Your memory data in `~/.memory-lane/` is preserved.
 
@@ -117,6 +122,9 @@ cd memory-lane
 pnpm install
 pnpm build
 ```
+
+For local binary builds, run `pnpm build:binary` after `pnpm build`.
+Compiled binaries embed release metadata from `MEMORY_LANE_VERSION`, an exact Git tag, or a short commit fallback; development builds without that metadata report `0.0.0-dev`.
 
 ### Link the CLI globally
 
@@ -546,6 +554,7 @@ memory-lane migrate project-local --apply-plan <path> --yes
                                   Apply a reviewed project-local migration plan
 memory-lane reindex [--force]     Embed approved memories missing current vectors; --force recomputes
 memory-lane init --project-local  Initialize sandbox-friendly project-local storage
+memory-lane upgrade [--yes]       Download the latest binary and re-apply existing harness configs
 memory-lane session-end --confirm Generate a pending session summary from stdin JSON
 memory-lane obsidian ...          Manage optional Obsidian mirror/import workflows
 ```

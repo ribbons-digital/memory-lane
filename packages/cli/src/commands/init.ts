@@ -5,6 +5,7 @@ import * as readline from "node:readline"
 import { detectHarnesses, findDetected, harnessName } from "../installer/detect.js"
 import { hasExistingMemoryLaneConfig, installHarness } from "../installer/config.js"
 import type { DetectedHarness, Harness, InitOptions, InitResult, IntegrationResult } from "../installer/types.js"
+import { VERSION } from "../version.js"
 
 async function prompt(question: string, defaultValue: string = ""): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
@@ -98,7 +99,7 @@ function renderHarnessList(harnesses: DetectedHarness[]): string {
 function writeInstallManifest(options: InitOptions, result: InitResult): void {
   const manifestPath = path.join(options.dataDir, "install.json")
   const manifest = {
-    version: "0.1.0",
+    version: VERSION,
     installedAt: new Date().toISOString(),
     binaryPath: options.binaryPath,
     dataDir: options.dataDir,

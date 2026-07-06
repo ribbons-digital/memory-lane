@@ -4,6 +4,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { installHarness } from "../installer/config.js"
 import type { Harness, InitOptions, IntegrationResult } from "../installer/types.js"
+import { VERSION } from "../version.js"
 
 const INSTALLER_URL = "https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh"
 const WINDOWS_INSTALLER_URL = "https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.ps1"
@@ -124,6 +125,7 @@ export function reapplyInstallManifest(options: InitOptions, manifest: InstallMa
   const configured = results.filter((r) => r.configured)
   const nextManifest: InstallManifest = {
     ...manifest,
+    version: VERSION,
     installedAt: new Date().toISOString(),
     binaryPath: options.binaryPath,
     dataDir: options.dataDir,
