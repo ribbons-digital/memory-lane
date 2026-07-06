@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { DEFAULT_CONFIG, MemoryEngine, type MemoryRecord, type ProjectScope } from "../src/index.js"
+import { DEFAULT_CONFIG, MemoryEngine, type MemoryKind, type MemoryRecord, type ProjectScope } from "../src/index.js"
 import { tempDir } from "./helpers.js"
 import { isGateSatisfactory, summarizeEvalGate, type BenchmarkAbility, type BenchmarkMetadata } from "./eval-report-helpers.js"
 
@@ -222,7 +222,11 @@ function normalizedSessions(record: LongMemoryRecord, id: string): { id: string;
   throw new Error(`${id} is missing sessions or haystack_sessions with haystack_session_ids`)
 }
 
-function memoryForSession(recordId: string, session: { id: string; text: string; date?: string }): MemoryRecord {
+function memoryKindForBenchmark(benchmark: BenchmarkMetadata): MemoryKind {
+  return benchmark.ability === "temporal-currentness" ? "project_checkpoint" : "session_summary"
+}
+
+function memoryForSession(recordId: string, session: { id: string; text: string; date?: string }, kind: MemoryKind): MemoryRecord {
   const timestamp = normalizeMemoryTimestamp(session.date, recordId, session.id)
   return {
     id: `${recordId}:${session.id}`,
@@ -231,7 +235,7 @@ function memoryForSession(recordId: string, session: { id: string; text: string;
     scope: { type: "project", key: PROJECT_SCOPE_KEY },
     status: "approved",
     source: "session-summary",
-    kind: "session_summary",
+    kind,
     createdAt: timestamp,
     updatedAt: timestamp,
     freshness: { capturedAt: timestamp },
@@ -249,6 +253,10 @@ function writeMemoryLog(dir: string, records: MemoryRecord[]): string {
   const memoryPath = path.join(dir, "memory.jsonl")
   fs.writeFileSync(memoryPath, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
   return memoryPath
+}
+
+function recallQuestionForBenchmark(question: string, benchmark: BenchmarkMetadata): string {
+  return benchmark.ability === "temporal-currentness" ? `current status: ${question}` : question
 }
 
 async function retrieveSessionIds(question: string, memories: MemoryRecord[], k: number): Promise<string[]> {
@@ -286,10 +294,10 @@ export async function evaluateLongMemoryRecord(record: LongMemoryRecord, index: 
   }
 
   const sessions = normalizedSessions(record, id)
-  const memories = sessions.map((session) => memoryForSession(id, session))
+  const memories = sessions.map((session) => memoryForSession(id, session, memoryKindForBenchmark(benchmark)))
   const sessionDates = Object.fromEntries(sessions.filter((session) => session.date).map((session) => [session.id, session.date!]))
   const evidenceSessionIds = new Set(memories.map((memory) => memory.provenance?.sessionId).filter(Boolean))
-  const actualSessionIds = await retrieveSessionIds(question, memories, k)
+  const actualSessionIds = await retrieveSessionIds(recallQuestionForBenchmark(question, benchmark), memories, k)
   const missingExpectedEvidence = expectedSessionIds.some((expectedId) => !evidenceSessionIds.has(expectedId))
   const failureTags: ExternalLongMemoryFailureTag[] = []
   if (missingExpectedEvidence) failureTags.push("invalid-record")

@@ -132,6 +132,28 @@ test("builds a stable optional smoke report without mutating the dataset directo
   assert.equal(reportIsSatisfactory(report), true)
 })
 
+test("temporal smoke records use haystack dates for currentness tie-breaks", async () => {
+  const datasetPath = writeDataset("temporal-tie-longmemeval-smoke.json", {
+    records: [{
+      question_id: "launch-window-currentness",
+      category: "temporal-reasoning",
+      question: "What is the current launch window?",
+      answer_session_ids: ["new-launch"],
+      haystack_session_ids: ["old-launch", "new-launch"],
+      haystack_dates: ["2024-01-15", "2024-07-15"],
+      haystack_sessions: [
+        [{ role: "user", content: "Launch window is June." }],
+        [{ role: "user", content: "Launch window is June." }],
+      ],
+    }],
+  })
+
+  const report = await buildLongMemorySmokeReport({ datasetPath, limit: 1, k: 1 })
+
+  assert.deepEqual(report.scenarioResults[0]?.actualSessionIds, ["new-launch"])
+  assert.equal(report.scenarioResults[0]?.recallAtK, 1)
+})
+
 test("reports recall misses without failing the adapter gate", async () => {
   const datasetPath = writeDataset("recall-miss-longmemeval-smoke.json", {
     records: [{
