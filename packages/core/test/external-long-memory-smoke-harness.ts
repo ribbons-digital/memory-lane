@@ -31,6 +31,9 @@ export interface LongMemorySession {
   messages?: LongMemoryTurn[]
   transcript?: string
   text?: string
+  date?: string
+  created_at?: string
+  createdAt?: string
 }
 
 export interface LongMemoryRecord {
@@ -45,6 +48,7 @@ export interface LongMemoryRecord {
   sessions?: LongMemorySession[]
   haystack_sessions?: LongMemorySession[] | LongMemoryTurn[][]
   haystack_session_ids?: string[]
+  haystack_dates?: string[]
 }
 
 export interface LongMemoryDataset {
@@ -68,6 +72,7 @@ export interface LongMemorySmokeScenarioResult {
   k: number
   expectedSessionIds: string[]
   actualSessionIds: string[]
+  sessionDates: Record<string, string>
   recallAtK: number
   passed: boolean
   failureTags: ExternalLongMemoryFailureTag[]
@@ -186,24 +191,39 @@ function recordQuestion(record: LongMemoryRecord, id: string): string {
   return question
 }
 
-function normalizedSessions(record: LongMemoryRecord, id: string): { id: string; text: string }[] {
+function normalizeMemoryTimestamp(date: string | undefined, id: string, sessionId: string): string {
+  if (!date) return "2026-07-06T10:00:00.000Z"
+  const time = Date.parse(date)
+  if (!Number.isFinite(time)) throw new Error(`${id} session ${sessionId} has invalid haystack date`)
+  return new Date(time).toISOString()
+}
+
+function normalizedSessions(record: LongMemoryRecord, id: string): { id: string; text: string; date?: string }[] {
   if (record.sessions) {
     return record.sessions.map((session, index) => {
       const sessionId = session.session_id ?? session.sessionId ?? session.id
       if (!sessionId) throw new Error(`${id} session ${index + 1} is missing session_id`)
-      return { id: sessionId, text: sessionText(session) }
+      return { id: sessionId, text: sessionText(session), date: session.date ?? session.created_at ?? session.createdAt }
     })
   }
   if (record.haystack_sessions && record.haystack_session_ids) {
     if (record.haystack_sessions.length !== record.haystack_session_ids.length) {
       throw new Error(`${id} haystack_sessions and haystack_session_ids lengths differ`)
     }
-    return record.haystack_sessions.map((session, index) => ({ id: record.haystack_session_ids![index]!, text: sessionText(session) }))
+    if (record.haystack_dates && record.haystack_dates.length !== record.haystack_sessions.length) {
+      throw new Error(`${id} haystack_dates and haystack_sessions lengths differ`)
+    }
+    return record.haystack_sessions.map((session, index) => ({
+      id: record.haystack_session_ids![index]!,
+      text: sessionText(session),
+      date: record.haystack_dates?.[index],
+    }))
   }
   throw new Error(`${id} is missing sessions or haystack_sessions with haystack_session_ids`)
 }
 
-function memoryForSession(recordId: string, session: { id: string; text: string }): MemoryRecord {
+function memoryForSession(recordId: string, session: { id: string; text: string; date?: string }): MemoryRecord {
+  const timestamp = normalizeMemoryTimestamp(session.date, recordId, session.id)
   return {
     id: `${recordId}:${session.id}`,
     text: session.text,
@@ -212,8 +232,9 @@ function memoryForSession(recordId: string, session: { id: string; text: string 
     status: "approved",
     source: "session-summary",
     kind: "session_summary",
-    createdAt: "2026-07-06T10:00:00.000Z",
-    updatedAt: "2026-07-06T10:00:00.000Z",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    freshness: { capturedAt: timestamp },
     provenance: { adapter: "long-memory-smoke", lifecycleEvent: "session_end", sessionId: session.id },
   }
 }
@@ -266,6 +287,7 @@ export async function evaluateLongMemoryRecord(record: LongMemoryRecord, index: 
 
   const sessions = normalizedSessions(record, id)
   const memories = sessions.map((session) => memoryForSession(id, session))
+  const sessionDates = Object.fromEntries(sessions.filter((session) => session.date).map((session) => [session.id, session.date!]))
   const evidenceSessionIds = new Set(memories.map((memory) => memory.provenance?.sessionId).filter(Boolean))
   const actualSessionIds = await retrieveSessionIds(question, memories, k)
   const missingExpectedEvidence = expectedSessionIds.some((expectedId) => !evidenceSessionIds.has(expectedId))
@@ -282,6 +304,7 @@ export async function evaluateLongMemoryRecord(record: LongMemoryRecord, index: 
     k,
     expectedSessionIds,
     actualSessionIds,
+    sessionDates,
     recallAtK: recall,
     passed: !failureTags.includes("invalid-record"),
     failureTags: [...new Set(failureTags)],

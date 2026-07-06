@@ -66,6 +66,7 @@ test("builds a stable optional smoke report without mutating the dataset directo
         question: "What is the current pricing plan?",
         answer_session_ids: ["session-current-pricing"],
         haystack_session_ids: ["session-old-pricing", "session-current-pricing"],
+        haystack_dates: ["2024-01-15", "2024-07-15"],
         haystack_sessions: [
           [{ role: "user", content: "Old pricing was Basic during the first beta." }],
           [{ role: "user", content: "Current pricing plan is Pro after the July update." }],
@@ -106,6 +107,10 @@ test("builds a stable optional smoke report without mutating the dataset directo
   assert.equal(report.scenarioResults.every((result) => result.passed), true)
   assert.deepEqual(report.scenarioResults[0]?.actualSessionIds, ["session-editor", "session-distractor"])
   assert.deepEqual(report.scenarioResults[1]?.actualSessionIds, ["session-current-pricing", "session-old-pricing"])
+  assert.deepEqual(report.scenarioResults[1]?.sessionDates, {
+    "session-old-pricing": "2024-01-15",
+    "session-current-pricing": "2024-07-15",
+  })
   assert.deepEqual(report.abstentionResults, [{
     id: "unsupported-false-premise_abs",
     category: "single-session-user",
