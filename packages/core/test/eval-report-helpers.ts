@@ -81,9 +81,10 @@ export function summarizeEvalGate<Tag extends string>(
   results: readonly EvalResultWithFailureTags<Tag>[],
   zeroToleranceFailureTags: ReadonlySet<Tag> | Partial<Record<Tag, true>>,
 ): EvalGateSummary {
+  const zeroToleranceFailureMap = zeroToleranceFailureTags as Partial<Record<Tag, true>>
   const isZeroTolerance = zeroToleranceFailureTags instanceof Set
     ? (tag: Tag) => zeroToleranceFailureTags.has(tag)
-    : (tag: Tag) => zeroToleranceFailureTags[tag] === true
+    : (tag: Tag) => zeroToleranceFailureMap[tag] === true
   const failCount = results.filter((result) => !isEvalResultPassed(result)).length
   const zeroToleranceFailures = results.reduce((sum, result) => sum + result.failureTags.filter(isZeroTolerance).length, 0)
   const summary = {
