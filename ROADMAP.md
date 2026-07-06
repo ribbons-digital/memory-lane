@@ -89,10 +89,11 @@ No active eval implementation slice is currently open.
 The deterministic local long-session synthetic benchmark from issue #113 is shipped, network-free, embedding-free, LLM-judge-free, and outside default CI.
 The deterministic retrieval, conflict/update, lifecycle-injection, prompt-routing, and long-session synthetic evals are clean, so retrieval-ranking changes remain paused until dogfood or eval evidence exposes a concrete production recall bug.
 
-Likely next eval/benchmark slice:
+Current eval/benchmark design slice:
 
-- **External long-memory benchmark adapter design:** design how Memory Lane should map external long-memory benchmarks such as LongMemEval into the local taxonomy, data policy, judge policy, cost limits, and CI posture before any adapter implementation.
-- Keep adapter implementation, embeddings, model judges, external datasets, and network-dependent runners out of scope until the design is explicitly approved.
+- **External long-memory benchmark adapter design:** issue #114 now captures the design decision for an external benchmark adapter.
+  The first adapter should be retrieval/read-model-first, optional/manual, local-dataset-path-only, deterministic-metric-only, and outside default CI.
+- Adapter implementation, embeddings, model judges, external dataset commits, network-dependent runners, and production behavior changes remain out of scope until a follow-up implementation slice is explicitly approved.
 
 Do not add LongMemEval, embeddings, LLM judges, production ranking rewrites, or auto-consolidation until deterministic local evals remain stable and expose a reason to broaden.
 

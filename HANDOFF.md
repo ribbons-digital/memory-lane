@@ -2,7 +2,7 @@
 
 ## Current state
 
-- Branch context: no active product branch; this handoff tracks post-PR #127 state.
+- Branch context: active design branch `eval/external-benchmark-design`; this handoff tracks issue #114 design capture after PR #128.
 - PR #127 merged deterministic local long-session synthetic benchmark coverage as main commit `c8c65ea`.
 - PR #127 added `pnpm --filter @memory-lane/lifecycle eval:long-session-synthetic`.
 - PR #127 added a stable local JSON report with benchmark taxonomy metadata, temp-only MemoryEngine stores, and coverage for temporal currentness, repeated knowledge updates, multi-session continuity, false-premise abstention, cross-scope safety, and bounded long context.
@@ -16,13 +16,13 @@
 
 ## Current decision / next work
 
-The current repo state is post-PR #127 cleanup on `main`.
-There is no active implementation branch.
+The current repo state is issue #114 design capture on branch `eval/external-benchmark-design`.
+The design is captured in issue #114 comment `https://github.com/ribbons-digital/memory-lane/issues/114#issuecomment-4888147243`.
 
-The recommended next product slice stays on the eval/benchmark track.
-The next slice should be external long-memory benchmark adapter design from issue #114.
-It should define exactly which Memory Lane behavior an external benchmark evaluates, map categories back to the local taxonomy, and state data, judge, network, CI, runtime, and cost policy before any adapter implementation.
-It should keep adapter implementation, LongMemEval ingestion, embeddings, LLM judges, network-dependent runners, external datasets, and production behavior changes out of scope unless explicitly approved.
+The recommended next product action is to review and merge the issue #114 design capture PR once opened.
+After that, the next eval/benchmark implementation slice should be a separately approved external benchmark adapter implementation issue.
+That implementation issue should stay retrieval/read-model-first unless a new design decision explicitly approves lifecycle injection plus answer generation.
+It should keep LongMemEval ingestion details, embeddings, LLM judges, network-dependent runners, external datasets, and production behavior changes out of scope until explicitly approved.
 
 The project goal for evals is to improve Memory Lane behavior, not to add decorative scaffolding.
 Each eval slice should state whether it ran deterministic fixtures, live Memory Lane store data, embeddings, synthetic long-session benchmarks, or external benchmarks.
@@ -40,6 +40,8 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 
 ## Current verification evidence
 
+- Issue #114 design capture posted to GitHub issue comment `https://github.com/ribbons-digital/memory-lane/issues/114#issuecomment-4888147243`.
+  The design selects a retrieval/read-model-first external benchmark adapter, optional manual runner mode, local dataset path only, deterministic retrieval/session-id metrics, no default CI, no model judge, no auto-download, no committed dataset, and no production behavior changes.
 - PR #127 long-session synthetic benchmark verification passed `pnpm --filter @memory-lane/lifecycle exec node --test --import tsx test/long-session-synthetic-eval.test.ts` with 13 tests, `pnpm --filter @memory-lane/lifecycle eval:long-session-synthetic` with 6 scenarios, 7 steps, and `satisfactory: true`, `pnpm --filter @memory-lane/lifecycle build`, staged whitespace checks, and Opus 4.8 implementation re-review with no blockers or should-fix items.
 - PR #127 merged as `c8c65ea`; post-merge cleanup synced local `main`, deleted local and remote `eval/long-session-synthetic`, and opened a status-sync branch.
 - PR #123 lifecycle-injection adversarial coverage verification passed `pnpm --filter @memory-lane/lifecycle exec node --test --import tsx test/lifecycle-injection-eval.test.ts` with 11 tests.
@@ -63,5 +65,5 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.46` / commit `cadd261`
-- Current repo status: clean `main` after PR #125 cleanup; no active implementation branch before this status-sync branch.
-- Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, and PR #125.
+- Current repo status: active issue #114 design branch `eval/external-benchmark-design`; design captured after PR #128.
+- Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, and PR #127.
