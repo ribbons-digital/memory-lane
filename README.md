@@ -163,6 +163,34 @@ When changing generated harness adapters, installer templates, or release-style 
 
 For pi specifically, `before_agent_start` must return a custom message object such as `{ message: { customType, content, display, details? } }`; returning a raw string is invalid even if the extension loads successfully.
 
+#### Optional local evals
+
+Memory Lane eval runners are developer commands and stay outside default CI unless a specific slice says otherwise.
+Core retrieval evals live in `@memory-lane/core`:
+
+```bash
+pnpm --filter @memory-lane/core eval:retrieval
+pnpm --filter @memory-lane/core eval:conflict-update
+```
+
+The optional external long-memory smoke adapter also lives in `@memory-lane/core` and requires an explicit local dataset path:
+
+```bash
+pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset /path/to/longmemeval-smoke.json --limit 20 --k 5
+```
+
+You can also set `MEMORY_LANE_LONG_MEMORY_SMOKE_DATASET=/path/to/longmemeval-smoke.json` instead of passing `--dataset`.
+The adapter accepts a tiny LongMemEval-compatible smoke subset with `question_id`, `haystack_session_ids`, `haystack_sessions`, and `answer_session_ids`; it does not download data, call a model, use a judge, commit external datasets, or change production retrieval/lifecycle behavior.
+Its stable JSON report uses deterministic retrieval session-id recall, maps categories into the test-only benchmark taxonomy, skips `_abs` abstention records into `abstentionResults`, reports recall misses as metrics, and treats malformed evidence-session mappings as zero-tolerance adapter failures.
+
+Lifecycle evals live in `@memory-lane/lifecycle`:
+
+```bash
+pnpm --filter @memory-lane/lifecycle eval:lifecycle-injection
+pnpm --filter @memory-lane/lifecycle eval:prompt-routing
+pnpm --filter @memory-lane/lifecycle eval:long-session-synthetic
+```
+
 #### pi: load the local adapter
 
 Create or replace `~/.pi/agent/extensions/memory-lane/index.ts` with a shim that imports your checkout:

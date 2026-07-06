@@ -2,12 +2,12 @@
 
 ## Current state
 
-- Branch context: active design branch `eval/external-benchmark-design`; this handoff tracks issue #114 design capture after PR #128.
+- Branch context: active implementation branch `eval/longmemeval-smoke-adapter`; this handoff tracks issue #115 optional external long-memory smoke adapter work.
+- PR #129 merged issue #114 external benchmark adapter design as main commit `bef9230`.
 - PR #127 merged deterministic local long-session synthetic benchmark coverage as main commit `c8c65ea`.
 - PR #127 added `pnpm --filter @memory-lane/lifecycle eval:long-session-synthetic`.
 - PR #127 added a stable local JSON report with benchmark taxonomy metadata, temp-only MemoryEngine stores, and coverage for temporal currentness, repeated knowledge updates, multi-session continuity, false-premise abstention, cross-scope safety, and bounded long context.
 - PR #125 merged benchmark taxonomy and fixture manifest metadata as main commit `f08ba13`.
-- PR #123 lifecycle-injection adversarial coverage, PR #120 prompt-routing adversarial coverage, PR #118 eval report contract unification, PR #116 adversarial retrieval benchmark hardening, and PR #105 conflict/update microbench expansion merged before PR #125.
 - PR #104 removed internal `docs/` files from repository tracking, kept `docs/plugins/README.md` tracked as user-facing documentation, ignored the rest of on-disk `docs/`, and synced status docs.
 - Latest known release: `v0.2.46` from main commit `cadd261`, after PR #99 fixed generated Pi pre-compact bridge session-summary behavior.
 - Project-local storage defaults are implemented through Slice 2b: PR #80, PR #89, and PR #94 shipped the write default, legacy diagnostics, and review-first migration protocol.
@@ -16,13 +16,13 @@
 
 ## Current decision / next work
 
-The current repo state is issue #114 design capture on branch `eval/external-benchmark-design`.
-The design is captured in issue #114 comment `https://github.com/ribbons-digital/memory-lane/issues/114#issuecomment-4888147243`.
+The current repo state is issue #115 implementation on branch `eval/longmemeval-smoke-adapter`.
+The binding design is captured in issue #114 comment `https://github.com/ribbons-digital/memory-lane/issues/114#issuecomment-4888147243`.
 
-The recommended next product action is to review and merge the issue #114 design capture PR once opened.
-After that, the next eval/benchmark implementation slice should be a separately approved external benchmark adapter implementation issue.
-That implementation issue should stay retrieval/read-model-first unless a new design decision explicitly approves lifecycle injection plus answer generation.
-It should keep LongMemEval ingestion details, embeddings, LLM judges, network-dependent runners, external datasets, and production behavior changes out of scope until explicitly approved.
+The issue #115 adapter adds `pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset <path>`.
+It requires a local dataset path by `--dataset` or `MEMORY_LANE_LONG_MEMORY_SMOKE_DATASET`, does not auto-download data, and reports `networkRequired: false`, `modelRequired: false`, and `judgeRequired: false`.
+It supports a tiny LongMemEval-compatible smoke subset using `question_id`, `haystack_session_ids`, `haystack_sessions`, and `answer_session_ids`.
+It evaluates deterministic retrieval session-id recall only, maps categories back to the test-only benchmark taxonomy, skips `_abs` abstention records into `abstentionResults`, writes only temp MemoryEngine stores, and leaves production retrieval and lifecycle code unchanged.
 
 The project goal for evals is to improve Memory Lane behavior, not to add decorative scaffolding.
 Each eval slice should state whether it ran deterministic fixtures, live Memory Lane store data, embeddings, synthetic long-session benchmarks, or external benchmarks.
@@ -40,10 +40,11 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 
 ## Current verification evidence
 
+- Issue #115 adapter verification passed `pnpm --filter @memory-lane/core exec node --test --import tsx test/external-long-memory-smoke.test.ts` with 7 tests.
+- Issue #115 manual runner smoke passed `pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset /var/folders/f6/lm8c20wn4yv1hyk_23y65yk40000gn/T/memory-lane-long-memory-smoke-fixture.json --limit 2 --k 2` with 1 evaluated scenario, 1 abstention, `meanSessionRecallAtK: 1`, and `satisfactory: true`.
+- Issue #115 core verification passed `pnpm --filter @memory-lane/core test` with 413 tests and `pnpm --filter @memory-lane/core build`.
 - Issue #114 design capture posted to GitHub issue comment `https://github.com/ribbons-digital/memory-lane/issues/114#issuecomment-4888147243`.
   The design selects a retrieval/read-model-first external benchmark adapter, optional manual runner mode, local dataset path only, deterministic retrieval/session-id metrics, no default CI, no model judge, no auto-download, no committed dataset, and no production behavior changes.
-- PR #127 long-session synthetic benchmark verification passed `pnpm --filter @memory-lane/lifecycle exec node --test --import tsx test/long-session-synthetic-eval.test.ts` with 13 tests, `pnpm --filter @memory-lane/lifecycle eval:long-session-synthetic` with 6 scenarios, 7 steps, and `satisfactory: true`, `pnpm --filter @memory-lane/lifecycle build`, staged whitespace checks, and Opus 4.8 implementation re-review with no blockers or should-fix items.
-- PR #127 merged as `c8c65ea`; post-merge cleanup synced local `main`, deleted local and remote `eval/long-session-synthetic`, and opened a status-sync branch.
 - PR #123 lifecycle-injection adversarial coverage verification passed `pnpm --filter @memory-lane/lifecycle exec node --test --import tsx test/lifecycle-injection-eval.test.ts` with 11 tests.
 - PR #123 lifecycle-injection adversarial coverage verification passed `pnpm --filter @memory-lane/lifecycle eval:lifecycle-injection` with 12 scenarios, 12 passes, 0 failures, and `satisfactory: true`.
 - PR #123 lifecycle-injection adversarial coverage verification passed `pnpm --filter @memory-lane/lifecycle build`, `git diff --check`, and CodeRabbit uncommitted review after one fixture nit was fixed.
@@ -65,5 +66,5 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.46` / commit `cadd261`
-- Current repo status: active issue #114 design branch `eval/external-benchmark-design`; design captured after PR #128.
+- Current repo status: active issue #115 implementation branch `eval/longmemeval-smoke-adapter`.
 - Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, and PR #127.

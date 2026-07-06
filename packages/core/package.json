@@ -20,7 +20,8 @@
     "test": "node --test --import tsx test/*.test.ts",
     "test:watch": "node --test --watch --import tsx test/*.test.ts",
     "eval:retrieval": "tsx test/retrieval-eval-runner.ts",
-    "eval:conflict-update": "tsx test/conflict-update-eval-runner.ts"
+    "eval:conflict-update": "tsx test/conflict-update-eval-runner.ts",
+    "eval:long-memory-smoke": "tsx test/external-long-memory-smoke-runner.ts"
   },
   "dependencies": {
     "@memory-lane/obsidian-mirror": "workspace:*"

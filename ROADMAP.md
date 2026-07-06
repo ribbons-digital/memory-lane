@@ -83,19 +83,21 @@ Deterministic eval coverage now includes:
 - prompt-routing adversarial coverage from PR #120;
 - lifecycle-injection adversarial coverage from PR #123;
 - benchmark taxonomy and fixture manifest metadata from PR #125;
-- deterministic local long-session synthetic benchmark coverage from PR #127.
+- deterministic local long-session synthetic benchmark coverage from PR #127;
+- optional external long-memory smoke adapter implementation from issue #115 is in progress on branch `eval/longmemeval-smoke-adapter`.
 
-No active eval implementation slice is currently open.
-The deterministic local long-session synthetic benchmark from issue #113 is shipped, network-free, embedding-free, LLM-judge-free, and outside default CI.
+The issue #115 adapter stays outside default CI and requires an explicit local dataset path.
+It supports the tiny LongMemEval-compatible smoke shape with `question_id`, `haystack_session_ids`, `haystack_sessions`, and `answer_session_ids`.
+It emits a stable JSON report with test-only benchmark taxonomy metadata, deterministic session-id recall metrics, explicit no-network, no-model, and no-judge flags, and separate abstention handling for `_abs` records.
 The deterministic retrieval, conflict/update, lifecycle-injection, prompt-routing, and long-session synthetic evals are clean, so retrieval-ranking changes remain paused until dogfood or eval evidence exposes a concrete production recall bug.
 
-Current eval/benchmark design slice:
+Current eval/benchmark implementation slice:
 
-- **External long-memory benchmark adapter design:** issue #114 now captures the design decision for an external benchmark adapter.
-  The first adapter should be retrieval/read-model-first, optional/manual, local-dataset-path-only, deterministic-metric-only, and outside default CI.
-- Adapter implementation, embeddings, model judges, external dataset commits, network-dependent runners, and production behavior changes remain out of scope until a follow-up implementation slice is explicitly approved.
+- **External long-memory benchmark smoke adapter:** issue #115 implements the first optional manual adapter after issue #114 design.
+  It evaluates retrieval session-id recall only, uses temp MemoryEngine stores, commits no external dataset, and does not change production retrieval or lifecycle behavior.
+  Recall misses are reported as benchmark metrics rather than default command gate failures; malformed evidence-session mappings remain zero-tolerance adapter failures.
 
-Do not add LongMemEval, embeddings, LLM judges, production ranking rewrites, or auto-consolidation until deterministic local evals remain stable and expose a reason to broaden.
+Do not add embeddings, LLM judges, production ranking rewrites, auto-downloads, default CI wiring, or auto-consolidation until deterministic local evals remain stable and expose a reason to broaden.
 
 ## Other viable future tracks
 
