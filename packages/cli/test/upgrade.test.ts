@@ -81,6 +81,7 @@ describe("upgrade", () => {
     assert.equal(result.configuredCount, 2)
     assert.deepEqual(result.manifest.integrations.map((i) => i.harness), ["claude-desktop", "pi"])
     assert.equal(result.manifest.binaryPath, binaryPath)
+    assert.equal(result.manifest.version, "0.0.0-dev")
 
     const claudeConfig = JSON.parse(fs.readFileSync(correctClaudeDesktopConfig, "utf8"))
     assert.equal(claudeConfig.theme, "dark")

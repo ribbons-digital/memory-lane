@@ -4,8 +4,9 @@ import Table from "cli-table3"
 import figures from "figures"
 import { buildContinuityHints, buildContinuityWarningRenderPlan, continuityWarningInspectionActions, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryRecord, type MemoryRecordWithReviewHygiene, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type UpdatePreview, type RescopeResult, type SupersedeResult, type ReplaceResult, type LegacyProjectMemoryDiagnostics, type LegacyProjectMigrationApplyResult, type LegacyProjectMigrationPlan } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
+import { VERSION } from "./version.js"
+export { VERSION }
 
-export const VERSION = "0.1.0"
 
 export interface ObsidianImportApplyResult {
   summary: {

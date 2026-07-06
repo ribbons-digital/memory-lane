@@ -538,6 +538,7 @@ esac
 
     const manifest = JSON.parse(fs.readFileSync(path.join(home, ".memory-lane/install.json"), "utf8"))
     assert.equal(manifest.binaryPath, binaryPath)
+    assert.equal(manifest.version, "0.0.0-dev")
     assert.ok(Array.isArray(manifest.integrations))
     assert.ok(manifest.integrations.some((i: any) => i.harness === "pi"))
   })
