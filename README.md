@@ -180,7 +180,7 @@ pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset /path/to/lon
 ```
 
 You can also set `MEMORY_LANE_LONG_MEMORY_SMOKE_DATASET=/path/to/longmemeval-smoke.json` instead of passing `--dataset`.
-The adapter accepts a tiny LongMemEval-compatible smoke subset with `question_id`, `haystack_session_ids`, `haystack_sessions`, and `answer_session_ids`; it does not download data, call a model, use a judge, commit external datasets, or change production retrieval/lifecycle behavior.
+The adapter accepts a tiny LongMemEval-compatible smoke subset with `question_id`, `haystack_session_ids`, `haystack_sessions`, optional `haystack_dates`, `answer_session_ids`, and `_abs` abstention records; it does not download data, call a model, use a judge, commit external datasets, or change production retrieval/lifecycle behavior.
 Its stable JSON report uses deterministic retrieval session-id recall, maps categories into the test-only benchmark taxonomy, skips `_abs` abstention records into `abstentionResults`, reports recall misses as metrics, and treats malformed evidence-session mappings as zero-tolerance adapter failures.
 
 Lifecycle evals live in `@memory-lane/lifecycle`:
