@@ -1,56 +1,80 @@
 # Memory Lane
 
-Local-first, review-governed continuity infrastructure for AI coding agents — a shared project memory/index across Claude Code, Codex, Cursor-style clients, pi, MCP clients, and future harnesses, all backed by simple JSONL files.
+Memory Lane gives AI coding agents a local, review-governed memory they can share across Claude Code, Codex, MCP clients, pi, and any harness that can shell out.
+It is for the boring but painful problem every agent workflow hits: a new session should know the current project state, durable preferences, decisions, corrections, and procedures without depending on one vendor's chat history.
 
-Memory Lane is not meant to be another isolated chat-history search box. Its goal is to make project state, durable preferences, decisions, checkpoints, failures, corrections, and procedures available across sessions and tools without relying on any single vendor's built-in thread memory. It stays non-autonomous by default: bounded context, freshness checks, explicit review controls, privacy-conscious storage, good defaults, and optional configuration for advanced workflows.
+The default path is small:
 
-## Table of Contents
+1. install the binary;
+2. run `memory-lane init`;
+3. save useful project facts;
+4. ask for continuity or recall from any configured harness.
+
+Memory Lane stores plain JSONL files on your machine.
+It does not silently turn every transcript into durable policy.
+Most automation is review-first, bounded, and inspectable.
+Advanced features such as project-local storage, freshness metadata, session summaries, plugins, and Obsidian integration are optional.
+You do not need to understand them to try the core workflow.
+
+## Contents
 
 - [Quick Start](#quick-start)
+- [What Memory Lane stores](#what-memory-lane-stores)
+- [Everyday commands](#everyday-commands)
 - [Installation](#installation)
-  - [One-line installer](#one-line-installer-recommended)
-  - [Build from source](#build-from-source)
-  - [Link the CLI globally](#link-the-cli-globally)
-  - [Development setup: local checkout + manual harness config](#development-setup-local-checkout--manual-harness-config)
 - [Architecture](#architecture)
 - [Storage](#storage)
 - [Project Scoping](#project-scoping)
 - [CLI Commands](#cli-commands)
-  - [Freshness status](#freshness-status)
-  - [Operating agreements](#operating-agreements)
-  - [Continuity read model](#continuity-read-model)
-  - [Continuity hints](#continuity-hints)
-  - [Session-end summarization](#session-end-summarization)
-  - [Obsidian mirror](#obsidian-mirror)
-  - [Import from Obsidian](#import-from-obsidian)
+- [Plugins](#plugins)
 - [Configuration](#configuration)
-  - [Handoff mode](#handoff-mode)
-  - [Semantic search config](#semantic-search-config)
 - [Environment Variables](#environment-variables)
 - [Programmatic Use](#programmatic-use)
 - [MCP Server](#mcp-server)
 - [Memory Lifecycle](#memory-lifecycle)
 - [Harness Integrations](#harness-integrations)
-  - [pi adapter](#pi-adapter)
-  - [Claude Code hooks](#claude-code-hooks)
-  - [Codex hooks](#codex-hooks)
 
 ## Quick Start
 
 ```bash
 # Install the binary
-curl -fsSL -o install.sh https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh
-sh install.sh
+curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | sh
 
 # Configure your harnesses
 memory-lane init
 
-# Start using
+# Save a durable project fact
 memory-lane save "always use pnpm for package installation"
-memory-lane list
+
+# Ask what the project knows
+memory-lane recall "package manager"
 memory-lane continuity --json
+```
+
+That is the whole adoption path.
+Everything else in this README is reference material for optional integrations and advanced workflows.
+
+## What Memory Lane stores
+
+Memory Lane stores reviewed memories: project facts, preferences, decisions, corrections, procedures, and checkpoints.
+Each memory has status and scope metadata so agents can distinguish active project guidance from pending suggestions or unrelated global preferences.
+Records live in local files, not a hosted service.
+Rejected and deleted records can be compacted, but normal edits are append-only so history is auditable.
+
+## Everyday commands
+
+```bash
+memory-lane save "Release checklist: run pnpm build before tagging"
+memory-lane suggest "Consider documenting the new deploy script"
+memory-lane recall "release checklist"
+memory-lane continuity
+memory-lane review
 memory-lane doctor
 ```
+
+Use `save` when the fact is already approved.
+Use `suggest` when something should be reviewed before it becomes durable memory.
+Use `continuity` when you want broad project state such as "what changed?", "where did we leave off?", or "what should we do next?".
 
 ## Installation
 
@@ -68,9 +92,12 @@ Windows (PowerShell):
 irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.ps1 | iex
 ```
 
-The installer downloads a prebuilt binary, verifies its SHA-256 checksum with `sha256sum` or `shasum`, and places it on your PATH. After installation, run `memory-lane init` to configure Claude Code, Codex, Claude Desktop, Codex Desktop, and pi. Use `memory-lane init --yes` to auto-configure all detected harnesses without prompting.
+The installer downloads a prebuilt binary, verifies its SHA-256 checksum, and places it on your PATH.
+After installation, run `memory-lane init` to configure Claude Code, Codex, Claude Desktop, Codex Desktop, and pi.
+Use `memory-lane init --yes` to auto-configure all detected harnesses without prompting.
 
-If you are an end user, this installer + `memory-lane init` path is the recommended setup. If you are developing Memory Lane and also using it on the same machine, prefer the [development setup](#development-setup-local-checkout--manual-harness-config) below instead of `memory-lane init --yes`; release-style init can replace local dev shims and hand-edited harness config. Memory Lane guards generated skill writes so symlinked installed skill paths are not allowed to overwrite Memory Lane source skill files. For pi, release-style init writes a loadable CLI bridge extension that executes the installed `memory-lane` binary; local checkout development should use the manual pi-adapter shim below.
+If you are an end user, this installer plus `memory-lane init` path is the recommended setup.
+If you are developing Memory Lane and also using it on the same machine, prefer the [development setup](#development-setup-local-checkout--manual-harness-config) below so release-style init does not replace local shims or hand-edited harness config.
 
 If you prefer to review the script first, save it and run locally:
 
@@ -157,7 +184,9 @@ After source changes, run `pnpm build` again and reload/restart the harness you 
 
 #### Project status docs sync guardrail
 
-When completing a Memory Lane phase/slice, merging a PR, cutting a release, or recommending the next work item, update status docs before calling the work complete. Start with compact current-state sections in `HANDOFF.md` and the relevant current roadmap section, then check `README.md` and `skills/memory-lane/SKILL.md` only when their status, commands, or workflow guidance changed. Do not rely only on Memory Lane checkpoint memories; future sessions and users must be able to recover current project state from the repository docs without reading archived chronology by default.
+When completing a Memory Lane milestone, merging a PR, cutting a release, or recommending the next work item, update status docs before calling the work complete.
+Start with compact current-state sections in `HANDOFF.md` and the relevant current roadmap section, then check `README.md` and `skills/memory-lane/SKILL.md` only when their status, commands, or workflow guidance changed.
+Do not rely only on Memory Lane checkpoint memories; future sessions and users must be able to recover current project state from the repository docs without reading archived chronology by default.
 
 #### Harness adapter/template release guardrail
 
@@ -173,7 +202,7 @@ For pi specifically, `before_agent_start` must return a custom message object su
 
 #### Optional local evals
 
-Memory Lane eval runners are developer commands and stay outside default CI unless a specific slice says otherwise.
+Memory Lane eval runners are developer commands and stay outside default CI unless a specific task says otherwise.
 Core retrieval evals live in `@memory-lane/core`:
 
 ```bash
@@ -407,7 +436,7 @@ with argument:
 
 Set the working directory to the project you want Memory Lane to scope against, for example `/absolute/path/to/your/project`.
 
-End users do not need these manual development shims — `memory-lane init` installs release-style integrations automatically.
+End users do not need these manual development shims - `memory-lane init` installs release-style integrations automatically.
 
 ## Plugins
 
@@ -440,7 +469,7 @@ Promotion of wiki-derived facts into Memory Lane remains explicit through the ex
 **Installing the Obsidian Wiki plugin:**
 
 - If you use the standalone binary: the plugin is bundled in official `v0.2.1+` releases, but you must still enable it by adding `"@memory-lane/plugin-obsidian-wiki"` to `plugins` in `~/.memory-lane/config.json`.
-- If you build Memory Lane from source: `sfw pnpm add @memory-lane/plugin-obsidian-wiki` in the repository root, then enable it in `config.json`.
+- If you build Memory Lane from source: `pnpm add @memory-lane/plugin-obsidian-wiki` in the repository root, then enable it in `config.json`.
 - For a custom checkout: add `@memory-lane/plugin-obsidian-wiki` to `pnpm-workspace.yaml`, enable it in `config.json`, and reference it by name.
 
 ## Architecture
@@ -495,9 +524,9 @@ In the default two-tier model, commands and hooks run with `--project /path/to/p
 ## Project Scoping
 
 Project identity is resolved in order:
-1. `.memory-lane-scope` file (walks up from cwd) — `{ "id": "your-project-id" }`
-2. Git identity — normal repos use the repo root; linked Git worktrees use the main checkout/common Git directory as the project key so worktrees share memories by default
-3. Global scope (fallback — memories are visible everywhere)
+1. `.memory-lane-scope` file (walks up from cwd) - `{ "id": "your-project-id" }`
+2. Git identity - normal repos use the repo root; linked Git worktrees use the main checkout/common Git directory as the project key so worktrees share memories by default
+3. Global scope (fallback - memories are visible everywhere)
 
 Read-only scope resolution never creates scope files.
 Project-local initialization and first project-scoped writes may create `.memory-lane-scope` as part of initializing `.memory-lane/`.
@@ -571,7 +600,10 @@ memory-lane suggest "Recheck this after launch" --stale-after-days 30
 memory-lane save "Release note" --captured-at 2026-06-21T00:00:00.000Z
 ```
 
-Freshness metadata is advisory in Phase 20. Memory Lane stores, validates, displays, and classifies it for status/continuity inspection, but does not automatically delete, hide, refresh, consolidate, deprioritize, or filter memories. Stale and expired advisory metadata may include existing dry-run revision commands so users can inspect a safe next action per memory id. Generated session summaries can also carry `freshness.capturedAt` when the source messages include canonical ISO timestamps; this captured time is the session as-of/source timestamp and may differ from the summary heading/write date.
+Freshness metadata is advisory.
+Memory Lane stores, validates, displays, and classifies it for status/continuity inspection, but does not automatically delete, hide, refresh, consolidate, deprioritize, or filter memories.
+Stale and expired advisory metadata may include existing dry-run revision commands so users can inspect a safe next action per memory id.
+Generated session summaries can also carry `freshness.capturedAt` when the source messages include canonical ISO timestamps; this captured time is the session as-of/source timestamp and may differ from the summary heading/write date.
 
 ### Checkpoint candidates and review-first capture
 
@@ -583,7 +615,8 @@ No new command, MCP tool, config flag, or explicit memory API is required for ch
 
 ### Workflow correction candidates
 
-Memory Lane can also suggest pending `correction` candidates when a user explicitly points out that an agent violated, forgot, skipped, or ignored an expected workflow or operating agreement, such as “you forgot our PR-protected workflow” or “you skipped the review gate.” This first learning slice runs only from bounded Stop context, saves compact normalized project-scoped text, and remains pending by default.
+Memory Lane can also suggest pending `correction` candidates when a user explicitly points out that an agent violated, forgot, skipped, or ignored an expected workflow or operating agreement, such as “you forgot our PR-protected workflow” or “you skipped the review gate.”
+Correction capture runs only from bounded Stop context, saves compact normalized project-scoped text, and remains pending by default.
 
 Correction capture is review-first learning, not automatic rule rewriting. It does not add commands or MCP tools, does not run an LLM classifier, does not capture raw transcripts or tool output, and does not auto-approve or change recall ranking. Inspect candidates with `memory-lane review`, MCP `memory_review`, `memory-lane continuity`, or MCP `memory_continuity`; approve only corrections that should become durable project workflow guidance.
 
@@ -724,7 +757,7 @@ Generated summaries are also cleaned of obvious Memory Lane review-management ch
 A repeated manual/session-end summary for the same adapter and session id, a repeated pre-compact summary for the same adapter, session id, and turn id or fallback message digest, or a summary with the same normalized durable content as an existing visible pending/approved session summary, is skipped before writing another pending memory.
 Generated summaries dominated by operational subagent/orchestrator chatter are skipped when they contain no durable project outcome.
 Existing pending suspect summaries may show a read-only `review hint` in CLI review output and `reviewHygiene` metadata in JSON/MCP review output.
-This Phase 21 Slice 7 summary hygiene shipped in `v0.2.34`.
+Summary hygiene removes obvious review-management chatter from generated summaries before they enter the pending review queue.
 When transcript/session messages include canonical ISO timestamps, the saved pending summary stores the latest message timestamp as `freshness.capturedAt`.
 No current-time fallback is used.
 Claude Code supports `memory-lane claude session-end` through its documented `SessionEnd` hook.
@@ -831,7 +864,7 @@ Default config path: `~/.memory-lane/config.json`
 
 Override via env variable: `MEMORY_LANE_CONFIG=/path/to/config.json`
 
-### Minimal config (semantic disabled — default)
+### Minimal config (semantic disabled - default)
 
 No config file needed. Lexical search works out of the box.
 
@@ -849,9 +882,9 @@ No config file needed. Lexical search works out of the box.
 
 Values:
 
-- `manual` — current inspection-first behavior. Use explicit CLI/MCP surfaces such as `memory-lane continuity`, `memory-lane status --json`, `memory-lane review`, `memory_list`, `memory_review`, `memory_status`, and `memory_continuity({ projectPath })`.
-- `review` — review-first handoff proposal behavior. Existing pending project-scoped continuity candidates, such as pending session summaries or checkpoint/progress candidates, are assembled into a read-only `handoffProposal` on `memory-lane continuity`, `memory-lane continuity --json`, and MCP `memory_continuity`. Review mode does not generate new summaries, approve pending records, or inject handoff bodies into lifecycle context; approve with existing `memory-lane review` / `memory-lane approve <id>` flows before relying on proposals as handoff state.
-- `automatic` — opt-in SessionStart continuity behavior. When `memory.contextPolicy.mode` is `selective`, Memory Lane reserves part of the existing SessionStart budget for at most one latest approved current-project handoff pointer (`session_summary` or `project_checkpoint`) so it is not crowded out by generic recency selection. When context policy is `policy-only`, it emits text-free guidance that an approved handoff pointer is available, without memory bodies. When context policy is `off`, automatic handoff mode is inactive. Automatic mode uses approved records only; it does not approve pending records, generate summaries, mutate storage, add new MCP/CLI surfaces, capture transcripts/tool output, or increase budgets.
+- `manual` - current inspection-first behavior. Use explicit CLI/MCP surfaces such as `memory-lane continuity`, `memory-lane status --json`, `memory-lane review`, `memory_list`, `memory_review`, `memory_status`, and `memory_continuity({ projectPath })`.
+- `review` - review-first handoff proposal behavior. Existing pending project-scoped continuity candidates, such as pending session summaries or checkpoint/progress candidates, are assembled into a read-only `handoffProposal` on `memory-lane continuity`, `memory-lane continuity --json`, and MCP `memory_continuity`. Review mode does not generate new summaries, approve pending records, or inject handoff bodies into lifecycle context; approve with existing `memory-lane review` / `memory-lane approve <id>` flows before relying on proposals as handoff state.
+- `automatic` - opt-in SessionStart continuity behavior. When `memory.contextPolicy.mode` is `selective`, Memory Lane reserves part of the existing SessionStart budget for at most one latest approved current-project handoff pointer (`session_summary` or `project_checkpoint`) so it is not crowded out by generic recency selection. When context policy is `policy-only`, it emits text-free guidance that an approved handoff pointer is available, without memory bodies. When context policy is `off`, automatic handoff mode is inactive. Automatic mode uses approved records only; it does not approve pending records, generate summaries, mutate storage, add new MCP/CLI surfaces, capture transcripts/tool output, or increase budgets.
 
 `memory-lane doctor`, `memory-lane doctor --json`, `memory-lane status --json`, and MCP `memory_status` report `handoffMode`, `handoffModeBehaviorActive`, `handoffModeNote`, and text-free `automaticHandoffDiagnostics` without memory bodies or proposal previews. Human `memory-lane status` stays compact; use `status --json` for the full handoff-mode diagnostic fields.
 
@@ -1005,16 +1038,16 @@ Memory Lane includes a local stdio MCP server for clients that support explicit 
 
 The MCP server exposes explicit tools only:
 
-- `memory_save` — save an approved memory
-- `memory_suggest` — queue a pending suggestion, or save approved when `status: "approved"`
-- `memory_recall` — recall relevant memories for a specific topic or fact query
-- `memory_continuity` — canonical continuity read model for broad prior-work, project resumption, last-worked-on, accomplished, next-action, project-status, resume, and handoff-style questions; accepts optional `query` for read-only workstream discovery
+- `memory_save` - save an approved memory
+- `memory_suggest` - queue a pending suggestion, or save approved when `status: "approved"`
+- `memory_recall` - recall relevant memories for a specific topic or fact query
+- `memory_continuity` - canonical continuity read model for broad prior-work, project resumption, last-worked-on, accomplished, next-action, project-status, resume, and handoff-style questions; accepts optional `query` for read-only workstream discovery
 - `memory_status` - read Memory Lane counts, config paths, project scope, legacy project-memory diagnostics, and integration diagnostics
-- `memory_list` — list memories visible to the current project scope by default
-- `memory_review` — list pending memories for review; supports `kind`, `source`, and `provenance` filters such as `kind: "session_summary"`, `source: "session-summary"`, `provenance: "pi/session_end"`, and `provenance: "codex/pre_compact"`
-- `memory_approve` — approve a memory by id
-- `memory_reject` — reject a memory by id
-- `memory_delete` — soft-delete a memory by id
+- `memory_list` - list memories visible to the current project scope by default
+- `memory_review` - list pending memories for review; supports `kind`, `source`, and `provenance` filters such as `kind: "session_summary"`, `source: "session-summary"`, `provenance: "pi/session_end"`, and `provenance: "codex/pre_compact"`
+- `memory_approve` - approve a memory by id
+- `memory_reject` - reject a memory by id
+- `memory_delete` - soft-delete a memory by id
 
 Use `memory_continuity({ projectPath })` from MCP clients before answering continuity questions such as project resumption, last-worked-on, accomplished, next-action, or project-status prompts. Use `memory_continuity({ projectPath, query: "resume building X" })` when the user asks for a specific workstream. Prefer it over `memory_recall` for continuity; `memory_recall` is a topic-specific follow-up after continuity inspection, not an authority by itself.
 
@@ -1069,9 +1102,9 @@ The pi adapter supports manual Memory Lane tools and commands (`memory_save`, `m
 
 pi also writes memories through higher-signal lifecycle events:
 
-- `input` — explicit memory requests only ("Remember that..."); ordinary prompt submissions are ignored to avoid noisy memory queues.
-- `turn_end` — the last user and assistant messages are evaluated for memory-worthy candidates and strong completed-progress checkpoint evidence after a turn completes.
-- `tool_result` — successful shell workflow commands such as `pnpm test`, `pnpm build`, and `pnpm install` are captured as project workflow rules; successful release/merge commands may queue pending checkpoint candidates.
+- `input` - explicit memory requests only ("Remember that..."); ordinary prompt submissions are ignored to avoid noisy memory queues.
+- `turn_end` - the last user and assistant messages are evaluated for memory-worthy candidates and strong completed-progress checkpoint evidence after a turn completes.
+- `tool_result` - successful shell workflow commands such as `pnpm test`, `pnpm build`, and `pnpm install` are captured as project workflow rules; successful release/merge commands may queue pending checkpoint candidates.
 
 Automatic writes skip secrets, transient imperatives, reviewer/subagent meta-prompts, and duplicates within a turn. Inferred checkpoint candidates stay pending until review; use `/memory review` in pi or the normal CLI/MCP review surfaces to approve or reject them. Set `MEMORY_LANE_DEBUG=1` to append privacy-safe debug records to `~/.memory-lane/pi-debug.jsonl` (no prompts or tool outputs are logged).
 
