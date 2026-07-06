@@ -26,8 +26,8 @@ Keep it safe to read wholesale in fresh sessions.
 
 ## Current status
 
-Latest known release: `v0.2.46` from main commit `cadd261`, after PR #99 fixed generated Pi pre-compact bridge session-summary behavior.
-Local release verification passed `pnpm build`, `pnpm test`, and `git diff --check`.
+Latest known release: `v0.2.47` from main commit `28e5961`, after PR #132 fixed compiled binary and install-manifest version metadata.
+Release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMORY_LANE_VERSION=v0.2.47 pnpm build:binary`, `pnpm smoke:binary`, GitHub Actions release run `28768281598`, and a downloaded release-asset `status --json` version check.
 
 Recent shipped work:
 
@@ -43,6 +43,15 @@ Recent shipped work:
 - PR #103 added the deterministic conflict/update recall eval baseline.
 - PR #104 removed internal `docs/` files from repository tracking, kept `docs/plugins/README.md` tracked, ignored the rest of `docs/`, and synced status docs.
 - PR #105 expanded the deterministic conflict/update microbench with same-id updates, correction records, supersession chains, cross-scope false premises, folded-text assertions, and stale/superseded leak-rate reporting.
+- PR #116 hardened the retrieval benchmark against adversarial fixtures.
+- PR #118 unified eval report contracts and gates.
+- PR #120 added prompt-routing adversarial coverage.
+- PR #123 added lifecycle-injection adversarial coverage.
+- PR #125 added benchmark taxonomy and fixture manifest metadata.
+- PR #127 added deterministic local long-session synthetic benchmark coverage.
+- PR #130 added the optional external long-memory smoke adapter.
+- PR #131 synced long-memory smoke adapter status docs.
+- PR #132 fixed release binary version metadata and Windows upgrade documentation.
 
 ## Active track - Project-local Storage Defaults
 

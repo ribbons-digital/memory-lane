@@ -2,29 +2,33 @@
 
 ## Current state
 
-- Branch context: active status-sync branch `docs/pr130-status-sync`; PR #130 merged issue #115 and this branch updates post-merge status docs.
+- Branch context: clean `main...origin/main` after release `v0.2.47` from main commit `28e5961`.
+- Latest release: `v0.2.47` from main commit `28e5961`, after PR #132 fixed binary and install-manifest version metadata.
+- PR #132 merged release version metadata fixes and docs for Windows upgrade behavior.
+- PR #131 synced long-memory smoke adapter status docs after PR #130.
 - PR #130 merged optional external long-memory smoke adapter coverage as main commit `950a71e`.
 - PR #129 merged issue #114 external benchmark adapter design as main commit `bef9230`.
 - PR #127 merged deterministic local long-session synthetic benchmark coverage as main commit `c8c65ea`.
 - PR #127 added `pnpm --filter @memory-lane/lifecycle eval:long-session-synthetic`.
 - PR #125 merged benchmark taxonomy and fixture manifest metadata as main commit `f08ba13`.
 - PR #104 removed internal `docs/` files from repository tracking, kept `docs/plugins/README.md` tracked as user-facing documentation, ignored the rest of on-disk `docs/`, and synced status docs.
-- Latest known release: `v0.2.46` from main commit `cadd261`, after PR #99 fixed generated Pi pre-compact bridge session-summary behavior.
 - Project-local storage defaults are implemented through Slice 2b: PR #80, PR #89, and PR #94 shipped the write default, legacy diagnostics, and review-first migration protocol.
 - Continuity routing/context hygiene shipped in PR #82; duplicate continuity rendering hygiene shipped in PR #97.
 - Internal feature specs, validation notes, and archived handoffs under `docs/` are intentionally removed from repository tracking.
 
 ## Current decision / next work
 
-The current repo state is post-PR #130 status sync on branch `docs/pr130-status-sync`.
-Issue #115 is closed with comment `Closed by PR #130, main commit 950a71e.`
+The current repo state is post-release `v0.2.47` on clean `main`.
+PR #132 fixed release binary version metadata so compiled binaries and install manifests report the embedded release version instead of stale package metadata.
+The release workflow for tag `v0.2.47` passed as GitHub Actions run `28768281598`.
+Released asset `memory-lane-darwin-arm64.tar.gz` was downloaded from GitHub Releases, extracted, and verified with `status --json` reporting `meta.version: "0.2.47"`.
 
+Issue #115 is closed with comment `Closed by PR #130, main commit 950a71e.`
 The issue #115 adapter added `pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset <path>`.
 It requires a local dataset path by `--dataset` or `MEMORY_LANE_LONG_MEMORY_SMOKE_DATASET`, does not auto-download data, and reports `networkRequired: false`, `modelRequired: false`, and `judgeRequired: false`.
 It supports a tiny LongMemEval-compatible smoke subset using `question_id`, `haystack_session_ids`, `haystack_sessions`, `haystack_dates`, `answer_session_ids`, and `_abs` abstention records.
 It evaluates deterministic retrieval session-id recall only, maps categories back to the test-only benchmark taxonomy, skips abstention records into `abstentionResults`, writes only temp MemoryEngine stores, and leaves production retrieval and lifecycle code unchanged.
-no-mistakes fixed three review findings before merge: preserve haystack dates, make temporal smoke records exercise currentness, and size temporary retrieval `topK` to requested `k`.
-
+no-mistakes fixed three review findings before PR #130 merged: preserve haystack dates, make temporal smoke records exercise currentness, and size temporary retrieval `topK` to requested `k`.
 The project goal for evals is to improve Memory Lane behavior, not to add decorative scaffolding.
 Each eval slice should state whether it ran deterministic fixtures, live Memory Lane store data, embeddings, synthetic long-session benchmarks, or external benchmarks.
 
@@ -41,6 +45,10 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 
 ## Current verification evidence
 
+- Release `v0.2.47` pre-release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMORY_LANE_VERSION=v0.2.47 pnpm build:binary`, and `pnpm smoke:binary`.
+- GitHub Actions release run `28768281598` passed for tag `v0.2.47`, including build, tests, binary build, current-platform binary smoke, release notes, and release creation.
+- Released `memory-lane-darwin-arm64.tar.gz` asset was downloaded and extracted; `status --json` reported `meta.version: "0.2.47"`.
+- PR #132 no-mistakes gate reached `outcome: checks-passed` with no findings after review-comment fixes.
 - PR #130 no-mistakes gate reached `outcome: checks-passed`, opened PR #130, and CI passed before merge.
 - PR #130 no-mistakes review fixed three findings: preserve LongMemEval haystack dates, exercise temporal smoke currentness dates, and fix smoke recall `topK` sizing.
 - PR #130 test evidence included `pnpm --filter @memory-lane/core exec node --test --import tsx test/external-long-memory-smoke.test.ts`, a manual `eval:long-memory-smoke` run against a LongMemEval-compatible fixture, an explicit missing-dataset failure check, and `pnpm --filter @memory-lane/core test`.
@@ -67,6 +75,6 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - User-facing plugin documentation: `docs/plugins/README.md`
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
-- Latest release reference: `v0.2.46` / commit `cadd261`
-- Current repo status: post-PR #130 status-sync branch `docs/pr130-status-sync`.
+- Latest release reference: `v0.2.47` / commit `28e5961`.
+- Current repo status: post-release `v0.2.47`, clean `main...origin/main`.
 - Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, PR #127, and PR #130.
