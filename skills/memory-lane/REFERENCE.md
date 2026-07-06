@@ -390,7 +390,7 @@ curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/downlo
 memory-lane init
 ```
 
-To upgrade to the latest release while preserving existing harness configs, manifest version metadata, and memory data:
+To upgrade to the latest release while preserving existing harness configs and memory data, and refreshing the install manifest version to the current `VERSION`:
 
 ```bash
 memory-lane upgrade

@@ -99,7 +99,8 @@ memory-lane upgrade
 
 Use `memory-lane upgrade --yes` to run non-interactively.
 On macOS and Linux this re-runs the installer and then refreshes your existing configs.
-On Windows it downloads the new binary and prompts you to run `memory-lane init --yes` in a fresh terminal (because Windows locks the running executable).
+On Windows, when an install manifest is present, the upgrade downloads the new binary and reapplies the existing harness configs automatically.
+`memory-lane init --yes` is only the fallback when no manifest exists.
 When existing configs are refreshed, the install manifest version is updated to the version embedded in the new binary.
 
 Your memory data in `~/.memory-lane/` is preserved.
