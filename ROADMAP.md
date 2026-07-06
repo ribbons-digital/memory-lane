@@ -82,15 +82,17 @@ Deterministic eval coverage now includes:
 - eval report contract unification from PR #118;
 - prompt-routing adversarial coverage from PR #120;
 - lifecycle-injection adversarial coverage from PR #123;
-- benchmark taxonomy and fixture manifest metadata from PR #125.
+- benchmark taxonomy and fixture manifest metadata from PR #125;
+- deterministic local long-session synthetic benchmark coverage from PR #127.
 
 No active eval implementation slice is currently open.
-The deterministic retrieval and conflict/update adversarial microbenches are clean, so retrieval-ranking changes remain paused until dogfood or eval evidence exposes a concrete production recall bug.
+The deterministic local long-session synthetic benchmark from issue #113 is shipped, network-free, embedding-free, LLM-judge-free, and outside default CI.
+The deterministic retrieval, conflict/update, lifecycle-injection, prompt-routing, and long-session synthetic evals are clean, so retrieval-ranking changes remain paused until dogfood or eval evidence exposes a concrete production recall bug.
 
 Likely next eval/benchmark slice:
 
-- **Deterministic local long-session synthetic benchmark:** add a local synthetic benchmark runner that builds bounded multi-session histories using existing Memory Lane engine and lifecycle surfaces, emits the unified eval report contract with taxonomy metadata from PR #125, and stays network-free, embedding-free, and LLM-judge-free.
-- Keep the slice out of default CI unless explicitly approved.
+- **External long-memory benchmark adapter design:** design how Memory Lane should map external long-memory benchmarks such as LongMemEval into the local taxonomy, data policy, judge policy, cost limits, and CI posture before any adapter implementation.
+- Keep adapter implementation, embeddings, model judges, external datasets, and network-dependent runners out of scope until the design is explicitly approved.
 
 Do not add LongMemEval, embeddings, LLM judges, production ranking rewrites, or auto-consolidation until deterministic local evals remain stable and expose a reason to broaden.
 
