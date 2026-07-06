@@ -84,18 +84,15 @@ Deterministic eval coverage now includes:
 - lifecycle-injection adversarial coverage from PR #123;
 - benchmark taxonomy and fixture manifest metadata from PR #125;
 - deterministic local long-session synthetic benchmark coverage from PR #127;
-- optional external long-memory smoke adapter implementation from issue #115 is in progress on branch `eval/longmemeval-smoke-adapter`.
+- optional external long-memory smoke adapter coverage from PR #130.
 
-The issue #115 adapter stays outside default CI and requires an explicit local dataset path.
-It supports the tiny LongMemEval-compatible smoke shape with `question_id`, `haystack_session_ids`, `haystack_sessions`, and `answer_session_ids`.
-It emits a stable JSON report with test-only benchmark taxonomy metadata, deterministic session-id recall metrics, explicit no-network, no-model, and no-judge flags, and separate abstention handling for `_abs` records.
-The deterministic retrieval, conflict/update, lifecycle-injection, prompt-routing, and long-session synthetic evals are clean, so retrieval-ranking changes remain paused until dogfood or eval evidence exposes a concrete production recall bug.
-
-Current eval/benchmark implementation slice:
-
-- **External long-memory benchmark smoke adapter:** issue #115 implements the first optional manual adapter after issue #114 design.
-  It evaluates retrieval session-id recall only, uses temp MemoryEngine stores, commits no external dataset, and does not change production retrieval or lifecycle behavior.
-  Recall misses are reported as benchmark metrics rather than default command gate failures; malformed evidence-session mappings remain zero-tolerance adapter failures.
+No active eval implementation slice is currently open.
+Issue #115 shipped the first optional external long-memory smoke adapter and closed after PR #130.
+The adapter stays outside default CI and requires an explicit local dataset path.
+It supports the tiny LongMemEval-compatible smoke shape with `question_id`, `haystack_session_ids`, `haystack_sessions`, `haystack_dates`, `answer_session_ids`, and `_abs` abstention records.
+It emits a stable JSON report with test-only benchmark taxonomy metadata, deterministic session-id recall metrics, explicit no-network, no-model, and no-judge flags, and separate abstention handling.
+no-mistakes review fixes preserved haystack dates, made temporal smoke records exercise currentness, and sized temporary retrieval `topK` to the requested `k`.
+The deterministic retrieval, conflict/update, lifecycle-injection, prompt-routing, long-session synthetic, and external long-memory smoke evals are clean, so retrieval-ranking changes remain paused until dogfood or eval evidence exposes a concrete production recall bug.
 
 Do not add embeddings, LLM judges, production ranking rewrites, auto-downloads, default CI wiring, or auto-consolidation until deterministic local evals remain stable and expose a reason to broaden.
 
