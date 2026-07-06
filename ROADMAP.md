@@ -83,7 +83,7 @@ Deterministic eval coverage now includes:
 - prompt-routing adversarial coverage from PR #120;
 - lifecycle-injection adversarial coverage from PR #123;
 - benchmark taxonomy and fixture manifest metadata from PR #125;
-- deterministic local long-session synthetic benchmark coverage from PR #127.
+- deterministic local long-session synthetic benchmark coverage from PR #127;
 - optional external long-memory smoke adapter implementation from issue #115 is in progress on branch `eval/longmemeval-smoke-adapter`.
 
 The issue #115 adapter stays outside default CI and requires an explicit local dataset path.

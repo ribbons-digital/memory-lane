@@ -40,7 +40,7 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 
 ## Current verification evidence
 
-- Issue #115 adapter verification passed `pnpm --filter @memory-lane/core exec node --test --import tsx test/external-long-memory-smoke.test.ts` with 5 tests.
+- Issue #115 adapter verification passed `pnpm --filter @memory-lane/core exec node --test --import tsx test/external-long-memory-smoke.test.ts` with 7 tests.
 - Issue #115 manual runner smoke passed `pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset /var/folders/f6/lm8c20wn4yv1hyk_23y65yk40000gn/T/memory-lane-long-memory-smoke-fixture.json --limit 2 --k 2` with 1 evaluated scenario, 1 abstention, `meanSessionRecallAtK: 1`, and `satisfactory: true`.
 - Issue #115 core verification passed `pnpm --filter @memory-lane/core test` with 413 tests and `pnpm --filter @memory-lane/core build`.
 - Issue #114 design capture posted to GitHub issue comment `https://github.com/ribbons-digital/memory-lane/issues/114#issuecomment-4888147243`.
