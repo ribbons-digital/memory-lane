@@ -27,18 +27,28 @@ function contentToText(content: unknown): string | undefined {
   if (content && typeof content === "object") {
     const obj = content as Record<string, unknown>
     if (typeof obj.text === "string") return obj.text
-    if (typeof obj.content === "string") return obj.content
+    return contentToText(obj.content)
   }
   return undefined
 }
 
+// Claude Code JSONL wraps each turn as { type, uuid, timestamp, message: { role, content } }.
+function transcriptMessageObject(obj: Record<string, unknown>): Record<string, unknown> {
+  if (obj.message && typeof obj.message === "object" && !Array.isArray(obj.message)) {
+    return obj.message as Record<string, unknown>
+  }
+  return obj
+}
+
 function roleFromObject(obj: Record<string, unknown>): string | undefined {
-  const role = obj.role ?? obj.type ?? obj.author
+  const message = transcriptMessageObject(obj)
+  const role = message.role ?? obj.role ?? obj.type ?? obj.author
   return typeof role === "string" ? role.toLowerCase() : undefined
 }
 
 function textFromObject(obj: Record<string, unknown>): string | undefined {
-  return contentToText(obj.content ?? obj.message ?? obj.text)
+  const message = transcriptMessageObject(obj)
+  return contentToText(message.content ?? message.message ?? message.text)
 }
 
 function sessionMessageRole(role: string): SessionMessage["role"] | undefined {
