@@ -110,12 +110,12 @@ function validateProfile(v: unknown, p: string): void {
   if (o.timeoutMs !== undefined) positiveNonZeroInt(o.timeoutMs, `${p}.timeoutMs`)
 }
 
-function deepMerge(base: unknown, override: unknown): unknown {
+export function deepMergeConfig(base: unknown, override: unknown): unknown {
   if (override === null || override === undefined || !plain(override)) return override ?? base
   const result: Record<string, unknown> = plain(base) ? { ...base } : {}
   for (const [k, v] of Object.entries(override)) {
     if (["__proto__", "constructor", "prototype"].includes(k)) continue
-    result[k] = deepMerge(k in result ? result[k] : undefined, v)
+    result[k] = deepMergeConfig(k in result ? result[k] : undefined, v)
   }
   return result
 }
@@ -244,7 +244,7 @@ export function loadConfig(configPath?: string): SemanticMemoryConfig {
   }
   const raw = JSON.parse(fs.readFileSync(file, "utf8"))
   validateConfigOverrides(raw)
-  return validateConfig(deepMerge(DEFAULT_CONFIG, raw))
+  return validateConfig(deepMergeConfig(DEFAULT_CONFIG, raw))
 }
 
 export function isLocalBaseUrl(url: string): boolean {
@@ -256,9 +256,10 @@ export function isLocalBaseUrl(url: string): boolean {
 // ── Write helpers ────────────────────────────────────────────
 
 /** Write a config file, merging the given partial config with defaults. */
-export function writeConfig(configPath: string, partial: Partial<SemanticMemoryConfig>): void {
+export function writeConfig(configPath: string, partial: unknown): void {
   const existing = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {}
-  const merged = deepMerge(DEFAULT_CONFIG, deepMerge(existing, partial)) as SemanticMemoryConfig
+  const merged = deepMergeConfig(DEFAULT_CONFIG, deepMergeConfig(existing, partial)) as SemanticMemoryConfig
+  validateConfig(structuredClone(merged))
   fs.mkdirSync(path.dirname(configPath), { recursive: true })
   fs.writeFileSync(configPath, JSON.stringify(merged, null, 2) + "\n", "utf8")
 }

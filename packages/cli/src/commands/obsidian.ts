@@ -195,7 +195,7 @@ function handleObsidianInit(ctx: CliContext): void {
     process.exit(1)
   }
 
-  writeConfig(ctx.configPath, { obsidian: { enabled: true, vaultPath, folder, mode: "mirror" } } as any)
+  writeConfig(ctx.configPath, { obsidian: { enabled: true, vaultPath, folder, mode: "mirror" } })
   const sync = syncObsidianMirror({ vaultPath, folder }, ctx.engine.list({ all: true }))
   console.log(formatObsidianInitSync(init, sync, ctx.json))
   if (!sync.ok) process.exit(1)

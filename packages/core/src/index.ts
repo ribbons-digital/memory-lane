@@ -37,7 +37,7 @@ export {
 export { resolveProjectScope } from "./project-scope.js"
 export {
   loadConfig, DEFAULT_CONFIG, getDefaultConfigPath, isLocalBaseUrl, validateConfig,
-  writeConfig, readRawConfig,
+  writeConfig, readRawConfig, deepMergeConfig,
 } from "./config.js"
 export { createEmbeddingStore, foldEmbeddings, type EmbeddingLine } from "./embedding-store.js"
 export { createOpenAIEmbeddingProvider } from "./embedding-provider.js"
