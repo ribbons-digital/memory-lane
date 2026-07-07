@@ -167,6 +167,23 @@ test("ignores records whose array content is only tool_use or tool_result blocks
   assert.equal(turn.lastAssistantMessage, undefined)
 })
 
+test("ignores records whose object content is a single tool_result block", () => {
+  const file = writeTranscript([
+    userRecord("Please run the tests", { uuid: "u-1", parentUuid: null, timestamp: stamp(1) }),
+    userRecord(
+      { type: "tool_result", tool_use_id: "toolu_1", content: "raw tool output" },
+      { uuid: "u-2", parentUuid: "u-1", timestamp: stamp(2) },
+    ),
+  ])
+
+  assert.deepEqual(extracted(readSessionMessagesFromTranscript(file, MAX_BYTES)), [
+    { role: "user", content: "Please run the tests", timestamp: stamp(1) },
+  ])
+
+  const turn = readLatestTurnFromTranscript(file, MAX_BYTES)
+  assert.equal(turn.lastUserMessage, "Please run the tests")
+})
+
 test("skips summary records", () => {
   const file = writeTranscript([
     { type: "summary", summary: "Earlier work on the transcript parser", leafUuid: "leaf-1" },

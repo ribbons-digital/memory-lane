@@ -31,6 +31,7 @@ function contentToText(content: unknown): string | undefined {
   }
   if (content && typeof content === "object") {
     const obj = content as Record<string, unknown>
+    if (typeof obj.type === "string" && TOOL_BLOCK_TYPES.has(obj.type)) return undefined
     if (typeof obj.text === "string") return obj.text
     return contentToText(obj.content)
   }
