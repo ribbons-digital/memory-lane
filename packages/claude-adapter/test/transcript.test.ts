@@ -41,7 +41,7 @@ function userRecord(content: unknown, meta: RecordMeta): Record<string, unknown>
   }
 }
 
-function assistantRecord(content: unknown[], meta: RecordMeta): Record<string, unknown> {
+function assistantRecord(content: unknown, meta: RecordMeta): Record<string, unknown> {
   return {
     parentUuid: meta.parentUuid,
     isSidechain: false,
@@ -167,12 +167,16 @@ test("ignores records whose array content is only tool_use or tool_result blocks
   assert.equal(turn.lastAssistantMessage, undefined)
 })
 
-test("ignores records whose object content is a single tool_result block", () => {
+test("ignores records whose object content is a single tool_use or tool_result block", () => {
   const file = writeTranscript([
     userRecord("Please run the tests", { uuid: "u-1", parentUuid: null, timestamp: stamp(1) }),
     userRecord(
       { type: "tool_result", tool_use_id: "toolu_1", content: "raw tool output" },
       { uuid: "u-2", parentUuid: "u-1", timestamp: stamp(2) },
+    ),
+    assistantRecord(
+      { type: "tool_use", id: "toolu_2", name: "Bash", input: { command: "pnpm test" } },
+      { uuid: "a-1", parentUuid: "u-2", timestamp: stamp(3) },
     ),
   ])
 
@@ -182,6 +186,7 @@ test("ignores records whose object content is a single tool_result block", () =>
 
   const turn = readLatestTurnFromTranscript(file, MAX_BYTES)
   assert.equal(turn.lastUserMessage, "Please run the tests")
+  assert.equal(turn.lastAssistantMessage, undefined)
 })
 
 test("skips summary records", () => {
