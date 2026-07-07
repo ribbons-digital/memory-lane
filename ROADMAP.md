@@ -52,6 +52,7 @@ Recent shipped work:
 - PR #130 added the optional external long-memory smoke adapter.
 - PR #131 synced long-memory smoke adapter status docs.
 - PR #132 fixed release binary version metadata and Windows upgrade documentation.
+- PR #161 fixed config-set validation so invalid config writes are rejected before saving and parseable invalid configs can be repaired before engine initialization.
 
 ## Active track - Project-local Storage Defaults
 
