@@ -2,6 +2,7 @@
   "name": "@memory-lane/cli",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "bin": {
     "memory-lane": "./dist/index.js"

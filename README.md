@@ -33,6 +33,7 @@ You do not need to understand them to try the core workflow.
 - [MCP Server](#mcp-server)
 - [Memory Lifecycle](#memory-lifecycle)
 - [Harness Integrations](#harness-integrations)
+- [License](#license)
 
 ## Quick Start
 
@@ -1218,3 +1219,7 @@ memory-lane codex pre-compact
 `SessionStart` baseline injection is available for compact session-opening context when allowed by `memory.contextPolicy.mode`: tiny always-on bodies plus `Memory Index` descriptor cards in `selective` mode, and guidance without memory bodies in `policy-only` mode. `UserPromptSubmit` follows the same context policy: `off` suppresses injection, `policy-only` emits guidance without memory bodies, and `selective` injects a small relevant-memory block for ordinary or topic-specific prompts while suppressing ordinary recall bodies for broad `project-position` and `next-work` continuity prompts. `Stop`, `PreCompact`, and `PostToolUse` save useful memories externally and remain quiet when nothing pending was suggested. When a write hook saves pending memories, Memory Lane may emit a compact count-only system message such as `Memory Lane: suggested 1 pending memory for review. Run memory-lane review to approve or reject it.` The notice does not include memory text, prompts, transcripts, or tool output. Hook commands fail safe: if storage/config/plugin initialization fails, Claude/Codex hook invocations return `{}` and exit successfully so the host session is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr. Hook shutdown waits briefly for background embedding writes and cancels outstanding embedding work after a bounded timeout. Codex `PreCompact` can run `memory-lane codex pre-compact` to save pending `session_summary` memories with `pre_compact` provenance before context compaction when `memory.sessionEndSummary.requireConfirmation` is `false`; set `memory.preCompactSummary.enabled` to `false` to opt out. If the latest user message explicitly asks to summarize the session (for example, "remember this session"), the supported `Stop` hook path uses `memory.sessionEndSummary` to save a pending session summary for review with `memory-lane review`; do not configure an unsupported Codex `SessionEnd` hook. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise hook diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
 
 See `examples/harness-integrations/codex-cli.md` for setup details.
+
+## License
+
+Memory Lane is released under the [MIT License](./LICENSE).
