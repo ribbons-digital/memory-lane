@@ -17,6 +17,7 @@ import type { CliContext } from "./commands/context.js"
 import { loadPlugins } from "@memory-lane/plugin-api"
 import type { BundledPluginModule, LoadedPlugin } from "@memory-lane/plugin-api"
 import type { SemanticMemoryConfig } from "@memory-lane/core"
+
 import { resolveBundledPlugin } from "./plugins.js"
 import {
   formatMemories, formatReviewMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
@@ -24,10 +25,12 @@ import {
   VERSION,
 } from "./formatters.js"
 
+type ConfigContext = Omit<CliContext, "engine">
+
 // ── Config helpers ───────────────────────────────────────────
 
 function deepMergeConfig(base: unknown, override: unknown): unknown {
-  const isPlain = (v: any) => typeof v === "object" && v !== null && !Array.isArray(v)
+  const isPlain = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v)
   if (override === null || override === undefined || !isPlain(override)) return override ?? base
   const result: Record<string, unknown> = isPlain(base) ? { ...(base as Record<string, unknown>) } : {}
   for (const [k, v] of Object.entries(override as Record<string, unknown>)) {
@@ -605,18 +608,18 @@ async function handleReindex(ctx: CliContext): Promise<void> {
   }
 }
 
-function showConfig(ctx: CliContext): void {
+function showConfig(ctx: ConfigContext): void {
   const raw = readRawConfig(ctx.configPath)
   if (!raw) {
     console.log(formatError("No config file found.", ctx.json))
     return
   }
   if (ctx.json) console.log(JSON.stringify(raw, null, 2))
-  else console.log(`Config: ${getDefaultConfigPath()}\n` + JSON.stringify(raw, null, 2))
+  else console.log(`Config: ${ctx.configPath}\n` + JSON.stringify(raw, null, 2))
 }
 
-function setSemanticEnabled(ctx: CliContext, enabled: boolean): void {
-  writeConfig(ctx.configPath, { semantic: { enabled } as any })
+function setSemanticEnabled(ctx: ConfigContext, enabled: boolean): void {
+  writeConfig(ctx.configPath, { semantic: { enabled } })
   if (ctx.json) {
     console.log(JSON.stringify({ ok: true, semantic: { enabled } }))
   } else {
@@ -624,32 +627,35 @@ function setSemanticEnabled(ctx: CliContext, enabled: boolean): void {
   }
 }
 
-function setConfigValue(ctx: CliContext): void {
+function setConfigValue(ctx: ConfigContext): void {
   const key = ctx.rest[1]
-  const value = ctx.rest.slice(2).join(" ")
-  if (!key) {
+  if (!key || ctx.rest.length < 3) {
     console.log(formatError("Usage: memory-lane config set <json-path> <value>", ctx.json))
-    return
+    process.exit(2)
   }
+  const value = ctx.rest.slice(2).join(" ")
   const existing = (readRawConfig(ctx.configPath) as Record<string, unknown>) || {}
   const merged = deepMergeConfig(DEFAULT_CONFIG, existing) as Record<string, unknown>
   setByPath(merged, key, parseConfigValue(value))
-  writeConfig(ctx.configPath, merged as any)
+  writeConfig(ctx.configPath, merged)
   console.log(ctx.json ? JSON.stringify({ ok: true, path: key }) : `Set ${key}`)
 }
 
-const configHandlers: Record<string, (ctx: CliContext) => void> = {
+const configHandlers: Record<string, (ctx: ConfigContext) => void> = {
   show: showConfig,
   "enable-semantic": (ctx) => setSemanticEnabled(ctx, true),
   "disable-semantic": (ctx) => setSemanticEnabled(ctx, false),
   set: setConfigValue,
 }
 
-function handleConfig(ctx: CliContext): void {
+function handleConfig(ctx: ConfigContext): void {
   const subCmd = ctx.rest[0]?.toLowerCase() ?? "show"
   const handler = configHandlers[subCmd]
   if (handler) handler(ctx)
-  else console.log(formatError("Usage: memory-lane config [show | enable-semantic | disable-semantic | set <key> <value>]", ctx.json))
+  else {
+    console.log(formatError("Usage: memory-lane config [show | enable-semantic | disable-semantic | set <key> <value>]", ctx.json))
+    process.exit(2)
+  }
 }
 
 function handleMigrate(ctx: CliContext): void {
@@ -836,7 +842,6 @@ const commandHandlers: Record<string, CommandHandler> = {
   doctor: handleDoctor,
   status: handleStatus,
   reindex: handleReindex,
-  config: handleConfig,
   obsidian: handleObsidian,
   migrate: handleMigrate,
   claude: handleClaude,
@@ -925,6 +930,18 @@ async function main(): Promise<void> {
     process.exit(1)
   }
   const configPath = paths.configPath || resolveConfigPath()
+  if (command === "config") {
+    try {
+      handleConfig({ argv, rest: positionals(argv.slice(1)), json, configPath })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const message = err instanceof SyntaxError ? `Invalid config file ${configPath}: ${msg}` : msg
+      console.log(formatError(message, json))
+      process.exit(1)
+    }
+    process.exit(0)
+  }
+
   let engine: MemoryEngine
   try {
     engine = createEngine(paths, projPath, { autoCompact: !readOnlyStorage })

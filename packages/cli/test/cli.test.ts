@@ -101,6 +101,89 @@ function writeMemoryRecords(filePath: string, records: MemoryRecord[]): void {
   fs.writeFileSync(filePath, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
 }
 
+describe("config command", () => {
+  function configFixture(): { env: NodeJS.ProcessEnv; configPath: string } {
+    const dir = tempDir()
+    const configPath = path.join(dir, "config.json")
+    const env = {
+      MEMORY_LANE_FILE: path.join(dir, "memories.jsonl"),
+      MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"),
+      MEMORY_LANE_CONFIG: configPath,
+      NO_COLOR: "1",
+    }
+    return { env, configPath }
+  }
+
+  it("rejects invalid numeric writes without changing the config file", () => {
+    const { env, configPath } = configFixture()
+    const original = JSON.stringify({ semantic: { retrieval: { topK: 8 } } }, null, 2) + "\n"
+    fs.writeFileSync(configPath, original)
+
+    const result = runProcess(["config", "set", "semantic.retrieval.topK", "banana"], { env })
+
+    assert.equal(result.status, 1)
+    assert.match(result.stdout, /semantic\.retrieval\.topK must be finite number/u)
+    assert.equal(fs.readFileSync(configPath, "utf8"), original)
+  })
+
+  it("rejects invalid boolean writes without changing the config file", () => {
+    const { env, configPath } = configFixture()
+    const original = JSON.stringify({ semantic: { privacy: { allowRemoteEmbeddings: false } } }, null, 2) + "\n"
+    fs.writeFileSync(configPath, original)
+
+    const result = runProcess(["config", "set", "semantic.privacy.allowRemoteEmbeddings", "maybe"], { env })
+
+    assert.equal(result.status, 1)
+    assert.match(result.stdout, /semantic\.privacy\.allowRemoteEmbeddings must be boolean/u)
+    assert.equal(fs.readFileSync(configPath, "utf8"), original)
+  })
+
+  it("rejects invalid object writes without changing the config file", () => {
+    const { env, configPath } = configFixture()
+    const original = JSON.stringify({ semantic: { retrieval: { topK: 8 } } }, null, 2) + "\n"
+    fs.writeFileSync(configPath, original)
+
+    const result = runProcess(["config", "set", "semantic.retrieval", "{\"topK\":\"bad\"}"], { env })
+
+    assert.equal(result.status, 1)
+    assert.match(result.stdout, /semantic\.retrieval\.topK must be finite number/u)
+    assert.equal(fs.readFileSync(configPath, "utf8"), original)
+  })
+
+  it("rejects missing config values as usage errors", () => {
+    const { env, configPath } = configFixture()
+
+    const result = runProcess(["config", "set", "semantic.retrieval.minSimilarity"], { env })
+
+    assert.equal(result.status, 2)
+    assert.match(result.stdout, /Usage: memory-lane config set <json-path> <value>/u)
+    assert.equal(fs.existsSync(configPath), false)
+  })
+
+  it("repairs a parseable invalid config without constructing the engine", () => {
+    const { env, configPath } = configFixture()
+    fs.writeFileSync(configPath, JSON.stringify({ semantic: { retrieval: { topK: "banana" } } }, null, 2) + "\n")
+
+    const result = runProcess(["config", "set", "semantic.retrieval.topK", "9"], { env })
+
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Set semantic\.retrieval\.topK/u)
+    const repairedConfig = JSON.parse(fs.readFileSync(configPath, "utf8")) as { semantic?: { retrieval?: { topK?: unknown } } }
+    assert.equal(repairedConfig.semantic?.retrieval?.topK, 9)
+  })
+
+  it("reports malformed config JSON with the file path before engine setup", () => {
+    const { env, configPath } = configFixture()
+    fs.writeFileSync(configPath, "{", "utf8")
+
+    const result = runProcess(["config", "show"], { env })
+
+    assert.equal(result.status, 1)
+    assert.match(result.stdout, new RegExp(escapeRegExp(configPath), "u"))
+    assert.match(result.stdout, /Expected property name|JSON/u)
+  })
+})
+
 describe("formatMemoryGet", () => {
   it("renders descriptor metadata on exact human show output", () => {
     const memory: MemoryRecord = {

@@ -71,7 +71,7 @@ describe("writeConfig", () => {
       },
     }))
 
-    writeConfig(f, { semantic: { enabled: true } as any })
+    writeConfig(f, { semantic: { enabled: true } })
 
     const cfg = loadConfig(f)
     assert.equal(cfg.semantic.enabled, true)
@@ -82,6 +82,19 @@ describe("writeConfig", () => {
       model: "nomic-embed-text",
     })
     assert.equal(cfg.semantic.retrieval.topK, 3)
+  })
+
+  it("rejects invalid merged config without changing existing file", () => {
+    const f = path.join(dir, "c.json")
+    const original = JSON.stringify({ semantic: { retrieval: { topK: 8 } } }, null, 2) + "\n"
+    fs.writeFileSync(f, original)
+
+    assert.throws(
+      () => writeConfig(f, { semantic: { retrieval: { topK: "banana" } } }),
+      /semantic\.retrieval\.topK must be finite number/u,
+    )
+
+    assert.equal(fs.readFileSync(f, "utf8"), original)
   })
 })
 
