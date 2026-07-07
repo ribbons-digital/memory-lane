@@ -8,6 +8,10 @@ export interface TranscriptTurn {
 
 const DEFAULT_MAX_BYTES = 200 * 1024
 
+// Tool payloads are not conversation prose; extracting them would let raw
+// tool output masquerade as user or assistant messages.
+const TOOL_BLOCK_TYPES = new Set(["tool_use", "tool_result"])
+
 function contentToText(content: unknown): string | undefined {
   if (typeof content === "string") return content
   if (Array.isArray(content)) {
@@ -16,6 +20,7 @@ function contentToText(content: unknown): string | undefined {
         if (typeof part === "string") return part
         if (part && typeof part === "object") {
           const obj = part as Record<string, unknown>
+          if (typeof obj.type === "string" && TOOL_BLOCK_TYPES.has(obj.type)) return ""
           if (typeof obj.text === "string") return obj.text
           if (typeof obj.content === "string") return obj.content
         }

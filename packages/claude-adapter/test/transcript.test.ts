@@ -141,6 +141,32 @@ test("extracts user records with nested array text content", () => {
   ])
 })
 
+test("ignores records whose array content is only tool_use or tool_result blocks", () => {
+  const file = writeTranscript([
+    userRecord("Please run the tests", { uuid: "u-1", parentUuid: null, timestamp: stamp(1) }),
+    assistantRecord(
+      [{ type: "tool_use", id: "toolu_1", name: "Bash", input: { command: "pnpm test" } }],
+      { uuid: "a-1", parentUuid: "u-1", timestamp: stamp(2) },
+    ),
+    userRecord(
+      [{ type: "tool_result", tool_use_id: "toolu_1", content: "raw tool output" }],
+      { uuid: "u-2", parentUuid: "a-1", timestamp: stamp(3) },
+    ),
+    userRecord(
+      [{ type: "tool_result", tool_use_id: "toolu_1", content: [{ type: "text", text: "nested tool output" }] }],
+      { uuid: "u-3", parentUuid: "u-2", timestamp: stamp(4) },
+    ),
+  ])
+
+  assert.deepEqual(extracted(readSessionMessagesFromTranscript(file, MAX_BYTES)), [
+    { role: "user", content: "Please run the tests", timestamp: stamp(1) },
+  ])
+
+  const turn = readLatestTurnFromTranscript(file, MAX_BYTES)
+  assert.equal(turn.lastUserMessage, "Please run the tests")
+  assert.equal(turn.lastAssistantMessage, undefined)
+})
+
 test("skips summary records", () => {
   const file = writeTranscript([
     { type: "summary", summary: "Earlier work on the transcript parser", leafUuid: "leaf-1" },
@@ -183,6 +209,18 @@ test("takes the timestamp from the top-level record, not the nested message", ()
   const messages = readSessionMessagesFromTranscript(file, MAX_BYTES)
   assert.equal(messages.length, 1)
   assert.equal(messages[0]?.timestamp, stamp(1))
+})
+
+test("reads session messages from a realistic mixed transcript", () => {
+  const messages = readSessionMessagesFromTranscript(writeMixedTranscript(), MAX_BYTES)
+
+  assert.deepEqual(extracted(messages), [
+    { role: "user", content: "Set up the project", timestamp: stamp(1) },
+    { role: "assistant", content: "I'll read the config first.", timestamp: stamp(2) },
+    { role: "assistant", content: "Config looks good.\nNext I'll wire the adapter.", timestamp: stamp(4) },
+    { role: "user", content: "Now add regression tests", timestamp: stamp(5) },
+    { role: "assistant", content: "Added tests covering the parser.", timestamp: stamp(6) },
+  ])
 })
 
 test("reads the latest turn from a realistic mixed transcript", () => {
