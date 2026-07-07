@@ -29,6 +29,7 @@ describe("positionals", () => {
       { name: "hyphenated value flag with value", argv: ["--stale-after-days", "30", "text"], expected: ["text"] },
       { name: "value flag at end of argv", argv: ["text", "--scope"], expected: ["text"] },
       { name: "value flag followed by another flag", argv: ["--scope", "--json", "text"], expected: ["text"] },
+      { name: "empty-string value is consumed, not left as a positional", argv: ["--scope", "", "text"], expected: ["text"] },
     ]
     for (const { name, argv, expected } of cases) {
       assert.deepEqual(positionals(argv), expected, name)
@@ -64,6 +65,10 @@ describe("flag", () => {
 
   it("returns the sentinel \"true\" when the next token is another flag", () => {
     assert.equal(flag(["--scope", "--json", "text"], "scope"), "true")
+  })
+
+  it("returns an empty string value instead of the sentinel", () => {
+    assert.equal(flag(["--scope", "", "text"], "scope"), "")
   })
 
   it("returns undefined when the flag is absent", () => {

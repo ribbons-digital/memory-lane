@@ -38,7 +38,9 @@ export function flag(argv: string[], name: string): string | undefined {
   const idx = argv.indexOf(`--${name}`)
   if (idx === -1) return undefined
   const next = argv[idx + 1]
-  return next && !next.startsWith("--") ? next : "true"
+  // Empty string counts as a consumed value, matching positionals(); only a
+  // missing token or another --flag falls back to the "true" sentinel.
+  return next !== undefined && !next.startsWith("--") ? next : "true"
 }
 
 export function hasFlag(argv: string[], name: string): boolean {
