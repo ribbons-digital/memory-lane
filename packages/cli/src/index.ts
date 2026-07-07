@@ -2,7 +2,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type WorkflowArea } from "@memory-lane/core"
+import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, deepMergeConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type WorkflowArea } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import { classifyPromptRoute, handleSessionEnd, createOpenAICompatibleProvider } from "@memory-lane/lifecycle"
@@ -26,19 +26,6 @@ import {
 } from "./formatters.js"
 
 type ConfigContext = Omit<CliContext, "engine">
-
-// ── Config helpers ───────────────────────────────────────────
-
-function deepMergeConfig(base: unknown, override: unknown): unknown {
-  const isPlain = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v)
-  if (override === null || override === undefined || !isPlain(override)) return override ?? base
-  const result: Record<string, unknown> = isPlain(base) ? { ...(base as Record<string, unknown>) } : {}
-  for (const [k, v] of Object.entries(override as Record<string, unknown>)) {
-    if (["__proto__", "constructor", "prototype"].includes(k)) continue
-    result[k] = deepMergeConfig(k in result ? result[k] : undefined, v)
-  }
-  return result
-}
 
 function setByPath(obj: Record<string, unknown>, path: string, value: unknown): void {
   const parts = path.split(".")
