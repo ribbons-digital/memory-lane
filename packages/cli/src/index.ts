@@ -12,7 +12,7 @@ import { handleInit } from "./commands/init.js"
 import { handleUninstall } from "./commands/uninstall.js"
 import { handleUpgrade } from "./commands/upgrade.js"
 import { handleObsidian } from "./commands/obsidian.js"
-import { flag, hasFlag } from "./args.js"
+import { flag, hasFlag, positionals } from "./args.js"
 import type { CliContext } from "./commands/context.js"
 import { loadPlugins } from "@memory-lane/plugin-api"
 import type { BundledPluginModule, LoadedPlugin } from "@memory-lane/plugin-api"
@@ -109,22 +109,7 @@ function optionalFreshness(argv: string[]) {
   return Object.keys(freshness).length ? freshness : undefined
 }
 
-// Strip flags (--foo and --foo value) from argv, return positional args
-function positionals(argv: string[]): string[] {
-  const result: string[] = []
-  let i = 0
-  while (i < argv.length) {
-    if (argv[i].startsWith("--")) {
-      const next = argv[i + 1]
-      if (next && !next.startsWith("--")) i += 2
-      else i++
-    } else {
-      result.push(argv[i])
-      i++
-    }
-  }
-  return result
-}
+// positionals() lives in ./args.ts next to the VALUE_FLAGS registry it depends on.
 
 // ── Runtime context ──────────────────────────────────────────
 

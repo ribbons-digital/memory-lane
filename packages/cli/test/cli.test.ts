@@ -3104,7 +3104,6 @@ describe("CLI integration", () => {
     assert.ok(result.stdout.includes("Download latest binary and re-apply configs"))
   })
 
-
   it("shows exact ids with scoped defaults and --all", () => {
     const projectA = tempDir()
     const projectB = tempDir()
@@ -3176,4 +3175,36 @@ describe("CLI integration", () => {
     assert.equal(global.data.proposed.project, undefined)
   })
 
+})
+
+describe("boolean flags before positionals (issue #135)", () => {
+  let dir: string, env: NodeJS.ProcessEnv
+  beforeEach(() => {
+    dir = tempDir()
+    env = {
+      MEMORY_LANE_FILE: path.join(dir, "mem.jsonl"),
+      MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "emb.jsonl"),
+      MEMORY_LANE_CONFIG: path.join(dir, "cfg.json"),
+    }
+  })
+
+  it("save --json before the text does not swallow the first word", () => {
+    const saved = JSON.parse(run(["save", "--json", "remember", "to", "use", "pnpm"], env))
+    assert.equal(saved.data.saved.text, "remember to use pnpm")
+
+    const listed = JSON.parse(run(["list", "--json"], env))
+    assert.equal(listed.data.memories.length, 1)
+    assert.equal(listed.data.memories[0].text, "remember to use pnpm")
+  })
+
+  it("show --json before the id resolves the memory instead of dropping the id", () => {
+    const saved = JSON.parse(run(["save", "--json", "remember", "to", "use", "pnpm"], env))
+    const id = saved.data.saved.id
+
+    const shown = runProcess(["show", "--json", id], { env })
+    assert.equal(shown.status, 0, shown.stderr)
+    const payload = JSON.parse(shown.stdout)
+    assert.equal(payload.data.memory.id, id)
+    assert.equal(payload.data.memory.text, "remember to use pnpm")
+  })
 })
