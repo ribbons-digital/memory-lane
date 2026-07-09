@@ -114,7 +114,7 @@ It supports the tiny LongMemEval-compatible smoke shape with `question_id`, `hay
 It emits a stable JSON report with test-only benchmark taxonomy metadata, deterministic session-id recall metrics, explicit no-network, no-model, and no-judge flags, and separate abstention handling.
 no-mistakes review fixes preserved haystack dates, made temporal smoke records exercise currentness, and sized temporary retrieval `topK` to the requested `k`.
 Slice B adds `pnpm --filter @memory-lane/lifecycle eval:trace-dataset-converter -- --traces <dir> --out <file>` for maintainers who have opted into local trace capture.
-The converter deduplicates trace content, skips traces without a user question unless all traces are unusable, records date range, fidelity mix, duplicate/unusable counts, and thin-data status, and rejects output paths inside the trace directory.
+The converter reads one hashed per-project trace directory, deduplicates trace content, skips traces without a user question unless all traces are unusable, records date range, fidelity mix, duplicate/unusable counts, and thin-data status, and rejects output paths that physically resolve inside the trace directory.
 Its output is meant to be passed explicitly to the existing core smoke adapter and remains a local self-retrieval transport smoke, not ranking-quality evidence.
 The deterministic retrieval, conflict/update, lifecycle-injection, prompt-routing, long-session synthetic, external long-memory smoke, and trace dataset converter evals are clean or locally scoped, so retrieval-ranking changes remain paused until dogfood or eval evidence exposes a concrete production recall bug.
 
