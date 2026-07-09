@@ -29,6 +29,9 @@ Keep it safe to read wholesale in fresh sessions.
 Latest known release: `v0.2.47` from main commit `28e5961`, after PR #132 fixed compiled binary and install-manifest version metadata.
 Release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMORY_LANE_VERSION=v0.2.47 pnpm build:binary`, `pnpm smoke:binary`, GitHub Actions release run `28768281598`, and a downloaded release-asset `status --json` version check.
 
+Current open PR: PR #167 fixes issue #141 by making Codex Desktop init existing-config detection TOML-aware and making failed selected init integrations report partial errors with non-zero exit status.
+PR #167 used Blaze quickfix mode with Fable 5 review, and no-mistakes was skipped by quickfix mode.
+
 Recent shipped work:
 
 - PR #80 shipped project-local default writes in `v0.2.43`.
