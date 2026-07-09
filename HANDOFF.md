@@ -2,8 +2,8 @@
 
 ## Current state
 
-- Branch context: PR #167 is open from `blaze/issue-141-codex-init` for issue #141 Codex Desktop init failure handling.
-- PR #167 fixes interactive Codex Desktop init with normal TOML config, partial-error reporting for failed selected integrations, and non-zero init exit status on selected integration failure.
+- Branch context: clean `main...origin/main` after PR #167 merged issue #141 as main commit `89b0fa8`.
+- PR #167 fixed interactive Codex Desktop init with normal TOML config, partial-error reporting for failed selected integrations, and non-zero init exit status on selected integration failure.
 - PR #167 used Blaze quickfix mode with Fable 5 implementation review.
 - no-mistakes was not run for PR #167 because quickfix mode skips it by default.
 - PR #164 synced status docs after PR #163.
@@ -21,9 +21,9 @@
 
 ## Current decision / next work
 
-The current repo state is PR #167 open from `blaze/issue-141-codex-init`.
-PR #167 fixes issue #141 so interactive Codex Desktop init no longer parses normal `~/.codex/config.toml` as JSON.
-Failed selected init integrations now print a partial-error banner and exit non-zero, while user-declined overwrite skips remain non-fatal.
+The current repo state is post-PR #167 on clean `main`.
+PR #167 fixed issue #141 so interactive Codex Desktop init no longer parses normal `~/.codex/config.toml` as JSON.
+Failed selected init integrations now print a partial-error banner and exit non-zero, while user-declined overwrite skips remain non-fatal through a structured skip flag.
 PR #167 used Fable 5 for implementation review and Blaze quickfix mode.
 no-mistakes was not run for PR #167 because quickfix mode skips it by default.
 The latest release remains `v0.2.47`.
@@ -94,5 +94,5 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.47` / commit `28e5961`.
-- Current repo status: PR #167 open for issue #141 from `blaze/issue-141-codex-init`.
+- Current repo status: post-PR #167 on clean `main...origin/main`.
 - Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, PR #127, and PR #130.
