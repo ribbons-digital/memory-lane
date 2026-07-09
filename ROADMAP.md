@@ -29,9 +29,6 @@ Keep it safe to read wholesale in fresh sessions.
 Latest known release: `v0.2.47` from main commit `28e5961`, after PR #132 fixed compiled binary and install-manifest version metadata.
 Release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMORY_LANE_VERSION=v0.2.47 pnpm build:binary`, `pnpm smoke:binary`, GitHub Actions release run `28768281598`, and a downloaded release-asset `status --json` version check.
 
-Current open PR: PR #167 fixes issue #141 by making Codex Desktop init existing-config detection TOML-aware and making failed selected init integrations report partial errors with non-zero exit status.
-PR #167 used Blaze quickfix mode with Fable 5 review, and no-mistakes was skipped by quickfix mode.
-
 Recent shipped work:
 
 - PR #80 shipped project-local default writes in `v0.2.43`.
@@ -59,6 +56,8 @@ Recent shipped work:
 - PR #163 shipped issue #138 secret-detector false-positive fixes for long branch names, feature flags, and bare high-entropy identifiers without secret context.
   The slice keeps explicit secret patterns and adds metadata-only lifecycle debug `skippedSecret` counts; fallback PR flow was used because no-mistakes could not start after the gate-remote push.
 - PR #165 fixed issue #140 by adding script-friendly CLI version handling for `--version`, `-v`, and `version` before config or storage initialization.
+- PR #167 fixed issue #141 by making Codex Desktop init existing-config detection TOML-aware, preserving overwrite prompts for padded or commented TOML headers, and making failed selected init integrations report partial errors with non-zero exit status.
+  The slice keeps user-declined overwrite skips non-fatal through a structured skip flag; quickfix mode skipped no-mistakes.
 
 ## Active track - Project-local Storage Defaults
 
