@@ -259,6 +259,36 @@ test("writeTraceDataset leaves no output when conversion fails", () => {
   assert.equal(fs.existsSync(outputDirectory), false)
 })
 
+test("writeTraceDataset rejects output paths inside the selected traces directory", () => {
+  const tracesDirectory = tempDir()
+  writeTrace(tracesDirectory, "valid.json", trace())
+
+  const insideOutput = path.join(tracesDirectory, "trace-dataset.json")
+  assert.throws(
+    () => writeTraceDataset(tracesDirectory, insideOutput),
+    /--out must resolve outside --traces/u,
+  )
+  assert.equal(fs.existsSync(insideOutput), false)
+
+  const nestedOutput = path.join(tracesDirectory, "nested", "trace-dataset.json")
+  assert.throws(
+    () => writeTraceDataset(tracesDirectory, nestedOutput),
+    /--out must resolve outside --traces/u,
+  )
+  assert.equal(fs.existsSync(nestedOutput), false)
+  assert.equal(fs.existsSync(path.dirname(nestedOutput)), false)
+
+  assert.throws(
+    () => writeTraceDataset(tracesDirectory, path.join(tracesDirectory, "..dataset.json")),
+    /--out must resolve outside --traces/u,
+  )
+
+  assert.throws(
+    () => writeTraceDataset(tracesDirectory, tracesDirectory),
+    /--out must resolve outside --traces/u,
+  )
+})
+
 test("a captured lifecycle trace converts into the local smoke dataset contract", () => {
   const workspace = tempDir()
   const configPath = path.join(workspace, "config.json")

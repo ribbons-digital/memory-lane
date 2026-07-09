@@ -237,7 +237,16 @@ export function serializeTraceDataset(dataset: TraceDataset): string {
   return JSON.stringify(dataset, null, 2) + "\n"
 }
 
+function assertOutputOutsideTracesDirectory(tracesDirectory: string, outputPath: string): void {
+  const resolvedTracesDirectory = path.resolve(tracesDirectory)
+  const resolvedOutputPath = path.resolve(outputPath)
+  const relativeOutputPath = path.relative(resolvedTracesDirectory, resolvedOutputPath)
+  const outputIsOutside = relativeOutputPath === ".." || relativeOutputPath.startsWith(`..${path.sep}`) || path.isAbsolute(relativeOutputPath)
+  if (!outputIsOutside) throw new Error(`Trace dataset converter --out must resolve outside --traces (${tracesDirectory})`)
+}
+
 export function writeTraceDataset(tracesDirectory: string, outputPath: string): TraceDataset {
+  assertOutputOutsideTracesDirectory(tracesDirectory, outputPath)
   const dataset = buildTraceDataset(tracesDirectory)
   const serialized = serializeTraceDataset(dataset)
   const outputDirectory = path.dirname(outputPath)
