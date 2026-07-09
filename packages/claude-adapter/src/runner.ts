@@ -1,7 +1,7 @@
 import {
-  appendHookDebugLog, hookDebugEnabled, loadConfig, skippedSecretCount, type HookDebugLogStatus, type MemoryEngine,
+  appendHookDebugLog, hookDebugEnabled, loadConfig, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
-import { createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, type LifecycleResult } from "@memory-lane/lifecycle"
+import { createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, lifecycleDebugCounts, type LifecycleResult } from "@memory-lane/lifecycle"
 import { lifecycleNoopOutput, noopOutput, sessionStartOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseClaudePayload, type ClaudeCommand } from "./payloads.js"
 import { readLatestTurnFromTranscript, readSessionMessagesFromTranscript } from "./transcript.js"
@@ -16,42 +16,6 @@ export interface RunClaudeHookOptions {
 
 function parseJson(text: string): unknown {
   return JSON.parse(text)
-}
-
-function lifecycleCounts(result: LifecycleResult): {
-  saved: number
-  skipped: number
-  discarded: number
-  skippedSecret?: number
-  additionalContext: boolean
-  warningCount: number
-  contextPolicyMode?: string
-  contextEvent?: string
-  contextSelected?: number
-  contextOmitted?: number
-  contextMaxItems?: number
-  contextMaxChars?: number
-  contextOmittedReasons?: string[]
-} {
-  const decision = result.contextDecision
-  const totalSkippedSecret = result.skippedSecret ?? skippedSecretCount(result.saved) ?? 0
-  return {
-    saved: result.saved.filter((saveResult) => saveResult.status === "saved").length,
-    skipped: result.saved.filter((saveResult) => saveResult.status === "skipped").length,
-    skippedSecret: totalSkippedSecret > 0 ? totalSkippedSecret : undefined,
-    discarded: result.discarded.length,
-    additionalContext: Boolean(result.additionalContext),
-    warningCount: result.saved.reduce((count, saveResult) => count + (saveResult.warnings?.length ?? 0), 0),
-    ...(decision ? {
-      contextPolicyMode: decision.mode,
-      contextEvent: decision.event,
-      contextSelected: decision.selected,
-      contextOmitted: decision.omitted,
-      contextMaxItems: decision.maxItems,
-      contextMaxChars: decision.maxChars,
-      contextOmittedReasons: decision.omittedReasons,
-    } : {}),
-  }
 }
 
 function systemMessageOutput(message: string): string {
@@ -132,13 +96,13 @@ export async function runClaudeHookCommand(command: ClaudeCommand, options: RunC
   try {
     if (parsed.kind === "session-start") {
       const result = handleSessionStart(options.engine, parsed.input)
-      log("ok", lifecycleCounts(result))
+      log("ok", lifecycleDebugCounts(result))
       return sessionStartOutput(result, debug)
     }
 
     if (parsed.kind === "user-prompt-submit") {
       const result = await handleUserPromptSubmit(options.engine, parsed.input)
-      log("ok", lifecycleCounts(result))
+      log("ok", lifecycleDebugCounts(result))
       return userPromptSubmitOutput(result, debug)
     }
 
@@ -149,7 +113,7 @@ export async function runClaudeHookCommand(command: ClaudeCommand, options: RunC
         lastUserMessage: parsed.input.lastUserMessage ?? latest.lastUserMessage,
         lastAssistantMessage: parsed.input.lastAssistantMessage ?? latest.lastAssistantMessage,
       }, { adapter: "claude" })
-      log("ok", lifecycleCounts(result))
+      log("ok", lifecycleDebugCounts(result))
       return lifecycleNoopOutput(result, debug)
     }
 
@@ -184,7 +148,7 @@ export async function runClaudeHookCommand(command: ClaudeCommand, options: RunC
         adapter: "claude",
       }, options.env)
       const result = saveSessionEndCandidates(options.engine, candidates)
-      log("ok", lifecycleCounts(result))
+      log("ok", lifecycleDebugCounts(result))
       return lifecycleNoopOutput(result, debug)
     }
 
@@ -220,12 +184,12 @@ export async function runClaudeHookCommand(command: ClaudeCommand, options: RunC
         adapter: "claude",
       }, options.env)
       const result = saveSessionEndCandidates(options.engine, candidates)
-      log("ok", lifecycleCounts(result))
+      log("ok", lifecycleDebugCounts(result))
       return lifecycleNoopOutput(result, debug)
     }
 
     const result = handlePostToolUse(options.engine, parsed.input, { adapter: "claude" })
-    log("ok", lifecycleCounts(result))
+    log("ok", lifecycleDebugCounts(result))
     return lifecycleNoopOutput(result, debug)
   } catch {
     log("error", { reason: "hook handling failed" })

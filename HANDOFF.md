@@ -30,7 +30,7 @@ Issue #138 is implemented in PR #163 on branch `fix/secret-detector-138`.
 The fix allows branch names, feature flags, and bare mixed high-entropy identifiers without secret words while still rejecting explicit secret prefixes, assignment-style secrets, private keys, and high-entropy values with secret-bearing context.
 Lifecycle hook debug logs now include a safe numeric `skippedSecret` count for secret-suppressed capture paths without logging raw candidate text or token values.
 Fable 5 approved both the diagnosis and implementation reviews.
-no-mistakes fallback PR flow is in use because `no-mistakes axi run --intent ...` still failed after `git push no-mistakes fix/secret-detector-138` and quick-start consultation with `error: "no run started for \"fix/secret-detector-138\": no previous run for branch fix/secret-detector-138"`.
+no-mistakes fallback PR flow is in use for PR #163 because the gate did not start for this branch after the gate-remote push and quick-start consultation.
 
 Issue #115 is closed with comment `Closed by PR #130, main commit 950a71e.`
 The issue #115 adapter added `pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset <path>`.
@@ -48,7 +48,7 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Keep `docs/plugins/README.md` tracked because it is user-facing and linked from `README.md`.
 - Keep internal feature notes out of tracked `docs/` unless a future user decision explicitly reintroduces them.
 - Use Fable 5 for explicit Fable 5 follow-up planning and code review with `claude --model claude-fable-5 -p '<review prompt>'`.
-- Use Opus 4.8 for ordinary Memory Lane design/spec and pre-PR implementation reviews outside the Fable 5 wave with `claude --model claude-opus-4-8 -p '<review prompt>'`.
+- Use Opus 4.8 with `claude --model claude-opus-4-8 -p '<review prompt>'` for ordinary Memory Lane design/spec and pre-PR implementation reviews unless Fable 5 is mentioned or specified.
 - PR-protected workflow applies: feature branch or worktree, PR, wait for user merge, sync main, delete feature branch, recommend next item.
 - Avoid retrieval rewrites, auto-consolidation, silent deletion, schema expansion, raw transcript indexing, token retuning, public eval commands, production eval APIs, or persisted workstream IDs unless a new approved slice explicitly includes them.
 
