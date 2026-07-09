@@ -2,7 +2,7 @@
 
 ## Current state
 
-- Current repo status: PR #172 merged for issue #171 Slice A opt-in local trace capture, local `main` synced to merge commit `0bebeba`, and local/remote `feature/slice-a-trace-capture` branches deleted.
+- Current repo status: PR #172 merged and closed issue #171 Slice A opt-in local trace capture, local `main` synced to merge commit `0bebeba`, and local/remote `feature/slice-a-trace-capture` branches deleted.
 - PR #172 implements opt-in local learning capture: interactive consent, default-off capture, home-scoped redacted capture files, 60-day/512MB retention, per-project exclusions, status/tuneup surfaces, and purge support.
 - PR #172 passed `pnpm build`, `pnpm test`, `git diff --check`, focused lifecycle trace tests, focused init/status/tuneup tests, focused Claude adapter tests, and Fable 5 implementation reviews with no blockers.
 - Issue #169 captured the review-governed learning flywheel design (outcome-informed learning track) with a UX north star and all six design decisions recorded as issue comments on 2026-07-09.
@@ -30,7 +30,7 @@ The current repo state is clean `main` after PR #172 merged as commit `0bebeba`.
 PR #172 implemented issue #171 Slice A: opt-in local learning capture for redacted lifecycle records, interactive consent that leaves `learning.capture` absent on EOF/non-interactive init, home-scoped capture storage, per-project exclusions, capture-time retention, status/tuneup reporting, and purge support.
 Issue #169 holds the completed review-governed learning flywheel design: home-scoped traces under `~/.memory-lane/traces/<project-key>/`, single global opt-in consent with per-project opt-out, 60-day/512MB retention with `memory-lane tuneup purge`, deferred-and-instrumented Codex transcript fidelity, a new minimal versioned capture-outcome schema, and proposals applied inside `memory-lane tuneup` with an undo journal.
 The UX north star keeps traces/datasets/evals/sweeps vocabulary out of the user surface; Slice E (`memory-lane tuneup`) is the product.
-The next required user action is to choose the next issue #171 slice.
+The next required user action is to choose or approve the next issue #169 slice after Slice A.
 PR #167 fixed issue #141 so interactive Codex Desktop init no longer parses normal `~/.codex/config.toml` as JSON.
 Failed selected init integrations now print a partial-error banner and exit non-zero, while user-declined overwrite skips remain non-fatal through a structured skip flag.
 PR #167 used Fable 5 for implementation review and Blaze quickfix mode.
