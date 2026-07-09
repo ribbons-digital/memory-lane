@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { analyzeSummaryHygiene, containsLikelySecret, normalizeMemoryText, type MemoryEngine, type MemoryFreshness, type MemoryLifecycleEvent, type MemoryRecord } from "@memory-lane/core"
 import { createOpenAICompatibleProvider } from "./llm-provider.js"
+import { captureLifecycleTrace } from "./trace-capture.js"
 import type { LLMProvider, PreCompactInput, PreCompactOptions, SessionEndInput, SessionEndOptions } from "./types.js"
 
 export const DEFAULT_SESSION_END_PROMPT = `You are summarizing an AI-assisted coding session for a memory system.
@@ -225,6 +226,16 @@ export async function handleSessionEnd(
 ): Promise<SessionEndCandidate[]> {
   engine.refreshScope(input.cwd)
   const scope = engine.getProjectScope()
+  if (options.captureTrace !== false) {
+    captureLifecycleTrace(input, {
+      adapter: options.adapter,
+      lifecycleEvent: options.lifecycleEvent === "pre_compact" ? "pre_compact" : "session_end",
+      trigger: options.trigger,
+      fidelity: options.traceFidelity,
+      configPath: options.configPath,
+      env,
+    })
+  }
 
   if (options.requireConfirmation !== false && !options.confirmed) {
     return []

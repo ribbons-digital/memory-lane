@@ -102,6 +102,14 @@ function writeMemoryRecords(filePath: string, records: MemoryRecord[]): void {
   fs.writeFileSync(filePath, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
 }
 
+function writeTraceFixture(root: string, directoryName: string, fileName: string, content: string): string {
+  const dir = path.join(root, directoryName)
+  fs.mkdirSync(dir, { recursive: true })
+  const filePath = path.join(dir, fileName)
+  fs.writeFileSync(filePath, content, "utf8")
+  return filePath
+}
+
 describe("config command", () => {
   function configFixture(): { env: NodeJS.ProcessEnv; configPath: string } {
     const dir = tempDir()
@@ -3339,6 +3347,100 @@ describe("CLI integration", () => {
     assert.equal(global.data.proposed.project, undefined)
   })
 
+
+  it("status reports the learning trace block in json and human forms", () => {
+    const dir = tempDir()
+    const traces = path.join(dir, "traces")
+    const configPath = path.join(dir, "config.json")
+    const traceA = writeTraceFixture(traces, "project-hash", "a.json", "{\"schemaVersion\":1}\n")
+    const traceB = writeTraceFixture(traces, "project-hash", "b.json", "{\"schemaVersion\":1,\"messages\":[]}\n")
+    const totalBytes = fs.statSync(traceA).size + fs.statSync(traceB).size
+    fs.writeFileSync(configPath, JSON.stringify({ learning: { capture: "on", excludedProjects: ["status-excluded-project"] } }), "utf8")
+    const env = {
+      MEMORY_LANE_FILE: path.join(dir, "memory.jsonl"),
+      MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"),
+      MEMORY_LANE_CONFIG: configPath,
+      MEMORY_LANE_TRACES_DIR: traces,
+      NO_COLOR: "1",
+    }
+
+    const jsonResult = runProcess(["status", "--json"], { env })
+    assert.equal(jsonResult.status, 0, jsonResult.stderr)
+    type StatusLearningPayload = {
+      ok: boolean
+      data: {
+        learning: {
+          enabled: boolean
+          tracesDirectory: string
+          fileCount: number
+          totalBytes: number
+          excludedProjects: string[]
+        }
+      }
+    }
+    const payload = JSON.parse(jsonResult.stdout) as StatusLearningPayload
+    assert.equal(payload.ok, true)
+    assert.equal(payload.data.learning.enabled, true)
+    assert.equal(payload.data.learning.tracesDirectory, traces)
+    assert.equal(payload.data.learning.fileCount, 2)
+    assert.equal(payload.data.learning.totalBytes, totalBytes)
+    assert.deepEqual(payload.data.learning.excludedProjects, ["status-excluded-project"])
+
+    const humanResult = runProcess(["status"], { env })
+    assert.equal(humanResult.status, 0, humanResult.stderr)
+    assert.match(humanResult.stdout, /Learning: on/u)
+    assert.match(humanResult.stdout, /Captured sessions: 2/u)
+    assert.match(humanResult.stdout, new RegExp(escapeRegExp(traces), "u"))
+    assert.match(humanResult.stdout, /status-excluded-project/u)
+  })
+
+  it("tuneup reports learning empty states and purge removes trace files idempotently", () => {
+    const dir = tempDir()
+    const traces = path.join(dir, "traces")
+    const configPath = path.join(dir, "config.json")
+    const env = {
+      MEMORY_LANE_FILE: path.join(dir, "memory.jsonl"),
+      MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "embeddings.jsonl"),
+      MEMORY_LANE_CONFIG: configPath,
+      MEMORY_LANE_TRACES_DIR: traces,
+      NO_COLOR: "1",
+    }
+    fs.writeFileSync(configPath, JSON.stringify({ learning: { capture: "off" } }), "utf8")
+
+    const offResult = runProcess(["tuneup"], { env })
+    assert.equal(offResult.status, 0, offResult.stderr)
+    assert.match(offResult.stdout, /Local learning is off/u)
+    assert.match(offResult.stdout, /learning\.capture.*on/u)
+
+    fs.writeFileSync(configPath, JSON.stringify({ learning: { capture: "on" } }), "utf8")
+    writeTraceFixture(traces, "project-hash", "first.json", "{\"schemaVersion\":1}\n")
+    writeTraceFixture(traces, "project-hash", "second.json", "{\"schemaVersion\":1}\n")
+
+    const onResult = runProcess(["tuneup"], { env })
+    assert.equal(onResult.status, 0, onResult.stderr)
+    assert.match(onResult.stdout, /2 sessions captured; useful signal around 50/u)
+
+    const purgeResult = runProcess(["tuneup", "purge", "--json"], { env })
+    assert.equal(purgeResult.status, 0, purgeResult.stderr)
+    type TuneupPurgePayload = {
+      data: {
+        removedFiles: number
+        removedBytes: number
+        tracesDirectory: string
+      }
+    }
+    const purged = JSON.parse(purgeResult.stdout) as TuneupPurgePayload
+    assert.equal(purged.data.removedFiles, 2)
+    assert.equal(purged.data.removedBytes > 0, true)
+    assert.equal(purged.data.tracesDirectory, traces)
+    assert.equal(fs.existsSync(traces), false)
+
+    const secondPurge = runProcess(["tuneup", "purge", "--json"], { env })
+    assert.equal(secondPurge.status, 0, secondPurge.stderr)
+    const secondPurged = JSON.parse(secondPurge.stdout) as TuneupPurgePayload
+    assert.equal(secondPurged.data.removedFiles, 0)
+    assert.equal(secondPurged.data.removedBytes, 0)
+  })
 })
 
 describe("boolean flags before positionals (issue #135)", () => {

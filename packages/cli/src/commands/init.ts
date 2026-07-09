@@ -1,3 +1,4 @@
+import { getDefaultConfigPath, readRawConfig, writeConfig } from "@memory-lane/core"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -7,20 +8,62 @@ import { hasExistingMemoryLaneConfig, installHarness } from "../installer/config
 import type { DetectedHarness, Harness, InitOptions, InitResult, IntegrationResult } from "../installer/types.js"
 import { VERSION } from "../version.js"
 
+type PromiseResolvers<T> = {
+  promise: Promise<T>
+  resolve: (value: T | PromiseLike<T>) => void
+  reject: (reason?: unknown) => void
+}
+
+function promiseWithResolvers<T>(): PromiseResolvers<T> {
+  const promiseConstructor = Promise as PromiseConstructor & { withResolvers?: <Value>() => PromiseResolvers<Value> }
+  if (promiseConstructor.withResolvers) return promiseConstructor.withResolvers<T>()
+  let resolve!: PromiseResolvers<T>["resolve"]
+  let reject!: PromiseResolvers<T>["reject"]
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
 const INIT_SKIPPED_BY_USER = "skipped by user"
 
-async function prompt(question: string, defaultValue: string = ""): Promise<string> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-  try {
-    return await new Promise((resolve) => {
-      const suffix = defaultValue ? ` [${defaultValue}]: ` : ": "
-      rl.question(question + suffix, (answer) => {
-        resolve(answer.trim() || defaultValue)
-      })
-    })
-  } finally {
-    rl.close()
+interface PromptResult {
+  answer: string
+  answered: boolean
+}
+
+let promptInterface: readline.Interface | undefined
+
+function getPromptInterface(): readline.Interface {
+  promptInterface ??= readline.createInterface({ input: process.stdin, output: process.stdout })
+  return promptInterface
+}
+
+function closePromptInterface(): void {
+  promptInterface?.close()
+  promptInterface = undefined
+}
+
+async function promptResult(question: string, defaultValue: string = ""): Promise<PromptResult> {
+  const rl = getPromptInterface()
+  const { promise, resolve } = promiseWithResolvers<PromptResult>()
+  const suffix = defaultValue ? ` [${defaultValue}]: ` : ": "
+  let settled = false
+  const finish = (answer: string, answered: boolean) => {
+    if (settled) return
+    settled = true
+    rl.off("close", onClose)
+    resolve({ answer: answer.trim() || defaultValue, answered })
   }
+  const onClose = () => finish(defaultValue, false)
+  rl.once("close", onClose)
+  rl.question(question + suffix, (answer) => finish(answer, true))
+  return await promise
+}
+
+async function prompt(question: string, defaultValue: string = ""): Promise<string> {
+  return (await promptResult(question, defaultValue)).answer
 }
 
 async function confirm(question: string, defaultValue: boolean = true): Promise<boolean> {
@@ -42,6 +85,25 @@ function resolveHomeDir(): string {
 function ensureDataDir(dataDir: string): void {
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true })
 }
+
+function learningCaptureConfigured(configPath: string): boolean {
+  const raw = readRawConfig(configPath)
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false
+  const learning = "learning" in raw ? raw.learning : undefined
+  if (!learning || typeof learning !== "object" || Array.isArray(learning)) return false
+  return "capture" in learning
+}
+
+async function askLearningConsent(configPath: string): Promise<void> {
+  if (learningCaptureConfigured(configPath)) return
+  console.log("")
+  console.log("Memory Lane can learn from how you use it - locally, on this machine.")
+  console.log("Sessions are redacted and never leave your computer. You approve every change it proposes.")
+  const result = await promptResult("Enable local learning? [y/N]", "")
+  if (!result.answered) return
+  writeConfig(configPath, { learning: { capture: result.answer.toLowerCase().startsWith("y") ? "on" : "off" } })
+}
+
 
 function hasFlag(argv: string[], name: string): boolean {
   return argv.includes(`--${name}`)
@@ -162,51 +224,57 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
     return { binaryPath, dataDir, integrations: [], failedIntegrations: [] }
   }
 
-  const selected = only
-    ? parseHarnessTokens(only, harnesses)
-    : all
-      ? harnesses.map((h) => h.harness)
-      : (yes || recommended)
-        ? findDetected(harnesses).map((h) => h.harness)
-        : await runInteractive(options, harnesses)
-
-  const integrations: IntegrationResult[] = []
-  for (const harness of selected) {
-    try {
-      const detected = findDetected(harnesses).find((h) => h.harness === harness)
-      const configPath = detected?.configPath
-      if (!options.yes && configPath && hasExistingMemoryLaneConfig(harness, configPath)) {
-        const ok = await confirm(`${harnessName(harness)} already has a Memory Lane configuration. Overwrite?`, true)
-        if (!ok) {
-          integrations.push({ harness, configured: false, skipped: true, message: INIT_SKIPPED_BY_USER })
-          console.log(`  - ${harnessName(harness)} skipped`)
-          continue
-        }
-      }
-      const result = installHarness(harness, options)
-      integrations.push(result)
-      console.log(`  ✓ ${harnessName(harness)} configured`)
-      if (result.message) console.log(`    ${result.message}`)
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
-      integrations.push({ harness, configured: false, message })
-      console.log(`  ✗ ${harnessName(harness)} failed: ${message}`)
+  try {
+    const selected = only
+      ? parseHarnessTokens(only, harnesses)
+      : all
+        ? harnesses.map((h) => h.harness)
+        : (yes || recommended)
+          ? findDetected(harnesses).map((h) => h.harness)
+          : await runInteractive(options, harnesses)
+    if (!yes && !recommended && !all && !only) {
+      await askLearningConsent(getDefaultConfigPath())
     }
-  }
 
-  const failedIntegrations = integrations.filter((integration) => !integration.configured && !integration.skipped)
-  const result: InitResult = { binaryPath, dataDir, integrations, failedIntegrations }
-  writeInstallManifest(options, result)
-  if (failedIntegrations.length) {
-    console.log("\nMemory Lane init completed with errors.")
-    console.log(`Failed integrations: ${failedIntegrations.map((integration) => harnessName(integration.harness)).join(", ")}`)
+    const integrations: IntegrationResult[] = []
+    for (const harness of selected) {
+      try {
+        const detected = findDetected(harnesses).find((h) => h.harness === harness)
+        const configPath = detected?.configPath
+        if (!options.yes && configPath && hasExistingMemoryLaneConfig(harness, configPath)) {
+          const ok = await confirm(`${harnessName(harness)} already has a Memory Lane configuration. Overwrite?`, true)
+          if (!ok) {
+            integrations.push({ harness, configured: false, skipped: true, message: INIT_SKIPPED_BY_USER })
+            console.log(`  - ${harnessName(harness)} skipped`)
+            continue
+          }
+        }
+        const result = installHarness(harness, options)
+        integrations.push(result)
+        console.log(`  ✓ ${harnessName(harness)} configured`)
+        if (result.message) console.log(`    ${result.message}`)
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        integrations.push({ harness, configured: false, message })
+        console.log(`  ✗ ${harnessName(harness)} failed: ${message}`)
+      }
+    }
+
+    const failedIntegrations = integrations.filter((integration) => !integration.configured && !integration.skipped)
+    const result: InitResult = { binaryPath, dataDir, integrations, failedIntegrations }
+    writeInstallManifest(options, result)
+    if (failedIntegrations.length) {
+      console.log("\nMemory Lane init completed with errors.")
+      console.log(`Failed integrations: ${failedIntegrations.map((integration) => harnessName(integration.harness)).join(", ")}`)
+      console.log(`Data directory: ${dataDir}`)
+      return result
+    }
+
+    console.log("\nDone. Memory Lane is ready.")
     console.log(`Data directory: ${dataDir}`)
+    console.log("Try: memory-lane save \"always use pnpm\" --status approved")
     return result
+  } finally {
+    closePromptInterface()
   }
-
-  console.log("\nDone. Memory Lane is ready.")
-  console.log(`Data directory: ${dataDir}`)
-  console.log("Try: memory-lane save \"always use pnpm\" --status approved")
-
-  return result
 }

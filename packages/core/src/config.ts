@@ -149,7 +149,21 @@ export function validateConfig(config: unknown): SemanticMemoryConfig {
   validateSessionEndSummaryConfig(memory?.sessionEndSummary)
   validatePreCompactSummaryConfig(memory?.preCompactSummary)
   validatePluginsConfig(root.plugins, root.pluginConfig)
+  validateLearningConfig(root.learning)
   return config as SemanticMemoryConfig
+}
+
+function validateLearningConfig(v: unknown): void {
+  if (v === undefined) return
+  const o = obj(v, "learning")
+  if (o.capture !== undefined && o.capture !== "on" && o.capture !== "off") {
+    throw new ConfigError("learning.capture must be on or off")
+  }
+  if (o.excludedProjects !== undefined) {
+    if (!Array.isArray(o.excludedProjects) || !o.excludedProjects.every((item) => typeof item === "string")) {
+      throw new ConfigError("learning.excludedProjects must be an array of strings")
+    }
+  }
 }
 
 function validateHandoffMode(v: unknown): void {

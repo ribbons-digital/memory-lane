@@ -717,6 +717,12 @@ export interface PreCompactSummaryConfig {
   enabled?: boolean
 }
 
+export interface LearningConfig {
+  capture?: "on" | "off"
+  excludedProjects?: string[]
+}
+
+
 export interface SemanticMemoryConfig {
   semantic: {
     enabled: boolean
@@ -735,6 +741,7 @@ export interface SemanticMemoryConfig {
   obsidian?: ObsidianMirrorConfig
   plugins?: string[]
   pluginConfig?: Record<string, unknown>
+  learning?: LearningConfig
   memory?: {
     handoffMode?: HandoffMode
     sessionEndSummary?: SessionEndSummaryConfig

@@ -5,7 +5,7 @@ import * as path from "node:path"
 import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, deepMergeConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type WorkflowArea } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
-import { classifyPromptRoute, handleSessionEnd, createOpenAICompatibleProvider } from "@memory-lane/lifecycle"
+import { classifyPromptRoute, handleSessionEnd, createOpenAICompatibleProvider, purgeTraces, traceStatus, type TraceStatus } from "@memory-lane/lifecycle"
 import { runPiHookCommand } from "./pi-hook.js"
 import { handleMcp } from "./commands/mcp.js"
 import { handleInit } from "./commands/init.js"
@@ -456,23 +456,77 @@ function handleDoctor(ctx: CliContext): void {
   printInitPrompt(ctx.json)
 }
 
+function numericReportField(report: Record<string, unknown>, key: string): number {
+  const value = report[key]
+  return typeof value === "number" ? value : 0
+}
+
+function formatLearningStatusHuman(learning: TraceStatus): string[] {
+  const lines = [
+    `Learning: ${learning.enabled ? "on" : "off"}`,
+    `Learning data: ${learning.tracesDirectory}`,
+    `Captured sessions: ${learning.fileCount}`,
+    `Captured bytes: ${learning.totalBytes}`,
+  ]
+  if (learning.excludedProjects.length) lines.push(`Excluded projects: ${learning.excludedProjects.join(", ")}`)
+  if (learning.oldestTrace) lines.push(`Oldest capture: ${learning.oldestTrace}`)
+  if (learning.newestTrace) lines.push(`Newest capture: ${learning.newestTrace}`)
+  return lines
+}
+
 function handleStatus(ctx: CliContext): void {
   const since = flag(ctx.argv, "since")
-  const report = ctx.engine.doctor({ freshnessSince: since })
+  const report = ctx.engine.doctor({ freshnessSince: since }) as Record<string, unknown>
+  const learning = traceStatus(ctx.configPath)
   if (ctx.json) {
-    console.log(formatDoctor(report, true))
+    console.log(formatDoctor({ ...report, learning }, true))
     return
   }
-  const r = report as any
-  const lines = [`Total: ${r.totalMemories}, Approved: ${r.approvedMemories}, Pending: ${r.pendingMemories}, Embeddings: ${r.embeddingCount}`]
-  lines.push(...formatPreferenceDiagnosticsSummary(r.preferenceDiagnostics, report))
-  const legacySummary = formatLegacyProjectMemorySummary(r.legacyProjectMemories)
+  const lines = [`Total: ${numericReportField(report, "totalMemories")}, Approved: ${numericReportField(report, "approvedMemories")}, Pending: ${numericReportField(report, "pendingMemories")}, Embeddings: ${numericReportField(report, "embeddingCount")}`]
+  lines.push(...formatPreferenceDiagnosticsSummary(report.preferenceDiagnostics, report))
+  const legacySummary = formatLegacyProjectMemorySummary(report.legacyProjectMemories)
   if (legacySummary) lines.push(legacySummary)
+  lines.push(...formatLearningStatusHuman(learning))
   if (since) {
-    const freshnessSummary = formatFreshnessSummary(r.freshness)
+    const freshnessSummary = formatFreshnessSummary(report.freshness)
     if (freshnessSummary) lines.push(freshnessSummary)
   }
   console.log(lines.join("\n"))
+}
+
+function handleTuneup(ctx: CliContext): void {
+  const subCmd = ctx.rest[0]?.toLowerCase()
+  if (subCmd && subCmd !== "purge") {
+    console.log(formatError("Usage: memory-lane tuneup [purge] [--json]", ctx.json))
+    process.exit(2)
+  }
+  if (subCmd === "purge") {
+    const result = purgeTraces(ctx.configPath)
+    if (ctx.json) {
+      console.log(JSON.stringify({ ok: true, data: result }, null, 2))
+      return
+    }
+    console.log(`Removed ${result.removedFiles} capture file${result.removedFiles === 1 ? "" : "s"} (${result.removedBytes} bytes) from ${result.tracesDirectory}.`)
+    return
+  }
+
+  const learning = traceStatus(ctx.configPath)
+  if (ctx.json) {
+    console.log(JSON.stringify({ ok: true, data: learning }, null, 2))
+    return
+  }
+  if (!learning.enabled) {
+    console.log([
+      "Local learning is off.",
+      "Enable it with: memory-lane config set learning.capture on",
+      `Learning data: ${learning.tracesDirectory}`,
+    ].join("\n"))
+    return
+  }
+  console.log([
+    `Local learning is on. ${learning.fileCount} session${learning.fileCount === 1 ? "" : "s"} captured; useful signal around 50.`,
+    `Learning data: ${learning.tracesDirectory}`,
+  ].join("\n"))
 }
 
 function createSummaryProvider(config: ReturnType<typeof loadConfig>):
@@ -815,6 +869,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   delete: handleDelete,
   approve: handleApprove,
   reject: handleReject,
+  tuneup: handleTuneup,
   update: handleUpdate,
   rescope: handleRescope,
   move: handleRescope,

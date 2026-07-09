@@ -1,7 +1,7 @@
 import {
   appendHookDebugLog, hookDebugEnabled, loadConfig, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
-import { createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, lifecycleDebugCounts, type LifecycleResult, type SessionEndInput, type SessionMessage, type StopInput } from "@memory-lane/lifecycle"
+import { captureLifecycleTrace, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, lifecycleDebugCounts, shouldCaptureLifecycleTrace, type LifecycleResult, type SessionEndInput, type SessionMessage, type StopInput, type TraceFidelity } from "@memory-lane/lifecycle"
 import { additionalContextOutput, lifecycleNoopOutput, noopOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseCodexPayload, type CodexCommand } from "./payloads.js"
 import { readLatestTurnFromTranscript, readSessionMessagesFromTranscript } from "./transcript.js"
@@ -64,15 +64,26 @@ function fallbackSessionMessages(input: StopInput): SessionMessage[] {
   return messages
 }
 
-function sessionEndInputFromStop(input: StopInput, transcriptPath?: string): SessionEndInput {
+function sessionEndInputFromStop(input: StopInput, transcriptPath?: string): { input: SessionEndInput; fidelity: TraceFidelity } {
   const transcriptMessages = readSessionMessagesFromTranscript(transcriptPath)
+  const messages = transcriptMessages.length ? transcriptMessages : fallbackSessionMessages(input)
   return {
-    cwd: input.cwd,
-    sessionId: input.sessionId,
-    transcriptPath: input.transcriptPath,
-    messages: transcriptMessages.length ? transcriptMessages : fallbackSessionMessages(input),
+    input: {
+      cwd: input.cwd,
+      sessionId: input.sessionId,
+      transcriptPath: input.transcriptPath,
+      messages,
+    },
+    fidelity: transcriptMessages.length ? "full-transcript" : "last-turn-fallback",
   }
 }
+
+function traceFidelity(inputMessagesLength: number, capturedMessagesLength: number, transcriptPath?: string): TraceFidelity {
+  if (transcriptPath && inputMessagesLength === 0 && capturedMessagesLength > 0) return "full-transcript"
+  if (capturedMessagesLength > 0) return "payload-messages"
+  return "last-turn-fallback"
+}
+
 
 function saveSessionEndCandidates(engine: MemoryEngine, candidates: Awaited<ReturnType<typeof handleSessionEnd>>): LifecycleResult {
   return {
@@ -146,6 +157,17 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
       }
 
       const config = loadConfig(options.configPath)
+      let trace: { input: SessionEndInput; fidelity: TraceFidelity } | undefined
+      if (shouldCaptureLifecycleTrace(stopInput.cwd, config)) {
+        trace = sessionEndInputFromStop(stopInput, parsed.transcriptPath)
+        captureLifecycleTrace(trace.input, {
+          adapter: "codex",
+          lifecycleEvent: "session_end",
+          fidelity: trace.fidelity,
+          configPath: options.configPath,
+          env: options.env,
+        })
+      }
       const summaryProvider = createSessionEndSummaryProvider(config, options.env)
       if (summaryProvider.status === "disabled") {
         log("noop", { reason: "session-end summarization disabled" })
@@ -156,7 +178,8 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         return systemMessageOutput("Session-end summarization requires memory.sessionEndSummary.baseUrl and model.")
       }
 
-      const candidates = await handleSessionEnd(options.engine, sessionEndInputFromStop(stopInput, parsed.transcriptPath), {
+      trace ??= sessionEndInputFromStop(stopInput, parsed.transcriptPath)
+      const candidates = await handleSessionEnd(options.engine, trace.input, {
         provider: summaryProvider.provider,
         promptTemplate: summaryProvider.config.promptTemplate ?? undefined,
         maxTokens: summaryProvider.config.maxTokens,
@@ -165,6 +188,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         confirmed: true,
         includeToolOutputs: summaryProvider.config.includeToolOutputs,
         adapter: "codex",
+        captureTrace: false,
       }, options.env)
       const result = saveSessionEndCandidates(options.engine, candidates)
       log("ok", lifecycleDebugCounts(result))
@@ -180,6 +204,18 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
     if (parsed.kind === "session-end") {
       const config = loadConfig(options.configPath)
       const summaryProvider = createSessionEndSummaryProvider(config, options.env)
+      let transcriptMessages = parsed.input.messages.length ? parsed.input.messages : undefined
+      if (shouldCaptureLifecycleTrace(parsed.input.cwd, config)) {
+        transcriptMessages ??= readSessionMessagesFromTranscript(parsed.input.transcriptPath)
+        const sessionEndInput = { ...parsed.input, messages: transcriptMessages }
+        captureLifecycleTrace(sessionEndInput, {
+          adapter: "codex",
+          lifecycleEvent: "session_end",
+          fidelity: traceFidelity(parsed.input.messages.length, transcriptMessages.length, parsed.input.transcriptPath),
+          configPath: options.configPath,
+          env: options.env,
+        })
+      }
       if (summaryProvider.status === "disabled") {
         log("noop", { reason: "session-end summarization disabled" })
         return noopOutput("Session-end summarization is not enabled.", debug)
@@ -202,6 +238,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         confirmed: true,
         includeToolOutputs: summaryProvider.config.includeToolOutputs,
         adapter: "codex",
+        captureTrace: false,
       }, options.env)
       const result = saveSessionEndCandidates(options.engine, candidates)
       log("ok", lifecycleDebugCounts(result))
@@ -210,6 +247,21 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
 
     if (parsed.kind === "pre-compact") {
       const config = loadConfig(options.configPath)
+      let transcriptMessages = parsed.input.messages?.length ? parsed.input.messages : undefined
+      if (shouldCaptureLifecycleTrace(parsed.input.cwd, config)) {
+        transcriptMessages ??= readSessionMessagesFromTranscript(parsed.input.transcriptPath)
+        captureLifecycleTrace({
+          ...parsed.input,
+          messages: transcriptMessages,
+        }, {
+          adapter: "codex",
+          lifecycleEvent: "pre_compact",
+          trigger: parsed.input.trigger,
+          fidelity: traceFidelity(parsed.input.messages?.length ?? 0, transcriptMessages.length, parsed.input.transcriptPath),
+          configPath: options.configPath,
+          env: options.env,
+        })
+      }
       if (!preCompactSummaryEnabled(config)) {
         log("noop", { reason: "pre-compact summarization disabled" })
         return noopOutput("Pre-compact summarization is not enabled.", debug)
@@ -226,7 +278,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         return parsed.input.trigger === "auto" ? noopOutput(message, debug) : systemMessageOutput(message)
       }
 
-      const transcriptMessages = parsed.input.messages?.length ? parsed.input.messages : readSessionMessagesFromTranscript(parsed.input.transcriptPath)
+      transcriptMessages ??= readSessionMessagesFromTranscript(parsed.input.transcriptPath)
       const candidates = await handlePreCompact(options.engine, {
         ...parsed.input,
         messages: transcriptMessages,
@@ -238,6 +290,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         confirmed: true,
         includeToolOutputs: summaryProvider.config.includeToolOutputs,
         adapter: "codex",
+        captureTrace: false,
       }, options.env)
       const result = saveSessionEndCandidates(options.engine, candidates)
       log("ok", lifecycleDebugCounts(result))
