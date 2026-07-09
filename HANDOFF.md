@@ -2,7 +2,10 @@
 
 ## Current state
 
-- Branch context: clean `main...origin/main` after PR #167 merged issue #141 as main commit `89b0fa8`.
+- Branch context: clean `main...origin/main` after PR #168 synced status docs as main commit `277dbbf`.
+- Issue #169 captured the review-governed learning flywheel design (outcome-informed learning track) with a UX north star and all six design decisions recorded as issue comments on 2026-07-09.
+- Memory store hygiene on 2026-07-09: rejected pending `484111e8`, consolidated duplicate no-mistakes gate rules into approved workflow_rule `1bc145df` (supersedes `29023aba` and `e0e48ba4`), and ran `memory-lane compact` to purge deleted/rejected records.
+- PR #168 synced status docs after PR #167.
 - PR #167 fixed interactive Codex Desktop init with normal TOML config, partial-error reporting for failed selected integrations, and non-zero init exit status on selected integration failure.
 - PR #167 used Blaze quickfix mode with Fable 5 implementation review.
 - no-mistakes was not run for PR #167 because quickfix mode skips it by default.
@@ -21,7 +24,10 @@
 
 ## Current decision / next work
 
-The current repo state is post-PR #167 on clean `main`.
+The current repo state is post-PR #168 on clean `main`.
+Issue #169 holds the completed review-governed learning flywheel design: home-scoped traces under `~/.memory-lane/traces/<project-key>/`, single global opt-in consent with per-project opt-out, 60-day/512MB retention with `memory-lane tuneup purge`, deferred-and-instrumented Codex transcript fidelity, a new minimal versioned capture-outcome schema, and proposals applied inside `memory-lane tuneup` with an undo journal.
+The UX north star keeps traces/datasets/evals/sweeps vocabulary out of the user surface; Slice E (`memory-lane tuneup`) is the product.
+The next gate is scoping Slice A (opt-in local trace capture) for explicit user approval before any implementation.
 PR #167 fixed issue #141 so interactive Codex Desktop init no longer parses normal `~/.codex/config.toml` as JSON.
 Failed selected init integrations now print a partial-error banner and exit non-zero, while user-declined overwrite skips remain non-fatal through a structured skip flag.
 PR #167 used Fable 5 for implementation review and Blaze quickfix mode.
@@ -94,5 +100,5 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.47` / commit `28e5961`.
-- Current repo status: post-PR #167 on clean `main...origin/main`.
+- Current repo status: post-PR #168 on clean `main...origin/main`; issue #169 design captured, next gate is Slice A scoping.
 - Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, PR #127, and PR #130.
