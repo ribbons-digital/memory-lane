@@ -294,6 +294,11 @@ function tomlEscape(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
 }
 
+function hasTomlSection(content: string, sectionName: string): boolean {
+  const sectionRegex = new RegExp(`^\\[${sectionName.replace(/\./g, "\\.")}\\]$`)
+  return content.split("\n").some((line) => sectionRegex.test(line.trim()))
+}
+
 function removeTomlSection(content: string, sectionName: string): string {
   const lines = content.split("\n")
   const startRegex = new RegExp(`^\\[${sectionName.replace(/\./g, "\\.")}\\]$`)
@@ -374,9 +379,13 @@ export function hasExistingMemoryLaneConfig(harness: Harness, configPath: string
     return false
   }
 
-  if (harness === "claude-desktop" || harness === "codex-desktop") {
+  if (harness === "claude-desktop") {
     const data = readJson(configPath)
     return !!(data.mcpServers as Record<string, unknown> | undefined)?.["memory-lane"]
+  }
+
+  if (harness === "codex-desktop") {
+    return hasTomlSection(fs.readFileSync(configPath, "utf8"), "mcp_servers.memory-lane")
   }
 
   if (harness === "pi") {
