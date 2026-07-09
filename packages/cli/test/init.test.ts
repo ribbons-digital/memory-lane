@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
-import { execFileSync, spawnSync } from "node:child_process"
+import { execFileSync, spawn, spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -60,6 +60,38 @@ describe("init wizard", () => {
       stdout: result.stdout.trim(),
       stderr: result.stderr.trim(),
     }
+  }
+
+  function runInteractive(args: string[], env: NodeJS.ProcessEnv, steps: Array<{ prompt: string; input: string }>, cwd?: string): Promise<{ status: number | null; stdout: string; stderr: string }> {
+    const cli = path.resolve(__dirname, "../dist/index.js")
+    const child = spawn("node", [cli, ...args], {
+      env: { ...process.env, PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH}`, ...env },
+      cwd,
+      stdio: ["pipe", "pipe", "pipe"],
+    })
+    let resolve!: (value: { status: number | null; stdout: string; stderr: string }) => void
+    let reject!: (reason?: unknown) => void
+    const promise = new Promise<{ status: number | null; stdout: string; stderr: string }>((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise
+      reject = rejectPromise
+    })
+    let stdout = ""
+    let stderr = ""
+    let nextStep = 0
+    child.stdout.setEncoding("utf8")
+    child.stderr.setEncoding("utf8")
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk
+      while (nextStep < steps.length && stdout.includes(steps[nextStep].prompt)) {
+        child.stdin.write(steps[nextStep].input)
+        nextStep += 1
+        if (nextStep === steps.length) child.stdin.end()
+      }
+    })
+    child.stderr.on("data", (chunk: string) => { stderr += chunk })
+    child.on("error", reject)
+    child.on("close", (status) => resolve({ status, stdout: stdout.trim(), stderr: stderr.trim() }))
+    return promise
   }
 
   function writeNativeMemoryLaneStub(logFileName: string, commandLogic: string): { nativeBinary: string; logPath: string } {
@@ -891,5 +923,84 @@ esac
     assert.ok(content.includes("[mcp_servers]"))
     assert.ok(content.includes("[mcp_servers.memory-lane]"))
     assert.ok(content.includes(`command = "${binaryPath}"`))
+  })
+
+  it("interactive init records local learning consent once", async () => {
+    const env = {
+      HOME: home,
+      NO_COLOR: "1",
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    }
+
+    const first = await runInteractive(["init"], env, [
+      { prompt: "Select integrations", input: "1\n" },
+      { prompt: "Enable local learning? [y/N]", input: "y\n" },
+    ])
+    assert.equal(first.status, 0, first.stderr)
+    assert.equal(first.stdout.match(/Enable local learning\? \[y\/N\]/gu)?.length, 1)
+    type LearningConfigFile = { learning?: { capture?: "on" | "off" } }
+    const configPath = path.join(home, ".memory-lane", "config.json")
+    const enabledConfig = JSON.parse(fs.readFileSync(configPath, "utf8")) as LearningConfigFile
+    assert.equal(enabledConfig.learning?.capture, "on")
+    const second = await runInteractive(["init"], env, [
+      { prompt: "Select integrations", input: "1\n" },
+      { prompt: "already has a Memory Lane configuration", input: "n\n" },
+    ])
+    assert.equal(second.status, 0, second.stderr)
+    assert.doesNotMatch(second.stdout, /Enable local learning\?/u)
+    const unchangedConfig = JSON.parse(fs.readFileSync(configPath, "utf8")) as LearningConfigFile
+    assert.equal(unchangedConfig.learning?.capture, "on")
+  })
+
+  it("interactive init leaves local learning unset on consent EOF", () => {
+    const result = runWithStatus(["init"], {
+      HOME: home,
+      NO_COLOR: "1",
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    }, undefined, "1\n")
+
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Enable local learning\? \[y\/N\]/u)
+    type LearningConfigFile = { learning?: { capture?: "on" | "off" } }
+    const configPath = path.join(home, ".memory-lane", "config.json")
+    const config = fs.existsSync(configPath)
+      ? JSON.parse(fs.readFileSync(configPath, "utf8")) as LearningConfigFile
+      : {}
+    assert.equal(config.learning?.capture, undefined)
+  })
+
+  it("interactive init continues after consent EOF before overwrite prompt", () => {
+    const configPath =
+      process.platform === "darwin"
+        ? path.join(home, "Library/Application Support/Claude/claude_desktop_config.json")
+        : path.join(home, ".config/Claude/claude_desktop_config.json")
+    fs.mkdirSync(path.dirname(configPath), { recursive: true })
+    fs.writeFileSync(configPath, JSON.stringify({ mcpServers: { "memory-lane": { command: "old-memory-lane" } } }), "utf8")
+
+    const result = runWithStatus(["init"], {
+      HOME: home,
+      NO_COLOR: "1",
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    }, undefined, "3\n")
+
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Enable local learning\? \[y\/N\]/u)
+    assert.match(result.stdout, /Claude Desktop\s+configured/u)
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"))
+    assert.equal(config.mcpServers["memory-lane"].command, binaryPath)
+  })
+
+  it("--yes init does not enable local trace capture implicitly", () => {
+    run(["init", "--yes"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    type LearningConfigFile = { learning?: { capture?: "on" | "off" } }
+    const configPath = path.join(home, ".memory-lane", "config.json")
+    const config = fs.existsSync(configPath)
+      ? JSON.parse(fs.readFileSync(configPath, "utf8")) as LearningConfigFile
+      : {}
+    assert.notEqual(config.learning?.capture, "on")
   })
 })

@@ -1,7 +1,7 @@
 import {
   appendHookDebugLog, hookDebugEnabled, loadConfig, skippedSecretCount, type HookDebugLogStatus, type MemoryEngine, type SaveResult,
 } from "@memory-lane/core"
-import { createOpenAICompatibleProvider, handlePreCompact, type SessionMessage } from "@memory-lane/lifecycle"
+import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePreCompact, shouldCaptureLifecycleTrace, type SessionMessage } from "@memory-lane/lifecycle"
 
 export interface RunPiHookOptions {
   engine: MemoryEngine
@@ -145,6 +145,19 @@ export async function runPiHookCommand(command: PiCommand, options: RunPiHookOpt
 
   try {
     const config = loadConfig(options.configPath)
+    if (parsed.input.messages.length && shouldCaptureLifecycleTrace(parsed.input.cwd, config)) {
+      captureLifecycleTrace({
+        ...parsed.input,
+        messages: parsed.input.messages,
+      }, {
+        adapter: "pi",
+        lifecycleEvent: "pre_compact",
+        trigger: parsed.input.trigger,
+        fidelity: classifyTraceFidelity(parsed.input.messages.length, parsed.input.messages.length),
+        configPath: options.configPath,
+        env: options.env,
+      })
+    }
     if (!preCompactSummaryEnabled(config)) {
       const reason = "pre-compact summarization disabled"
       log("noop", { reason })
@@ -185,6 +198,7 @@ export async function runPiHookCommand(command: PiCommand, options: RunPiHookOpt
       includeToolOutputs: summaryProvider.config.includeToolOutputs,
       adapter: "pi",
       trigger: parsed.input.trigger,
+      captureTrace: false,
     }, options.env)
 
     const savedResults = saveSessionSummaryCandidates(options.engine, candidates)

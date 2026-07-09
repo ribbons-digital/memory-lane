@@ -2,7 +2,9 @@
 
 ## Current state
 
-- Branch context: clean `main...origin/main` after PR #168 synced status docs as main commit `277dbbf`.
+- Branch context: PR #172 is open from `feature/slice-a-trace-capture` for issue #171 Slice A opt-in local trace capture.
+- PR #172 implements opt-in local learning capture: interactive consent, default-off capture, home-scoped redacted capture files, 60-day/512MB retention, per-project exclusions, status/tuneup surfaces, and purge support.
+- PR #172 passed `pnpm build`, `pnpm test`, `git diff --check`, focused lifecycle trace tests, focused init/status/tuneup tests, and Fable 5 implementation review with no blockers.
 - Issue #169 captured the review-governed learning flywheel design (outcome-informed learning track) with a UX north star and all six design decisions recorded as issue comments on 2026-07-09.
 - Memory store hygiene on 2026-07-09: rejected pending `484111e8`, consolidated duplicate no-mistakes gate rules into approved workflow_rule `1bc145df` (supersedes `29023aba` and `e0e48ba4`), and ran `memory-lane compact` to purge deleted/rejected records.
 - PR #168 synced status docs after PR #167.
@@ -24,10 +26,11 @@
 
 ## Current decision / next work
 
-The current repo state is post-PR #168 on clean `main`.
+The current repo state is PR #172 open from `feature/slice-a-trace-capture`.
+PR #172 implements issue #171 Slice A: opt-in local learning capture for redacted lifecycle records, interactive consent that leaves `learning.capture` absent on EOF/non-interactive init, home-scoped capture storage, per-project exclusions, capture-time retention, status/tuneup reporting, and purge support.
 Issue #169 holds the completed review-governed learning flywheel design: home-scoped traces under `~/.memory-lane/traces/<project-key>/`, single global opt-in consent with per-project opt-out, 60-day/512MB retention with `memory-lane tuneup purge`, deferred-and-instrumented Codex transcript fidelity, a new minimal versioned capture-outcome schema, and proposals applied inside `memory-lane tuneup` with an undo journal.
 The UX north star keeps traces/datasets/evals/sweeps vocabulary out of the user surface; Slice E (`memory-lane tuneup`) is the product.
-The next gate is scoping Slice A (opt-in local trace capture) for explicit user approval before any implementation.
+The next required user action is repository-owner review/merge of PR #172 after checks pass.
 PR #167 fixed issue #141 so interactive Codex Desktop init no longer parses normal `~/.codex/config.toml` as JSON.
 Failed selected init integrations now print a partial-error banner and exit non-zero, while user-declined overwrite skips remain non-fatal through a structured skip flag.
 PR #167 used Fable 5 for implementation review and Blaze quickfix mode.

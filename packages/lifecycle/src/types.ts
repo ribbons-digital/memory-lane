@@ -128,6 +128,9 @@ export interface SessionMessage {
   toolName?: string
 }
 
+export type TraceFidelity = "full-transcript" | "payload-messages" | "last-turn-fallback"
+
+
 export interface SessionEndInput {
   cwd: string
   sessionId?: string
@@ -147,6 +150,9 @@ export interface SessionEndOptions {
   lifecycleEvent?: MemoryLifecycleEvent
   trigger?: string
   turnId?: string
+  traceFidelity?: TraceFidelity
+  captureTrace?: boolean
+  configPath?: string
 }
 
 export interface PreCompactInput extends LifecycleContext {
