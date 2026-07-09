@@ -7,6 +7,8 @@ import { hasExistingMemoryLaneConfig, installHarness } from "../installer/config
 import type { DetectedHarness, Harness, InitOptions, InitResult, IntegrationResult } from "../installer/types.js"
 import { VERSION } from "../version.js"
 
+const INIT_SKIPPED_BY_USER = "skipped by user"
+
 async function prompt(question: string, defaultValue: string = ""): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
   try {
@@ -157,7 +159,7 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
   if (listOnly) {
     console.log("Memory Lane integrations:")
     console.log(renderHarnessList(harnesses))
-    return { binaryPath, dataDir, integrations: [] }
+    return { binaryPath, dataDir, integrations: [], failedIntegrations: [] }
   }
 
   const selected = only
@@ -176,7 +178,7 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
       if (!options.yes && configPath && hasExistingMemoryLaneConfig(harness, configPath)) {
         const ok = await confirm(`${harnessName(harness)} already has a Memory Lane configuration. Overwrite?`, true)
         if (!ok) {
-          integrations.push({ harness, configured: false, message: "skipped by user" })
+          integrations.push({ harness, configured: false, skipped: true, message: INIT_SKIPPED_BY_USER })
           console.log(`  - ${harnessName(harness)} skipped`)
           continue
         }
@@ -192,8 +194,15 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
     }
   }
 
-  const result: InitResult = { binaryPath, dataDir, integrations }
+  const failedIntegrations = integrations.filter((integration) => !integration.configured && !integration.skipped)
+  const result: InitResult = { binaryPath, dataDir, integrations, failedIntegrations }
   writeInstallManifest(options, result)
+  if (failedIntegrations.length) {
+    console.log("\nMemory Lane init completed with errors.")
+    console.log(`Failed integrations: ${failedIntegrations.map((integration) => harnessName(integration.harness)).join(", ")}`)
+    console.log(`Data directory: ${dataDir}`)
+    return result
+  }
 
   console.log("\nDone. Memory Lane is ready.")
   console.log(`Data directory: ${dataDir}`)

@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
-import { execFileSync } from "node:child_process"
+import { execFileSync, spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -44,6 +44,22 @@ describe("init wizard", () => {
       cwd,
       input: stdin,
     }).trim()
+  }
+
+  function runWithStatus(args: string[], env?: NodeJS.ProcessEnv, cwd?: string, stdin?: string) {
+    const cli = path.resolve(__dirname, "../dist/index.js")
+    const result = spawnSync("node", [cli, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH}`, ...env },
+      cwd,
+      input: stdin,
+    })
+    if (result.error) throw result.error
+    return {
+      status: result.status,
+      stdout: result.stdout.trim(),
+      stderr: result.stderr.trim(),
+    }
   }
 
   function writeNativeMemoryLaneStub(logFileName: string, commandLogic: string): { nativeBinary: string; logPath: string } {
@@ -660,14 +676,33 @@ esac
     fs.mkdirSync(path.dirname(configPath), { recursive: true })
     fs.writeFileSync(configPath, "{bad json", "utf8")
 
-    const output = run(["init", "--yes"], {
+    const result = runWithStatus(["init", "--yes"], {
       HOME: home,
       MEMORY_LANE_INSTALL_BINARY: binaryPath,
     })
 
     assert.equal(fs.readFileSync(configPath, "utf8"), "{bad json")
     assert.equal(fs.existsSync(`${configPath}.memory-lane.bak`), false)
-    assert.match(output, /Claude Code CLI failed: Could not parse JSON config/u)
+    assert.equal(result.status, 1)
+    assert.match(result.stdout, /Claude Code CLI failed: Could not parse JSON config/u)
+    assert.match(result.stdout, /Memory Lane init completed with errors/u)
+    assert.doesNotMatch(result.stdout, /Done\. Memory Lane is ready\./u)
+  })
+
+  it("exits non-zero when a selected integration fails", () => {
+    const configPath = path.join(home, ".claude/settings.json")
+    fs.mkdirSync(path.dirname(configPath), { recursive: true })
+    fs.writeFileSync(configPath, "{bad json", "utf8")
+
+    const result = runWithStatus(["init", "--only", "claude-code-cli"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    assert.equal(result.status, 1)
+    assert.match(result.stdout, /Claude Code CLI failed: Could not parse JSON config/u)
+    assert.match(result.stdout, /Memory Lane init completed with errors/u)
+    assert.doesNotMatch(result.stdout, /Done\. Memory Lane is ready\./u)
   })
 
   it("leaves non-object JSON hook config untouched", () => {
@@ -675,14 +710,17 @@ esac
     fs.mkdirSync(path.dirname(configPath), { recursive: true })
     fs.writeFileSync(configPath, "null", "utf8")
 
-    const output = run(["init", "--yes"], {
+    const result = runWithStatus(["init", "--yes"], {
       HOME: home,
       MEMORY_LANE_INSTALL_BINARY: binaryPath,
     })
 
     assert.equal(fs.readFileSync(configPath, "utf8"), "null")
     assert.equal(fs.existsSync(`${configPath}.memory-lane.bak`), false)
-    assert.match(output, /Claude Code CLI failed: Could not parse JSON config/u)
+    assert.equal(result.status, 1)
+    assert.match(result.stdout, /Claude Code CLI failed: Could not parse JSON config/u)
+    assert.match(result.stdout, /Memory Lane init completed with errors/u)
+    assert.doesNotMatch(result.stdout, /Done\. Memory Lane is ready\./u)
   })
 
   it("writes project-level Claude Code hooks with --project", () => {
@@ -797,5 +835,61 @@ esac
     assert.ok(content.includes('args = ["mcp"]'))
     assert.ok(content.includes("enabled = true"))
     assert.ok(content.includes('model = "gpt-5.5"'))
+  })
+
+  it("overwrites existing Codex Desktop TOML section with whitespace and comment", () => {
+    const configPath = path.join(home, ".codex/config.toml")
+    fs.writeFileSync(configPath, '[ mcp_servers.memory-lane ] # old entry\ncommand = "old-memory-lane"\n\n[other]\nvalue = true\n', "utf8")
+
+    const result = runWithStatus(["init", "--only", "codex-desktop"], {
+      HOME: home,
+      NO_COLOR: "1",
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    }, undefined, "Y\n")
+
+    const content = fs.readFileSync(configPath, "utf8")
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Codex Desktop already has a Memory Lane configuration/u)
+    assert.doesNotMatch(content, /old-memory-lane/u)
+    assert.equal(content.match(/mcp_servers\.memory-lane/gu)?.length, 1)
+    assert.ok(content.includes("[other]"))
+    assert.ok(content.includes(`command = "${binaryPath}"`))
+  })
+
+  it("keeps user-declined Codex Desktop overwrite non-fatal", () => {
+    const configPath = path.join(home, ".codex/config.toml")
+    fs.writeFileSync(configPath, '[mcp_servers.memory-lane]\ncommand = "old-memory-lane"\n', "utf8")
+
+    const result = runWithStatus(["init", "--only", "codex-desktop"], {
+      HOME: home,
+      NO_COLOR: "1",
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    }, undefined, "n\n")
+
+    const content = fs.readFileSync(configPath, "utf8")
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Codex Desktop skipped/u)
+    assert.match(result.stdout, /Done\. Memory Lane is ready\./u)
+    assert.doesNotMatch(result.stdout, /Memory Lane init completed with errors/u)
+    assert.match(content, /old-memory-lane/u)
+  })
+
+  it("interactive Codex Desktop setup accepts normal TOML config", () => {
+    fs.writeFileSync(path.join(home, ".codex/config.toml"), "[mcp_servers]\n", "utf8")
+
+    const result = runWithStatus(["init"], {
+      HOME: home,
+      NO_COLOR: "1",
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    }, undefined, "4\n")
+
+    const content = fs.readFileSync(path.join(home, ".codex/config.toml"), "utf8")
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Codex Desktop\s+configured/u)
+    assert.doesNotMatch(result.stdout, /Could not parse JSON config/u)
+    assert.match(result.stdout, /Done\. Memory Lane is ready\./u)
+    assert.ok(content.includes("[mcp_servers]"))
+    assert.ok(content.includes("[mcp_servers.memory-lane]"))
+    assert.ok(content.includes(`command = "${binaryPath}"`))
   })
 })

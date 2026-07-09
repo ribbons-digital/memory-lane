@@ -2,10 +2,10 @@
 
 ## Current state
 
-- Branch context: clean `main...origin/main` after PR #165 merged issue #140 CLI version handling as main commit `0f767e5`.
-- PR #165 added early CLI handling for `--version`, `-v`, and `version`, printing only the normalized version string before config, storage, engine, or plugin initialization.
-- PR #165 used Blaze quickfix mode at the user's clarification; no-mistakes was not run.
-- Latest release: `v0.2.47` from main commit `28e5961`, after PR #132 fixed binary and install-manifest version metadata.
+- Branch context: PR #167 is open from `blaze/issue-141-codex-init` for issue #141 Codex Desktop init failure handling.
+- PR #167 fixes interactive Codex Desktop init with normal TOML config, partial-error reporting for failed selected integrations, and non-zero init exit status on selected integration failure.
+- PR #167 used Blaze quickfix mode with Fable 5 implementation review.
+- no-mistakes was not run for PR #167 because quickfix mode skips it by default.
 - PR #164 synced status docs after PR #163.
 - PR #132 merged release version metadata fixes and docs for Windows upgrade behavior.
 - PR #131 synced long-memory smoke adapter status docs after PR #130.
@@ -21,11 +21,11 @@
 
 ## Current decision / next work
 
-The current repo state is post-PR #165 on clean `main`.
-PR #165 fixed issue #140 so users can run `memory-lane --version`, `memory-lane -v`, or `memory-lane version` to print only the installed version string and exit 0.
-The version path runs before config, storage, engine, or plugin initialization, so it works with malformed config and missing memory stores.
-PR #165 used Opus 4.8 for implementation review and Blaze quickfix mode at the user's clarification.
-no-mistakes was not run for PR #165 because the user clarified quickfix mode.
+The current repo state is PR #167 open from `blaze/issue-141-codex-init`.
+PR #167 fixes issue #141 so interactive Codex Desktop init no longer parses normal `~/.codex/config.toml` as JSON.
+Failed selected init integrations now print a partial-error banner and exit non-zero, while user-declined overwrite skips remain non-fatal.
+PR #167 used Fable 5 for implementation review and Blaze quickfix mode.
+no-mistakes was not run for PR #167 because quickfix mode skips it by default.
 The latest release remains `v0.2.47`.
 The release workflow for tag `v0.2.47` passed as GitHub Actions run `28768281598`.
 Released asset `memory-lane-darwin-arm64.tar.gz` was downloaded from GitHub Releases, extracted, and verified with `status --json` reporting `meta.version: "0.2.47"`.
@@ -58,6 +58,9 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - PR #163 verification passed focused detector, engine, Claude runner, Codex runner, and CLI tests; post-fix CLI reproduction saved `Deploy from branch release/JIRA-2024-blueGreenRollout-phase3`; `pnpm build`, `pnpm test`, and `git diff --check` passed.
 - PR #163 used Fable 5 for diagnosis and implementation review because the user explicitly requested Fable 5 review.
 - PR #163 used the Blaze fallback PR path because no-mistakes could not start for `fix/secret-detector-138` after gate-remote push and quick-start consultation.
+- PR #167 verification passed `pnpm --filter @memory-lane/cli build`, `node --test --import tsx packages/cli/test/init.test.ts` with 32 tests and 0 failures, `HOME=<temp-home> pnpm --filter @memory-lane/cli test` with 191 tests and 0 failures, and `git diff --check`.
+- PR #167 used Fable 5 for implementation review and returned approve with no blockers.
+- PR #167 ran in Blaze quickfix mode and skipped no-mistakes by quickfix mode.
 - PR #165 verification passed `pnpm --filter @memory-lane/cli build`, `pnpm --filter @memory-lane/cli test` with 187 tests and 0 failures, manual `--version`, `-v`, and `version` smoke checks with `MEMORY_LANE_VERSION=v1.2.3`, and `git diff --check`.
 - PR #165 used Opus 4.8 for implementation review and returned PASS.
 - Release `v0.2.47` pre-release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMORY_LANE_VERSION=v0.2.47 pnpm build:binary`, and `pnpm smoke:binary`.
@@ -91,5 +94,5 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.47` / commit `28e5961`.
-- Current repo status: post-PR #163, clean `main...origin/main`.
+- Current repo status: PR #167 open for issue #141 from `blaze/issue-141-codex-init`.
 - Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, PR #127, and PR #130.

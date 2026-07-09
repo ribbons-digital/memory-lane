@@ -21,6 +21,7 @@ export interface IntegrationResult {
   harness: Harness
   configured: boolean
   configPath?: string
+  skipped?: boolean
   message?: string
 }
 
@@ -28,4 +29,5 @@ export interface InitResult {
   binaryPath: string
   dataDir: string
   integrations: IntegrationResult[]
+  failedIntegrations: IntegrationResult[]
 }

@@ -874,7 +874,8 @@ async function main(): Promise<void> {
       if (hasFlag(argv, "project-local")) {
         handleInitCommand(argv, json)
       } else {
-        await handleInit(argv)
+        const result = await handleInit(argv)
+        if (result.failedIntegrations.length) process.exit(1)
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
