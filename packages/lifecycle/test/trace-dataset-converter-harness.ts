@@ -237,10 +237,22 @@ export function serializeTraceDataset(dataset: TraceDataset): string {
   return JSON.stringify(dataset, null, 2) + "\n"
 }
 
+function realPathWithMissingTail(targetPath: string): string {
+  let existingPath = path.resolve(targetPath)
+  const missingSegments: string[] = []
+  while (!fs.existsSync(existingPath)) {
+    const parentPath = path.dirname(existingPath)
+    if (parentPath === existingPath) break
+    missingSegments.unshift(path.basename(existingPath))
+    existingPath = parentPath
+  }
+  return path.join(fs.realpathSync(existingPath), ...missingSegments)
+}
+
 function assertOutputOutsideTracesDirectory(tracesDirectory: string, outputPath: string): void {
-  const resolvedTracesDirectory = path.resolve(tracesDirectory)
-  const resolvedOutputPath = path.resolve(outputPath)
-  const relativeOutputPath = path.relative(resolvedTracesDirectory, resolvedOutputPath)
+  const realTracesDirectory = fs.realpathSync(tracesDirectory)
+  const realOutputPath = path.join(realPathWithMissingTail(path.dirname(outputPath)), path.basename(outputPath))
+  const relativeOutputPath = path.relative(realTracesDirectory, realOutputPath)
   const outputIsOutside = relativeOutputPath === ".." || relativeOutputPath.startsWith(`..${path.sep}`) || path.isAbsolute(relativeOutputPath)
   if (!outputIsOutside) throw new Error(`Trace dataset converter --out must resolve outside --traces (${tracesDirectory})`)
 }

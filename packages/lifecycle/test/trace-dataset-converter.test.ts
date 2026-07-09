@@ -289,6 +289,34 @@ test("writeTraceDataset rejects output paths inside the selected traces director
   )
 })
 
+test("writeTraceDataset rejects a symlinked output parent that resolves inside the traces directory", (t) => {
+  const workspace = tempDir()
+  const tracesDirectory = path.join(workspace, "traces")
+  const physicalOutputParent = path.join(tracesDirectory, "physical-output")
+  const symlinkedOutputParent = path.join(workspace, "output-link")
+  const outputPath = path.join(symlinkedOutputParent, "trace-dataset.json")
+  writeTrace(tracesDirectory, "valid.json", trace())
+  fs.mkdirSync(physicalOutputParent)
+
+  try {
+    fs.symlinkSync(physicalOutputParent, symlinkedOutputParent, process.platform === "win32" ? "junction" : "dir")
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === "EPERM" || code === "EACCES" || code === "ENOTSUP" || code === "ENOSYS" || code === "EINVAL" || code === "UNKNOWN") {
+      t.skip(`directory symlinks are unsupported: ${code}`)
+      return
+    }
+    throw error
+  }
+
+  assert.throws(
+    () => writeTraceDataset(tracesDirectory, outputPath),
+    /--out must resolve outside --traces/u,
+  )
+  assert.equal(fs.existsSync(outputPath), false)
+  assert.deepEqual(fs.readdirSync(physicalOutputParent), [])
+})
+
 test("a captured lifecycle trace converts into the local smoke dataset contract", () => {
   const workspace = tempDir()
   const configPath = path.join(workspace, "config.json")
