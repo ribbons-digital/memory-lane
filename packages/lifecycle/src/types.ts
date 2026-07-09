@@ -91,6 +91,7 @@ export interface LifecycleResult {
   additionalContext?: string
   saved: SaveResult[]
   discarded: Array<{ text: string; reason: string }>
+  skippedSecret?: number
   contextDecision?: MemoryContextDecision
 }
 

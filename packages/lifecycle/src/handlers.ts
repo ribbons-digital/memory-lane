@@ -1,4 +1,4 @@
-import type { MemoryEngine, MemoryProvenance, MemorySource, SaveResult } from "@memory-lane/core"
+import { containsLikelySecret, type MemoryEngine, type MemoryProvenance, type MemorySource, type SaveResult } from "@memory-lane/core"
 import { analyzeAutomaticHandoff, classifyPromptRoute, isAlwaysOnMemory, isUnsafeAutomaticHandoffPointer, limitsFromContextPolicy, renderContinuityIntentGuidance, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, renderSessionStartMemoryContext, resolveContextPolicy, selectAlwaysOnMemories, selectDescriptorMemories, selectMemoriesForInjection, SESSION_START_DESCRIPTOR_MAX_CHARS, SESSION_START_DESCRIPTOR_MAX_ITEMS, type AutomaticHandoffAnalysis, type ContinuityIntent, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
 import { checkpointKeyFromText, extractCheckpointCandidatesFromPostToolUse, extractCheckpointCandidatesFromStop, filterDuplicateCheckpointCandidates } from "./checkpoint-capture.js"
@@ -9,6 +9,28 @@ import type { AutomaticHandoffContextDecision, LifecycleResult, MemoryCandidate,
 
 function createResult(additionalContext?: string, contextDecision?: MemoryContextDecision): LifecycleResult {
   return { additionalContext, saved: [], discarded: [], contextDecision }
+}
+
+function lifecycleResult(saved: SaveResult[], discarded: LifecycleResult["discarded"], skippedSecret?: number): LifecycleResult {
+  const saveSkippedSecret = saved.filter((result) => result.status === "skipped" && result.reason === "secret").length
+  const totalSkippedSecret = (skippedSecret ?? 0) + saveSkippedSecret
+  return {
+    saved,
+    discarded,
+    ...(totalSkippedSecret > 0 ? { skippedSecret: totalSkippedSecret } : {}),
+  }
+}
+
+function inputHasLikelySecret(...values: unknown[]): boolean {
+  return values.some((value) => {
+    if (typeof value === "string") return containsLikelySecret(value)
+    if (value === undefined || value === null) return false
+    try {
+      return containsLikelySecret(JSON.stringify(value))
+    } catch {
+      return false
+    }
+  })
 }
 
 function contextDecision(input: Omit<MemoryContextDecision, "omittedReasons"> & { omittedReasons?: string[] }): MemoryContextDecision {
@@ -171,7 +193,7 @@ function persistCandidates(
     }))
   }
 
-  return { saved, discarded }
+  return lifecycleResult(saved, discarded)
 }
 
 export async function handleUserPromptSubmit(
@@ -384,7 +406,12 @@ export function handleStop(engine: MemoryEngine, input: StopInput, options?: Lif
     const generatedAdapterLearning = learningPostmortemKeys.has("postmortem:harness-generated-adapter-contract-tests")
     return !(generatedAdapterLearning && (correctionKey === "review-gate" || correctionKey === "verification-before-completion"))
   })
-  return persistCandidates(engine, [...effectiveCorrectionCandidates, ...learningCandidates, ...checkpointCandidates, ...stopCandidates], input, "turn_stop", options)
+  const result = persistCandidates(engine, [...effectiveCorrectionCandidates, ...learningCandidates, ...checkpointCandidates, ...stopCandidates], input, "turn_stop", options)
+  return lifecycleResult(
+    result.saved,
+    result.discarded,
+    inputHasLikelySecret(input.lastUserMessage, input.lastAssistantMessage) ? 1 : undefined,
+  )
 }
 
 export function handlePostToolUse(engine: MemoryEngine, input: PostToolUseInput, options?: LifecycleHandlerOptions): LifecycleResult {
@@ -393,5 +420,10 @@ export function handlePostToolUse(engine: MemoryEngine, input: PostToolUseInput,
     ...filterDuplicateProcedureCandidates(engine, summarizeToolOutcome(input)),
     ...filterDuplicateCheckpointCandidates(engine, extractCheckpointCandidatesFromPostToolUse(input)),
   ]
-  return persistCandidates(engine, candidates, input, "post_tool_use", options)
+  const result = persistCandidates(engine, candidates, input, "post_tool_use", options)
+  return lifecycleResult(
+    result.saved,
+    result.discarded,
+    inputHasLikelySecret(input.toolInput, input.toolResponse) ? 1 : undefined,
+  )
 }

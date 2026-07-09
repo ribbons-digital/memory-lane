@@ -499,7 +499,33 @@ test("debug-enabled hook writes one JSONL record with safe counts", async () => 
   assert.equal(records[0].discarded, 0)
   assert.equal(records[0].additionalContext, false)
   assert.equal(records[0].warningCount, 0)
+  assert.equal(records[0].skippedSecret, undefined)
   assert.equal(typeof records[0].durationMs, "number")
+})
+
+test("debug-enabled stop records metadata-only secret skips", async () => {
+  const logPath = debugLogPath()
+  await runClaudeHookCommand("stop", {
+    engine: engineInTemp(),
+    env: { MEMORY_LANE_HOOK_DEBUG: "1" } as NodeJS.ProcessEnv,
+    hookDebugLogPath: logPath,
+    payloadText: stopPayload({
+      last_user_message: "remember that API_KEY=abcd1234",
+      last_assistant_message: "Acknowledged.",
+    }),
+  })
+
+  const logText = fs.readFileSync(logPath, "utf8")
+  const records = readDebugRecords(logPath)
+
+  assert.equal(records.length, 1)
+  assert.equal(records[0].adapter, "claude")
+  assert.equal(records[0].event, "stop")
+  assert.equal(records[0].status, "ok")
+  assert.equal(records[0].saved, 0)
+  assert.equal(records[0].skipped, 0)
+  assert.equal(records[0].skippedSecret, 1)
+  assert.doesNotMatch(logText, /API_KEY|abcd1234/u)
 })
 
 test("debug-enabled user-prompt logs safe context decision fields", async () => {

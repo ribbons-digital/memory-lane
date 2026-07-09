@@ -1,5 +1,5 @@
 import {
-  appendHookDebugLog, hookDebugEnabled, loadConfig, type HookDebugLogStatus, type MemoryEngine,
+  appendHookDebugLog, hookDebugEnabled, loadConfig, skippedSecretCount, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
 import { createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, type LifecycleResult, type SessionEndInput, type SessionMessage, type StopInput } from "@memory-lane/lifecycle"
 import { additionalContextOutput, lifecycleNoopOutput, noopOutput, userPromptSubmitOutput } from "./outputs.js"
@@ -22,6 +22,7 @@ function lifecycleCounts(result: LifecycleResult): {
   saved: number
   skipped: number
   discarded: number
+  skippedSecret?: number
   additionalContext: boolean
   warningCount: number
   contextPolicyMode?: string
@@ -33,9 +34,11 @@ function lifecycleCounts(result: LifecycleResult): {
   contextOmittedReasons?: string[]
 } {
   const decision = result.contextDecision
+  const totalSkippedSecret = result.skippedSecret ?? skippedSecretCount(result.saved) ?? 0
   return {
     saved: result.saved.filter((saveResult) => saveResult.status === "saved").length,
     skipped: result.saved.filter((saveResult) => saveResult.status === "skipped").length,
+    skippedSecret: totalSkippedSecret > 0 ? totalSkippedSecret : undefined,
     discarded: result.discarded.length,
     additionalContext: Boolean(result.additionalContext),
     warningCount: result.saved.reduce((count, saveResult) => count + (saveResult.warnings?.length ?? 0), 0),

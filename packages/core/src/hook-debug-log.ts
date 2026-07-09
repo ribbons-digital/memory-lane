@@ -1,3 +1,5 @@
+import type { SaveResult } from "./types.js"
+
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -14,6 +16,7 @@ export interface HookDebugLogRecord {
   saved?: number
   skipped?: number
   discarded?: number
+  skippedSecret?: number
   additionalContext?: boolean
   warningCount?: number
   contextPolicyMode?: string
@@ -40,6 +43,7 @@ const SAFE_FIELDS = [
   "saved",
   "skipped",
   "discarded",
+  "skippedSecret",
   "additionalContext",
   "warningCount",
   "contextPolicyMode",
@@ -78,4 +82,9 @@ export function appendHookDebugLog(record: HookDebugLogRecord, options?: AppendH
   } catch {
     // Hook debug logging must never affect hook output or exit behavior.
   }
+}
+
+export function skippedSecretCount(results: SaveResult[]): number | undefined {
+  const count = results.filter((result) => result.status === "skipped" && result.reason === "secret").length
+  return count > 0 ? count : undefined
 }

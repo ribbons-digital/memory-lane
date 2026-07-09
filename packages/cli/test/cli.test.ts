@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
 import { MemoryEngine, type ContinuityReadModel, type MemoryRecord } from "@memory-lane/core"
 import { formatContinuityReadModel, formatMemoryGet } from "../src/formatters.ts"
+import { runPiHookCommand } from "../src/pi-hook.ts"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -401,6 +402,21 @@ describe("CLI integration", () => {
     run(["save", "use pnpm"], env)
     const list = run(["list"], env)
     assert.ok(list.includes("use pnpm"))
+  })
+
+  it("save allows long branch-like tokens without secret context", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+
+    const output = run(["save", "Deploy from branch release/JIRA-2024-blueGreenRollout-phase3", "--json"], env)
+    const payload = JSON.parse(output)
+
+    assert.equal(payload.ok, true)
+    assert.equal(payload.data.saved.text, "Deploy from branch release/JIRA-2024-blueGreenRollout-phase3")
   })
 
   it("save accepts freshness flags", () => {
@@ -2741,6 +2757,53 @@ describe("CLI integration", () => {
       assert.equal(memory.provenance.turnId, "pi-turn-2")
       assert.match(memory.text, /generated Pi precompact continuity/)
       assert.equal(requests.length, 1)
+    })
+  })
+
+  it("pi pre-compact debug records metadata-only secret skips", async () => {
+    await withMockSummaryServer("Session summary includes API_KEY=abcd1234.", async (baseUrl) => {
+      const logPath = path.join(dir, "hooks-log.jsonl")
+      fs.writeFileSync(cfgFile, JSON.stringify({
+        memory: {
+          sessionEndSummary: {
+            enabled: true,
+            baseUrl,
+            model: "summary-model",
+            requireConfirmation: false,
+          },
+        },
+      }), "utf8")
+      const engine = new MemoryEngine({
+        memoryPath: memFile,
+        embeddingsPath: embFile,
+        configPath: cfgFile,
+      })
+
+      await runPiHookCommand("pre-compact", {
+        engine,
+        env: { MEMORY_LANE_HOOK_DEBUG: "1" },
+        hookDebugLogPath: logPath,
+        configPath: cfgFile,
+        payloadText: JSON.stringify({
+          cwd: process.cwd(),
+          session_id: "pi-secret-session",
+          turn_id: "pi-secret-turn",
+          trigger: "auto",
+          messages: [{ role: "user", content: "Summarize this session." }],
+        }),
+      })
+
+      const logText = fs.readFileSync(logPath, "utf8")
+      const records = logText.trim().split(/\r?\n/u).map((line) => JSON.parse(line))
+
+      assert.equal(records.length, 1)
+      assert.equal(records[0].adapter, "pi")
+      assert.equal(records[0].event, "pre-compact")
+      assert.equal(records[0].status, "ok")
+      assert.equal(records[0].saved, 0)
+      assert.equal(records[0].skipped, 1)
+      assert.equal(records[0].skippedSecret, 1)
+      assert.doesNotMatch(logText, /API_KEY|abcd1234/u)
     })
   })
 
