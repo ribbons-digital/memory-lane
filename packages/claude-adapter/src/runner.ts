@@ -1,7 +1,7 @@
 import {
   appendHookDebugLog, hookDebugEnabled, loadConfig, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
-import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, lifecycleDebugCounts, shouldCaptureLifecycleTrace, type LifecycleResult } from "@memory-lane/lifecycle"
+import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, lifecycleDebugCounts, shouldCaptureLifecycleTrace, type LifecycleResult, type PreCompactInput, type SessionEndInput, type SessionMessage } from "@memory-lane/lifecycle"
 import { lifecycleNoopOutput, noopOutput, sessionStartOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseClaudePayload, type ClaudeCommand } from "./payloads.js"
 import { readLatestTurnFromTranscript, readSessionMessagesFromTranscript } from "./transcript.js"
@@ -41,6 +41,32 @@ function createSessionEndSummaryProvider(config: ReturnType<typeof loadConfig>, 
 
 function preCompactSummaryEnabled(config: ReturnType<typeof loadConfig>): boolean {
   return config.memory?.sessionEndSummary?.enabled === true && config.memory?.preCompactSummary?.enabled !== false
+}
+
+function captureClaudeLifecycleTrace(
+  input: SessionEndInput | PreCompactInput,
+  config: ReturnType<typeof loadConfig>,
+  options: RunClaudeHookOptions,
+  lifecycleEvent: "session_end" | "pre_compact",
+  trigger?: string,
+): SessionMessage[] | undefined {
+  const inputMessageCount = input.messages?.length ?? 0
+  let transcriptMessages = inputMessageCount ? input.messages : undefined
+  if (shouldCaptureLifecycleTrace(input.cwd, config)) {
+    transcriptMessages ??= readSessionMessagesFromTranscript(input.transcriptPath)
+    captureLifecycleTrace({
+      ...input,
+      messages: transcriptMessages,
+    }, {
+      adapter: "claude",
+      lifecycleEvent,
+      trigger,
+      fidelity: classifyTraceFidelity(inputMessageCount, transcriptMessages.length, input.transcriptPath),
+      configPath: options.configPath,
+      env: options.env,
+    })
+  }
+  return transcriptMessages
 }
 
 
@@ -121,20 +147,7 @@ export async function runClaudeHookCommand(command: ClaudeCommand, options: RunC
     if (parsed.kind === "session-end") {
       const config = loadConfig(options.configPath)
       const summaryProvider = createSessionEndSummaryProvider(config, options.env)
-      let transcriptMessages = parsed.input.messages.length ? parsed.input.messages : undefined
-      if (shouldCaptureLifecycleTrace(parsed.input.cwd, config)) {
-        transcriptMessages ??= readSessionMessagesFromTranscript(parsed.input.transcriptPath)
-        captureLifecycleTrace({
-          ...parsed.input,
-          messages: transcriptMessages,
-        }, {
-          adapter: "claude",
-          lifecycleEvent: "session_end",
-          fidelity: classifyTraceFidelity(parsed.input.messages.length, transcriptMessages.length, parsed.input.transcriptPath),
-          configPath: options.configPath,
-          env: options.env,
-        })
-      }
+      let transcriptMessages = captureClaudeLifecycleTrace(parsed.input, config, options, "session_end")
       if (summaryProvider.status === "disabled") {
         log("noop", { reason: "session-end summarization disabled" })
         return systemMessageOutput("Session-end summarization is not enabled.")
@@ -169,21 +182,7 @@ export async function runClaudeHookCommand(command: ClaudeCommand, options: RunC
 
     if (parsed.kind === "pre-compact") {
       const config = loadConfig(options.configPath)
-      let transcriptMessages = parsed.input.messages?.length ? parsed.input.messages : undefined
-      if (shouldCaptureLifecycleTrace(parsed.input.cwd, config)) {
-        transcriptMessages ??= readSessionMessagesFromTranscript(parsed.input.transcriptPath)
-        captureLifecycleTrace({
-          ...parsed.input,
-          messages: transcriptMessages,
-        }, {
-          adapter: "claude",
-          lifecycleEvent: "pre_compact",
-          trigger: parsed.input.trigger,
-          fidelity: classifyTraceFidelity(parsed.input.messages?.length ?? 0, transcriptMessages.length, parsed.input.transcriptPath),
-          configPath: options.configPath,
-          env: options.env,
-        })
-      }
+      let transcriptMessages = captureClaudeLifecycleTrace(parsed.input, config, options, "pre_compact", parsed.input.trigger)
       if (!preCompactSummaryEnabled(config)) {
         log("noop", { reason: "pre-compact summarization disabled" })
         return noopOutput("Pre-compact summarization is not enabled.", debug)
