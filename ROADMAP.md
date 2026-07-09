@@ -29,9 +29,9 @@ Keep it safe to read wholesale in fresh sessions.
 Latest known release: `v0.2.47` from main commit `28e5961`, after PR #132 fixed compiled binary and install-manifest version metadata.
 Release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMORY_LANE_VERSION=v0.2.47 pnpm build:binary`, `pnpm smoke:binary`, GitHub Actions release run `28768281598`, and a downloaded release-asset `status --json` version check.
 
-Current open implementation: PR #172 implements issue #171 Slice A (opt-in local trace capture) from the review-governed learning flywheel design.
-PR #172 adds interactive consent, default-off capture, home-scoped redacted capture files, 60-day/512MB retention, per-project exclusions, status/tuneup surfaces, purge support, and focused regression coverage.
-The next required user action is repository-owner review/merge of PR #172 after checks pass.
+PR #172 merged issue #171 Slice A (opt-in local trace capture) from the review-governed learning flywheel design as main commit `0bebeba`.
+PR #172 added interactive consent, default-off capture, home-scoped redacted capture files, 60-day/512MB retention, per-project exclusions, status/tuneup surfaces, purge support, and focused regression coverage.
+The next required user action is to choose the next issue #171 slice.
 
 Recent shipped work:
 
