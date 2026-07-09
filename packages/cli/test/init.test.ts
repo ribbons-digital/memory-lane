@@ -856,6 +856,24 @@ esac
     assert.ok(content.includes(`command = "${binaryPath}"`))
   })
 
+  it("keeps user-declined Codex Desktop overwrite non-fatal", () => {
+    const configPath = path.join(home, ".codex/config.toml")
+    fs.writeFileSync(configPath, '[mcp_servers.memory-lane]\ncommand = "old-memory-lane"\n', "utf8")
+
+    const result = runWithStatus(["init", "--only", "codex-desktop"], {
+      HOME: home,
+      NO_COLOR: "1",
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    }, undefined, "n\n")
+
+    const content = fs.readFileSync(configPath, "utf8")
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Codex Desktop skipped/u)
+    assert.match(result.stdout, /Done\. Memory Lane is ready\./u)
+    assert.doesNotMatch(result.stdout, /Memory Lane init completed with errors/u)
+    assert.match(content, /old-memory-lane/u)
+  })
+
   it("interactive Codex Desktop setup accepts normal TOML config", () => {
     fs.writeFileSync(path.join(home, ".codex/config.toml"), "[mcp_servers]\n", "utf8")
 

@@ -58,7 +58,7 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - PR #163 verification passed focused detector, engine, Claude runner, Codex runner, and CLI tests; post-fix CLI reproduction saved `Deploy from branch release/JIRA-2024-blueGreenRollout-phase3`; `pnpm build`, `pnpm test`, and `git diff --check` passed.
 - PR #163 used Fable 5 for diagnosis and implementation review because the user explicitly requested Fable 5 review.
 - PR #163 used the Blaze fallback PR path because no-mistakes could not start for `fix/secret-detector-138` after gate-remote push and quick-start consultation.
-- PR #167 verification passed `pnpm --filter @memory-lane/cli build`, `node --test --import tsx packages/cli/test/init.test.ts` with 31 tests and 0 failures, `HOME=<temp-home> pnpm --filter @memory-lane/cli test` with 190 tests and 0 failures, and `git diff --check`.
+- PR #167 verification passed `pnpm --filter @memory-lane/cli build`, `node --test --import tsx packages/cli/test/init.test.ts` with 32 tests and 0 failures, `HOME=<temp-home> pnpm --filter @memory-lane/cli test` with 191 tests and 0 failures, and `git diff --check`.
 - PR #167 used Fable 5 for implementation review and returned approve with no blockers.
 - PR #167 ran in Blaze quickfix mode and skipped no-mistakes by quickfix mode.
 - PR #165 verification passed `pnpm --filter @memory-lane/cli build`, `pnpm --filter @memory-lane/cli test` with 187 tests and 0 failures, manual `--version`, `-v`, and `version` smoke checks with `MEMORY_LANE_VERSION=v1.2.3`, and `git diff --check`.

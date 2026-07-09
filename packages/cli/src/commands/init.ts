@@ -178,7 +178,7 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
       if (!options.yes && configPath && hasExistingMemoryLaneConfig(harness, configPath)) {
         const ok = await confirm(`${harnessName(harness)} already has a Memory Lane configuration. Overwrite?`, true)
         if (!ok) {
-          integrations.push({ harness, configured: false, message: INIT_SKIPPED_BY_USER })
+          integrations.push({ harness, configured: false, skipped: true, message: INIT_SKIPPED_BY_USER })
           console.log(`  - ${harnessName(harness)} skipped`)
           continue
         }
@@ -194,7 +194,7 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
     }
   }
 
-  const failedIntegrations = integrations.filter((integration) => !integration.configured && integration.message !== INIT_SKIPPED_BY_USER)
+  const failedIntegrations = integrations.filter((integration) => !integration.configured && !integration.skipped)
   const result: InitResult = { binaryPath, dataDir, integrations, failedIntegrations }
   writeInstallManifest(options, result)
   if (failedIntegrations.length) {
