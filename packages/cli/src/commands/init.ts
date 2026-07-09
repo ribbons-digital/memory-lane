@@ -34,18 +34,34 @@ interface PromptResult {
 }
 
 let promptInterface: readline.Interface | undefined
+let promptInputClosed = false
+let closingPromptInterface = false
 
 function getPromptInterface(): readline.Interface {
-  promptInterface ??= readline.createInterface({ input: process.stdin, output: process.stdout })
+  if (!promptInterface) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+    rl.once("close", () => {
+      if (promptInterface === rl) promptInterface = undefined
+      if (!closingPromptInterface) promptInputClosed = true
+    })
+    promptInterface = rl
+  }
   return promptInterface
 }
 
 function closePromptInterface(): void {
-  promptInterface?.close()
-  promptInterface = undefined
+  if (!promptInterface) return
+  closingPromptInterface = true
+  try {
+    promptInterface.close()
+  } finally {
+    promptInterface = undefined
+    closingPromptInterface = false
+  }
 }
 
 async function promptResult(question: string, defaultValue: string = ""): Promise<PromptResult> {
+  if (promptInputClosed) return { answer: defaultValue, answered: false }
   const rl = getPromptInterface()
   const { promise, resolve } = promiseWithResolvers<PromptResult>()
   const suffix = defaultValue ? ` [${defaultValue}]: ` : ": "
@@ -56,7 +72,11 @@ async function promptResult(question: string, defaultValue: string = ""): Promis
     rl.off("close", onClose)
     resolve({ answer: answer.trim() || defaultValue, answered })
   }
-  const onClose = () => finish(defaultValue, false)
+  const onClose = () => {
+    promptInputClosed = true
+    if (promptInterface === rl) promptInterface = undefined
+    finish(defaultValue, false)
+  }
   rl.once("close", onClose)
   rl.question(question + suffix, (answer) => finish(answer, true))
   return await promise

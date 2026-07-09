@@ -136,6 +136,12 @@ function defaultFidelity(input: CaptureTraceInput): TraceFidelity {
   return input.transcriptPath ? "full-transcript" : "payload-messages"
 }
 
+export function classifyTraceFidelity(inputMessagesLength: number, capturedMessagesLength: number, transcriptPath?: string): TraceFidelity {
+  if (transcriptPath && inputMessagesLength === 0 && capturedMessagesLength > 0) return "full-transcript"
+  if (capturedMessagesLength > 0) return "payload-messages"
+  return "last-turn-fallback"
+}
+
 function writeProjectIndex(root: string, hash: string, projectKey: string): void {
   const indexPath = path.join(root, "_projects.json")
   let index: Record<string, string> = {}
@@ -167,15 +173,15 @@ function traceFiles(root: string): Array<{ path: string; size: number; mtimeMs: 
 
 function enforceTraceRetention(root: string, now: Date): void {
   const cutoffMs = now.getTime() - TRACE_RETENTION_DAYS * 24 * 60 * 60 * 1000
-  for (const file of traceFiles(root)) {
-    if (file.mtimeMs < cutoffMs) {
-      try { fs.unlinkSync(file.path) } catch { /* best effort */ }
-    }
-  }
+  const files = traceFiles(root)
+  const retainedFiles = files.filter((file) => {
+    if (file.mtimeMs >= cutoffMs) return true
+    try { fs.unlinkSync(file.path) } catch { /* best effort */ }
+    return false
+  }).sort((a, b) => a.mtimeMs - b.mtimeMs)
 
-  let files = traceFiles(root).sort((a, b) => a.mtimeMs - b.mtimeMs)
-  let total = files.reduce((sum, file) => sum + file.size, 0)
-  for (const file of files) {
+  let total = retainedFiles.reduce((sum, file) => sum + file.size, 0)
+  for (const file of retainedFiles) {
     if (total <= TRACE_RETENTION_MAX_BYTES) break
     try {
       fs.unlinkSync(file.path)

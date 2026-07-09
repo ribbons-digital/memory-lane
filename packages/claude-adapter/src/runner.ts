@@ -1,7 +1,7 @@
 import {
   appendHookDebugLog, hookDebugEnabled, loadConfig, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
-import { captureLifecycleTrace, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, lifecycleDebugCounts, shouldCaptureLifecycleTrace, type LifecycleResult, type TraceFidelity } from "@memory-lane/lifecycle"
+import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, lifecycleDebugCounts, shouldCaptureLifecycleTrace, type LifecycleResult } from "@memory-lane/lifecycle"
 import { lifecycleNoopOutput, noopOutput, sessionStartOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseClaudePayload, type ClaudeCommand } from "./payloads.js"
 import { readLatestTurnFromTranscript, readSessionMessagesFromTranscript } from "./transcript.js"
@@ -43,10 +43,6 @@ function preCompactSummaryEnabled(config: ReturnType<typeof loadConfig>): boolea
   return config.memory?.sessionEndSummary?.enabled === true && config.memory?.preCompactSummary?.enabled !== false
 }
 
-function traceFidelity(inputMessagesLength: number, capturedMessagesLength: number, transcriptPath?: string): TraceFidelity {
-  if (transcriptPath && inputMessagesLength === 0 && capturedMessagesLength > 0) return "full-transcript"
-  return "payload-messages"
-}
 
 function saveSessionEndCandidates(engine: MemoryEngine, candidates: Awaited<ReturnType<typeof handleSessionEnd>>): LifecycleResult {
   return {
@@ -134,7 +130,7 @@ export async function runClaudeHookCommand(command: ClaudeCommand, options: RunC
         }, {
           adapter: "claude",
           lifecycleEvent: "session_end",
-          fidelity: traceFidelity(parsed.input.messages.length, transcriptMessages.length, parsed.input.transcriptPath),
+          fidelity: classifyTraceFidelity(parsed.input.messages.length, transcriptMessages.length, parsed.input.transcriptPath),
           configPath: options.configPath,
           env: options.env,
         })
@@ -183,7 +179,7 @@ export async function runClaudeHookCommand(command: ClaudeCommand, options: RunC
           adapter: "claude",
           lifecycleEvent: "pre_compact",
           trigger: parsed.input.trigger,
-          fidelity: traceFidelity(parsed.input.messages?.length ?? 0, transcriptMessages.length, parsed.input.transcriptPath),
+          fidelity: classifyTraceFidelity(parsed.input.messages?.length ?? 0, transcriptMessages.length, parsed.input.transcriptPath),
           configPath: options.configPath,
           env: options.env,
         })

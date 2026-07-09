@@ -85,7 +85,7 @@ function postToolUsePayload(
   })
 }
 
-function sessionEndPayload(confirmed?: boolean): string {
+function sessionEndPayload(confirmed?: boolean, fields: Record<string, unknown> = {}): string {
   return JSON.stringify({
     hook_event_name: "SessionEnd",
     session_id: "session-1",
@@ -97,6 +97,7 @@ function sessionEndPayload(confirmed?: boolean): string {
       { role: "user", content: "RAW_TRANSCRIPT_SHOULD_NOT_BE_SAVED" },
       { role: "assistant", content: "I will summarize the durable outcome." },
     ],
+    ...fields,
   })
 }
 
@@ -280,6 +281,30 @@ test("session-end saves confirmed provider summary without raw transcript", asyn
     assert.match(saved[0].text, /use pnpm/)
     assert.doesNotMatch(saved[0].text, /RAW_TRANSCRIPT_SHOULD_NOT_BE_SAVED/)
     assert.doesNotMatch(fs.readFileSync(memoryPath, "utf8"), /RAW_TRANSCRIPT_SHOULD_NOT_BE_SAVED/)
+  })
+})
+
+test("session-end summarizes transcript messages when payload messages are empty", async () => {
+  await withMockSummaryServer("- Decisions made: summarize transcript-backed Codex session.", async (baseUrl, requests) => {
+    const { engine, configPath } = engineFixture()
+    enableSessionEndSummary(configPath, baseUrl, false)
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-codex-session-end-"))
+    const transcriptPath = path.join(dir, "transcript.jsonl")
+    fs.writeFileSync(transcriptPath, [
+      JSON.stringify({ role: "user", content: "TRANSCRIPT_SESSION_USER" }),
+      JSON.stringify({ role: "assistant", content: "Transcript-backed durable outcome." }),
+    ].join("\n"))
+
+    const output = await runCodexHookCommand("session-end", {
+      engine,
+      configPath,
+      payloadText: sessionEndPayload(true, { transcript_path: transcriptPath, messages: [] }),
+    })
+
+    const parsed = JSON.parse(output)
+    assert.match(parsed.systemMessage, /suggested 1 pending memory for review/u)
+    assert.equal(requests.length, 1)
+    assert.match(JSON.stringify(requests[0]), /TRANSCRIPT_SESSION_USER/u)
   })
 })
 

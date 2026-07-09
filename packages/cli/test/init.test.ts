@@ -969,6 +969,27 @@ esac
     assert.equal(config.learning?.capture, undefined)
   })
 
+  it("interactive init continues after consent EOF before overwrite prompt", () => {
+    const configPath =
+      process.platform === "darwin"
+        ? path.join(home, "Library/Application Support/Claude/claude_desktop_config.json")
+        : path.join(home, ".config/Claude/claude_desktop_config.json")
+    fs.mkdirSync(path.dirname(configPath), { recursive: true })
+    fs.writeFileSync(configPath, JSON.stringify({ mcpServers: { "memory-lane": { command: "old-memory-lane" } } }), "utf8")
+
+    const result = runWithStatus(["init"], {
+      HOME: home,
+      NO_COLOR: "1",
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    }, undefined, "3\n")
+
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Enable local learning\? \[y\/N\]/u)
+    assert.match(result.stdout, /Claude Desktop\s+configured/u)
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"))
+    assert.equal(config.mcpServers["memory-lane"].command, binaryPath)
+  })
+
   it("--yes init does not enable local trace capture implicitly", () => {
     run(["init", "--yes"], {
       HOME: home,

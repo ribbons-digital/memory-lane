@@ -1,7 +1,7 @@
 import {
   appendHookDebugLog, hookDebugEnabled, loadConfig, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
-import { captureLifecycleTrace, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, lifecycleDebugCounts, shouldCaptureLifecycleTrace, type LifecycleResult, type SessionEndInput, type SessionMessage, type StopInput, type TraceFidelity } from "@memory-lane/lifecycle"
+import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, lifecycleDebugCounts, shouldCaptureLifecycleTrace, type LifecycleResult, type SessionEndInput, type SessionMessage, type StopInput, type TraceFidelity } from "@memory-lane/lifecycle"
 import { additionalContextOutput, lifecycleNoopOutput, noopOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseCodexPayload, type CodexCommand } from "./payloads.js"
 import { readLatestTurnFromTranscript, readSessionMessagesFromTranscript } from "./transcript.js"
@@ -74,15 +74,10 @@ function sessionEndInputFromStop(input: StopInput, transcriptPath?: string): { i
       transcriptPath: input.transcriptPath,
       messages,
     },
-    fidelity: transcriptMessages.length ? "full-transcript" : "last-turn-fallback",
+    fidelity: transcriptMessages.length ? classifyTraceFidelity(0, transcriptMessages.length, transcriptPath) : "last-turn-fallback",
   }
 }
 
-function traceFidelity(inputMessagesLength: number, capturedMessagesLength: number, transcriptPath?: string): TraceFidelity {
-  if (transcriptPath && inputMessagesLength === 0 && capturedMessagesLength > 0) return "full-transcript"
-  if (capturedMessagesLength > 0) return "payload-messages"
-  return "last-turn-fallback"
-}
 
 
 function saveSessionEndCandidates(engine: MemoryEngine, candidates: Awaited<ReturnType<typeof handleSessionEnd>>): LifecycleResult {
@@ -211,7 +206,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         captureLifecycleTrace(sessionEndInput, {
           adapter: "codex",
           lifecycleEvent: "session_end",
-          fidelity: traceFidelity(parsed.input.messages.length, transcriptMessages.length, parsed.input.transcriptPath),
+          fidelity: classifyTraceFidelity(parsed.input.messages.length, transcriptMessages.length, parsed.input.transcriptPath),
           configPath: options.configPath,
           env: options.env,
         })
@@ -229,7 +224,9 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         log("noop", { reason: "session-end confirmation required" })
         return confirmationRequiredOutput()
       }
-      const candidates = await handleSessionEnd(options.engine, parsed.input, {
+      transcriptMessages ??= readSessionMessagesFromTranscript(parsed.input.transcriptPath)
+      const sessionEndInput = { ...parsed.input, messages: transcriptMessages }
+      const candidates = await handleSessionEnd(options.engine, sessionEndInput, {
         provider: summaryProvider.provider,
         promptTemplate: summaryProvider.config.promptTemplate ?? undefined,
         maxTokens: summaryProvider.config.maxTokens,
@@ -257,7 +254,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
           adapter: "codex",
           lifecycleEvent: "pre_compact",
           trigger: parsed.input.trigger,
-          fidelity: traceFidelity(parsed.input.messages?.length ?? 0, transcriptMessages.length, parsed.input.transcriptPath),
+          fidelity: classifyTraceFidelity(parsed.input.messages?.length ?? 0, transcriptMessages.length, parsed.input.transcriptPath),
           configPath: options.configPath,
           env: options.env,
         })

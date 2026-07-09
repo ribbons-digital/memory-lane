@@ -1,7 +1,7 @@
 import {
   appendHookDebugLog, hookDebugEnabled, loadConfig, skippedSecretCount, type HookDebugLogStatus, type MemoryEngine, type SaveResult,
 } from "@memory-lane/core"
-import { captureLifecycleTrace, createOpenAICompatibleProvider, handlePreCompact, shouldCaptureLifecycleTrace, type SessionMessage } from "@memory-lane/lifecycle"
+import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePreCompact, shouldCaptureLifecycleTrace, type SessionMessage } from "@memory-lane/lifecycle"
 
 export interface RunPiHookOptions {
   engine: MemoryEngine
@@ -153,7 +153,7 @@ export async function runPiHookCommand(command: PiCommand, options: RunPiHookOpt
         adapter: "pi",
         lifecycleEvent: "pre_compact",
         trigger: parsed.input.trigger,
-        fidelity: "payload-messages",
+        fidelity: classifyTraceFidelity(parsed.input.messages.length, parsed.input.messages.length),
         configPath: options.configPath,
         env: options.env,
       })
