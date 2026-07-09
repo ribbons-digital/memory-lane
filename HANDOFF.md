@@ -2,8 +2,9 @@
 
 ## Current state
 
-- Branch context: clean `main...origin/main` after PR #161 merged issue #137 config-set validation as main commit `d90f381`.
-- PR #161 fixed `memory-lane config set` so invalid values are rejected before writing, missing values are usage errors, parseable invalid configs can be repaired before engine initialization, and malformed config JSON reports the config path.
+- Branch context: PR #163 (`fix/secret-detector-138`) contains the issue #138 secret-detector fix and status-doc sync.
+- Issue #138 fix makes generic high-entropy token detection require secret-bearing context, keeps explicit secret prefix and assignment-style detection, and adds metadata-only `skippedSecret` lifecycle hook debug counts for Claude, Codex, and Pi.
+  no-mistakes could not start for this branch after the gate-remote push, so the approved fallback PR flow is in use.
 - Latest release: `v0.2.47` from main commit `28e5961`, after PR #132 fixed binary and install-manifest version metadata.
 - PR #132 merged release version metadata fixes and docs for Windows upgrade behavior.
 - PR #131 synced long-memory smoke adapter status docs after PR #130.
@@ -25,6 +26,12 @@ The latest release remains `v0.2.47` from main commit `28e5961`.
 The release workflow for tag `v0.2.47` passed as GitHub Actions run `28768281598`.
 Released asset `memory-lane-darwin-arm64.tar.gz` was downloaded from GitHub Releases, extracted, and verified with `status --json` reporting `meta.version: "0.2.47"`.
 
+Issue #138 is implemented in PR #163 on branch `fix/secret-detector-138`.
+The fix allows branch names, feature flags, and bare mixed high-entropy identifiers without secret words while still rejecting explicit secret prefixes, assignment-style secrets, private keys, and high-entropy values with secret-bearing context.
+Lifecycle hook debug logs now include a safe numeric `skippedSecret` count for secret-suppressed capture paths without logging raw candidate text or token values.
+Fable 5 approved both the diagnosis and implementation reviews.
+no-mistakes fallback PR flow is in use for PR #163 because the gate did not start for this branch after the gate-remote push and quick-start consultation.
+
 Issue #115 is closed with comment `Closed by PR #130, main commit 950a71e.`
 The issue #115 adapter added `pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset <path>`.
 It requires a local dataset path by `--dataset` or `MEMORY_LANE_LONG_MEMORY_SMOKE_DATASET`, does not auto-download data, and reports `networkRequired: false`, `modelRequired: false`, and `judgeRequired: false`.
@@ -41,7 +48,7 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Keep `docs/plugins/README.md` tracked because it is user-facing and linked from `README.md`.
 - Keep internal feature notes out of tracked `docs/` unless a future user decision explicitly reintroduces them.
 - Use Fable 5 for explicit Fable 5 follow-up planning and code review with `claude --model claude-fable-5 -p '<review prompt>'`.
-- Use Opus 4.8 for ordinary Memory Lane design/spec and pre-PR implementation reviews outside the Fable 5 wave with `claude --model claude-opus-4-8 -p '<review prompt>'`.
+- Use Opus 4.8 with `claude --model claude-opus-4-8 -p '<review prompt>'` for ordinary Memory Lane design/spec and pre-PR implementation reviews unless Fable 5 is mentioned or specified.
 - PR-protected workflow applies: feature branch or worktree, PR, wait for user merge, sync main, delete feature branch, recommend next item.
 - Avoid retrieval rewrites, auto-consolidation, silent deletion, schema expansion, raw transcript indexing, token retuning, public eval commands, production eval APIs, or persisted workstream IDs unless a new approved slice explicitly includes them.
 
@@ -50,6 +57,9 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - PR #161 verification passed `pnpm --filter @memory-lane/core build && pnpm --filter @memory-lane/cli build`, `pnpm --filter @memory-lane/core exec node --test --import tsx test/config.test.ts`, `pnpm --filter @memory-lane/cli exec node --test --import tsx test/cli.test.ts`, isolated original issue reproduction with temp storage, `pnpm build`, `pnpm test`, and `git diff --check`.
 - PR #161 used Fable 5 for diagnosis and implementation review.
 - PR #161 used the Blaze fallback PR path because no-mistakes could not start for the branch with `error: "no run started for \"fix/config-set-validation-137\": no previous run for branch fix/config-set-validation-137"`.
+- Issue #138 verification passed focused detector, engine, Claude runner, Codex runner, and CLI tests; post-fix CLI reproduction saved `Deploy from branch release/JIRA-2024-blueGreenRollout-phase3`; `pnpm build`, `pnpm test`, and `git diff --check` passed.
+- Issue #138 used Fable 5 for diagnosis and implementation review because the user explicitly requested Fable 5 review.
+- Issue #138 uses the Blaze fallback PR path because no-mistakes could not start for `fix/secret-detector-138` after gate-remote push and quick-start consultation.
 - Release `v0.2.47` pre-release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMORY_LANE_VERSION=v0.2.47 pnpm build:binary`, and `pnpm smoke:binary`.
 - GitHub Actions release run `28768281598` passed for tag `v0.2.47`, including build, tests, binary build, current-platform binary smoke, release notes, and release creation.
 - Released `memory-lane-darwin-arm64.tar.gz` asset was downloaded and extracted; `status --json` reported `meta.version: "0.2.47"`.

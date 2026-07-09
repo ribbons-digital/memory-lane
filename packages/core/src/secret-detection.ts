@@ -32,5 +32,4 @@ function mentionsSecretBearer(text: string): boolean {
 export function containsLikelySecret(text: string): boolean {
   return SECRET_PATTERNS.some((pattern) => pattern.test(text))
     || (mentionsSecretBearer(text) && containsHighEntropyToken(text))
-    || containsHighEntropyToken(text)
 }

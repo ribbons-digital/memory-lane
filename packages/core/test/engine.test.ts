@@ -247,6 +247,20 @@ describe("MemoryEngine", () => {
     assert.deepEqual(result.memory.descriptor?.keywords, ["one", "two", "three", "four", "five", "six", "seven"])
   })
 
+  it("descriptor metadata allows high entropy branch hints without secret context", () => {
+    const e = engine()
+    const result = e.save({
+      text: "Descriptor branch source memory",
+      status: "approved",
+      descriptor: {
+        fetchHint: "Deploy from branch release/JIRA-2024-blueGreenRollout-phase3",
+        keywords: ["BlueGreenRollout2024Aa1Bb2Cc3Dd4Ee5"],
+      },
+    })
+
+    assert.equal(result.status, "saved")
+  })
+
   it("save rejects invalid descriptor metadata", () => {
     const e = engine()
 
@@ -271,7 +285,7 @@ describe("MemoryEngine", () => {
     assert.throws(() => e.save({
       text: "Secret descriptor keyword",
       status: "approved",
-      descriptor: { keywords: ["Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8Ii9Jj0Kk1Ll2"] },
+      descriptor: { keywords: ["API_KEY=abcd1234"] },
     }), /Invalid descriptor\.keywords/u)
 
     assert.throws(() => e.save({

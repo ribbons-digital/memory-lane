@@ -1,5 +1,5 @@
 import {
-  appendHookDebugLog, hookDebugEnabled, loadConfig, type HookDebugLogStatus, type MemoryEngine, type SaveResult,
+  appendHookDebugLog, hookDebugEnabled, loadConfig, skippedSecretCount, type HookDebugLogStatus, type MemoryEngine, type SaveResult,
 } from "@memory-lane/core"
 import { createOpenAICompatibleProvider, handlePreCompact, type SessionMessage } from "@memory-lane/lifecycle"
 
@@ -114,10 +114,11 @@ function output(data: { saved?: number; skipped?: number; discarded?: number; re
   return JSON.stringify({ ok: true, data: { saved: 0, skipped: 0, discarded: 0, ...data } })
 }
 
-function counts(saved: SaveResult[]): { saved: number; skipped: number } {
+function counts(saved: SaveResult[]): { saved: number; skipped: number; skippedSecret?: number } {
   return {
     saved: saved.filter((result) => result.status === "saved").length,
     skipped: saved.filter((result) => result.status === "skipped").length,
+    skippedSecret: skippedSecretCount(saved),
   }
 }
 
@@ -188,7 +189,7 @@ export async function runPiHookCommand(command: PiCommand, options: RunPiHookOpt
 
     const savedResults = saveSessionSummaryCandidates(options.engine, candidates)
     const resultCounts = counts(savedResults)
-    log("ok", { saved: resultCounts.saved, skipped: resultCounts.skipped, discarded: 0, additionalContext: false, warningCount: 0 })
+    log("ok", { saved: resultCounts.saved, skipped: resultCounts.skipped, skippedSecret: resultCounts.skippedSecret, discarded: 0, additionalContext: false, warningCount: 0 })
     return output(resultCounts)
   } catch (error) {
     const reason = "hook handling failed"

@@ -53,6 +53,8 @@ Recent shipped work:
 - PR #131 synced long-memory smoke adapter status docs.
 - PR #132 fixed release binary version metadata and Windows upgrade documentation.
 - PR #161 fixed config-set validation so invalid config writes are rejected before saving and parseable invalid configs can be repaired before engine initialization.
+- PR #163 implements issue #138 to reduce secret-detector false positives for long branch names, feature flags, and bare high-entropy identifiers without secret context.
+  The slice keeps explicit secret patterns and adds metadata-only lifecycle debug `skippedSecret` counts; fallback PR flow is in use because no-mistakes could not start after the gate-remote push.
 
 ## Active track - Project-local Storage Defaults
 

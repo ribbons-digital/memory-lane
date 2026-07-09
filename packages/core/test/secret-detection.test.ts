@@ -23,6 +23,12 @@ describe("containsLikelySecret", () => {
     assert.equal(containsLikelySecret("bearer Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8Ii9Jj0Kk1Ll2"), true)
   })
 
+  it("allows high entropy branch and feature flag tokens without secret context", () => {
+    assert.equal(containsLikelySecret("Deploy from branch release/JIRA-2024-blueGreenRollout-phase3"), false)
+    assert.equal(containsLikelySecret("feature flag enableBlueGreenRolloutPhase3ForTenant2024"), false)
+    assert.equal(containsLikelySecret("Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8Ii9Jj0Kk1Ll2"), false)
+  })
+
   it("allows normal memory text and low-entropy identifiers", () => {
     assert.equal(containsLikelySecret("I prefer pnpm for package installs"), false)
     assert.equal(containsLikelySecret("ticket id is abcabcabcabcabcabcabcabcabcabcabcabc"), false)

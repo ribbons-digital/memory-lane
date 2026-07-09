@@ -1,7 +1,7 @@
 import {
   appendHookDebugLog, hookDebugEnabled, loadConfig, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
-import { createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, type LifecycleResult, type SessionEndInput, type SessionMessage, type StopInput } from "@memory-lane/lifecycle"
+import { createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, lifecycleDebugCounts, type LifecycleResult, type SessionEndInput, type SessionMessage, type StopInput } from "@memory-lane/lifecycle"
 import { additionalContextOutput, lifecycleNoopOutput, noopOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseCodexPayload, type CodexCommand } from "./payloads.js"
 import { readLatestTurnFromTranscript, readSessionMessagesFromTranscript } from "./transcript.js"
@@ -16,39 +16,6 @@ export interface RunCodexHookOptions {
 
 function parseJson(text: string): unknown {
   return JSON.parse(text)
-}
-
-function lifecycleCounts(result: LifecycleResult): {
-  saved: number
-  skipped: number
-  discarded: number
-  additionalContext: boolean
-  warningCount: number
-  contextPolicyMode?: string
-  contextEvent?: string
-  contextSelected?: number
-  contextOmitted?: number
-  contextMaxItems?: number
-  contextMaxChars?: number
-  contextOmittedReasons?: string[]
-} {
-  const decision = result.contextDecision
-  return {
-    saved: result.saved.filter((saveResult) => saveResult.status === "saved").length,
-    skipped: result.saved.filter((saveResult) => saveResult.status === "skipped").length,
-    discarded: result.discarded.length,
-    additionalContext: Boolean(result.additionalContext),
-    warningCount: result.saved.reduce((count, saveResult) => count + (saveResult.warnings?.length ?? 0), 0),
-    ...(decision ? {
-      contextPolicyMode: decision.mode,
-      contextEvent: decision.event,
-      contextSelected: decision.selected,
-      contextOmitted: decision.omitted,
-      contextMaxItems: decision.maxItems,
-      contextMaxChars: decision.maxChars,
-      contextOmittedReasons: decision.omittedReasons,
-    } : {}),
-  }
 }
 
 function systemMessageOutput(message: string): string {
@@ -160,7 +127,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
   try {
     if (parsed.kind === "user-prompt-submit") {
       const result = await handleUserPromptSubmit(options.engine, parsed.input)
-      log("ok", lifecycleCounts(result))
+      log("ok", lifecycleDebugCounts(result))
       return userPromptSubmitOutput(result, debug)
     }
 
@@ -174,7 +141,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
 
       if (!hasExplicitSessionSummaryIntent(stopInput.lastUserMessage)) {
         const result = handleStop(options.engine, stopInput)
-        log("ok", lifecycleCounts(result))
+        log("ok", lifecycleDebugCounts(result))
         return lifecycleNoopOutput(result, debug)
       }
 
@@ -200,13 +167,13 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         adapter: "codex",
       }, options.env)
       const result = saveSessionEndCandidates(options.engine, candidates)
-      log("ok", lifecycleCounts(result))
+      log("ok", lifecycleDebugCounts(result))
       return lifecycleNoopOutput(result, debug)
     }
 
     if (parsed.kind === "session-start") {
       const result = handleSessionStart(options.engine, parsed.input)
-      log("ok", lifecycleCounts(result))
+      log("ok", lifecycleDebugCounts(result))
       return additionalContextOutput(result, "SessionStart", debug)
     }
 
@@ -237,7 +204,7 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         adapter: "codex",
       }, options.env)
       const result = saveSessionEndCandidates(options.engine, candidates)
-      log("ok", lifecycleCounts(result))
+      log("ok", lifecycleDebugCounts(result))
       return lifecycleNoopOutput(result, debug)
     }
 
@@ -273,12 +240,12 @@ export async function runCodexHookCommand(command: CodexCommand, options: RunCod
         adapter: "codex",
       }, options.env)
       const result = saveSessionEndCandidates(options.engine, candidates)
-      log("ok", lifecycleCounts(result))
+      log("ok", lifecycleDebugCounts(result))
       return lifecycleNoopOutput(result, debug)
     }
 
     const result = handlePostToolUse(options.engine, parsed.input)
-    log("ok", lifecycleCounts(result))
+    log("ok", lifecycleDebugCounts(result))
     return lifecycleNoopOutput(result, debug)
   } catch {
     log("error", { reason: "hook handling failed" })
