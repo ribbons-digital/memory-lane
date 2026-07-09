@@ -2,10 +2,11 @@
 
 ## Current state
 
-- Branch context: clean `main...origin/main` after PR #163 merged issue #138 secret-detector entropy false positives as main commit `7361da0`.
-- PR #163 fixed issue #138 by making generic high-entropy token detection require secret-bearing context, keeping explicit secret prefix and assignment-style detection, and adding metadata-only `skippedSecret` lifecycle hook debug counts for Claude, Codex, and Pi.
-  no-mistakes could not start for the feature branch after the gate-remote push, so PR #163 used the approved fallback PR flow.
+- Branch context: clean `main...origin/main` after PR #165 merged issue #140 CLI version handling as main commit `0f767e5`.
+- PR #165 added early CLI handling for `--version`, `-v`, and `version`, printing only the normalized version string before config, storage, engine, or plugin initialization.
+- PR #165 used Blaze quickfix mode at the user's clarification; no-mistakes was not run.
 - Latest release: `v0.2.47` from main commit `28e5961`, after PR #132 fixed binary and install-manifest version metadata.
+- PR #164 synced status docs after PR #163.
 - PR #132 merged release version metadata fixes and docs for Windows upgrade behavior.
 - PR #131 synced long-memory smoke adapter status docs after PR #130.
 - PR #130 merged optional external long-memory smoke adapter coverage as main commit `950a71e`.
@@ -20,11 +21,11 @@
 
 ## Current decision / next work
 
-The current repo state is post-PR #163 on clean `main`.
-PR #163 fixed issue #138 so branch names, feature flags, and bare mixed high-entropy identifiers without secret words are saved, while explicit secret prefixes, assignment-style secrets, private keys, and high-entropy values with secret-bearing context are still rejected.
-Lifecycle hook debug logs now include a safe numeric `skippedSecret` count for secret-suppressed capture paths without logging raw candidate text or token values.
-PR #163 used Fable 5 for diagnosis and implementation review because the user explicitly requested Fable 5 review.
-PR #163 used the Blaze fallback PR path because no-mistakes did not start for the feature branch after gate-remote push and quick-start consultation.
+The current repo state is post-PR #165 on clean `main`.
+PR #165 fixed issue #140 so users can run `memory-lane --version`, `memory-lane -v`, or `memory-lane version` to print only the installed version string and exit 0.
+The version path runs before config, storage, engine, or plugin initialization, so it works with malformed config and missing memory stores.
+PR #165 used Opus 4.8 for implementation review and Blaze quickfix mode at the user's clarification.
+no-mistakes was not run for PR #165 because the user clarified quickfix mode.
 The latest release remains `v0.2.47`.
 The release workflow for tag `v0.2.47` passed as GitHub Actions run `28768281598`.
 Released asset `memory-lane-darwin-arm64.tar.gz` was downloaded from GitHub Releases, extracted, and verified with `status --json` reporting `meta.version: "0.2.47"`.
@@ -57,6 +58,8 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - PR #163 verification passed focused detector, engine, Claude runner, Codex runner, and CLI tests; post-fix CLI reproduction saved `Deploy from branch release/JIRA-2024-blueGreenRollout-phase3`; `pnpm build`, `pnpm test`, and `git diff --check` passed.
 - PR #163 used Fable 5 for diagnosis and implementation review because the user explicitly requested Fable 5 review.
 - PR #163 used the Blaze fallback PR path because no-mistakes could not start for `fix/secret-detector-138` after gate-remote push and quick-start consultation.
+- PR #165 verification passed `pnpm --filter @memory-lane/cli build`, `pnpm --filter @memory-lane/cli test` with 187 tests and 0 failures, manual `--version`, `-v`, and `version` smoke checks with `MEMORY_LANE_VERSION=v1.2.3`, and `git diff --check`.
+- PR #165 used Opus 4.8 for implementation review and returned PASS.
 - Release `v0.2.47` pre-release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMORY_LANE_VERSION=v0.2.47 pnpm build:binary`, and `pnpm smoke:binary`.
 - GitHub Actions release run `28768281598` passed for tag `v0.2.47`, including build, tests, binary build, current-platform binary smoke, release notes, and release creation.
 - Released `memory-lane-darwin-arm64.tar.gz` asset was downloaded and extracted; `status --json` reported `meta.version: "0.2.47"`.
