@@ -2,8 +2,9 @@
 
 ## Current state
 
-- Current repo status: PR #172 merged and closed issue #171 Slice A opt-in local trace capture, local `main` synced to merge commit `0bebeba`, and local/remote `feature/slice-a-trace-capture` branches deleted.
+- Current repo status: Slice B trace dataset converter branch after PR #172 merged and closed issue #171 Slice A opt-in local trace capture.
 - PR #172 implements opt-in local learning capture: interactive consent, default-off capture, home-scoped redacted capture files, 60-day/512MB retention, per-project exclusions, status/tuneup surfaces, and purge support.
+- Slice B adds `pnpm --filter @memory-lane/lifecycle eval:trace-dataset-converter -- --traces <dir> --out <file>` as a maintainer-only local runner that converts opt-in Slice A trace files into a deterministic `schemaVersion: 1` LongMemEval-compatible smoke dataset for the existing core adapter.
 - PR #172 passed `pnpm build`, `pnpm test`, `git diff --check`, focused lifecycle trace tests, focused init/status/tuneup tests, focused Claude adapter tests, and Fable 5 implementation reviews with no blockers.
 - Issue #169 captured the review-governed learning flywheel design (outcome-informed learning track) with a UX north star and all six design decisions recorded as issue comments on 2026-07-09.
 - Memory store hygiene on 2026-07-09: rejected pending `484111e8`, consolidated duplicate no-mistakes gate rules into approved workflow_rule `1bc145df` (supersedes `29023aba` and `e0e48ba4`), and ran `memory-lane compact` to purge deleted/rejected records.
@@ -26,11 +27,13 @@
 
 ## Current decision / next work
 
-The current repo state is clean `main` after PR #172 merged as commit `0bebeba`.
+The current repo state is the Slice B trace dataset converter branch after PR #172 merged as commit `0bebeba`.
 PR #172 implemented issue #171 Slice A: opt-in local learning capture for redacted lifecycle records, interactive consent that leaves `learning.capture` absent on EOF/non-interactive init, home-scoped capture storage, per-project exclusions, capture-time retention, status/tuneup reporting, and purge support.
+Slice B converts one or more usable local trace files into a byte-stable smoke dataset with content-derived IDs, capture dates, fidelity metadata, duplicate/unusable counts, date range, and thin-data status.
+The runner requires explicit `--traces` and `--out`, rejects outputs under the selected trace directory, fails without output when no usable trace has a user question, and leaves the core adapter dependency direction unchanged by writing a dataset consumed later through explicit `--dataset`.
 Issue #169 holds the completed review-governed learning flywheel design: home-scoped traces under `~/.memory-lane/traces/<project-key>/`, single global opt-in consent with per-project opt-out, 60-day/512MB retention with `memory-lane tuneup purge`, deferred-and-instrumented Codex transcript fidelity, a new minimal versioned capture-outcome schema, and proposals applied inside `memory-lane tuneup` with an undo journal.
 The UX north star keeps traces/datasets/evals/sweeps vocabulary out of the user surface; Slice E (`memory-lane tuneup`) is the product.
-The next required user action is to choose or approve the next issue #169 slice after Slice A.
+The next required user action after Slice B is reviewed is to choose or approve the next issue #169 slice.
 PR #167 fixed issue #141 so interactive Codex Desktop init no longer parses normal `~/.codex/config.toml` as JSON.
 Failed selected init integrations now print a partial-error banner and exit non-zero, while user-declined overwrite skips remain non-fatal through a structured skip flag.
 PR #167 used Fable 5 for implementation review and Blaze quickfix mode.
@@ -58,6 +61,7 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Use Opus 4.8 with `claude --model claude-opus-4-8 -p '<review prompt>'` for ordinary Memory Lane design/spec and pre-PR implementation reviews unless Fable 5 is mentioned or specified.
 - PR-protected workflow applies: feature branch or worktree, PR, wait for user merge, sync main, delete feature branch, recommend next item.
 - Avoid retrieval rewrites, auto-consolidation, silent deletion, schema expansion, raw transcript indexing, token retuning, public eval commands, production eval APIs, or persisted workstream IDs unless a new approved slice explicitly includes them.
+- Treat Slice B output as local self-retrieval transport smoke data only, not ranking-quality evidence.
 
 ## Current verification evidence
 
