@@ -858,6 +858,10 @@ async function main(): Promise<void> {
     console.log("memory-lane ok")
     process.exit(0)
   }
+  if (command === "--version" || command === "-v" || command === "version") {
+    console.log(VERSION)
+    process.exit(0)
+  }
 
   if (!command || command === "help" || hasFlag(argv, "help") || hasFlag(argv, "h")) {
     console.log(usage())

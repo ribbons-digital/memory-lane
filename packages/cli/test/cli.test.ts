@@ -393,6 +393,24 @@ describe("CLI integration", () => {
     cfgFile = path.join(dir, "cfg.json")
   })
 
+  it("prints version without config or storage initialization", () => {
+    const env = {
+      MEMORY_LANE_VERSION: "v9.8.7",
+      MEMORY_LANE_CONFIG: path.join(dir, "invalid-config.json"),
+      MEMORY_LANE_FILE: path.join(dir, "missing", "mem.jsonl"),
+      MEMORY_LANE_EMBEDDINGS_FILE: path.join(dir, "missing", "emb.jsonl"),
+    }
+    fs.writeFileSync(env.MEMORY_LANE_CONFIG, "{not-json", "utf8")
+
+    for (const flag of ["--version", "-v", "version"]) {
+      const result = runProcess([flag], { env })
+
+      assert.equal(result.status, 0)
+      assert.equal(result.stdout.trim(), "9.8.7")
+      assert.equal(result.stderr, "")
+    }
+  })
+
   it("save and list", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,
