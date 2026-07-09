@@ -55,6 +55,7 @@ Recent shipped work:
 - PR #161 fixed config-set validation so invalid config writes are rejected before saving and parseable invalid configs can be repaired before engine initialization.
 - PR #163 shipped issue #138 secret-detector false-positive fixes for long branch names, feature flags, and bare high-entropy identifiers without secret context.
   The slice keeps explicit secret patterns and adds metadata-only lifecycle debug `skippedSecret` counts; fallback PR flow was used because no-mistakes could not start after the gate-remote push.
+- PR #165 fixed issue #140 by adding script-friendly CLI version handling for `--version`, `-v`, and `version` before config or storage initialization.
 
 ## Active track - Project-local Storage Defaults
 
