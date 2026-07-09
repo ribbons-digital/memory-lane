@@ -29,6 +29,9 @@ Keep it safe to read wholesale in fresh sessions.
 Latest known release: `v0.2.47` from main commit `28e5961`, after PR #132 fixed compiled binary and install-manifest version metadata.
 Release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMORY_LANE_VERSION=v0.2.47 pnpm build:binary`, `pnpm smoke:binary`, GitHub Actions release run `28768281598`, and a downloaded release-asset `status --json` version check.
 
+Current open design: issue #169 captured the review-governed learning flywheel design (outcome-informed learning track) with a UX north star and six recorded decisions.
+The next gate is scoping Slice A (opt-in local trace capture) for explicit approval; Slice E (`memory-lane tuneup`) is the user-facing product surface.
+
 Recent shipped work:
 
 - PR #80 shipped project-local default writes in `v0.2.43`.
@@ -117,6 +120,7 @@ Do not add embeddings, LLM judges, production ranking rewrites, auto-downloads, 
   Keep review-first; no auto-consolidation or auto-approval.
 - **Hardening backlog:** installer/init wizard improvements, Claude Desktop MCP config path tests, import dry-run secret warnings, and broader read-only taxonomy checks.
 - **Outcome-informed learning:** use approval, rejection, delete, rescope, replace, and supersede decisions as reviewable signals for future suggesters, without silent self-training or durable policy mutation.
+  Design captured with decisions on issue #169; implementation slices A-E each require separate approval.
 - **Opt-in memory sharing:** let teams share selected project memories across machines or collaborators.
 - **Retrieval/ranking upgrades:** consider RRF, reranking, graph expansion, or embedding-default changes only after eval evidence.
 - **Memory-Lane-configured continuity classifier:** future harness-agnostic design only.
