@@ -227,7 +227,14 @@ Lifecycle evals live in `@memory-lane/lifecycle`:
 pnpm --filter @memory-lane/lifecycle eval:lifecycle-injection
 pnpm --filter @memory-lane/lifecycle eval:prompt-routing
 pnpm --filter @memory-lane/lifecycle eval:long-session-synthetic
+pnpm --filter @memory-lane/lifecycle eval:trace-dataset-converter -- --traces /path/to/project-traces --out /tmp/memory-lane-trace-smoke.json
 ```
+
+The trace dataset converter is a maintainer-only local runner for opt-in Slice A trace files.
+It requires explicit `--traces <dir>` and `--out <file>` paths, where `--traces` points at one hashed per-project trace directory under the local trace root, not the trace root itself.
+It rejects outputs that physically resolve inside the selected trace directory, including through symlinked parents, writes a deterministic `schemaVersion: 1` LongMemEval-compatible smoke dataset, and fails without writing output when no usable trace contains a user question.
+The emitted dataset preserves session messages, capture dates, trace fidelity, thin-data metadata, and content-derived stable IDs so the result can be passed to the core smoke adapter with `pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset /tmp/memory-lane-trace-smoke.json`.
+It is a local self-retrieval transport smoke only, not ranking-quality evidence, and it does not call a network, model, embeddings path, or judge.
 
 #### pi: load the local adapter
 

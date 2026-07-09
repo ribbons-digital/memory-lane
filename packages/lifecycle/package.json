@@ -21,7 +21,8 @@
     "eval:injection": "tsx test/lifecycle-injection-eval-runner.ts",
     "eval:lifecycle-injection": "tsx test/lifecycle-injection-eval-runner.ts",
     "eval:long-session-synthetic": "tsx test/long-session-synthetic-eval-runner.ts",
-    "eval:prompt-routing": "tsx test/prompt-routing-eval-runner.ts"
+    "eval:prompt-routing": "tsx test/prompt-routing-eval-runner.ts",
+    "eval:trace-dataset-converter": "tsx test/trace-dataset-converter-runner.ts"
   },
   "dependencies": {
     "@memory-lane/core": "workspace:*"

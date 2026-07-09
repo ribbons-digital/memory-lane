@@ -31,7 +31,8 @@ Release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMO
 
 PR #172 merged and closed issue #171 Slice A (opt-in local trace capture) from the review-governed learning flywheel design as main commit `0bebeba`.
 PR #172 added interactive consent, default-off capture, home-scoped redacted capture files, 60-day/512MB retention, per-project exclusions, status/tuneup surfaces, purge support, and focused regression coverage.
-The next required user action is to choose or approve the next issue #169 slice after Slice A.
+The current Slice B branch adds a maintainer-only lifecycle test runner that converts opt-in Slice A trace files into a deterministic `schemaVersion: 1` LongMemEval-compatible smoke dataset for the existing core adapter via explicit `--dataset`.
+The next required user action after Slice B is reviewed is to choose or approve the next issue #169 slice.
 
 Recent shipped work:
 
@@ -103,15 +104,19 @@ Deterministic eval coverage now includes:
 - lifecycle-injection adversarial coverage from PR #123;
 - benchmark taxonomy and fixture manifest metadata from PR #125;
 - deterministic local long-session synthetic benchmark coverage from PR #127;
-- optional external long-memory smoke adapter coverage from PR #130.
+- optional external long-memory smoke adapter coverage from PR #130;
+- Slice B trace dataset converter coverage on the current branch.
 
-No active eval implementation slice is currently open.
+The current active eval implementation slice is Slice B, which converts local opt-in trace files into a deterministic smoke dataset without public CLI exposure or default CI wiring.
 Issue #115 shipped the first optional external long-memory smoke adapter and closed after PR #130.
 The adapter stays outside default CI and requires an explicit local dataset path.
 It supports the tiny LongMemEval-compatible smoke shape with `question_id`, `haystack_session_ids`, `haystack_sessions`, `haystack_dates`, `answer_session_ids`, and `_abs` abstention records.
 It emits a stable JSON report with test-only benchmark taxonomy metadata, deterministic session-id recall metrics, explicit no-network, no-model, and no-judge flags, and separate abstention handling.
 no-mistakes review fixes preserved haystack dates, made temporal smoke records exercise currentness, and sized temporary retrieval `topK` to the requested `k`.
-The deterministic retrieval, conflict/update, lifecycle-injection, prompt-routing, long-session synthetic, and external long-memory smoke evals are clean, so retrieval-ranking changes remain paused until dogfood or eval evidence exposes a concrete production recall bug.
+Slice B adds `pnpm --filter @memory-lane/lifecycle eval:trace-dataset-converter -- --traces <dir> --out <file>` for maintainers who have opted into local trace capture.
+The converter reads one hashed per-project trace directory, deduplicates trace content, skips traces without a user question unless all traces are unusable, records date range, fidelity mix, duplicate/unusable counts, and thin-data status, and rejects output paths that physically resolve inside the trace directory.
+Its output is meant to be passed explicitly to the existing core smoke adapter and remains a local self-retrieval transport smoke, not ranking-quality evidence.
+The deterministic retrieval, conflict/update, lifecycle-injection, prompt-routing, long-session synthetic, external long-memory smoke, and trace dataset converter evals are clean or locally scoped, so retrieval-ranking changes remain paused until dogfood or eval evidence exposes a concrete production recall bug.
 
 Do not add embeddings, LLM judges, production ranking rewrites, auto-downloads, default CI wiring, or auto-consolidation until deterministic local evals remain stable and expose a reason to broaden.
 
