@@ -2,9 +2,9 @@
 
 ## Current state
 
-- Branch context: PR #163 (`fix/secret-detector-138`) contains the issue #138 secret-detector fix and status-doc sync.
-- Issue #138 fix makes generic high-entropy token detection require secret-bearing context, keeps explicit secret prefix and assignment-style detection, and adds metadata-only `skippedSecret` lifecycle hook debug counts for Claude, Codex, and Pi.
-  no-mistakes could not start for this branch after the gate-remote push, so the approved fallback PR flow is in use.
+- Branch context: clean `main...origin/main` after PR #163 merged issue #138 secret-detector entropy false positives as main commit `7361da0`.
+- PR #163 fixed issue #138 by making generic high-entropy token detection require secret-bearing context, keeping explicit secret prefix and assignment-style detection, and adding metadata-only `skippedSecret` lifecycle hook debug counts for Claude, Codex, and Pi.
+  no-mistakes could not start for the feature branch after the gate-remote push, so PR #163 used the approved fallback PR flow.
 - Latest release: `v0.2.47` from main commit `28e5961`, after PR #132 fixed binary and install-manifest version metadata.
 - PR #132 merged release version metadata fixes and docs for Windows upgrade behavior.
 - PR #131 synced long-memory smoke adapter status docs after PR #130.
@@ -20,17 +20,14 @@
 
 ## Current decision / next work
 
-The current repo state is post-PR #161 on clean `main`.
-PR #161 fixed issue #137 config-set validation so invalid config writes no longer brick later CLI commands.
-The latest release remains `v0.2.47` from main commit `28e5961`.
+The current repo state is post-PR #163 on clean `main`.
+PR #163 fixed issue #138 so branch names, feature flags, and bare mixed high-entropy identifiers without secret words are saved, while explicit secret prefixes, assignment-style secrets, private keys, and high-entropy values with secret-bearing context are still rejected.
+Lifecycle hook debug logs now include a safe numeric `skippedSecret` count for secret-suppressed capture paths without logging raw candidate text or token values.
+PR #163 used Fable 5 for diagnosis and implementation review because the user explicitly requested Fable 5 review.
+PR #163 used the Blaze fallback PR path because no-mistakes did not start for the feature branch after gate-remote push and quick-start consultation.
+The latest release remains `v0.2.47`.
 The release workflow for tag `v0.2.47` passed as GitHub Actions run `28768281598`.
 Released asset `memory-lane-darwin-arm64.tar.gz` was downloaded from GitHub Releases, extracted, and verified with `status --json` reporting `meta.version: "0.2.47"`.
-
-Issue #138 is implemented in PR #163 on branch `fix/secret-detector-138`.
-The fix allows branch names, feature flags, and bare mixed high-entropy identifiers without secret words while still rejecting explicit secret prefixes, assignment-style secrets, private keys, and high-entropy values with secret-bearing context.
-Lifecycle hook debug logs now include a safe numeric `skippedSecret` count for secret-suppressed capture paths without logging raw candidate text or token values.
-Fable 5 approved both the diagnosis and implementation reviews.
-no-mistakes fallback PR flow is in use for PR #163 because the gate did not start for this branch after the gate-remote push and quick-start consultation.
 
 Issue #115 is closed with comment `Closed by PR #130, main commit 950a71e.`
 The issue #115 adapter added `pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset <path>`.
@@ -57,9 +54,9 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - PR #161 verification passed `pnpm --filter @memory-lane/core build && pnpm --filter @memory-lane/cli build`, `pnpm --filter @memory-lane/core exec node --test --import tsx test/config.test.ts`, `pnpm --filter @memory-lane/cli exec node --test --import tsx test/cli.test.ts`, isolated original issue reproduction with temp storage, `pnpm build`, `pnpm test`, and `git diff --check`.
 - PR #161 used Fable 5 for diagnosis and implementation review.
 - PR #161 used the Blaze fallback PR path because no-mistakes could not start for the branch with `error: "no run started for \"fix/config-set-validation-137\": no previous run for branch fix/config-set-validation-137"`.
-- Issue #138 verification passed focused detector, engine, Claude runner, Codex runner, and CLI tests; post-fix CLI reproduction saved `Deploy from branch release/JIRA-2024-blueGreenRollout-phase3`; `pnpm build`, `pnpm test`, and `git diff --check` passed.
-- Issue #138 used Fable 5 for diagnosis and implementation review because the user explicitly requested Fable 5 review.
-- Issue #138 uses the Blaze fallback PR path because no-mistakes could not start for `fix/secret-detector-138` after gate-remote push and quick-start consultation.
+- PR #163 verification passed focused detector, engine, Claude runner, Codex runner, and CLI tests; post-fix CLI reproduction saved `Deploy from branch release/JIRA-2024-blueGreenRollout-phase3`; `pnpm build`, `pnpm test`, and `git diff --check` passed.
+- PR #163 used Fable 5 for diagnosis and implementation review because the user explicitly requested Fable 5 review.
+- PR #163 used the Blaze fallback PR path because no-mistakes could not start for `fix/secret-detector-138` after gate-remote push and quick-start consultation.
 - Release `v0.2.47` pre-release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMORY_LANE_VERSION=v0.2.47 pnpm build:binary`, and `pnpm smoke:binary`.
 - GitHub Actions release run `28768281598` passed for tag `v0.2.47`, including build, tests, binary build, current-platform binary smoke, release notes, and release creation.
 - Released `memory-lane-darwin-arm64.tar.gz` asset was downloaded and extracted; `status --json` reported `meta.version: "0.2.47"`.
@@ -91,5 +88,5 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.47` / commit `28e5961`.
-- Current repo status: post-release `v0.2.47`, clean `main...origin/main`.
+- Current repo status: post-PR #163, clean `main...origin/main`.
 - Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, PR #127, and PR #130.
