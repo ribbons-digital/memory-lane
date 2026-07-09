@@ -49,6 +49,12 @@ function projectWithScope(projectKey: string): string {
   return project
 }
 
+function isUnsupportedSymlinkError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code
+  return ["EPERM", "EACCES", "ENOTSUP", "ENOSYS", "EINVAL", "UNKNOWN"].includes(code ?? "")
+}
+
+// fallow-ignore-next-line complexity
 test("conversion is byte-stable, content-ordered, and reports fidelity and trace quality metadata", () => {
   const firstDirectory = tempDir()
   const secondDirectory = tempDir()
@@ -301,9 +307,8 @@ test("writeTraceDataset rejects a symlinked output parent that resolves inside t
   try {
     fs.symlinkSync(physicalOutputParent, symlinkedOutputParent, process.platform === "win32" ? "junction" : "dir")
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code === "EPERM" || code === "EACCES" || code === "ENOTSUP" || code === "ENOSYS" || code === "EINVAL" || code === "UNKNOWN") {
-      t.skip(`directory symlinks are unsupported: ${code}`)
+    if (isUnsupportedSymlinkError(error)) {
+      t.skip(`directory symlinks are unsupported: ${(error as NodeJS.ErrnoException).code}`)
       return
     }
     throw error

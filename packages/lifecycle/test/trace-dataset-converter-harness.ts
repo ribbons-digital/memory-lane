@@ -73,71 +73,102 @@ function optionalString(record: Record<string, unknown>, key: string, filePath: 
   return value
 }
 
-function parseTraceFile(filePath: string): TraceRecordV1 {
-  let parsed: unknown
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function readJsonTrace(filePath: string): unknown {
   try {
-    parsed = JSON.parse(fs.readFileSync(filePath, "utf8")) as unknown
+    return JSON.parse(fs.readFileSync(filePath, "utf8")) as unknown
   } catch (error) {
-    throw new Error(`Unable to parse trace ${filePath}: ${error instanceof Error ? error.message : String(error)}`)
+    throw new Error(`Unable to parse trace ${filePath}: ${errorMessage(error)}`)
   }
+}
+
+// fallow-ignore-next-line complexity
+function parseTraceObject(filePath: string): Record<string, unknown> {
+  const parsed = readJsonTrace(filePath)
   if (!isObject(parsed)) throw new Error(`${filePath} must contain a trace object`)
   if (parsed.schemaVersion !== 1) throw new Error(`${filePath} uses unsupported trace schemaVersion ${String(parsed.schemaVersion)}`)
+  return parsed
+}
 
-  const capturedAt = requiredString(parsed, "capturedAt", filePath)
-  const capturedAtMs = Date.parse(capturedAt)
-  if (!Number.isFinite(capturedAtMs)) throw new Error(`${filePath} has invalid capturedAt`)
+function requiredDate(record: Record<string, unknown>, key: string, filePath: string): string {
+  const value = requiredString(record, key, filePath)
+  const valueMs = Date.parse(value)
+  if (!Number.isFinite(valueMs)) throw new Error(`${filePath} has invalid ${key}`)
+  return new Date(valueMs).toISOString()
+}
 
-  const harness = requiredString(parsed, "harness", filePath)
-  if (!Object.hasOwn(TRACE_HARNESSES, harness)) throw new Error(`${filePath} has invalid harness`)
-  const event = requiredString(parsed, "event", filePath)
-  if (!Object.hasOwn(TRACE_EVENTS, event)) throw new Error(`${filePath} has invalid event`)
-  const fidelity = requiredString(parsed, "fidelity", filePath)
-  if (!TRACE_FIDELITIES.includes(fidelity as TraceFidelity)) throw new Error(`${filePath} has invalid fidelity`)
+function requiredKnownString<T extends string>(
+  record: Record<string, unknown>,
+  key: string,
+  allowed: readonly T[] | Record<string, true>,
+  filePath: string,
+): T {
+  const value = requiredString(record, key, filePath)
+  const isAllowed = Array.isArray(allowed) ? allowed.includes(value as T) : Object.hasOwn(allowed, value)
+  if (!isAllowed) throw new Error(`${filePath} has invalid ${key}`)
+  return value as T
+}
 
+function parseTraceMessage(message: unknown, index: number, filePath: string): TraceRecordV1["messages"][number] {
+  if (!isObject(message)) throw new Error(`${filePath} has invalid message ${index + 1}`)
+  const role = requiredKnownString(message, "role", TRACE_ROLES, filePath) as TraceRecordV1["messages"][number]["role"]
+  if (typeof message.content !== "string") throw new Error(`${filePath} has invalid message content`)
+  const timestamp = optionalString(message, "timestamp", filePath)
+  return {
+    role,
+    content: message.content,
+    ...(timestamp !== undefined ? { timestamp: parseMessageTimestamp(timestamp, filePath) } : {}),
+  }
+}
+
+function parseMessageTimestamp(timestamp: string, filePath: string): string {
+  const timestampMs = Date.parse(timestamp)
+  if (!timestamp || !Number.isFinite(timestampMs)) throw new Error(`${filePath} has invalid message timestamp`)
+  return new Date(timestampMs).toISOString()
+}
+
+function requiredMessages(parsed: Record<string, unknown>, filePath: string): TraceRecordV1["messages"] {
   if (!Array.isArray(parsed.messages)) throw new Error(`${filePath} has invalid messages`)
-  const messages = parsed.messages.map((message, index) => {
-    if (!isObject(message)) throw new Error(`${filePath} has invalid message ${index + 1}`)
-    const role = requiredString(message, "role", filePath)
-    if (!Object.hasOwn(TRACE_ROLES, role)) throw new Error(`${filePath} has invalid message role`)
-    if (typeof message.content !== "string") throw new Error(`${filePath} has invalid message content`)
-    const timestamp = optionalString(message, "timestamp", filePath)
-    const timestampMs = timestamp === undefined ? undefined : Date.parse(timestamp)
-    if (timestamp !== undefined && (!timestamp || !Number.isFinite(timestampMs))) {
-      throw new Error(`${filePath} has invalid message timestamp`)
-    }
-    return {
-      role: role as TraceRecordV1["messages"][number]["role"],
-      content: message.content,
-      ...(timestampMs !== undefined ? { timestamp: new Date(timestampMs).toISOString() } : {}),
-    }
-  })
+  return parsed.messages.map((message, index) => parseTraceMessage(message, index, filePath))
+}
 
+function requiredRedactedMessageCount(parsed: Record<string, unknown>, filePath: string): number {
   if (!Number.isInteger(parsed.redactedMessageCount) || Number(parsed.redactedMessageCount) < 0) {
     throw new Error(`${filePath} has invalid redactedMessageCount`)
   }
+  return Number(parsed.redactedMessageCount)
+}
+
+// fallow-ignore-next-line complexity
+function optionalTraceMeta(parsed: Record<string, unknown>, filePath: string): TraceRecordV1["meta"] {
   if (!isObject(parsed.meta)) throw new Error(`${filePath} has invalid meta`)
+  const entries = ["model", "trigger", "reason"].flatMap((key) => {
+    const value = optionalString(parsed.meta as Record<string, unknown>, key, filePath)
+    return value === undefined ? [] : [[key, value]]
+  })
+  return Object.fromEntries(entries) as TraceRecordV1["meta"]
+}
+
+function parseTraceFile(filePath: string): TraceRecordV1 {
+  const parsed = parseTraceObject(filePath)
   const sessionId = optionalString(parsed, "sessionId", filePath)
   const turnId = optionalString(parsed, "turnId", filePath)
-  const model = optionalString(parsed.meta, "model", filePath)
-  const trigger = optionalString(parsed.meta, "trigger", filePath)
-  const reason = optionalString(parsed.meta, "reason", filePath)
 
   return {
     schemaVersion: 1,
-    capturedAt: new Date(capturedAtMs).toISOString(),
+    capturedAt: requiredDate(parsed, "capturedAt", filePath),
     projectKey: requiredString(parsed, "projectKey", filePath),
-    harness: harness as TraceRecordV1["harness"],
-    event: event as TraceRecordV1["event"],
+    harness: requiredKnownString(parsed, "harness", TRACE_HARNESSES, filePath) as TraceRecordV1["harness"],
+    event: requiredKnownString(parsed, "event", TRACE_EVENTS, filePath) as TraceRecordV1["event"],
     ...(sessionId !== undefined ? { sessionId } : {}),
     ...(turnId !== undefined ? { turnId } : {}),
-    fidelity: fidelity as TraceFidelity,
-    messages,
-    redactedMessageCount: Number(parsed.redactedMessageCount),
-    meta: {
-      ...(model !== undefined ? { model } : {}),
-      ...(trigger !== undefined ? { trigger } : {}),
-      ...(reason !== undefined ? { reason } : {}),
-    },
+    fidelity: requiredKnownString(parsed, "fidelity", TRACE_FIDELITIES, filePath),
+    messages: requiredMessages(parsed, filePath),
+    redactedMessageCount: requiredRedactedMessageCount(parsed, filePath),
+    meta: optionalTraceMeta(parsed, filePath),
   }
 }
 
@@ -154,11 +185,10 @@ function digest(value: unknown): string {
 }
 
 function questionFromTrace(trace: TraceRecordV1): string | undefined {
-  for (let index = trace.messages.length - 1; index >= 0; index -= 1) {
-    const message = trace.messages[index]
-    if (message?.role === "user" && message.content.trim()) return message.content.trim()
-  }
-  return undefined
+  return [...trace.messages]
+    .reverse()
+    .find((message) => message.role === "user" && Boolean(message.content.trim()))
+    ?.content.trim()
 }
 
 function traceFilePaths(tracesDirectory: string): string[] {
@@ -274,22 +304,19 @@ export function writeTraceDataset(tracesDirectory: string, outputPath: string): 
   return dataset
 }
 
+function requireFlagValue(value: string | undefined, flag: string): string {
+  if (!value || value.startsWith("--")) throw new Error(`${flag} requires a value`)
+  return value
+}
+
 function flagValue(argv: readonly string[], name: string): string | undefined {
   const flag = `--${name}`
-  for (let index = 0; index < argv.length; index += 1) {
-    const argument = argv[index]
-    if (argument === flag) {
-      const value = argv[index + 1]
-      if (!value || value.startsWith("--")) throw new Error(`${flag} requires a value`)
-      return value
-    }
-    if (argument?.startsWith(`${flag}=`)) {
-      const value = argument.slice(flag.length + 1)
-      if (!value) throw new Error(`${flag} requires a value`)
-      return value
-    }
-  }
-  return undefined
+  const argumentIndex = argv.findIndex((argument) => argument === flag || argument.startsWith(`${flag}=`))
+  if (argumentIndex === -1) return undefined
+
+  const argument = argv[argumentIndex]!
+  if (argument === flag) return requireFlagValue(argv[argumentIndex + 1], flag)
+  return requireFlagValue(argument.slice(flag.length + 1), flag)
 }
 
 export function requireTraceDatasetPaths(argv: readonly string[]): TraceDatasetPaths {
