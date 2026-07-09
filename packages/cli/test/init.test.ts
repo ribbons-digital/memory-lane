@@ -837,6 +837,25 @@ esac
     assert.ok(content.includes('model = "gpt-5.5"'))
   })
 
+  it("overwrites existing Codex Desktop TOML section with whitespace and comment", () => {
+    const configPath = path.join(home, ".codex/config.toml")
+    fs.writeFileSync(configPath, '[ mcp_servers.memory-lane ] # old entry\ncommand = "old-memory-lane"\n\n[other]\nvalue = true\n', "utf8")
+
+    const result = runWithStatus(["init", "--only", "codex-desktop"], {
+      HOME: home,
+      NO_COLOR: "1",
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    }, undefined, "Y\n")
+
+    const content = fs.readFileSync(configPath, "utf8")
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Codex Desktop already has a Memory Lane configuration/u)
+    assert.doesNotMatch(content, /old-memory-lane/u)
+    assert.equal(content.match(/mcp_servers\.memory-lane/gu)?.length, 1)
+    assert.ok(content.includes("[other]"))
+    assert.ok(content.includes(`command = "${binaryPath}"`))
+  })
+
   it("interactive Codex Desktop setup accepts normal TOML config", () => {
     fs.writeFileSync(path.join(home, ".codex/config.toml"), "[mcp_servers]\n", "utf8")
 

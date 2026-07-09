@@ -8,7 +8,7 @@ import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapt
 import { classifyPromptRoute, handleSessionEnd, createOpenAICompatibleProvider } from "@memory-lane/lifecycle"
 import { runPiHookCommand } from "./pi-hook.js"
 import { handleMcp } from "./commands/mcp.js"
-import { failedInitIntegrations, handleInit } from "./commands/init.js"
+import { handleInit } from "./commands/init.js"
 import { handleUninstall } from "./commands/uninstall.js"
 import { handleUpgrade } from "./commands/upgrade.js"
 import { handleObsidian } from "./commands/obsidian.js"
@@ -875,7 +875,7 @@ async function main(): Promise<void> {
         handleInitCommand(argv, json)
       } else {
         const result = await handleInit(argv)
-        if (failedInitIntegrations(result.integrations).length) process.exit(1)
+        if (result.failedIntegrations.length) process.exit(1)
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)

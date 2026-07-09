@@ -28,4 +28,5 @@ export interface InitResult {
   binaryPath: string
   dataDir: string
   integrations: IntegrationResult[]
+  failedIntegrations: IntegrationResult[]
 }
