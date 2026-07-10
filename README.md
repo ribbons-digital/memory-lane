@@ -544,7 +544,9 @@ echo '{"id":"my-project-uuid"}' > .memory-lane-scope
 ```
 If you do this in a Git repository, add `.memory-lane-scope` to `.gitignore` unless the shared id is deliberate.
 
-Existing memories saved under old worktree path keys are not migrated automatically. Use `memory-lane list --all`, `memory-lane show <id> --all`, and existing review/rescope/delete/save commands if you want to clean up fragmented historical records.
+Existing memories saved under old worktree path keys are not migrated automatically. Use `memory-lane list --all` and `memory-lane show <id> --all` to find them, then pass `--all` to `review`, `approve`, `reject`, `delete`, or `update` when deliberately maintaining records outside the active project scope. Rescope, supersede, and replace currently retain their existing maintenance behavior; #176 tracks aligning those commands with the same explicit escape hatch.
+
+Review and by-id mutation commands are scoped by default: they can access global memories plus memories owned by the active project. When no project scope is active, the default is global-only. Cross-project maintenance requires explicit `--all`; denied lookups return not-found behavior without exposing memory text.
 
 For legacy project-scoped memories that still live in the home store from before project-local defaults, use `memory-lane status --json`, `memory-lane doctor --json`, MCP `memory_status`, or `memory-lane migrate project-local --dry-run`.
 These surfaces are read-only for legacy diagnostics and do not move records or create project-local storage.
@@ -562,22 +564,22 @@ memory-lane recall [query]        Recall memories (semantic or lexical)
 memory-lane show|get <id> [--all] Show one memory by exact id, including descriptor metadata when present
 memory-lane list [--status ...]   List memories
 memory-lane search <query>        Lexical text search
-memory-lane approve <id>          Approve a pending memory
-memory-lane reject <id>           Reject a memory
-memory-lane delete <id>           Soft-delete a memory
-memory-lane review                Show pending memories
+memory-lane approve <id> [--all]  Approve a pending memory
+memory-lane reject <id> [--all]   Reject a memory
+memory-lane delete <id> [--all]   Soft-delete a memory
+memory-lane review [--all]        Show pending memories
 memory-lane review --kind session_summary Filter pending review by memory kind
 memory-lane review --source session-summary Filter pending review by source
 memory-lane review --provenance pi/session_end Filter pending review by adapter/event provenance, e.g. pi/session_end or codex/pre_compact
 memory-lane review --suspect-meta Show likely old pending operational prompt pollution only
-memory-lane review --suspect-meta --include-approved Show pending+approved suspect pollution
+memory-lane review --suspect-meta --include-approved [--all] Show pending+approved suspect pollution; --all includes other projects
 memory-lane dashboard [--all]     Compact continuity/review overview without long memory bodies
 memory-lane continuity [--json] [--query <text>]
                                   Canonical continuity read model, with optional workstream discovery
 memory-lane route --prompt <text> Internal prompt routing decision for harness adapters
 memory-lane agreements [--area <area>] [--json]
                                   Show approved operating agreements for the current project/global scope
-memory-lane update <id>           Revise an active memory with the same id
+memory-lane update <id> [--all]   Revise an active memory with the same id
 memory-lane rescope|move <id> --scope global|project [--dry-run|--yes]
                                   Correct memory scope with the same id
 memory-lane supersede <new-id> <old-id...> Link approved old memories to an approved successor
@@ -1052,10 +1054,12 @@ The MCP server exposes explicit tools only:
 - `memory_continuity` - canonical continuity read model for broad prior-work, project resumption, last-worked-on, accomplished, next-action, project-status, resume, and handoff-style questions; accepts optional `query` for read-only workstream discovery
 - `memory_status` - read Memory Lane counts, config paths, project scope, legacy project-memory diagnostics, and integration diagnostics
 - `memory_list` - list memories visible to the current project scope by default
-- `memory_review` - list pending memories for review; supports `kind`, `source`, and `provenance` filters such as `kind: "session_summary"`, `source: "session-summary"`, `provenance: "pi/session_end"`, and `provenance: "codex/pre_compact"`
-- `memory_approve` - approve a memory by id
-- `memory_reject` - reject a memory by id
-- `memory_delete` - soft-delete a memory by id
+- `memory_review` - list pending memories visible to the current project scope by default; supports `kind`, `source`, and `provenance` filters such as `kind: "session_summary"`, `source: "session-summary"`, `provenance: "pi/session_end"`, and `provenance: "codex/pre_compact"`; pass `all: true` only for cross-project maintenance
+- `memory_approve` - approve a memory by id within the current project scope; pass `all: true` only for cross-project maintenance
+- `memory_reject` - reject a memory by id within the current project scope; pass `all: true` only for cross-project maintenance
+- `memory_delete` - soft-delete a memory by id within the current project scope; pass `all: true` only for cross-project maintenance
+
+MCP review and mutations use global plus the requested `projectPath` by default. Without an active project scope they are global-only. Explicit `all: true` bypasses this boundary for administrative workflows; a refused cross-project id returns `not_found` without returning the target memory text.
 
 Use `memory_continuity({ projectPath })` from MCP clients before answering continuity questions such as project resumption, last-worked-on, accomplished, next-action, or project-status prompts. Use `memory_continuity({ projectPath, query: "resume building X" })` when the user asks for a specific workstream. Prefer it over `memory_recall` for continuity; `memory_recall` is a topic-specific follow-up after continuity inspection, not an authority by itself.
 
