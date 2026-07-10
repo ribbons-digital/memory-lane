@@ -560,6 +560,7 @@ export interface RescopeInput {
   scopeType: MemoryScopeType
   projectPath?: string
   dryRun?: boolean
+  /** Bypass current-project visibility for explicit cross-project maintenance. */
   all?: boolean
 }
 

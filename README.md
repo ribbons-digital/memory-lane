@@ -583,8 +583,10 @@ memory-lane agreements [--area <area>] [--json]
 memory-lane update <id> [--all]   Revise an active memory with the same id
 memory-lane rescope|move <id> --scope global|project [--dry-run|--yes] [--all]
                                   Correct memory scope with the same id
-memory-lane supersede <new-id> <old-id...> [--all] Link approved old memories to an approved successor
-memory-lane replace <old-id...> --text <text>|--stdin [--all] Create a successor memory for approved old memories
+memory-lane supersede <new-id> <old-id...> [--reason <reason>] [--dry-run] [--yes] [--all]
+                                  Link approved old memories to an approved successor
+memory-lane replace <old-id...> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run] [--yes] [--all]
+                                  Create a successor memory for approved old memories
 memory-lane compact               Remove deleted/rejected tombstones while preserving invalid rows
 memory-lane doctor                Diagnostic report
 memory-lane status                Quick stats

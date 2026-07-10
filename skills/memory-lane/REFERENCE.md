@@ -48,11 +48,19 @@ When a durable memory is wrong, stale, duplicated, or superseded, prefer explici
 
 ```bash
 memory-lane update <id> --text "refined memory" --reason "clarified"
-memory-lane replace <old-id> --text "new successor memory" --kind workflow_rule
-memory-lane supersede <new-id> <old-id> --reason "newer version"
+memory-lane replace <old-id> --text "new successor memory" --kind workflow_rule [--all]
+memory-lane supersede <new-id> <old-id> --reason "newer version" [--all]
 ```
 
-`update` keeps the same memory id. `replace` creates a new successor memory. `supersede` links an existing approved successor to approved old memories. Use `--dry-run` to preview revision commands before writing relationship changes. Use `--yes` for multi-old `replace` or `supersede`. Active continuity slots and workstream discovery omit superseded records, but list/show/recall can still expose them for explicit inspection. MCP mutation tools are not available for these revision operations yet.
+`update` keeps the same memory id.
+`replace` creates a new successor memory.
+`supersede` links an existing approved successor to approved old memories.
+Use `--dry-run` to preview revision commands before writing relationship changes.
+Use `--yes` for multi-old `replace` or `supersede`.
+Revision commands use global plus current-project visibility by default, use global-only visibility when no project scope is active, and require `--all` for cross-project maintenance.
+Denied scoped lookups use not-found behavior without exposing hidden memory text or appending new records.
+Active continuity slots and workstream discovery omit superseded records, but list/show/recall can still expose them for explicit inspection.
+MCP mutation tools are not available for these revision operations yet.
 
 ### Recall (semantic + lexical search of approved memories)
 
@@ -113,7 +121,9 @@ memory-lane list --status pending  # pending memories in current scope
 memory-lane list --status approved
 ```
 
-> **Project scope**: `list`, `search`, and `recall` only show memories scoped to the current project (global memories + project-matching memories). Use `--all` to bypass scope filtering.
+> **Project scope**: `list`, `search`, `recall`, review, by-id mutation, and revision commands use the current project plus global memories by default.
+> When no project scope is active, the default is global-only.
+> Use `--all` only for explicit cross-project maintenance.
 
 ### Other commands
 
@@ -124,15 +134,15 @@ memory-lane review --suspect-meta # list likely old pending operational prompt p
 memory-lane review --suspect-meta --include-approved # include approved suspect pollution that may affect recall
 memory-lane show <id>             # inspect one exact active memory id in current scope, including descriptor metadata when present
 memory-lane get <id>              # alias for show
-memory-lane rescope <id> --scope project --project <path> --dry-run # preview same-id scope correction
-memory-lane move <id> --scope global --yes # alias for rescope; apply with confirmation
+memory-lane rescope <id> --scope project --project <path> --dry-run [--all] # preview same-id scope correction
+memory-lane move <id> --scope global --yes [--all] # alias for rescope; apply with confirmation
 memory-lane approve <id>          # approve a pending memory
 memory-lane reject <id>           # reject a pending memory
 memory-lane delete <id>           # soft-delete a memory
 memory-lane agreements            # inspect approved operating agreement text
 memory-lane update <id> --text "..." --reason "..." # revise an active memory in place
-memory-lane supersede <new-id> <old-id...> [--yes] # link approved old memories to an approved successor
-memory-lane replace <old-id...> --text "..." [--yes] # create a successor memory
+memory-lane supersede <new-id> <old-id...> [--yes] [--all] # link approved old memories to an approved successor
+memory-lane replace <old-id...> --text "..." [--yes] [--all] # create a successor memory
 memory-lane route --prompt "what should we work on next?" --json # internal harness routing decision
 memory-lane status                # quick stats
 memory-lane status --json --since 2026-06-18T00:00:00.000Z
@@ -313,7 +323,7 @@ memory-lane save "test command is pnpm test" --project /path/to/project
 |------|-------------|
 | `--json` | Output JSON instead of human-readable text |
 | `--project <path>` | Set the project scope directory |
-| `--all` | (list) Show all memories, bypassing project scope |
+| `--all` | Bypass project scope for explicit cross-project list, review, by-id, or revision maintenance |
 | `--status <s>` | Filter by status: `approved`, `pending`, `rejected`, `deleted` |
 | `--category <c>` | Set category: `preference`, `personal`, `project` |
 | `--scope <s>` | Set scope: `global`, `project` |
