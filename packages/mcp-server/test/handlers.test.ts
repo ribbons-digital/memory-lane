@@ -189,6 +189,176 @@ test("memory_review returns pending memories", async () => {
   assert.equal(result.data.memories[0].status, "pending")
 })
 
+test("memory_review applies projectPath and only --all reveals another project", async () => {
+  const projectA = tempDir()
+  const projectB = tempDir()
+  fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "mcp-review-project-a" }))
+  fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "mcp-review-project-b" }))
+  const engine = engineInTemp(projectA)
+  engine.suggest("SECRET MCP project A pending text", "project", "project")
+  engine.refreshScope(projectB)
+  engine.suggest("Visible MCP project B pending text", "project", "project")
+  engine.refreshScope(projectA)
+
+  const scopedResult = await handleMemoryReview(engine, { projectPath: projectB })
+  const scoped = parseToolResult(scopedResult)
+  assert.deepEqual(scopedResult.structuredContent, scoped)
+  assert.equal(scoped.ok, true)
+  assert.equal(scoped.meta.projectScope, "mcp-review-project-b")
+  assert.equal(scoped.meta.count, 1)
+  assert.deepEqual(scoped.data.memories.map((memory: { text: string }) => memory.text), ["Visible MCP project B pending text"])
+  assert.doesNotMatch(JSON.stringify(scopedResult), /SECRET MCP project A/u)
+
+  const allResult = await handleMemoryReview(engine, { projectPath: projectB, all: true })
+  const all = parseToolResult(allResult)
+  assert.deepEqual(allResult.structuredContent, all)
+  assert.equal(all.ok, true)
+  assert.equal(all.meta.projectScope, "mcp-review-project-b")
+  assert.equal(all.meta.count, 2)
+  assert.deepEqual(all.data.memories.map((memory: { text: string }) => memory.text).sort(), ["SECRET MCP project A pending text", "Visible MCP project B pending text"].sort())
+})
+
+test("review mutation handlers refuse cross-project ids unless all is true", async (t) => {
+  const scenarios = [
+    { name: "memory_approve", initialStatus: "pending", finalStatus: "approved", invoke: handleMemoryApprove },
+    { name: "memory_reject", initialStatus: "pending", finalStatus: "rejected", invoke: handleMemoryReject },
+    { name: "memory_delete", initialStatus: "approved", finalStatus: "deleted", invoke: handleMemoryDelete },
+  ] as const
+
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, async () => {
+      const projectA = tempDir()
+      const projectB = tempDir()
+      fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: `mcp-${scenario.name}-project-a` }))
+      fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: `mcp-${scenario.name}-project-b` }))
+      const engine = engineInTemp(projectA)
+      const secretText = `SECRET ${scenario.name} project A text`
+      const saved = engine.save({
+        text: secretText,
+        status: scenario.initialStatus,
+        category: "project",
+        scopeType: "project",
+      })
+      assert.equal(saved.status, "saved")
+
+      const refusedResult = await scenario.invoke(engine, { id: saved.memory.id, projectPath: projectB })
+      const refused = parseToolResult(refusedResult)
+      assert.deepEqual(refusedResult.structuredContent, refused)
+      assert.equal(refused.ok, true)
+      assert.equal(refused.meta.projectScope, `mcp-${scenario.name}-project-b`)
+      assert.deepEqual(refused.data, { status: "not_found", id: saved.memory.id })
+      assert.doesNotMatch(JSON.stringify(refusedResult), /SECRET/u)
+      assert.equal(engine.getById(saved.memory.id, { all: true })?.status, scenario.initialStatus)
+
+      const allowedResult = await scenario.invoke(engine, { id: saved.memory.id, projectPath: projectB, all: true })
+      const allowed = parseToolResult(allowedResult)
+      assert.deepEqual(allowedResult.structuredContent, allowed)
+      assert.equal(allowed.ok, true)
+      assert.equal(allowed.meta.projectScope, `mcp-${scenario.name}-project-b`)
+      assert.equal(allowed.data.status, "updated")
+      assert.equal(allowed.data.memory.id, saved.memory.id)
+      assert.equal(allowed.data.memory.status, scenario.finalStatus)
+      assert.equal(allowed.data.memory.text, secretText)
+    })
+  }
+})
+
+test("memory review, get, and approve without projectPath are global-only unless all is true", async () => {
+  const storageDir = tempDir()
+  const projectA = tempDir()
+  fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "mcp-null-scope-project-a" }))
+  const engineOptions = {
+    memoryPath: path.join(storageDir, "memory.jsonl"),
+    embeddingsPath: path.join(storageDir, "embeddings.jsonl"),
+    configPath: path.join(storageDir, "config.json"),
+  }
+  const writer = new MemoryEngine(engineOptions)
+  writer.refreshScope(projectA)
+  const projectMemory = writer.save({
+    text: "SECRET null-scope project pending text",
+    status: "pending",
+    category: "project",
+    scopeType: "project",
+  })
+  assert.equal(projectMemory.status, "saved")
+  const globalMemory = writer.save({
+    text: "Visible global pending text",
+    status: "pending",
+    category: "preference",
+    scopeType: "global",
+  })
+  assert.equal(globalMemory.status, "saved")
+  const reader = new MemoryEngine(engineOptions)
+  const previousCwd = process.cwd()
+  try {
+    process.chdir(tempDir())
+    reader.refreshScope()
+  } finally {
+    process.chdir(previousCwd)
+  }
+
+  const scopedReviewResult = await handleMemoryReview(reader, {})
+  const scopedReview = parseToolResult(scopedReviewResult)
+  assert.deepEqual(scopedReviewResult.structuredContent, scopedReview)
+  assert.equal(scopedReview.ok, true)
+  assert.equal(scopedReview.meta.projectScope, "none")
+  assert.equal(scopedReview.meta.count, 1)
+  assert.deepEqual(scopedReview.data.memories.map((memory: { text: string }) => memory.text), ["Visible global pending text"])
+  assert.doesNotMatch(JSON.stringify(scopedReviewResult), /SECRET null-scope/u)
+
+  const allReviewResult = await handleMemoryReview(reader, { all: true })
+  const allReview = parseToolResult(allReviewResult)
+  assert.deepEqual(allReviewResult.structuredContent, allReview)
+  assert.equal(allReview.ok, true)
+  assert.equal(allReview.meta.projectScope, "none")
+  assert.equal(allReview.meta.count, 2)
+  assert.deepEqual(allReview.data.memories.map((memory: { text: string }) => memory.text).sort(), ["SECRET null-scope project pending text", "Visible global pending text"].sort())
+
+  const visibleGlobalResult = await handleMemoryGet(reader, { id: globalMemory.memory.id })
+  const visibleGlobal = parseToolResult(visibleGlobalResult)
+  assert.deepEqual(visibleGlobalResult.structuredContent, visibleGlobal)
+  assert.equal(visibleGlobal.ok, true)
+  assert.equal(visibleGlobal.meta.projectScope, "none")
+  assert.equal(visibleGlobal.data.memory.text, "Visible global pending text")
+
+  const hiddenProjectResult = await handleMemoryGet(reader, { id: projectMemory.memory.id })
+  const hiddenProject = parseToolResult(hiddenProjectResult)
+  assert.deepEqual(hiddenProjectResult.structuredContent, hiddenProject)
+  assert.equal(hiddenProject.ok, true)
+  assert.equal(hiddenProject.meta.projectScope, "none")
+  assert.deepEqual(hiddenProject.data, {
+    status: "not_found",
+    id: projectMemory.memory.id,
+    hint: "Use all: true to search across projects and deleted/rejected memories.",
+  })
+  assert.doesNotMatch(JSON.stringify(hiddenProjectResult), /SECRET null-scope/u)
+
+  const visibleWithAllResult = await handleMemoryGet(reader, { id: projectMemory.memory.id, all: true })
+  const visibleWithAll = parseToolResult(visibleWithAllResult)
+  assert.deepEqual(visibleWithAllResult.structuredContent, visibleWithAll)
+  assert.equal(visibleWithAll.ok, true)
+  assert.equal(visibleWithAll.meta.projectScope, "none")
+  assert.equal(visibleWithAll.data.memory.text, "SECRET null-scope project pending text")
+
+  const refusedResult = await handleMemoryApprove(reader, { id: projectMemory.memory.id })
+  const refused = parseToolResult(refusedResult)
+  assert.deepEqual(refusedResult.structuredContent, refused)
+  assert.equal(refused.ok, true)
+  assert.equal(refused.meta.projectScope, "none")
+  assert.deepEqual(refused.data, { status: "not_found", id: projectMemory.memory.id })
+  assert.doesNotMatch(JSON.stringify(refusedResult), /SECRET null-scope/u)
+  assert.equal(reader.getById(projectMemory.memory.id, { all: true })?.status, "pending")
+
+  const allowedResult = await handleMemoryApprove(reader, { id: projectMemory.memory.id, all: true })
+  const allowed = parseToolResult(allowedResult)
+  assert.deepEqual(allowedResult.structuredContent, allowed)
+  assert.equal(allowed.ok, true)
+  assert.equal(allowed.meta.projectScope, "none")
+  assert.equal(allowed.data.status, "updated")
+  assert.equal(allowed.data.memory.status, "approved")
+  assert.equal(allowed.data.memory.text, "SECRET null-scope project pending text")
+})
+
 test("memory_review includes checkpoint candidate metadata", async () => {
   const engine = engineInTemp()
   engine.suggest("Merged PR #13 adding prompt continuity intents.", "project", "project")

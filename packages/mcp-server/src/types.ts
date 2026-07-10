@@ -37,7 +37,9 @@ export interface ListToolInput extends ProjectPathInput {
   all?: boolean
 }
 
-export interface ReviewToolInput extends ProjectPathInput, ReviewFilters {}
+export interface ReviewToolInput extends ProjectPathInput, ReviewFilters {
+  all?: boolean
+}
 
 export interface StatusToolInput extends ProjectPathInput {
   since?: string
@@ -49,6 +51,7 @@ export interface ContinuityToolInput extends ProjectPathInput {
 
 export interface MemoryIdToolInput extends ProjectPathInput {
   id: string
+  all?: boolean
 }
 
 export interface MemoryGetToolInput extends MemoryIdToolInput {

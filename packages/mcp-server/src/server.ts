@@ -166,11 +166,12 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
     "memory_review",
     {
       title: "Review Pending Memories",
-      description: "List pending Memory Lane memories for review. Pass projectPath for current-project review context; omit it only for global/cross-project review. Use kind/source/provenance filters to inspect session summaries or other continuity candidates.",
+      description: "List pending Memory Lane memories visible to the current project scope by default. Pass projectPath for current-project review context. Use all=true only for cross-project/admin review. Use kind/source/provenance filters to inspect session summaries or other continuity candidates.",
       inputSchema: {
         kind: kindSchema.optional(),
         source: sourceSchema.optional(),
         provenance: provenanceSchema.optional(),
+        all: z.boolean().optional(),
         projectPath,
       },
     },
@@ -191,9 +192,10 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
     "memory_approve",
     {
       title: "Approve Memory",
-      description: "Approve a pending Memory Lane memory by id.",
+      description: "Approve a pending Memory Lane memory by id. Respects current project visibility unless all=true is explicitly requested for cross-project maintenance.",
       inputSchema: {
         id: memoryId,
+        all: z.boolean().optional(),
         projectPath,
       },
     },
@@ -204,9 +206,10 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
     "memory_reject",
     {
       title: "Reject Memory",
-      description: "Reject a Memory Lane memory by id.",
+      description: "Reject a Memory Lane memory by id. Respects current project visibility unless all=true is explicitly requested for cross-project maintenance.",
       inputSchema: {
         id: memoryId,
+        all: z.boolean().optional(),
         projectPath,
       },
     },
@@ -217,9 +220,10 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
     "memory_delete",
     {
       title: "Delete Memory",
-      description: "Soft-delete a Memory Lane memory by id.",
+      description: "Soft-delete a Memory Lane memory by id. Respects current project visibility unless all=true is explicitly requested for cross-project maintenance.",
       inputSchema: {
         id: memoryId,
+        all: z.boolean().optional(),
         projectPath,
       },
     },

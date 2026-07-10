@@ -551,6 +551,120 @@ describe("CLI integration", () => {
     assert.equal(payload.data.memories[0].text, "project plain folder rule")
   })
 
+  it("keeps review and mutations project-scoped unless --all is explicit", () => {
+    const projectA = tempDir()
+    const projectB = tempDir()
+    fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "cli-scope-project-a" }), "utf8")
+    fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "cli-scope-project-b" }), "utf8")
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+    const saveForProjectA = (text: string, status: "pending" | "approved"): string => {
+      const payload = JSON.parse(run([
+        "save", text,
+        "--scope", "project",
+        "--category", "project",
+        "--status", status,
+        "--project", projectA,
+        "--json",
+      ], env))
+      assert.equal(payload.ok, true)
+      assert.equal(payload.data.saved.scope.key, "cli-scope-project-a")
+      return payload.data.saved.id
+    }
+
+    const reviewText = "SECRET project A review text"
+    const approveText = "SECRET project A approve text"
+    const rejectText = "SECRET project A reject text"
+    const deleteText = "SECRET project A delete text"
+    const updateText = "SECRET project A update text"
+    const dryRunText = "SECRET project A dry-run text"
+    saveForProjectA(reviewText, "pending")
+    const approveId = saveForProjectA(approveText, "pending")
+    const rejectId = saveForProjectA(rejectText, "pending")
+    const deleteId = saveForProjectA(deleteText, "approved")
+    const updateId = saveForProjectA(updateText, "approved")
+    const dryRunId = saveForProjectA(dryRunText, "approved")
+    const projectBText = "Visible project B review text"
+    const projectBSaved = JSON.parse(run([
+      "save", projectBText,
+      "--scope", "project",
+      "--category", "project",
+      "--status", "pending",
+      "--project", projectB,
+      "--json",
+    ], env))
+    assert.equal(projectBSaved.data.saved.scope.key, "cli-scope-project-b")
+
+    const scopedReview = runProcess(["review", "--project", projectB, "--json"], { env })
+    assert.equal(scopedReview.status, 0, scopedReview.stderr)
+    const scopedReviewPayload = JSON.parse(scopedReview.stdout)
+    assert.equal(scopedReviewPayload.ok, true)
+    assert.equal(scopedReviewPayload.meta.projectScope, "cli-scope-project-b")
+    assert.equal(scopedReviewPayload.meta.count, 1)
+    assert.deepEqual(scopedReviewPayload.data.memories.map((memory: MemoryRecord) => memory.text), [projectBText])
+    assert.doesNotMatch(scopedReview.stdout, /SECRET project A/u)
+
+    const allReview = runProcess(["review", "--all", "--project", projectB, "--json"], { env })
+    assert.equal(allReview.status, 0, allReview.stderr)
+    const allReviewPayload = JSON.parse(allReview.stdout)
+    assert.equal(allReviewPayload.ok, true)
+    assert.equal(allReviewPayload.meta.projectScope, "cli-scope-project-b")
+    assert.equal(allReviewPayload.meta.count, 4)
+    assert.deepEqual(allReviewPayload.data.memories.map((memory: MemoryRecord) => memory.text).sort(), [approveText, projectBText, rejectText, reviewText].sort())
+
+    const refused = {
+      approve: runProcess(["approve", approveId, "--project", projectB, "--json"], { env }),
+      reject: runProcess(["reject", rejectId, "--project", projectB, "--json"], { env }),
+      delete: runProcess(["delete", deleteId, "--project", projectB, "--json"], { env }),
+      update: runProcess(["update", updateId, "--text", "cross-project update must not land", "--project", projectB, "--json"], { env }),
+      "update --dry-run": runProcess(["update", dryRunId, "--text", "cross-project preview must not leak", "--dry-run", "--project", projectB, "--json"], { env }),
+    }
+    for (const [command, result] of Object.entries(refused)) {
+      assert.notEqual(result.status, 0, `${command} unexpectedly succeeded`)
+      const payload = JSON.parse(result.stdout)
+      assert.equal(payload.ok, false, command)
+      assert.match(payload.error, /Memory not found/u, command)
+    }
+    assert.doesNotMatch(Object.values(refused).map((result) => result.stdout + result.stderr).join("\n"), /SECRET project A|cross-project preview/u)
+
+    const unchanged = JSON.parse(run(["list", "--all", "--project", projectB, "--json"], env)).data.memories as MemoryRecord[]
+    assert.equal(unchanged.find((memory) => memory.id === approveId)?.status, "pending")
+    assert.equal(unchanged.find((memory) => memory.id === rejectId)?.status, "pending")
+    assert.equal(unchanged.find((memory) => memory.id === deleteId)?.status, "approved")
+    assert.equal(unchanged.find((memory) => memory.id === updateId)?.text, updateText)
+    assert.equal(unchanged.find((memory) => memory.id === dryRunId)?.text, dryRunText)
+
+    const approved = runProcess(["approve", approveId, "--all", "--project", projectB, "--json"], { env })
+    const rejected = runProcess(["reject", rejectId, "--all", "--project", projectB, "--json"], { env })
+    const deleted = runProcess(["delete", deleteId, "--all", "--project", projectB, "--json"], { env })
+    const updated = runProcess(["update", updateId, "--text", "explicit all update", "--all", "--project", projectB, "--json"], { env })
+    const dryRun = runProcess(["update", dryRunId, "--text", "explicit all preview", "--dry-run", "--all", "--project", projectB, "--json"], { env })
+
+    for (const [command, result] of Object.entries({ approved, rejected, deleted, updated, dryRun })) {
+      assert.equal(result.status, 0, `${command}: ${result.stderr || result.stdout}`)
+      assert.equal(JSON.parse(result.stdout).ok, true, command)
+    }
+    assert.equal(JSON.parse(approved.stdout).data.approved.status, "approved")
+    assert.equal(JSON.parse(rejected.stdout).data.rejected.status, "rejected")
+    assert.equal(JSON.parse(deleted.stdout).data.deleted.status, "deleted")
+    assert.equal(JSON.parse(updated.stdout).data.updated.text, "explicit all update")
+    const dryRunPayload = JSON.parse(dryRun.stdout)
+    assert.equal(dryRunPayload.data.dryRun, true)
+    assert.equal(dryRunPayload.data.current.text, dryRunText)
+    assert.equal(dryRunPayload.data.proposed.text, "explicit all preview")
+
+    const after = JSON.parse(run(["list", "--all", "--project", projectB, "--json"], env)).data.memories as MemoryRecord[]
+    assert.equal(after.find((memory) => memory.id === approveId)?.status, "approved")
+    assert.equal(after.find((memory) => memory.id === rejectId)?.status, "rejected")
+    assert.equal(after.find((memory) => memory.id === deleteId)?.status, "deleted")
+    assert.equal(after.find((memory) => memory.id === updateId)?.text, "explicit all update")
+    assert.equal(after.find((memory) => memory.id === dryRunId)?.text, dryRunText)
+  })
+
   it("init --project-local creates project storage and project saves use it", () => {
     const project = tempDir()
     const home = tempDir()
@@ -1259,6 +1373,36 @@ describe("CLI integration", () => {
     assert.equal(payload.data.memories.some((memory: any) => memory.id === "approvedreal1"), false)
   })
 
+  it("review --suspect-meta --include-approved needs --all for cross-project suspects", () => {
+    const projectA = tempDir()
+    const projectB = tempDir()
+    fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "cli-suspect-project-a" }))
+    fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "cli-suspect-project-b" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const projectAText = "Task: You are a delegated subagent running from a fork of the parent session. SECRET approved suspect from project A."
+    const projectBText = "Task: You are a delegated subagent running from a fork of the parent session. Visible approved suspect from project B."
+    run(["save", projectAText, "--status", "approved", "--category", "project", "--scope", "project", "--project", projectA], env)
+    run(["save", projectBText, "--status", "approved", "--category", "project", "--scope", "project", "--project", projectB], env)
+
+    const scopedOutput = run(["review", "--suspect-meta", "--include-approved", "--project", projectB, "--json"], env)
+    const scoped = JSON.parse(scopedOutput)
+    assert.equal(scoped.ok, true)
+    assert.equal(scoped.meta.projectScope, "cli-suspect-project-b")
+    assert.equal(scoped.meta.count, 1)
+    assert.deepEqual(scoped.data.memories.map((memory: MemoryRecord) => memory.text), [projectBText])
+    assert.doesNotMatch(scopedOutput, /SECRET approved suspect/u)
+
+    const all = JSON.parse(run(["review", "--suspect-meta", "--include-approved", "--all", "--project", projectB, "--json"], env))
+    assert.equal(all.ok, true)
+    assert.equal(all.meta.projectScope, "cli-suspect-project-b")
+    assert.equal(all.meta.count, 2)
+    assert.deepEqual(all.data.memories.map((memory: MemoryRecord) => memory.text).sort(), [projectAText, projectBText].sort())
+  })
+
   it("review --suspect-meta human output is compact and actionable", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,
@@ -1509,7 +1653,7 @@ describe("CLI integration", () => {
       provenance: { adapter: "pi", lifecycleEvent: "session_end" },
     })
 
-    const output = run(["review"], env)
+    const output = run(["review", "--all"], env)
 
     assert.match(output, /Memory Lane Review/u)
     assert.match(output, /Pending memories grouped by project, source, kind, and provenance/u)
@@ -1552,7 +1696,7 @@ describe("CLI integration", () => {
       provenance: { adapter: "claude", lifecycleEvent: "session_end" },
     })
 
-    const output = run(["review", "--kind", "session_summary", "--source", "session-summary", "--provenance", "pi/session_end"], env)
+    const output = run(["review", "--all", "--kind", "session_summary", "--source", "session-summary", "--provenance", "pi/session_end"], env)
 
     assert.match(output, /Filters: kind=session_summary, source=session-summary/u)
     assert.match(output, /provenance=pi\/session_end/u)
@@ -1584,7 +1728,7 @@ describe("CLI integration", () => {
       provenance: { adapter: "pi", lifecycleEvent: "session_end" },
     })
 
-    const payload = JSON.parse(run(["review", "--kind", "session_summary", "--source", "session-summary", "--provenance", "pi/session_end", "--json"], env))
+    const payload = JSON.parse(run(["review", "--all", "--kind", "session_summary", "--source", "session-summary", "--provenance", "pi/session_end", "--json"], env))
 
     assert.equal(payload.ok, true)
     assert.equal(payload.meta.count, 1)

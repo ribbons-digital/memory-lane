@@ -4,7 +4,7 @@ import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { MemoryEngine } from "../src/engine.js"
 import { normalizeMemoryRecord } from "../src/storage-validation.js"
-import { contentHash } from "../src/engine-helpers.js"
+import { contentHash, visibleInScope } from "../src/engine-helpers.js"
 import { createSingleStoreEngineStorage } from "../src/storage-facade.js"
 import {
   selectOperatingAgreements,
@@ -28,6 +28,52 @@ describe("MemoryEngine", () => {
   function readJsonl(file: string): any[] {
     if (!fs.existsSync(file)) return []
     return fs.readFileSync(file, "utf8").split(/\r?\n/u).filter(Boolean).map((line) => JSON.parse(line))
+  }
+
+  function projectScopes() {
+    const projectA = path.join(dir, "scope-project-a")
+    const projectB = path.join(dir, "scope-project-b")
+    fs.mkdirSync(projectA, { recursive: true })
+    fs.mkdirSync(projectB, { recursive: true })
+    fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "scope-project-a" }), "utf8")
+    fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "scope-project-b" }), "utf8")
+    return { projectA, projectB }
+  }
+
+  function clearProjectScope(e: MemoryEngine) {
+    const originalCwd = process.cwd()
+    const unscopedDir = path.join(dir, "no-project-scope")
+    fs.mkdirSync(unscopedDir, { recursive: true })
+    try {
+      process.chdir(unscopedDir)
+      e.refreshScope()
+    } finally {
+      process.chdir(originalCwd)
+    }
+    assert.equal(e.getProjectScope(), null)
+  }
+
+  function mutationState(e: MemoryEngine, id: string) {
+    const target = e.list({ all: true }).find((memory) => memory.id === id)
+    assert.ok(target)
+    return {
+      text: target.text,
+      status: target.status,
+      category: target.category,
+      kind: target.kind,
+      revision: target.revision,
+    }
+  }
+
+  function assertScopeDenied(e: MemoryEngine, id: string, operation: string, action: () => unknown) {
+    const before = mutationState(e, id)
+    const transitionCount = readJsonl(path.join(dir, "mem.jsonl")).length
+    const embeddingTransitionCount = readJsonl(path.join(dir, "emb.jsonl")).length
+
+    assert.equal(action(), undefined, `${operation} must not return an out-of-scope memory`)
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, transitionCount, `${operation} must not append a transition`)
+    assert.equal(readJsonl(path.join(dir, "emb.jsonl")).length, embeddingTransitionCount, `${operation} must not append an embedding transition`)
+    assert.deepEqual(mutationState(e, id), before, `${operation} must not change an out-of-scope memory`)
   }
 
   it("rejects empty text", () => {
@@ -1087,6 +1133,198 @@ describe("MemoryEngine", () => {
     const pending = e.reviewPending()
     assert.equal(pending.length, 1)
     assert.equal(pending[0].text, "pending memory")
+  })
+
+  it("reviewPending limits project review to the current project plus globals unless all is requested", () => {
+    const e = engine()
+    const { projectA, projectB } = projectScopes()
+    e.refreshScope(projectA)
+    const projectAPending = e.save({ text: "Project A pending review", status: "pending", scopeType: "project" })
+    const globalPending = e.save({ text: "Global pending review", status: "pending", scopeType: "global" })
+    e.refreshScope(projectB)
+    const projectBPending = e.save({ text: "Project B pending review", status: "pending", scopeType: "project" })
+
+    assert.equal(projectAPending.status, "saved")
+    assert.equal(globalPending.status, "saved")
+    assert.equal(projectBPending.status, "saved")
+    if (projectAPending.status !== "saved" || globalPending.status !== "saved" || projectBPending.status !== "saved") return
+
+    assert.deepEqual(
+      new Set(e.reviewPending().map((memory) => memory.id)),
+      new Set([projectBPending.memory.id, globalPending.memory.id]),
+    )
+    assert.deepEqual(
+      new Set(e.reviewPending({ all: true }).map((memory) => memory.id)),
+      new Set([projectAPending.memory.id, projectBPending.memory.id, globalPending.memory.id]),
+    )
+  })
+
+  it("denies cross-project mutations and previews unless all is requested", () => {
+    const e = engine()
+    const { projectA, projectB } = projectScopes()
+    e.refreshScope(projectA)
+    const approveTarget = e.save({ text: "Project A approve target", status: "pending", scopeType: "project" })
+    const rejectTarget = e.save({ text: "Project A reject target", status: "pending", scopeType: "project" })
+    const deleteTarget = e.save({ text: "Project A delete target", status: "approved", scopeType: "project" })
+    const updateTarget = e.save({ text: "Project A update source", status: "pending", scopeType: "project" })
+    const previewTarget = e.save({ text: "Project A preview source", status: "approved", scopeType: "project" })
+
+    assert.equal(approveTarget.status, "saved")
+    assert.equal(rejectTarget.status, "saved")
+    assert.equal(deleteTarget.status, "saved")
+    assert.equal(updateTarget.status, "saved")
+    assert.equal(previewTarget.status, "saved")
+    if (approveTarget.status !== "saved" || rejectTarget.status !== "saved" || deleteTarget.status !== "saved" || updateTarget.status !== "saved" || previewTarget.status !== "saved") return
+
+    e.refreshScope(projectB)
+    assertScopeDenied(e, approveTarget.memory.id, "approve", () => e.approve(approveTarget.memory.id))
+    assertScopeDenied(e, rejectTarget.memory.id, "reject", () => e.reject(rejectTarget.memory.id))
+    assertScopeDenied(e, deleteTarget.memory.id, "delete", () => e.delete(deleteTarget.memory.id))
+    assertScopeDenied(e, updateTarget.memory.id, "update", () => e.update(updateTarget.memory.id, { text: "Denied cross-project update" }))
+    assertScopeDenied(e, previewTarget.memory.id, "previewUpdate", () => e.previewUpdate(previewTarget.memory.id, { text: "Denied cross-project preview" }))
+
+    const approved = e.approve(approveTarget.memory.id, { all: true })
+    assert.equal(approved?.status, "approved")
+    assert.equal(mutationState(e, approveTarget.memory.id).status, "approved")
+
+    const rejected = e.reject(rejectTarget.memory.id, { all: true })
+    assert.equal(rejected?.status, "rejected")
+    assert.equal(mutationState(e, rejectTarget.memory.id).status, "rejected")
+
+    const deleted = e.delete(deleteTarget.memory.id, { all: true })
+    assert.equal(deleted?.status, "deleted")
+    assert.equal(mutationState(e, deleteTarget.memory.id).status, "deleted")
+
+    const updated = e.update(updateTarget.memory.id, { text: "Permitted cross-project update" }, { all: true })
+    assert.equal(updated?.text, "Permitted cross-project update")
+    assert.equal(updated?.status, "pending")
+    assert.deepEqual(mutationState(e, updateTarget.memory.id), {
+      text: "Permitted cross-project update",
+      status: "pending",
+      category: updateTarget.memory.category,
+      kind: updateTarget.memory.kind,
+      revision: undefined,
+    })
+
+    const previewTransitionCount = readJsonl(path.join(dir, "mem.jsonl")).length
+    const previewState = mutationState(e, previewTarget.memory.id)
+    const preview = e.previewUpdate(previewTarget.memory.id, { text: "Permitted cross-project preview" }, { all: true })
+    assert.equal(preview?.dryRun, true)
+    assert.equal(preview?.current.text, "Project A preview source")
+    assert.equal(preview?.current.status, "approved")
+    assert.equal(preview?.proposed.text, "Permitted cross-project preview")
+    assert.equal(preview?.proposed.status, "approved")
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, previewTransitionCount)
+    assert.deepEqual(mutationState(e, previewTarget.memory.id), previewState)
+  })
+
+  it("reviewPending with no project scope returns globals only unless all is requested", () => {
+    const e = engine()
+    const { projectA } = projectScopes()
+    e.refreshScope(projectA)
+    const projectPending = e.save({ text: "Project-owned pending review", status: "pending", scopeType: "project" })
+    const globalPending = e.save({ text: "Unscoped global pending review", status: "pending", scopeType: "global" })
+
+    assert.equal(projectPending.status, "saved")
+    assert.equal(globalPending.status, "saved")
+    if (projectPending.status !== "saved" || globalPending.status !== "saved") return
+
+    clearProjectScope(e)
+    assert.deepEqual(e.reviewPending().map((memory) => memory.id), [globalPending.memory.id])
+    assert.deepEqual(
+      new Set(e.reviewPending({ all: true }).map((memory) => memory.id)),
+      new Set([projectPending.memory.id, globalPending.memory.id]),
+    )
+  })
+
+  it("with no project scope mutates and previews globals only unless all is requested", () => {
+    const e = engine()
+    const { projectA } = projectScopes()
+    e.refreshScope(projectA)
+    const projectApprove = e.save({ text: "Project approve without active scope", status: "pending", scopeType: "project" })
+    const projectReject = e.save({ text: "Project reject without active scope", status: "pending", scopeType: "project" })
+    const projectDelete = e.save({ text: "Project delete without active scope", status: "approved", scopeType: "project" })
+    const projectUpdate = e.save({ text: "Project update without active scope", status: "pending", scopeType: "project" })
+    const projectPreview = e.save({ text: "Project preview without active scope", status: "approved", scopeType: "project" })
+    const globalApprove = e.save({ text: "Global approve without active scope", status: "pending", scopeType: "global" })
+    const globalReject = e.save({ text: "Global reject without active scope", status: "pending", scopeType: "global" })
+    const globalDelete = e.save({ text: "Global delete without active scope", status: "approved", scopeType: "global" })
+    const globalUpdate = e.save({ text: "Global update without active scope", status: "pending", scopeType: "global" })
+    const globalPreview = e.save({ text: "Global preview without active scope", status: "approved", scopeType: "global" })
+    const fixtures = [
+      projectApprove,
+      projectReject,
+      projectDelete,
+      projectUpdate,
+      projectPreview,
+      globalApprove,
+      globalReject,
+      globalDelete,
+      globalUpdate,
+      globalPreview,
+    ]
+    assert.ok(fixtures.every((fixture) => fixture.status === "saved"))
+    if (
+      projectApprove.status !== "saved"
+      || projectReject.status !== "saved"
+      || projectDelete.status !== "saved"
+      || projectUpdate.status !== "saved"
+      || projectPreview.status !== "saved"
+      || globalApprove.status !== "saved"
+      || globalReject.status !== "saved"
+      || globalDelete.status !== "saved"
+      || globalUpdate.status !== "saved"
+      || globalPreview.status !== "saved"
+    ) return
+
+    clearProjectScope(e)
+    assertScopeDenied(e, projectApprove.memory.id, "unscoped approve", () => e.approve(projectApprove.memory.id))
+    assertScopeDenied(e, projectReject.memory.id, "unscoped reject", () => e.reject(projectReject.memory.id))
+    assertScopeDenied(e, projectDelete.memory.id, "unscoped delete", () => e.delete(projectDelete.memory.id))
+    assertScopeDenied(e, projectUpdate.memory.id, "unscoped update", () => e.update(projectUpdate.memory.id, { text: "Denied unscoped project update" }))
+    assertScopeDenied(e, projectPreview.memory.id, "unscoped previewUpdate", () => e.previewUpdate(projectPreview.memory.id, { text: "Denied unscoped project preview" }))
+
+    assert.equal(e.approve(globalApprove.memory.id)?.status, "approved")
+    assert.equal(mutationState(e, globalApprove.memory.id).status, "approved")
+    assert.equal(e.reject(globalReject.memory.id)?.status, "rejected")
+    assert.equal(mutationState(e, globalReject.memory.id).status, "rejected")
+    assert.equal(e.delete(globalDelete.memory.id)?.status, "deleted")
+    assert.equal(mutationState(e, globalDelete.memory.id).status, "deleted")
+    const globalUpdated = e.update(globalUpdate.memory.id, { text: "Permitted unscoped global update" })
+    assert.equal(globalUpdated?.text, "Permitted unscoped global update")
+    assert.equal(globalUpdated?.status, "pending")
+    assert.equal(mutationState(e, globalUpdate.memory.id).text, "Permitted unscoped global update")
+    const globalPreviewTransitionCount = readJsonl(path.join(dir, "mem.jsonl")).length
+    const globalPreviewState = mutationState(e, globalPreview.memory.id)
+    const defaultPreview = e.previewUpdate(globalPreview.memory.id, { text: "Permitted unscoped global preview" })
+    assert.equal(defaultPreview?.dryRun, true)
+    assert.equal(defaultPreview?.current.text, "Global preview without active scope")
+    assert.equal(defaultPreview?.current.status, "approved")
+    assert.equal(defaultPreview?.proposed.text, "Permitted unscoped global preview")
+    assert.equal(defaultPreview?.proposed.status, "approved")
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, globalPreviewTransitionCount)
+    assert.deepEqual(mutationState(e, globalPreview.memory.id), globalPreviewState)
+
+    assert.equal(e.approve(projectApprove.memory.id, { all: true })?.status, "approved")
+    assert.equal(e.reject(projectReject.memory.id, { all: true })?.status, "rejected")
+    assert.equal(e.delete(projectDelete.memory.id, { all: true })?.status, "deleted")
+    const projectUpdated = e.update(projectUpdate.memory.id, { text: "Permitted unscoped project update" }, { all: true })
+    assert.equal(projectUpdated?.text, "Permitted unscoped project update")
+    assert.equal(projectUpdated?.status, "pending")
+    assert.equal(mutationState(e, projectApprove.memory.id).status, "approved")
+    assert.equal(mutationState(e, projectReject.memory.id).status, "rejected")
+    assert.equal(mutationState(e, projectDelete.memory.id).status, "deleted")
+    assert.equal(mutationState(e, projectUpdate.memory.id).text, "Permitted unscoped project update")
+    const projectPreviewTransitionCount = readJsonl(path.join(dir, "mem.jsonl")).length
+    const projectPreviewState = mutationState(e, projectPreview.memory.id)
+    const allPreview = e.previewUpdate(projectPreview.memory.id, { text: "Permitted unscoped project preview" }, { all: true })
+    assert.equal(allPreview?.dryRun, true)
+    assert.equal(allPreview?.current.text, "Project preview without active scope")
+    assert.equal(allPreview?.current.status, "approved")
+    assert.equal(allPreview?.proposed.text, "Permitted unscoped project preview")
+    assert.equal(allPreview?.proposed.status, "approved")
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, projectPreviewTransitionCount)
+    assert.deepEqual(mutationState(e, projectPreview.memory.id), projectPreviewState)
   })
 
   it("suggest creates pending entry by default", () => {
@@ -2331,6 +2569,33 @@ You are continuing the same subagent session. Before this run can be accepted, c
     if (result.status === "saved") {
       assert.match(result.warnings?.join("\n") ?? "", /Vault path does not exist/u)
       assert.equal(e.list({ all: true }).some((memory) => memory.id === result.memory.id), true)
+    }
+  })
+})
+
+describe("visibleInScope", () => {
+  function record(scope: MemoryRecord["scope"]): MemoryRecord {
+    return {
+      id: "visibility-record",
+      text: "Visibility record",
+      status: "pending",
+      category: "project",
+      scope,
+      source: "manual",
+      createdAt: "2026-07-10T00:00:00.000Z",
+      updatedAt: "2026-07-10T00:00:00.000Z",
+    }
+  }
+
+  it("treats null undefined and empty project keys as global-only visibility", () => {
+    const globalMemory = record({ type: "global" })
+    const projectMemory = record({ type: "project", key: "project-a" })
+    const absentScopeKeys = [null, undefined, ""] as const
+
+    for (const scopeKey of absentScopeKeys) {
+      const label = scopeKey === null ? "null" : scopeKey === undefined ? "undefined" : "empty"
+      assert.equal(visibleInScope(globalMemory, scopeKey as any), true, `${label} scope must preserve global visibility`)
+      assert.equal(visibleInScope(projectMemory, scopeKey as any), false, `${label} scope must not expose project memories`)
     }
   })
 })
