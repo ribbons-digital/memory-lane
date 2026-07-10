@@ -506,6 +506,7 @@ By default, Memory Lane uses two storage tiers when no explicit `MEMORY_LANE_*` 
 - new memories whose final scope is the current project live in `<project-root>/.memory-lane/memory.jsonl` when a project scope is known.
 
 Each write appends a record; reads fold duplicates by id with the newest revision winning.
+New records created by Memory Lane receive 32-character lowercase hexadecimal ids; existing legacy ids are loaded unchanged.
 Atomic memory, embedding, continuity-baseline, and compaction writes use short file locks plus `.tmp` + `rename`, and batch memory writes are atomic per underlying store.
 Compaction removes folded deleted/rejected records and stale embeddings, but it preserves malformed or schema-invalid JSONL rows so diagnostics remain available instead of silently erasing corrupt input.
 The internal storage facade merges the active project store with the home store for recall, list, review, continuity, and status surfaces.

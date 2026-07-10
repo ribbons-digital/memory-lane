@@ -4,6 +4,7 @@ import * as path from "node:path"
 import type { MemoryRecord } from "./types.js"
 import { normalizeMemoryRecord } from "./storage-validation.js"
 
+/** Generate a new Memory Lane record id as 32 lowercase hexadecimal characters. */
 export function createMemoryId(): string {
   return crypto.randomBytes(16).toString("hex")
 }

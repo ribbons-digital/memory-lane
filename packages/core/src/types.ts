@@ -71,6 +71,7 @@ export interface ProjectInfo {
 }
 
 export interface MemoryRecord {
+  /** Generated Memory Lane records use 32 lowercase hexadecimal characters; legacy/imported ids are preserved. */
   id: string
   status: MemoryStatus
   text: string
