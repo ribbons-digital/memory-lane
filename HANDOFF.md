@@ -2,6 +2,7 @@
 
 ## Current state
 
+- PR #183 merged issue #145 as main commit `9b16939`, increasing new memory IDs to 128 random bits while preserving legacy short IDs and duplicate-ID folding semantics.
 - Current repo status: Slice B trace dataset converter branch after PR #172 merged and closed issue #171 Slice A opt-in local trace capture.
 - PR #172 implements opt-in local learning capture: interactive consent, default-off capture, home-scoped redacted capture files, 60-day/512MB retention, per-project exclusions, status/tuneup surfaces, and purge support.
 - Slice B adds `pnpm --filter @memory-lane/lifecycle eval:trace-dataset-converter -- --traces <dir> --out <file>` as a maintainer-only local runner that converts opt-in Slice A trace files into a deterministic `schemaVersion: 1` LongMemEval-compatible smoke dataset for the existing core adapter.
@@ -65,6 +66,7 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 
 ## Current verification evidence
 
+- PR #183 verification passed focused core storage tests, core and workspace builds, the full workspace test suite, `git diff --check`, Fable 5 diff review with no blockers, and no-mistakes run `01KX70XJNHAPD2X06C29RNPEVG` with `checks-passed` and no findings.
 - PR #161 verification passed `pnpm --filter @memory-lane/core build && pnpm --filter @memory-lane/cli build`, `pnpm --filter @memory-lane/core exec node --test --import tsx test/config.test.ts`, `pnpm --filter @memory-lane/cli exec node --test --import tsx test/cli.test.ts`, isolated original issue reproduction with temp storage, `pnpm build`, `pnpm test`, and `git diff --check`.
 - PR #161 used Fable 5 for diagnosis and implementation review.
 - PR #161 used the Blaze fallback PR path because no-mistakes could not start for the branch with `error: "no run started for \"fix/config-set-validation-137\": no previous run for branch fix/config-set-validation-137"`.

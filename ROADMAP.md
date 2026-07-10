@@ -36,6 +36,7 @@ The next required user action after Slice B is reviewed is to choose or approve 
 
 Recent shipped work:
 
+- PR #183 fixed issue #145 by increasing new memory IDs from 32 to 128 random bits while preserving legacy IDs and duplicate-ID folding semantics.
 - PR #80 shipped project-local default writes in `v0.2.43`.
 - PR #82 shipped continuity routing and context hygiene in `v0.2.43`.
 - PR #89 shipped project-local legacy diagnostics in `v0.2.44`.
