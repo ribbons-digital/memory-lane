@@ -425,9 +425,9 @@ export class MemoryEngine {
     opts?: { reason?: string; revisedBy?: MemoryRevisionActor; dryRun?: boolean; all?: boolean },
   ): SupersedeResult {
     this.validateOldIds(newId, oldIds)
+    validateRevisionOptions(opts ?? {})
     const successor = this.requireRevisionMemory(newId, "Successor", opts)
     const oldRecords = oldIds.map((id) => this.requireRevisionMemory(id, "Old", opts))
-    validateRevisionOptions(opts ?? {})
     this.assertApprovedRevisionMemory(successor, "Successor")
     for (const memory of oldRecords) this.assertApprovedRevisionMemory(memory, "Old")
     const already = oldRecords.find((memory) => memory.revision?.supersededBy)
@@ -476,12 +476,12 @@ export class MemoryEngine {
     all?: boolean
   }): ReplaceResult {
     this.validateOldIds(undefined, oldIds)
-    const oldRecords = oldIds.map((id) => this.requireRevisionMemory(id, "Old", input))
     validateRevisionOptions(input)
     validateSaveInput({ text: input.text, category: input.category, kind: input.kind, status: input.status ?? "approved" })
     if (input.status !== undefined && input.status !== "pending" && input.status !== "approved") {
       throw new Error(`Invalid status: ${displayValue(input.status)}. Expected one of: pending, approved`)
     }
+    const oldRecords = oldIds.map((id) => this.requireRevisionMemory(id, "Old", input))
     for (const memory of oldRecords) this.assertApprovedRevisionMemory(memory, "Old")
     const already = oldRecords.find((memory) => memory.revision?.supersededBy)
     if (already) throw new Error(`Old memory is already superseded: ${already.id}`)

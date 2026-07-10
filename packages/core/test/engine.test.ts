@@ -863,6 +863,7 @@ describe("MemoryEngine", () => {
     assert.throws(() => e.supersede(old.memory.id, [pendingOld.memory.id]), /Old must be approved/u)
     assert.throws(() => e.supersede(old.memory.id, [pendingOld.memory.id, pendingOld.memory.id]), /Old memory ids must be unique/u)
     assert.throws(() => e.supersede(old.memory.id, [pendingOld.memory.id], { revisedBy: "robot" as any }), /Invalid revisedBy.*robot/u)
+    assert.throws(() => e.supersede("missing", [old.memory.id], { revisedBy: "robot" as any }), /Invalid revisedBy.*robot/u)
     assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, logBefore)
   })
 
@@ -1058,6 +1059,9 @@ describe("MemoryEngine", () => {
     assert.throws(() => e.replace([old.memory.id], { text: "my key is sk-abc123def456ghi789jkl" }), /secret/u)
     assert.throws(() => e.replace([old.memory.id], { text: "Bad status", status: "rejected" as any }), /Invalid status.*rejected/u)
     assert.throws(() => e.replace([old.memory.id], { text: "Bad actor", revisedBy: "robot" as any }), /Invalid revisedBy.*robot/u)
+    assert.throws(() => e.replace(["missing-old"], { text: "Bad status", status: "rejected" as any }), /Invalid status.*rejected/u)
+    assert.throws(() => e.replace(["missing-old"], { text: "Bad actor", revisedBy: "robot" as any }), /Invalid revisedBy.*robot/u)
+    assert.throws(() => e.replace(["missing-old"], { text: "Bad kind", kind: "unknown" as any }), /Invalid kind.*unknown/u)
     assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, logBefore)
   })
 
@@ -1298,6 +1302,11 @@ describe("MemoryEngine", () => {
       throw new Error("expected saved supersede fixtures")
     }
 
+    const invalidHiddenSuccessorError = assertRevisionScopeDenied(e, "supersede invalid options with hidden successor", () => {
+      e.supersede(hiddenSuccessor.memory.id, [visibleOld.memory.id], { revisedBy: "robot" as any })
+    })
+    assert.match(invalidHiddenSuccessorError.message, /Invalid revisedBy.*robot/u)
+
     const hiddenSuccessorError = assertRevisionScopeDenied(e, "supersede with hidden successor", () => {
       e.supersede(hiddenSuccessor.memory.id, [visibleOld.memory.id])
     })
@@ -1348,6 +1357,11 @@ describe("MemoryEngine", () => {
     if (hiddenOldA.status !== "saved" || hiddenOldB.status !== "saved" || visibleOld.status !== "saved") {
       throw new Error("expected saved replace fixtures")
     }
+
+    const invalidHiddenOldError = assertRevisionScopeDenied(e, "replace invalid options with hidden old record", () => {
+      e.replace([hiddenOldA.memory.id], { text: "Bad hidden replacement status", status: "rejected" as any })
+    })
+    assert.match(invalidHiddenOldError.message, /Invalid status.*rejected/u)
 
     const hiddenOldError = assertRevisionScopeDenied(e, "replace with hidden old record", () => {
       e.replace([hiddenOldA.memory.id], { text: "Denied hidden replacement" })
