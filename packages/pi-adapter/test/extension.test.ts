@@ -283,7 +283,7 @@ test("memory_continuity tool returns canonical continuity context", async () => 
   assert.match(result.content[0].text, /Latest project progress/u)
   assert.match(result.content[0].text, /PR #52 released v0\.2\.29/u)
   assert.equal(result.details.projectScope, "pi-test-project")
-  assert.equal(result.details.latestApproved.project.id.length, 8)
+  assert.match(result.details.latestApproved.project.id, /^[0-9a-f]{32}$/u)
 })
 
 test("memory_continuity tool dedupes collapsed operating guidance items", async () => {

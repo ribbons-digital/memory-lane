@@ -5,7 +5,7 @@ import type { MemoryRecord } from "./types.js"
 import { normalizeMemoryRecord } from "./storage-validation.js"
 
 export function createMemoryId(): string {
-  return crypto.randomBytes(4).toString("hex")
+  return crypto.randomBytes(16).toString("hex")
 }
 
 export function foldMemoryRecords(records: MemoryRecord[]): MemoryRecord[] {

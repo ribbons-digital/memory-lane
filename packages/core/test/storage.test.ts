@@ -22,6 +22,12 @@ function rec(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
   }
 }
 
+describe("createMemoryId", () => {
+  it("returns 32 lowercase hexadecimal characters", () => {
+    assert.match(createMemoryId(), /^[0-9a-f]{32}$/)
+  })
+})
+
 describe("MemoryStore", () => {
   let dir: string, file: string
   beforeEach(() => { dir = tempDir(); file = path.join(dir, "mem.jsonl") })
@@ -36,6 +42,14 @@ describe("MemoryStore", () => {
     store.append(rec({ text: "hello" }))
     assert.equal(store.list().length, 1)
     assert.equal(store.list()[0].text, "hello")
+  })
+
+  it("loads an existing short non-empty id unchanged", () => {
+    fs.writeFileSync(file, JSON.stringify(rec({ id: "legacy-id" })) + "\n", "utf8")
+
+    const memories = createMemoryStore(file).list()
+
+    assert.deepEqual(memories.map(memory => memory.id), ["legacy-id"])
   })
 
   it("folds duplicates by id", () => {
