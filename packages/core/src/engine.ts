@@ -232,16 +232,26 @@ export class MemoryEngine {
     return warnings.length ? { ...memory, warnings } : memory
   }
 
-  private activeVisibleByDefault(memory: MemoryRecord): boolean {
-    return (memory.status === "approved" || memory.status === "pending") && (!this.scope || visibleInScope(memory, this.scope.key))
+  private visibleByScope(memory: MemoryRecord, opts?: { all?: boolean }): boolean {
+    return Boolean(opts?.all) || visibleInScope(memory, this.scope?.key)
+  }
+
+  private findScopedMemory(
+    id: string,
+    predicate: (memory: MemoryRecord) => boolean,
+    opts?: { all?: boolean },
+  ): MemoryRecord | undefined {
+    return this.storage.listMemories().find((memory) =>
+      memory.id === id && predicate(memory) && this.visibleByScope(memory, opts),
+    )
   }
 
   getById(id: string, opts?: { all?: boolean }): MemoryRecord | undefined {
-    return this.storage.listMemories().find((memory) => {
-      if (memory.id !== id) return false
-      if (opts?.all) return true
-      return this.activeVisibleByDefault(memory)
-    })
+    return this.findScopedMemory(
+      id,
+      (memory) => Boolean(opts?.all) || memory.status === "approved" || memory.status === "pending",
+      opts,
+    )
   }
 
   private requireActiveMemory(id: string): MemoryRecord {
@@ -340,9 +350,9 @@ export class MemoryEngine {
     return this.save({ text, category, scopeType, source: "user-suggested", status: nextStatus, kind, freshness, descriptor })
   }
 
-  /** Approve a pending memory by id. Returns the updated memory plus mirror warnings, or undefined. */
-  approve(id: string): MemoryMutationResult | undefined {
-    const mem = this.storage.listMemories().find((m) => m.id === id && m.status !== "deleted")
+  /** Approve a pending memory by id. Respects project scope unless `all` is true. */
+  approve(id: string, opts?: { all?: boolean }): MemoryMutationResult | undefined {
+    const mem = this.findScopedMemory(id, (memory) => memory.status !== "deleted", opts)
     if (!mem) return undefined
     const updated = clone(mem, { status: "approved" })
     this.storage.appendMemory(updated)
@@ -351,8 +361,8 @@ export class MemoryEngine {
     return this.mutationResultWithMirrorWarnings(updated)
   }
 
-  private buildUpdatePreview(id: string, patch: UpdateInput): UpdatePreview | undefined {
-    const mem = this.storage.listMemories().find((m) => m.id === id && (m.status === "approved" || m.status === "pending"))
+  private buildUpdatePreview(id: string, patch: UpdateInput, opts?: { all?: boolean }): UpdatePreview | undefined {
+    const mem = this.findScopedMemory(id, (memory) => memory.status === "approved" || memory.status === "pending", opts)
     if (!mem) return undefined
     validateUpdateInput(patch)
 
@@ -372,13 +382,13 @@ export class MemoryEngine {
     return { dryRun: true, current: mem, proposed, warnings: [] }
   }
 
-  previewUpdate(id: string, patch: UpdateInput): UpdatePreview | undefined {
-    return this.buildUpdatePreview(id, patch)
+  previewUpdate(id: string, patch: UpdateInput, opts?: { all?: boolean }): UpdatePreview | undefined {
+    return this.buildUpdatePreview(id, patch, opts)
   }
 
-  /** Update an active approved or pending memory by id. Returns the updated memory plus mirror warnings, or undefined. */
-  update(id: string, patch: UpdateInput): MemoryMutationResult | undefined {
-    const preview = this.buildUpdatePreview(id, patch)
+  /** Update an active approved or pending memory by id. Respects project scope unless `all` is true. */
+  update(id: string, patch: UpdateInput, opts?: { all?: boolean }): MemoryMutationResult | undefined {
+    const preview = this.buildUpdatePreview(id, patch, opts)
     if (!preview) return undefined
     const updated = preview.proposed
     this.storage.appendMemory(updated)
@@ -508,9 +518,9 @@ export class MemoryEngine {
     return mirrorWarnings.length ? { ...result, mirrorWarnings } : result
   }
 
-  /** Reject a memory by id. Returns the updated memory plus mirror warnings, or undefined. */
-  reject(id: string): MemoryMutationResult | undefined {
-    const mem = this.storage.listMemories().find((m) => m.id === id && m.status !== "deleted")
+  /** Reject a memory by id. Respects project scope unless `all` is true. */
+  reject(id: string, opts?: { all?: boolean }): MemoryMutationResult | undefined {
+    const mem = this.findScopedMemory(id, (memory) => memory.status !== "deleted", opts)
     if (!mem) return undefined
     const updated = clone(mem, { status: "rejected" })
     this.storage.appendMemory(updated)
@@ -518,9 +528,9 @@ export class MemoryEngine {
     return this.mutationResultWithMirrorWarnings(updated)
   }
 
-  /** Soft-delete a memory by id. Returns the deleted memory plus mirror warnings, or undefined. */
-  delete(id: string): MemoryMutationResult | undefined {
-    const mem = this.storage.listMemories().find((m) => m.id === id && m.status !== "deleted")
+  /** Soft-delete a memory by id. Respects project scope unless `all` is true. */
+  delete(id: string, opts?: { all?: boolean }): MemoryMutationResult | undefined {
+    const mem = this.findScopedMemory(id, (memory) => memory.status !== "deleted", opts)
     if (!mem) return undefined
     const updated = clone(mem, { status: "deleted" })
     this.storage.appendMemory(updated)
@@ -540,7 +550,7 @@ export class MemoryEngine {
   list(opts?: { status?: MemoryStatus; all?: boolean }): MemoryRecord[]
   list(arg?: MemoryStatus | { status?: MemoryStatus; all?: boolean }): MemoryRecord[] {
     const all = this.storage.listMemories()
-    const scopeKey = this.scope?.key ?? ""
+    const scopeKey = this.scope?.key
     const opts = typeof arg === "object" ? arg : { status: arg }
     const visible = opts?.all ? all : all.filter((m) => visibleInScope(m, scopeKey))
     if (!opts?.status) return visible
@@ -552,9 +562,11 @@ export class MemoryEngine {
     return searchMemories(this.storage.listMemories(), query, this.scope?.key ?? "")
   }
 
-  /** List pending memories for review. */
-  reviewPending(): MemoryRecord[] {
-    return this.storage.listMemories().filter((m) => m.status === "pending")
+  /** List pending memories visible to the current project, or all pending memories when requested. */
+  reviewPending(opts?: { all?: boolean }): MemoryRecord[] {
+    return this.storage.listMemories().filter((memory) =>
+      memory.status === "pending" && this.visibleByScope(memory, opts),
+    )
   }
 
   private invalidateEmbedding(memoryId: string, reason: "updated" | "deleted" | "stale"): void {

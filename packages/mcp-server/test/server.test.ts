@@ -185,6 +185,45 @@ test("registers status review-complete and continuity tools on the MCP server", 
   assert.match(continuityTool.description, /Pass projectPath/u)
 })
 
+test("registered review and mutation tools accept all true", async () => {
+  const projectA = tempDir("memory-lane-mcp-all-project-a-")
+  const projectB = tempDir("memory-lane-mcp-all-project-b-")
+  fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "server-all-project-a" }))
+  fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "server-all-project-b" }))
+  const engine = engineInTemp()
+  engine.refreshScope(projectA)
+  const reviewMemory = engine.save({ text: "Registered review all text", status: "pending", category: "project", scopeType: "project" })
+  const approveMemory = engine.save({ text: "Registered approve all text", status: "pending", category: "project", scopeType: "project" })
+  const rejectMemory = engine.save({ text: "Registered reject all text", status: "pending", category: "project", scopeType: "project" })
+  const deleteMemory = engine.save({ text: "Registered delete all text", status: "approved", category: "project", scopeType: "project" })
+  if (reviewMemory.status !== "saved" || approveMemory.status !== "saved" || rejectMemory.status !== "saved" || deleteMemory.status !== "saved") {
+    throw new Error("expected registered tool fixtures to save")
+  }
+  engine.refreshScope(projectB)
+  const server = createMemoryLaneMcpServer({ engine })
+  const parseResult = (result: { content: Array<{ type: string; text?: string }> }) => {
+    const text = result.content.find((item) => item.type === "text")?.text
+    assert.equal(typeof text, "string")
+    return JSON.parse(text)
+  }
+
+  const reviewed = parseResult(await registeredTool(server, "memory_review").handler({ all: true }))
+  assert.equal(reviewed.ok, true)
+  assert.equal(reviewed.meta.count, 3)
+  assert.deepEqual(reviewed.data.memories.map((memory: { text: string }) => memory.text).sort(), [
+    "Registered approve all text",
+    "Registered reject all text",
+    "Registered review all text",
+  ].sort())
+
+  const approved = parseResult(await registeredTool(server, "memory_approve").handler({ id: approveMemory.memory.id, all: true }))
+  const rejected = parseResult(await registeredTool(server, "memory_reject").handler({ id: rejectMemory.memory.id, all: true }))
+  const deleted = parseResult(await registeredTool(server, "memory_delete").handler({ id: deleteMemory.memory.id, all: true }))
+  assert.equal(approved.data.memory.status, "approved")
+  assert.equal(rejected.data.memory.status, "rejected")
+  assert.equal(deleted.data.memory.status, "deleted")
+})
+
 test("read-only MCP tools request non-writable project-path engines", async () => {
   const engine = engineInTemp()
   const projectPath = path.join(tempDir("memory-lane-mcp-readonly-routing-"), "project")

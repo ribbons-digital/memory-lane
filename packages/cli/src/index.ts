@@ -250,7 +250,7 @@ function handleSearch(ctx: CliContext): void {
 
 function handleDelete(ctx: CliContext): void {
   const id = requireId(ctx, "delete")
-  const mem = ctx.engine.delete(id)
+  const mem = ctx.engine.delete(id, { all: hasFlag(ctx.argv, "all") })
   if (!mem) {
     console.log(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
@@ -260,7 +260,7 @@ function handleDelete(ctx: CliContext): void {
 
 function handleApprove(ctx: CliContext): void {
   const id = requireId(ctx, "approve")
-  const mem = ctx.engine.approve(id)
+  const mem = ctx.engine.approve(id, { all: hasFlag(ctx.argv, "all") })
   if (!mem) {
     console.log(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
@@ -270,7 +270,7 @@ function handleApprove(ctx: CliContext): void {
 
 function handleReject(ctx: CliContext): void {
   const id = requireId(ctx, "reject")
-  const mem = ctx.engine.reject(id)
+  const mem = ctx.engine.reject(id, { all: hasFlag(ctx.argv, "all") })
   if (!mem) {
     console.log(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
@@ -322,7 +322,7 @@ async function handleUpdate(ctx: CliContext): Promise<void> {
     process.exit(1)
   }
   if (hasFlag(ctx.argv, "dry-run")) {
-    const preview = ctx.engine.previewUpdate(id, patch)
+    const preview = ctx.engine.previewUpdate(id, patch, { all: hasFlag(ctx.argv, "all") })
     if (!preview) {
       console.log(formatError(`Memory not found: ${id}`, ctx.json))
       process.exit(1)
@@ -330,7 +330,7 @@ async function handleUpdate(ctx: CliContext): Promise<void> {
     console.log(formatUpdatePreview(preview, ctx.json))
     return
   }
-  const mem = ctx.engine.update(id, patch)
+  const mem = ctx.engine.update(id, patch, { all: hasFlag(ctx.argv, "all") })
   if (!mem) {
     console.log(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
@@ -382,14 +382,15 @@ async function handleReplace(ctx: CliContext): Promise<void> {
 function handleReview(ctx: CliContext): void {
   const suspectMeta = hasFlag(ctx.argv, "suspect-meta")
   const includeApproved = suspectMeta && hasFlag(ctx.argv, "include-approved")
+  const allScope = hasFlag(ctx.argv, "all")
   const filters = {
     kind: flag(ctx.argv, "kind"),
     source: flag(ctx.argv, "source"),
     provenance: flag(ctx.argv, "provenance"),
   }
   const reviewMemories = includeApproved
-    ? [...ctx.engine.reviewPending(), ...ctx.engine.list({ status: "approved", all: true })]
-    : ctx.engine.reviewPending()
+    ? [...ctx.engine.reviewPending({ all: allScope }), ...ctx.engine.list({ status: "approved", all: allScope })]
+    : ctx.engine.reviewPending({ all: allScope })
   const memories = reviewMemories.filter((memory) => {
     if (suspectMeta && !isMetaTaskPromptText(memory.text)) return false
     if (filters.kind && (memory.kind ?? "misc") !== filters.kind) return false

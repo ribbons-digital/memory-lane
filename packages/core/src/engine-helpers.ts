@@ -84,8 +84,8 @@ function memoryScopeKey(memory: MemoryRecord): string | undefined {
   return memory.scope.key ?? memory.project?.key ?? memory.project?.root
 }
 
-export function visibleInScope(memory: MemoryRecord, scopeKey: string): boolean {
-  return memory.scope.type === "global" || memoryScopeKey(memory) === scopeKey
+export function visibleInScope(memory: MemoryRecord, scopeKey?: string): boolean {
+  return memory.scope.type === "global" || Boolean(scopeKey) && memoryScopeKey(memory) === scopeKey
 }
 
 export function timestamp(now?: string | Date): string {

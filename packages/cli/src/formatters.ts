@@ -994,10 +994,10 @@ Commands:
                   Show one memory by exact id
   list [--status approved|pending|rejected|deleted] [--all]
   search <query>
-  delete <id>
-  approve <id>
-  reject <id>
-  update <id> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run]
+  delete <id> [--all]
+  approve <id> [--all]
+  reject <id> [--all]
+  update <id> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run] [--all]
                   Revise an active memory with the same id
   rescope|move <id> --scope global|project [--dry-run|--yes]
                   Correct memory scope with the same id
@@ -1005,7 +1005,7 @@ Commands:
                   Mark approved old memories as superseded by an approved successor
   replace <old-id...> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run] [--yes]
                   Create a successor memory and optionally supersede old memories
-  review [--kind <kind>] [--source <source>] [--provenance <adapter/event>] [--suspect-meta] [--include-approved]
+  review [--kind <kind>] [--source <source>] [--provenance <adapter/event>] [--suspect-meta] [--include-approved] [--all]
   dashboard [--all]
                   Compact continuity and review overview
   agreements [--area <area>] [--limit <n>] [--related-limit <n>] [--all]
@@ -1053,5 +1053,5 @@ Commands:
 Flags:
   --json           Output JSON instead of human-readable text
   --project <path> Set the project scope directory
-  --all            (list, agreements) Show all memories, bypassing project scope`
+  --all            Show all memories or allow cross-project review/mutation`
 }
