@@ -29,14 +29,18 @@ Keep it safe to read wholesale in fresh sessions.
 Latest known release: `v0.2.47` from main commit `28e5961`, after PR #132 fixed compiled binary and install-manifest version metadata.
 Release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMORY_LANE_VERSION=v0.2.47 pnpm build:binary`, `pnpm smoke:binary`, GitHub Actions release run `28768281598`, and a downloaded release-asset `status --json` version check.
 
-PR #172 merged and closed issue #171 Slice A (opt-in local trace capture) from the review-governed learning flywheel design as main commit `0bebeba`.
-PR #172 added interactive consent, default-off capture, home-scoped redacted capture files, 60-day/512MB retention, per-project exclusions, status/tuneup surfaces, purge support, and focused regression coverage.
-The current Slice B branch adds a maintainer-only lifecycle test runner that converts opt-in Slice A trace files into a deterministic `schemaVersion: 1` LongMemEval-compatible smoke dataset for the existing core adapter via explicit `--dataset`.
-The next required user action after Slice B is reviewed is to choose or approve the next issue #169 slice.
+Main is synced through PR #183, which fixed issue #145 by increasing new memory IDs to 128 random bits while preserving legacy short IDs and duplicate-ID folding semantics.
+PR #174 shipped issue #169 Slice B as a maintainer-only lifecycle runner that converts opt-in Slice A trace files into a deterministic `schemaVersion: 1` LongMemEval-compatible smoke dataset for explicit core adapter use.
+PR #179 and PR #182 scoped review and revision maintenance mutations to the current project, with PR #180 documenting scoped review maintenance.
+The next issue #169 follow-up slice still requires separate user approval.
 
 Recent shipped work:
 
 - PR #183 fixed issue #145 by increasing new memory IDs from 32 to 128 random bits while preserving legacy IDs and duplicate-ID folding semantics.
+- PR #182 scoped revision maintenance mutations to the current project.
+- PR #180 documented scoped review maintenance.
+- PR #179 scoped review mutations to the current project.
+- PR #174 shipped issue #169 Slice B trace dataset conversion for opt-in local trace captures.
 - PR #80 shipped project-local default writes in `v0.2.43`.
 - PR #82 shipped continuity routing and context hygiene in `v0.2.43`.
 - PR #89 shipped project-local legacy diagnostics in `v0.2.44`.
@@ -106,15 +110,15 @@ Deterministic eval coverage now includes:
 - benchmark taxonomy and fixture manifest metadata from PR #125;
 - deterministic local long-session synthetic benchmark coverage from PR #127;
 - optional external long-memory smoke adapter coverage from PR #130;
-- Slice B trace dataset converter coverage on the current branch.
+- trace dataset converter coverage from PR #174.
 
-The current active eval implementation slice is Slice B, which converts local opt-in trace files into a deterministic smoke dataset without public CLI exposure or default CI wiring.
+No eval implementation slice is currently active; PR #174 shipped Slice B, which converts local opt-in trace files into a deterministic smoke dataset without public CLI exposure or default CI wiring.
 Issue #115 shipped the first optional external long-memory smoke adapter and closed after PR #130.
 The adapter stays outside default CI and requires an explicit local dataset path.
 It supports the tiny LongMemEval-compatible smoke shape with `question_id`, `haystack_session_ids`, `haystack_sessions`, `haystack_dates`, `answer_session_ids`, and `_abs` abstention records.
 It emits a stable JSON report with test-only benchmark taxonomy metadata, deterministic session-id recall metrics, explicit no-network, no-model, and no-judge flags, and separate abstention handling.
 no-mistakes review fixes preserved haystack dates, made temporal smoke records exercise currentness, and sized temporary retrieval `topK` to the requested `k`.
-Slice B adds `pnpm --filter @memory-lane/lifecycle eval:trace-dataset-converter -- --traces <dir> --out <file>` for maintainers who have opted into local trace capture.
+PR #174 added `pnpm --filter @memory-lane/lifecycle eval:trace-dataset-converter -- --traces <dir> --out <file>` for maintainers who have opted into local trace capture.
 The converter reads one hashed per-project trace directory, deduplicates trace content, skips traces without a user question unless all traces are unusable, records date range, fidelity mix, duplicate/unusable counts, and thin-data status, and rejects output paths that physically resolve inside the trace directory.
 Its output is meant to be passed explicitly to the existing core smoke adapter and remains a local self-retrieval transport smoke, not ranking-quality evidence.
 The deterministic retrieval, conflict/update, lifecycle-injection, prompt-routing, long-session synthetic, external long-memory smoke, and trace dataset converter evals are clean or locally scoped, so retrieval-ranking changes remain paused until dogfood or eval evidence exposes a concrete production recall bug.
