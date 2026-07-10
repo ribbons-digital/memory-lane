@@ -282,16 +282,17 @@ function handleRescope(ctx: CliContext): void {
   const id = requireId(ctx, "rescope")
   const scopeType = flag(ctx.argv, "scope")
   if (scopeType !== "global" && scopeType !== "project") {
-    console.log(formatError("Usage: memory-lane rescope <id> --scope global|project [--project <path>] [--dry-run|--yes]", ctx.json))
+    console.log(formatError("Usage: memory-lane rescope <id> --scope global|project [--project <path>] [--dry-run|--yes] [--all]", ctx.json))
     process.exit(1)
   }
   if (!hasFlag(ctx.argv, "dry-run") && !hasFlag(ctx.argv, "yes")) {
     console.log(formatError("rescope requires --yes or --dry-run", ctx.json))
     process.exit(1)
   }
+  const all = hasFlag(ctx.argv, "all")
   const result = hasFlag(ctx.argv, "dry-run")
-    ? ctx.engine.previewRescope(id, { scopeType: scopeType as any, projectPath: flag(ctx.argv, "project"), dryRun: true })
-    : ctx.engine.rescope(id, { scopeType: scopeType as any, projectPath: flag(ctx.argv, "project") })
+    ? ctx.engine.previewRescope(id, { scopeType, projectPath: flag(ctx.argv, "project"), dryRun: true, all })
+    : ctx.engine.rescope(id, { scopeType, projectPath: flag(ctx.argv, "project"), all })
   if (!result) {
     console.log(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
@@ -341,7 +342,7 @@ async function handleUpdate(ctx: CliContext): Promise<void> {
 function handleSupersede(ctx: CliContext): void {
   const [newId, ...oldIds] = ctx.rest
   if (!newId || !oldIds.length) {
-    console.log(formatError("Usage: memory-lane supersede <new-id> <old-id...>", ctx.json))
+    console.log(formatError("Usage: memory-lane supersede <new-id> <old-id...> [--all]", ctx.json))
     process.exit(1)
   }
   requireYesForMultiple(ctx, oldIds, "supersede")
@@ -349,6 +350,7 @@ function handleSupersede(ctx: CliContext): void {
     reason: flag(ctx.argv, "reason"),
     revisedBy: "cli",
     dryRun: hasFlag(ctx.argv, "dry-run"),
+    all: hasFlag(ctx.argv, "all"),
   })
   console.log(formatSupersedeResult(result, ctx.json))
 }
@@ -356,7 +358,7 @@ function handleSupersede(ctx: CliContext): void {
 async function handleReplace(ctx: CliContext): Promise<void> {
   const oldIds = ctx.rest
   if (!oldIds.length) {
-    console.log(formatError("Usage: memory-lane replace <old-id...> --text <text>|--stdin", ctx.json))
+    console.log(formatError("Usage: memory-lane replace <old-id...> --text <text>|--stdin [--all]", ctx.json))
     process.exit(1)
   }
   requireYesForMultiple(ctx, oldIds, "replace")
@@ -375,6 +377,7 @@ async function handleReplace(ctx: CliContext): Promise<void> {
     reason: flag(ctx.argv, "reason"),
     revisedBy: "cli",
     dryRun: hasFlag(ctx.argv, "dry-run"),
+    all: hasFlag(ctx.argv, "all"),
   })
   console.log(formatReplaceResult(result, ctx.json))
 }

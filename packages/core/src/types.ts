@@ -560,6 +560,7 @@ export interface RescopeInput {
   scopeType: MemoryScopeType
   projectPath?: string
   dryRun?: boolean
+  all?: boolean
 }
 
 export interface RescopeResult {
