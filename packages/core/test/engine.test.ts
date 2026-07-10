@@ -76,6 +76,25 @@ describe("MemoryEngine", () => {
     assert.deepEqual(mutationState(e, id), before, `${operation} must not change an out-of-scope memory`)
   }
 
+  function assertRevisionScopeDenied(e: MemoryEngine, operation: string, action: () => unknown): Error {
+    const before = e.list({ all: true })
+    const transitionCount = readJsonl(path.join(dir, "mem.jsonl")).length
+    const embeddingTransitionCount = readJsonl(path.join(dir, "emb.jsonl")).length
+    let thrown: unknown
+
+    try {
+      action()
+    } catch (error: unknown) {
+      thrown = error
+    }
+
+    assert.ok(thrown instanceof Error, `${operation} must fail without disclosing an out-of-scope memory`)
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, transitionCount, `${operation} must not append a transition`)
+    assert.equal(readJsonl(path.join(dir, "emb.jsonl")).length, embeddingTransitionCount, `${operation} must not append an embedding transition`)
+    assert.deepEqual(e.list({ all: true }), before, `${operation} must not change stored memories`)
+    return thrown
+  }
+
   it("rejects empty text", () => {
     const e = engine()
     const r = e.save({ text: "" })
@@ -844,6 +863,7 @@ describe("MemoryEngine", () => {
     assert.throws(() => e.supersede(old.memory.id, [pendingOld.memory.id]), /Old must be approved/u)
     assert.throws(() => e.supersede(old.memory.id, [pendingOld.memory.id, pendingOld.memory.id]), /Old memory ids must be unique/u)
     assert.throws(() => e.supersede(old.memory.id, [pendingOld.memory.id], { revisedBy: "robot" as any }), /Invalid revisedBy.*robot/u)
+    assert.throws(() => e.supersede("missing", [old.memory.id], { revisedBy: "robot" as any }), /Invalid revisedBy.*robot/u)
     assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, logBefore)
   })
 
@@ -1039,6 +1059,9 @@ describe("MemoryEngine", () => {
     assert.throws(() => e.replace([old.memory.id], { text: "my key is sk-abc123def456ghi789jkl" }), /secret/u)
     assert.throws(() => e.replace([old.memory.id], { text: "Bad status", status: "rejected" as any }), /Invalid status.*rejected/u)
     assert.throws(() => e.replace([old.memory.id], { text: "Bad actor", revisedBy: "robot" as any }), /Invalid revisedBy.*robot/u)
+    assert.throws(() => e.replace(["missing-old"], { text: "Bad status", status: "rejected" as any }), /Invalid status.*rejected/u)
+    assert.throws(() => e.replace(["missing-old"], { text: "Bad actor", revisedBy: "robot" as any }), /Invalid revisedBy.*robot/u)
+    assert.throws(() => e.replace(["missing-old"], { text: "Bad kind", kind: "unknown" as any }), /Invalid kind.*unknown/u)
     assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, logBefore)
   })
 
@@ -1216,6 +1239,216 @@ describe("MemoryEngine", () => {
     assert.equal(preview?.proposed.status, "approved")
     assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, previewTransitionCount)
     assert.deepEqual(mutationState(e, previewTarget.memory.id), previewState)
+  })
+
+  it("denies cross-project rescope preview and apply with missing-record parity unless all is requested", () => {
+    const e = engine()
+    const { projectA, projectB } = projectScopes()
+    e.refreshScope(projectA)
+    const target = e.save({ text: "Project A rescope target", status: "approved", scopeType: "project" })
+    assert.equal(target.status, "saved")
+    if (target.status !== "saved") throw new Error("expected saved rescope target")
+
+    e.refreshScope(projectB)
+    const hiddenPreviewError = assertRevisionScopeDenied(e, "cross-project rescope preview", () => {
+      e.previewRescope(target.memory.id, { scopeType: "global", dryRun: true })
+    })
+    const missingPreviewId = "missing-rescope-preview"
+    const missingPreviewError = assertRevisionScopeDenied(e, "missing rescope preview", () => {
+      e.previewRescope(missingPreviewId, { scopeType: "global", dryRun: true })
+    })
+    assert.equal(
+      hiddenPreviewError.message.replace(target.memory.id, "<id>"),
+      missingPreviewError.message.replace(missingPreviewId, "<id>"),
+    )
+
+    const hiddenApplyError = assertRevisionScopeDenied(e, "cross-project rescope apply", () => {
+      e.rescope(target.memory.id, { scopeType: "global" })
+    })
+    const missingApplyId = "missing-rescope-apply"
+    const missingApplyError = assertRevisionScopeDenied(e, "missing rescope apply", () => {
+      e.rescope(missingApplyId, { scopeType: "global" })
+    })
+    assert.equal(
+      hiddenApplyError.message.replace(target.memory.id, "<id>"),
+      missingApplyError.message.replace(missingApplyId, "<id>"),
+    )
+
+    const previewTransitionCount = readJsonl(path.join(dir, "mem.jsonl")).length
+    const previewEmbeddingCount = readJsonl(path.join(dir, "emb.jsonl")).length
+    const preview = e.previewRescope(target.memory.id, { scopeType: "global", dryRun: true, all: true })
+    assert.equal(preview?.current.text, "Project A rescope target")
+    assert.equal(preview?.proposed.scope.type, "global")
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, previewTransitionCount)
+    assert.equal(readJsonl(path.join(dir, "emb.jsonl")).length, previewEmbeddingCount)
+
+    const applied = e.rescope(target.memory.id, { scopeType: "global", all: true })
+    assert.equal(applied?.proposed.id, target.memory.id)
+    assert.equal(applied?.proposed.scope.type, "global")
+    assert.equal(e.getById(target.memory.id)?.scope.type, "global")
+  })
+
+  it("denies supersede when the successor or any old record is hidden before appending", () => {
+    const e = engine()
+    const { projectA, projectB } = projectScopes()
+    e.refreshScope(projectA)
+    const hiddenSuccessor = e.save({ text: "Project A hidden successor", status: "approved", scopeType: "project" })
+    const hiddenOld = e.save({ text: "Project A hidden old record", status: "approved", scopeType: "project" })
+    e.refreshScope(projectB)
+    const visibleSuccessor = e.save({ text: "Project B visible successor", status: "approved", scopeType: "project" })
+    const visibleOld = e.save({ text: "Project B visible old record", status: "approved", scopeType: "project" })
+    assert.ok([hiddenSuccessor, hiddenOld, visibleSuccessor, visibleOld].every((result) => result.status === "saved"))
+    if (hiddenSuccessor.status !== "saved" || hiddenOld.status !== "saved" || visibleSuccessor.status !== "saved" || visibleOld.status !== "saved") {
+      throw new Error("expected saved supersede fixtures")
+    }
+
+    const invalidHiddenSuccessorError = assertRevisionScopeDenied(e, "supersede invalid options with hidden successor", () => {
+      e.supersede(hiddenSuccessor.memory.id, [visibleOld.memory.id], { revisedBy: "robot" as any })
+    })
+    assert.match(invalidHiddenSuccessorError.message, /Invalid revisedBy.*robot/u)
+
+    const hiddenSuccessorError = assertRevisionScopeDenied(e, "supersede with hidden successor", () => {
+      e.supersede(hiddenSuccessor.memory.id, [visibleOld.memory.id])
+    })
+    const missingSuccessorId = "missing-successor"
+    const missingSuccessorError = assertRevisionScopeDenied(e, "supersede with missing successor", () => {
+      e.supersede(missingSuccessorId, [visibleOld.memory.id])
+    })
+    assert.equal(
+      hiddenSuccessorError.message.replace(hiddenSuccessor.memory.id, "<id>"),
+      missingSuccessorError.message.replace(missingSuccessorId, "<id>"),
+    )
+
+    const hiddenOldError = assertRevisionScopeDenied(e, "supersede with mixed-scope old records", () => {
+      e.supersede(visibleSuccessor.memory.id, [visibleOld.memory.id, hiddenOld.memory.id])
+    })
+    const missingOldId = "missing-old"
+    const missingOldError = assertRevisionScopeDenied(e, "supersede with missing old record", () => {
+      e.supersede(visibleSuccessor.memory.id, [visibleOld.memory.id, missingOldId])
+    })
+    assert.equal(
+      hiddenOldError.message.replace(hiddenOld.memory.id, "<id>"),
+      missingOldError.message.replace(missingOldId, "<id>"),
+    )
+
+    const previewTransitionCount = readJsonl(path.join(dir, "mem.jsonl")).length
+    const previewEmbeddingCount = readJsonl(path.join(dir, "emb.jsonl")).length
+    const preview = e.supersede(hiddenSuccessor.memory.id, [visibleOld.memory.id, hiddenOld.memory.id], { dryRun: true, all: true })
+    assert.equal(preview.dryRun, true)
+    assert.deepEqual(preview.successor.revision?.supersedes, [visibleOld.memory.id, hiddenOld.memory.id])
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, previewTransitionCount)
+    assert.equal(readJsonl(path.join(dir, "emb.jsonl")).length, previewEmbeddingCount)
+
+    const applied = e.supersede(hiddenSuccessor.memory.id, [visibleOld.memory.id, hiddenOld.memory.id], { all: true })
+    assert.equal(applied.dryRun, false)
+    assert.deepEqual(applied.successor.revision?.supersedes, [visibleOld.memory.id, hiddenOld.memory.id])
+    assert.ok(applied.superseded.every((memory) => memory.revision?.supersededBy === hiddenSuccessor.memory.id))
+  })
+
+  it("denies replace for hidden and mixed-scope old records before creating a successor", () => {
+    const e = engine()
+    const { projectA, projectB } = projectScopes()
+    e.refreshScope(projectA)
+    const hiddenOldA = e.save({ text: "Project A hidden replace source A", status: "approved", scopeType: "project" })
+    const hiddenOldB = e.save({ text: "Project A hidden replace source B", status: "approved", scopeType: "project" })
+    e.refreshScope(projectB)
+    const visibleOld = e.save({ text: "Project B visible replace source", status: "approved", scopeType: "project" })
+    assert.ok([hiddenOldA, hiddenOldB, visibleOld].every((result) => result.status === "saved"))
+    if (hiddenOldA.status !== "saved" || hiddenOldB.status !== "saved" || visibleOld.status !== "saved") {
+      throw new Error("expected saved replace fixtures")
+    }
+
+    const invalidHiddenOldError = assertRevisionScopeDenied(e, "replace invalid options with hidden old record", () => {
+      e.replace([hiddenOldA.memory.id], { text: "Bad hidden replacement status", status: "rejected" as any })
+    })
+    assert.match(invalidHiddenOldError.message, /Invalid status.*rejected/u)
+
+    const hiddenOldError = assertRevisionScopeDenied(e, "replace with hidden old record", () => {
+      e.replace([hiddenOldA.memory.id], { text: "Denied hidden replacement" })
+    })
+    const missingOldId = "missing-replace-old"
+    const missingOldError = assertRevisionScopeDenied(e, "replace with missing old record", () => {
+      e.replace([missingOldId], { text: "Denied missing replacement" })
+    })
+    assert.equal(
+      hiddenOldError.message.replace(hiddenOldA.memory.id, "<id>"),
+      missingOldError.message.replace(missingOldId, "<id>"),
+    )
+
+    assertRevisionScopeDenied(e, "replace with mixed-scope old records", () => {
+      e.replace([visibleOld.memory.id, hiddenOldB.memory.id], { text: "Denied mixed-scope replacement" })
+    })
+
+    const previewTransitionCount = readJsonl(path.join(dir, "mem.jsonl")).length
+    const previewEmbeddingCount = readJsonl(path.join(dir, "emb.jsonl")).length
+    const preview = e.replace([visibleOld.memory.id, hiddenOldB.memory.id], {
+      text: "Permitted mixed-scope replacement preview",
+      dryRun: true,
+      all: true,
+    })
+    assert.equal(preview.dryRun, true)
+    assert.deepEqual(preview.successor.revision?.supersedes, [visibleOld.memory.id, hiddenOldB.memory.id])
+    assert.equal(readJsonl(path.join(dir, "mem.jsonl")).length, previewTransitionCount)
+    assert.equal(readJsonl(path.join(dir, "emb.jsonl")).length, previewEmbeddingCount)
+
+    const applied = e.replace([visibleOld.memory.id, hiddenOldB.memory.id], {
+      text: "Permitted mixed-scope replacement",
+      all: true,
+    })
+    assert.equal(applied.successor.text, "Permitted mixed-scope replacement")
+    assert.deepEqual(applied.successor.revision?.supersedes, [visibleOld.memory.id, hiddenOldB.memory.id])
+    assert.ok(applied.superseded.every((memory) => memory.revision?.supersededBy === applied.successor.id))
+  })
+
+  it("with no project scope rescope supersede and replace can use globals but not project records", () => {
+    const e = engine()
+    const { projectA } = projectScopes()
+    e.refreshScope(projectA)
+    const projectRescope = e.save({ text: "Project rescope without active scope", status: "approved", scopeType: "project" })
+    const projectSuccessor = e.save({ text: "Project successor without active scope", status: "approved", scopeType: "project" })
+    const projectOld = e.save({ text: "Project old without active scope", status: "approved", scopeType: "project" })
+    const projectReplace = e.save({ text: "Project replace without active scope", status: "approved", scopeType: "project" })
+    const globalRescope = e.save({ text: "Global rescope without active scope", status: "approved", scopeType: "global" })
+    const globalSuccessor = e.save({ text: "Global successor without active scope", status: "approved", scopeType: "global" })
+    const globalOld = e.save({ text: "Global old without active scope", status: "approved", scopeType: "global" })
+    const globalReplace = e.save({ text: "Global replace without active scope", status: "approved", scopeType: "global" })
+    const fixtures = [projectRescope, projectSuccessor, projectOld, projectReplace, globalRescope, globalSuccessor, globalOld, globalReplace]
+    assert.ok(fixtures.every((result) => result.status === "saved"))
+    if (
+      projectRescope.status !== "saved"
+      || projectSuccessor.status !== "saved"
+      || projectOld.status !== "saved"
+      || projectReplace.status !== "saved"
+      || globalRescope.status !== "saved"
+      || globalSuccessor.status !== "saved"
+      || globalOld.status !== "saved"
+      || globalReplace.status !== "saved"
+    ) throw new Error("expected saved unscoped revision fixtures")
+
+    clearProjectScope(e)
+    assertRevisionScopeDenied(e, "unscoped project rescope", () => {
+      e.rescope(projectRescope.memory.id, { scopeType: "global" })
+    })
+    assertRevisionScopeDenied(e, "unscoped project supersede", () => {
+      e.supersede(projectSuccessor.memory.id, [projectOld.memory.id])
+    })
+    assertRevisionScopeDenied(e, "unscoped project replace", () => {
+      e.replace([projectReplace.memory.id], { text: "Denied unscoped project replacement" })
+    })
+
+    const rescoped = e.rescope(globalRescope.memory.id, { scopeType: "project", projectPath: projectA })
+    assert.equal(rescoped?.proposed.scope.key, "scope-project-a")
+    assert.equal(e.getById(globalRescope.memory.id), undefined)
+    assert.equal(e.getById(globalRescope.memory.id, { all: true })?.scope.key, "scope-project-a")
+
+    const superseded = e.supersede(globalSuccessor.memory.id, [globalOld.memory.id])
+    assert.equal(superseded.successor.revision?.supersedes?.[0], globalOld.memory.id)
+    assert.equal(superseded.superseded[0].revision?.supersededBy, globalSuccessor.memory.id)
+
+    const replaced = e.replace([globalReplace.memory.id], { text: "Permitted unscoped global replacement" })
+    assert.equal(replaced.successor.scope.type, "global")
+    assert.equal(replaced.successor.text, "Permitted unscoped global replacement")
+    assert.equal(replaced.superseded[0].revision?.supersededBy, replaced.successor.id)
   })
 
   it("reviewPending with no project scope returns globals only unless all is requested", () => {

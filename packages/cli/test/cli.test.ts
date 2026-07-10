@@ -665,6 +665,126 @@ describe("CLI integration", () => {
     assert.equal(after.find((memory) => memory.id === dryRunId)?.text, dryRunText)
   })
 
+  it("keeps rescope supersede and replace project-scoped unless --all is explicit", () => {
+    const projectA = tempDir()
+    const projectB = tempDir()
+    fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "cli-revision-project-a" }), "utf8")
+    fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "cli-revision-project-b" }), "utf8")
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+    const saveForProjectA = (text: string): MemoryRecord => {
+      const payload = JSON.parse(run([
+        "save", text,
+        "--scope", "project",
+        "--category", "project",
+        "--status", "approved",
+        "--project", projectA,
+        "--json",
+      ], env))
+      assert.equal(payload.data.saved.scope.key, "cli-revision-project-a")
+      return payload.data.saved as MemoryRecord
+    }
+    const rescopeTarget = saveForProjectA("SECRET project A rescope source")
+    const supersedeOld = saveForProjectA("SECRET project A supersede old source")
+    const supersedeSuccessor = saveForProjectA("SECRET project A supersede successor")
+    const replaceOld = saveForProjectA("SECRET project A replace source")
+    const projectARecordsBefore = JSON.parse(run(["list", "--all", "--project", projectA, "--json"], env)).data.memories as MemoryRecord[]
+    const memoryFileBefore = fs.readFileSync(memFile, "utf8")
+    const embeddingFileBefore = fs.existsSync(embFile) ? fs.readFileSync(embFile, "utf8") : undefined
+
+    const denied = {
+      "rescope --dry-run": runProcess([
+        "rescope", rescopeTarget.id, "--scope", "global", "--dry-run", "--project", projectB, "--json",
+      ], { env }),
+      "rescope --yes": runProcess([
+        "rescope", rescopeTarget.id, "--scope", "global", "--yes", "--project", projectB, "--json",
+      ], { env }),
+      "supersede --dry-run": runProcess([
+        "supersede", supersedeSuccessor.id, supersedeOld.id, "--dry-run", "--project", projectB, "--json",
+      ], { env }),
+      supersede: runProcess([
+        "supersede", supersedeSuccessor.id, supersedeOld.id, "--project", projectB, "--json",
+      ], { env }),
+      "replace --dry-run": runProcess([
+        "replace", replaceOld.id, "--text", "DENIED replacement preview", "--dry-run", "--project", projectB, "--json",
+      ], { env }),
+      replace: runProcess([
+        "replace", replaceOld.id, "--text", "DENIED replacement apply", "--project", projectB, "--json",
+      ], { env }),
+    }
+    for (const [command, result] of Object.entries(denied)) {
+      assert.notEqual(result.status, 0, `${command} unexpectedly succeeded`)
+      const payload = JSON.parse(result.stdout)
+      assert.equal(payload.ok, false, command)
+      assert.match(payload.error, /memory not found/u, command)
+    }
+    const deniedOutput = Object.values(denied).map((result) => result.stdout + result.stderr).join("\n")
+    assert.doesNotMatch(deniedOutput, /SECRET project A|DENIED replacement/u)
+
+    const projectARecordsAfterDenied = JSON.parse(run(["list", "--all", "--project", projectA, "--json"], env)).data.memories as MemoryRecord[]
+    assert.deepEqual(projectARecordsAfterDenied, projectARecordsBefore)
+    assert.equal(fs.readFileSync(memFile, "utf8"), memoryFileBefore)
+    assert.equal(fs.existsSync(embFile) ? fs.readFileSync(embFile, "utf8") : undefined, embeddingFileBefore)
+
+    const allPreviews = {
+      rescope: runProcess([
+        "rescope", rescopeTarget.id, "--scope", "global", "--dry-run", "--all", "--project", projectB, "--json",
+      ], { env }),
+      supersede: runProcess([
+        "supersede", supersedeSuccessor.id, supersedeOld.id, "--dry-run", "--all", "--project", projectB, "--json",
+      ], { env }),
+      replace: runProcess([
+        "replace", replaceOld.id, "--text", "Explicit all replacement preview", "--dry-run", "--all", "--project", projectB, "--json",
+      ], { env }),
+    }
+    for (const [command, result] of Object.entries(allPreviews)) {
+      assert.equal(result.status, 0, `${command} --all preview: ${result.stderr || result.stdout}`)
+      const payload = JSON.parse(result.stdout)
+      assert.equal(payload.ok, true, command)
+      assert.equal(payload.data.dryRun, true, command)
+    }
+    assert.equal(JSON.parse(allPreviews.rescope.stdout).data.proposed.scope.type, "global")
+    assert.equal(JSON.parse(allPreviews.supersede.stdout).data.successor.id, supersedeSuccessor.id)
+    assert.equal(JSON.parse(allPreviews.replace.stdout).data.successor.text, "Explicit all replacement preview")
+
+    const projectARecordsAfterPreviews = JSON.parse(run(["list", "--all", "--project", projectA, "--json"], env)).data.memories as MemoryRecord[]
+    assert.deepEqual(projectARecordsAfterPreviews, projectARecordsBefore)
+    assert.equal(fs.readFileSync(memFile, "utf8"), memoryFileBefore)
+    assert.equal(fs.existsSync(embFile) ? fs.readFileSync(embFile, "utf8") : undefined, embeddingFileBefore)
+
+    const appliedRescope = runProcess([
+      "rescope", rescopeTarget.id, "--scope", "global", "--yes", "--all", "--project", projectB, "--json",
+    ], { env })
+    const appliedSupersede = runProcess([
+      "supersede", supersedeSuccessor.id, supersedeOld.id, "--all", "--project", projectB, "--json",
+    ], { env })
+    const appliedReplace = runProcess([
+      "replace", replaceOld.id, "--text", "Explicit all replacement apply", "--all", "--project", projectB, "--json",
+    ], { env })
+    for (const [command, result] of Object.entries({ appliedRescope, appliedSupersede, appliedReplace })) {
+      assert.equal(result.status, 0, `${command}: ${result.stderr || result.stdout}`)
+      assert.equal(JSON.parse(result.stdout).ok, true, command)
+    }
+
+    const rescopePayload = JSON.parse(appliedRescope.stdout)
+    const supersedePayload = JSON.parse(appliedSupersede.stdout)
+    const replacePayload = JSON.parse(appliedReplace.stdout)
+    assert.equal(rescopePayload.data.proposed.scope.type, "global")
+    assert.equal(supersedePayload.data.successor.id, supersedeSuccessor.id)
+    assert.equal(supersedePayload.data.superseded[0].id, supersedeOld.id)
+    assert.equal(replacePayload.data.successor.text, "Explicit all replacement apply")
+
+    const afterMaintenance = JSON.parse(run(["list", "--all", "--project", projectB, "--json"], env)).data.memories as MemoryRecord[]
+    assert.equal(afterMaintenance.find((memory) => memory.id === rescopeTarget.id)?.scope.type, "global")
+    assert.equal(afterMaintenance.find((memory) => memory.id === supersedeOld.id)?.revision?.supersededBy, supersedeSuccessor.id)
+    assert.equal(afterMaintenance.find((memory) => memory.id === replaceOld.id)?.revision?.supersededBy, replacePayload.data.successor.id)
+    assert.equal(afterMaintenance.find((memory) => memory.id === replacePayload.data.successor.id)?.text, "Explicit all replacement apply")
+  })
+
   it("init --project-local creates project storage and project saves use it", () => {
     const project = tempDir()
     const home = tempDir()

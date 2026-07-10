@@ -72,7 +72,7 @@ Memory Lane has **several deterministic consolidation surfaces**:
 | Freshness classification | `packages/core/src/freshness.ts` | Classifies memories as `current`, `stale`, `expired`, or `none` based on advisory freshness metadata |
 | Session-end summarization | `packages/lifecycle/src/session-end.ts` | LLM-generated structured session summaries (decisions, blockers, next steps, key facts) — the only LLM-driven consolidation |
 | Checkpoint candidates | `packages/core/src/checkpoint-candidates.ts` | Classifies pending memories as release/merge/verification milestone types |
-| Revision system | `packages/core/src/engine.ts` (`update`, `replace`, `supersede`) | Explicit memory revision with append-only history and successor/superseded relationships |
+| Revision system | `packages/core/src/engine.ts` (`update`, `rescope`, `replace`, `supersede`) | Explicit memory revision with append-only history, same-id scope correction, successor/superseded relationships, and scoped maintenance visibility unless `--all` is explicit |
 
 ### Paper correspondence
 

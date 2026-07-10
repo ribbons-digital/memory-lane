@@ -999,11 +999,11 @@ Commands:
   reject <id> [--all]
   update <id> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run] [--all]
                   Revise an active memory with the same id
-  rescope|move <id> --scope global|project [--dry-run|--yes]
+  rescope|move <id> --scope global|project [--dry-run|--yes] [--all]
                   Correct memory scope with the same id
-  supersede <new-id> <old-id...> [--reason <reason>] [--dry-run] [--yes]
+  supersede <new-id> <old-id...> [--reason <reason>] [--dry-run] [--yes] [--all]
                   Mark approved old memories as superseded by an approved successor
-  replace <old-id...> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run] [--yes]
+  replace <old-id...> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run] [--yes] [--all]
                   Create a successor memory and optionally supersede old memories
   review [--kind <kind>] [--source <source>] [--provenance <adapter/event>] [--suspect-meta] [--include-approved] [--all]
   dashboard [--all]
@@ -1053,5 +1053,5 @@ Commands:
 Flags:
   --json           Output JSON instead of human-readable text
   --project <path> Set the project scope directory
-  --all            Show all memories or allow cross-project review/mutation`
+  --all            Show all memories or allow cross-project review/revision/mutation`
 }

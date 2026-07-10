@@ -76,10 +76,10 @@ memory-lane agreements --area project-loop --json
 
 # Explicit revision operations
 memory-lane update <id> --text "refined memory" --reason "clarified"
-memory-lane replace <old-id> --text "new successor memory" --kind workflow_rule
-memory-lane supersede <new-id> <old-id...> --yes
-memory-lane rescope <id> --scope project --project <path> --dry-run
-memory-lane move <id> --scope global --yes
+memory-lane replace <old-id> --text "new successor memory" --kind workflow_rule [--all]
+memory-lane supersede <new-id> <old-id...> --yes [--all]
+memory-lane rescope <id> --scope project --project <path> --dry-run [--all]
+memory-lane move <id> --scope global --yes [--all]
 
 # Maintenance / setup
 memory-lane compact
@@ -100,11 +100,15 @@ When a durable memory is wrong, stale, duplicated, or superseded, prefer explici
 
 ```bash
 memory-lane update <id> --text "refined memory" --reason "clarified"
-memory-lane replace <old-id...> --text "new successor memory" --yes
-memory-lane supersede <new-id> <old-id...> --reason "newer version" --yes
+memory-lane replace <old-id...> --text "new successor memory" --yes [--all]
+memory-lane supersede <new-id> <old-id...> --reason "newer version" --yes [--all]
 ```
 
-Use `--dry-run` where available before changing scope or relationships. Active continuity slots and workstream discovery omit superseded records, but list/show/recall can still expose them for explicit inspection. Avoid silent deletion/rejection/cleanup without explicit user approval.
+Use `--dry-run` where available before changing scope or relationships.
+Revision commands use global plus current-project visibility by default, use global-only visibility when no project scope is active, and require `--all` for cross-project maintenance.
+Denied scoped lookups use not-found behavior without exposing hidden memory text or appending new records.
+Active continuity slots and workstream discovery omit superseded records, but list/show/recall can still expose them for explicit inspection.
+Avoid silent deletion/rejection/cleanup without explicit user approval.
 
 ## Continuity and operating agreements
 

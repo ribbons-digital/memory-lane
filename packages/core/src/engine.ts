@@ -254,11 +254,13 @@ export class MemoryEngine {
     )
   }
 
-  private requireActiveMemory(id: string): MemoryRecord {
-    const memory = this.storage.listMemories().find((m) => m.id === id)
-    if (!memory || memory.status === "deleted" || memory.status === "rejected") {
-      throw new Error(`Cannot rescope memory: active memory not found: ${id}`)
-    }
+  private requireActiveMemory(id: string, opts?: { all?: boolean }): MemoryRecord {
+    const memory = this.findScopedMemory(
+      id,
+      (candidate) => candidate.status !== "deleted" && candidate.status !== "rejected",
+      opts,
+    )
+    if (!memory) throw new Error(`Cannot rescope memory: active memory not found: ${id}`)
     return memory
   }
 
@@ -266,7 +268,7 @@ export class MemoryEngine {
     if (input.scopeType !== "global" && input.scopeType !== "project") {
       throw new Error(`Invalid scopeType: ${displayValue(input.scopeType)}. Expected one of: global, project`)
     }
-    const current = this.requireActiveMemory(id)
+    const current = this.requireActiveMemory(id, input)
     const targetScope = input.scopeType === "global" ? undefined : resolveProjectScope(input.projectPath)
     if (input.scopeType === "project" && !targetScope) {
       throw new Error("Cannot rescope to project: no project scope is available")
@@ -283,10 +285,12 @@ export class MemoryEngine {
     return { dryRun: input.dryRun ?? false, current, proposed, warnings: [] }
   }
 
+  /** Preview a same-id scope correction. Respects project scope unless `all` is true. */
   previewRescope(id: string, input: RescopeInput): RescopeResult | undefined {
     return this.buildRescopePreview(id, { ...input, dryRun: true })
   }
 
+  /** Apply a same-id scope correction. Respects project scope unless `all` is true. */
   rescope(id: string, input: RescopeInput): RescopeResult | undefined {
     const result = this.buildRescopePreview(id, { ...input, dryRun: false })
     this.storage.appendMemory(result.proposed)
@@ -397,11 +401,18 @@ export class MemoryEngine {
     return this.mutationResultWithMirrorWarnings(updated)
   }
 
-  private requireApprovedMemory(id: string, label: "Successor" | "Old"): MemoryRecord {
-    const memory = this.storage.listMemories().find((m) => m.id === id && m.status !== "deleted" && m.status !== "rejected")
+  private requireRevisionMemory(id: string, label: "Successor" | "Old", opts?: { all?: boolean }): MemoryRecord {
+    const memory = this.findScopedMemory(
+      id,
+      (candidate) => candidate.status !== "deleted" && candidate.status !== "rejected",
+      opts,
+    )
     if (!memory) throw new Error(`${label} memory not found: ${id}`)
-    if (memory.status !== "approved") throw new Error(`${label} must be approved: ${id}`)
     return memory
+  }
+
+  private assertApprovedRevisionMemory(memory: MemoryRecord, label: "Successor" | "Old"): void {
+    if (memory.status !== "approved") throw new Error(`${label} must be approved: ${memory.id}`)
   }
 
   private validateOldIds(newId: string | undefined, oldIds: string[]): void {
@@ -413,13 +424,14 @@ export class MemoryEngine {
   private buildSupersedePreview(
     newId: string,
     oldIds: string[],
-    opts?: { reason?: string; revisedBy?: MemoryRevisionActor; dryRun?: boolean },
+    opts?: { reason?: string; revisedBy?: MemoryRevisionActor; dryRun?: boolean; all?: boolean },
   ): SupersedeResult {
     this.validateOldIds(newId, oldIds)
     validateRevisionOptions(opts ?? {})
-
-    const successor = this.requireApprovedMemory(newId, "Successor")
-    const oldRecords = oldIds.map((id) => this.requireApprovedMemory(id, "Old"))
+    const successor = this.requireRevisionMemory(newId, "Successor", opts)
+    const oldRecords = oldIds.map((id) => this.requireRevisionMemory(id, "Old", opts))
+    this.assertApprovedRevisionMemory(successor, "Successor")
+    for (const memory of oldRecords) this.assertApprovedRevisionMemory(memory, "Old")
     const already = oldRecords.find((memory) => memory.revision?.supersededBy)
     if (already) throw new Error(`Old memory is already superseded: ${already.id}`)
 
@@ -442,10 +454,11 @@ export class MemoryEngine {
     }
   }
 
+  /** Link approved old memories to an approved successor. Respects project scope unless `all` is true. */
   supersede(
     newId: string,
     oldIds: string[],
-    opts?: { reason?: string; revisedBy?: MemoryRevisionActor; dryRun?: boolean },
+    opts?: { reason?: string; revisedBy?: MemoryRevisionActor; dryRun?: boolean; all?: boolean },
   ): SupersedeResult {
     const preview = this.buildSupersedePreview(newId, oldIds, opts)
     if (opts?.dryRun) return preview
@@ -455,6 +468,7 @@ export class MemoryEngine {
     return mirrorWarnings.length ? { ...preview, mirrorWarnings } : preview
   }
 
+  /** Create a successor memory for approved old memories. Respects project scope unless `all` is true. */
   replace(oldIds: string[], input: {
     text: string
     category?: MemoryCategory
@@ -463,6 +477,7 @@ export class MemoryEngine {
     reason?: string
     revisedBy?: MemoryRevisionActor
     dryRun?: boolean
+    all?: boolean
   }): ReplaceResult {
     this.validateOldIds(undefined, oldIds)
     validateRevisionOptions(input)
@@ -470,8 +485,8 @@ export class MemoryEngine {
     if (input.status !== undefined && input.status !== "pending" && input.status !== "approved") {
       throw new Error(`Invalid status: ${displayValue(input.status)}. Expected one of: pending, approved`)
     }
-
-    const oldRecords = oldIds.map((id) => this.requireApprovedMemory(id, "Old"))
+    const oldRecords = oldIds.map((id) => this.requireRevisionMemory(id, "Old", input))
+    for (const memory of oldRecords) this.assertApprovedRevisionMemory(memory, "Old")
     const already = oldRecords.find((memory) => memory.revision?.supersededBy)
     if (already) throw new Error(`Old memory is already superseded: ${already.id}`)
 
