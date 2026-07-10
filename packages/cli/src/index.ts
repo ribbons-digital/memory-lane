@@ -342,7 +342,7 @@ async function handleUpdate(ctx: CliContext): Promise<void> {
 function handleSupersede(ctx: CliContext): void {
   const [newId, ...oldIds] = ctx.rest
   if (!newId || !oldIds.length) {
-    console.log(formatError("Usage: memory-lane supersede <new-id> <old-id...> [--all]", ctx.json))
+    console.log(formatError("Usage: memory-lane supersede <new-id> <old-id...> [--reason <reason>] [--dry-run] [--yes] [--all]", ctx.json))
     process.exit(1)
   }
   requireYesForMultiple(ctx, oldIds, "supersede")
@@ -358,7 +358,7 @@ function handleSupersede(ctx: CliContext): void {
 async function handleReplace(ctx: CliContext): Promise<void> {
   const oldIds = ctx.rest
   if (!oldIds.length) {
-    console.log(formatError("Usage: memory-lane replace <old-id...> --text <text>|--stdin [--all]", ctx.json))
+    console.log(formatError("Usage: memory-lane replace <old-id...> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run] [--yes] [--all]", ctx.json))
     process.exit(1)
   }
   requireYesForMultiple(ctx, oldIds, "replace")
