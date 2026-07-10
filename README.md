@@ -547,7 +547,9 @@ If you do this in a Git repository, add `.memory-lane-scope` to `.gitignore` unl
 Existing memories saved under old worktree path keys are not migrated automatically.
 Use `memory-lane list --all` and `memory-lane show <id> --all` to find them, then pass `--all` to `review`, `approve`, `reject`, `delete`, `update`, `rescope`, `supersede`, or `replace` when deliberately maintaining records outside the active project scope.
 
-Review and by-id mutation commands are scoped by default: they can access global memories plus memories owned by the active project. When no project scope is active, the default is global-only. Cross-project maintenance requires explicit `--all`; denied lookups return not-found behavior without exposing memory text.
+Review, by-id mutation, and revision commands are scoped by default: they can access global memories plus memories owned by the active project.
+When no project scope is active, the default is global-only.
+Cross-project maintenance requires explicit `--all`; denied lookups return not-found behavior without exposing memory text.
 
 For legacy project-scoped memories that still live in the home store from before project-local defaults, use `memory-lane status --json`, `memory-lane doctor --json`, MCP `memory_status`, or `memory-lane migrate project-local --dry-run`.
 These surfaces are read-only for legacy diagnostics and do not move records or create project-local storage.
@@ -649,9 +651,11 @@ cat refined.md | memory-lane update <id> --stdin --kind workflow_rule --dry-run
 
 memory-lane supersede <new-id> <old-id> --reason "newer workflow agreement"
 memory-lane supersede <new-id> <old1> <old2> --reason "merged duplicates" --yes
+memory-lane supersede <new-id> <old-id> --all --dry-run
 
 memory-lane replace <old-id> --text "new successor memory" --kind workflow_rule
 cat replacement.md | memory-lane replace <old1> <old2> --stdin --yes
+memory-lane replace <old-id> --text "cross-project successor" --all --dry-run
 ```
 
 `update` keeps the same memory id and can change text, category, kind, or approved/pending status. `replace` creates a new successor memory. `supersede` links an existing approved successor to approved older memories. Superseded memories remain approved historical records; Memory Lane does not delete them automatically. Active continuity slots and workstream discovery omit superseded records, while list/show/recall and continuity hints can still expose them for explicit inspection.
@@ -711,7 +715,9 @@ Current hints report:
 - freshness advisories: approved visible memories with explicit freshness metadata that are expired or stale;
 - newer approved memories when `--since <ISO timestamp>` is provided.
 
-Scope hygiene hints are text-free inspection signals only. Memory Lane does not automatically rescope or clean up those memories; use `memory-lane show <id>` or `memory-lane list --json` to inspect them before deciding whether to rescope, update, supersede, or leave them alone. Use `memory-lane rescope <id> --scope project --project <path> --dry-run` to preview a same-id scope correction, then rerun with `--yes` only after review.
+Scope hygiene hints are text-free inspection signals only.
+Memory Lane does not automatically rescope or clean up those memories; use `memory-lane show <id>` or `memory-lane list --json` to inspect them before deciding whether to rescope, update, supersede, or leave them alone.
+Use `memory-lane rescope <id> --scope project --project <path> --dry-run` to preview a same-id scope correction, adding `--all` only for deliberate cross-project maintenance, then rerun with `--yes` only after review.
 
 Hints invite inspection with commands such as `memory-lane dashboard`, `memory-lane show <id>`, `memory-lane agreements --area <area> --json`, `memory-lane agreements --all`, and `memory-lane list --json`.
 Freshness advisory hints may also include per-id dry-run revision commands already available in the CLI; human `continuity` groups those commands separately as manual dry-run freshness actions.

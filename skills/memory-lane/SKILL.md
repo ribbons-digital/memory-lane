@@ -100,8 +100,8 @@ When a durable memory is wrong, stale, duplicated, or superseded, prefer explici
 
 ```bash
 memory-lane update <id> --text "refined memory" --reason "clarified"
-memory-lane replace <old-id...> --text "new successor memory" --yes
-memory-lane supersede <new-id> <old-id...> --reason "newer version" --yes
+memory-lane replace <old-id...> --text "new successor memory" --yes [--all]
+memory-lane supersede <new-id> <old-id...> --reason "newer version" --yes [--all]
 ```
 
 Use `--dry-run` where available before changing scope or relationships.

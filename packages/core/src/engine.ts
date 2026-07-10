@@ -285,10 +285,12 @@ export class MemoryEngine {
     return { dryRun: input.dryRun ?? false, current, proposed, warnings: [] }
   }
 
+  /** Preview a same-id scope correction. Respects project scope unless `all` is true. */
   previewRescope(id: string, input: RescopeInput): RescopeResult | undefined {
     return this.buildRescopePreview(id, { ...input, dryRun: true })
   }
 
+  /** Apply a same-id scope correction. Respects project scope unless `all` is true. */
   rescope(id: string, input: RescopeInput): RescopeResult | undefined {
     const result = this.buildRescopePreview(id, { ...input, dryRun: false })
     this.storage.appendMemory(result.proposed)
@@ -452,6 +454,7 @@ export class MemoryEngine {
     }
   }
 
+  /** Link approved old memories to an approved successor. Respects project scope unless `all` is true. */
   supersede(
     newId: string,
     oldIds: string[],
@@ -465,6 +468,7 @@ export class MemoryEngine {
     return mirrorWarnings.length ? { ...preview, mirrorWarnings } : preview
   }
 
+  /** Create a successor memory for approved old memories. Respects project scope unless `all` is true. */
   replace(oldIds: string[], input: {
     text: string
     category?: MemoryCategory

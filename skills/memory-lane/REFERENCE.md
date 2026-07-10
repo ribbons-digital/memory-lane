@@ -50,12 +50,13 @@ When a durable memory is wrong, stale, duplicated, or superseded, prefer explici
 memory-lane update <id> --text "refined memory" --reason "clarified"
 memory-lane replace <old-id> --text "new successor memory" --kind workflow_rule [--all]
 memory-lane supersede <new-id> <old-id> --reason "newer version" [--all]
+memory-lane rescope <id> --scope project --project <path> --dry-run [--all]
 ```
 
 `update` keeps the same memory id.
 `replace` creates a new successor memory.
 `supersede` links an existing approved successor to approved old memories.
-Use `--dry-run` to preview revision commands before writing relationship changes.
+Use `--dry-run` to preview revision commands before writing scope or relationship changes.
 Use `--yes` for multi-old `replace` or `supersede`.
 Revision commands use global plus current-project visibility by default, use global-only visibility when no project scope is active, and require `--all` for cross-project maintenance.
 Denied scoped lookups use not-found behavior without exposing hidden memory text or appending new records.

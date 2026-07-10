@@ -1053,5 +1053,5 @@ Commands:
 Flags:
   --json           Output JSON instead of human-readable text
   --project <path> Set the project scope directory
-  --all            Show all memories or allow cross-project review/mutation`
+  --all            Show all memories or allow cross-project review/revision/mutation`
 }
