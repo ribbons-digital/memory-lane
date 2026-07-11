@@ -424,7 +424,7 @@ Optional Memory Lane plugins extend the CLI and MCP server. For example, `@memor
 
 ## Pi Harness Tools
 
-When used as a pi extension, five tools are available.
+When used as a pi extension, four tools are available.
 Repo-local slash commands include `/memory review [--all]` and `/memory delete <id> [--all]`; omit `--all` for normal current-project plus global visibility.
 
 | Tool | Description |
@@ -433,4 +433,3 @@ Repo-local slash commands include `/memory review [--all]` and `/memory delete <
 | `memory_suggest` | Queue a memory suggestion for user review |
 | `memory_continuity` | Read canonical broad prior-work, next-action, or project-status continuity |
 | `memory_recall` | Recall approved memories via semantic + lexical search for topic-specific follow-up |
-| `memory_get` | Inspect one exact active memory id |

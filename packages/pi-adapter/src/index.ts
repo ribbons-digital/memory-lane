@@ -401,6 +401,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
       const parts = trimmed.split(/\s+/)
       const cmd = parts[0]
       const rest = parts.slice(1).join(" ")
+      const allScope = parts.includes("--all")
 
       if (cmd === "init-project-local" || (cmd === "init" && rest === "--project-local")) {
         const result = initProjectLocalStorage(ctx.cwd)
@@ -425,14 +426,12 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
           const continuity = e.continuity({ caller: "core", query })
           notify(ctx, renderPiContinuityContext(continuity))
         } else if (cmd === "list") {
-          const allScope = parts.includes("--all")
           const mems = e.list({ all: allScope })
           notify(ctx, mems.length ? mems.map(formatMemory).join("\n") : "No memories.")
         } else if (cmd === "search") {
           const mems = e.search(rest)
           notify(ctx, mems.length ? mems.map(formatMemory).join("\n") : "No matches.")
         } else if (cmd === "delete") {
-          const allScope = parts.includes("--all")
           const id = parts.slice(1).filter((part) => part !== "--all").join(" ")
           const mem = e.delete(id, { all: allScope })
           notify(ctx, mem ? `Deleted memory ${id}` : `Memory not found: ${id}`, mem ? "info" : "warning")
@@ -441,7 +440,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
           if (!result.memories.length) notify(ctx, "No matching memories.", "info")
           else notify(ctx, `Recalled ${result.memories.length} memories.\n` + result.memories.map(formatMemory).join("\n"))
         } else if (cmd === "review") {
-          const pending = e.reviewPending({ all: parts.includes("--all") })
+          const pending = e.reviewPending({ all: allScope })
           notify(ctx, pending.length ? pending.map(formatMemory).join("\n") : "No pending memories.")
         } else if (cmd === "compact") {
           const report = e.compact()
