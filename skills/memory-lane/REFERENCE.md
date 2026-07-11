@@ -337,6 +337,7 @@ memory-lane save "test command is pnpm test" --project /path/to/project
 | `--all` | Bypass project scope for explicit cross-project list, review, by-id, or revision maintenance |
 | `--status <s>` | Filter by status: `approved`, `pending`, `rejected`, `deleted` |
 | `--category <c>` | Set category: `preference`, `personal`, `project` |
+| `--kind <k>` | Set memory kind for `save`, `update`, and `replace`, or filter compatible commands: `preference`, `personal_context`, `project_fact`, `project_checkpoint`, `workflow_rule`, `decision`, `correction`, `procedure`, `session_summary`, `misc` |
 | `--scope <s>` | Set scope: `global`, `project` |
 
 ## API (for direct library use)
