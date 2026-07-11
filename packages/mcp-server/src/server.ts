@@ -80,9 +80,13 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
       return handler(suppliedEngineForProjectPath(requestedProjectPath, engineOptions))
     }
 
-    const run = () => {
+    const run = async () => {
       engine.refreshScope(requestedProjectPath ?? startupProjectPath)
-      return handler(engine)
+      try {
+        return await handler(engine)
+      } finally {
+        engine.refreshScope(startupProjectPath)
+      }
     }
     const result = fallbackQueue.then(run)
     fallbackQueue = result.then(() => undefined, () => undefined)
