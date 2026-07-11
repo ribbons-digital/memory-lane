@@ -365,7 +365,7 @@ export class MemoryEngine {
     return this.save({ text, category, scopeType, source: "user-suggested", status: nextStatus, kind, freshness, descriptor })
   }
 
-  /** Approve a pending memory by id. Respects project scope unless `all` is true. */
+  /** Approve a pending memory or reactivate a rejected memory by id. Respects project scope unless `all` is true. */
   approve(id: string, opts?: { all?: boolean; actor?: LocalLearningActor }): MemoryMutationResult | undefined {
     const mem = this.findScopedMemory(id, (memory) => memory.status !== "deleted", opts)
     if (!mem) return undefined

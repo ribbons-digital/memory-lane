@@ -140,8 +140,8 @@ memory-lane show <id>             # inspect one exact active memory id in curren
 memory-lane get <id>              # alias for show
 memory-lane rescope <id> --scope project --project <path> --dry-run [--all] # preview same-id scope correction
 memory-lane move <id> --scope global --yes [--all] # alias for rescope; apply with confirmation
-memory-lane approve <id> [--all]  # approve a pending memory
-memory-lane reject <id> [--all]   # reject a pending memory
+memory-lane approve <id> [--all]  # approve pending or reactivate rejected memory
+memory-lane reject <id> [--all]   # reject a pending or approved memory
 memory-lane delete <id> [--all]   # soft-delete a memory
 memory-lane agreements            # inspect approved operating agreement text
 memory-lane update <id> --text "..." --reason "..." # revise an active memory in place

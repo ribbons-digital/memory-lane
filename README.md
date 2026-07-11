@@ -575,7 +575,7 @@ memory-lane recall [query]        Recall memories (semantic or lexical)
 memory-lane show|get <id> [--all] Show one memory by exact id, including descriptor metadata when present
 memory-lane list [--status ...]   List memories
 memory-lane search <query>        Lexical text search
-memory-lane approve <id> [--all]  Approve a pending memory
+memory-lane approve <id> [--all]  Approve pending or reactivate rejected memory
 memory-lane reject <id> [--all]   Reject a memory
 memory-lane delete <id> [--all]   Soft-delete a memory
 memory-lane review [--all]        Show pending memories
@@ -1148,9 +1148,10 @@ See `examples/harness-integrations/mcp.md` for client configuration examples.
 ## Memory Lifecycle
 
 ```
-user/agent → suggest() → pending → approve() → approved
-                                 → reject()  → rejected
-approved   → delete()           → deleted
+user/agent → suggest() → pending  → approve() → approved
+                                  → reject()  → rejected → approve() → approved
+approved   → delete()            → deleted
+approved   → replace()/supersede() → approved historical record with revision links
 ```
 
 Compaction removes deleted + rejected tombstones and stale embeddings while preserving malformed or schema-invalid JSONL rows for diagnostics. Trigger: `memory-lane compact` or startup auto-check (>30% dead weight + >100 valid records).
