@@ -169,8 +169,8 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
     const piExt = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
     assert.ok(fs.existsSync(piExt))
     const content = fs.readFileSync(piExt, "utf8")
-    assert.ok(content.includes("memoryLaneCliBridge"))
-    assert.ok(content.includes(binaryPath))
+    assert.ok(content.includes("memoryLaneExtension"))
+    assert.ok(content.includes(path.resolve(__dirname, "../../pi-adapter/dist/index.js")))
     assert.equal(content.includes(`import("file://${binaryPath}`), false)
   })
 
