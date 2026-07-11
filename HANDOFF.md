@@ -2,8 +2,9 @@
 
 ## Current state
 
+- PR #186 merged issue #177 as main commit `a7745af`, adding explicit `--all` maintenance mode to Pi review and delete while preserving scoped defaults.
 - PR #183 merged issue #145 as main commit `9b16939`, increasing new memory IDs to 128 random bits while preserving legacy short IDs and duplicate-ID folding semantics.
-- Current repo status: main is synced through PR #183; no issue #169 follow-up slice is active in this status branch.
+- Current repo status: main is synced through PR #186; no issue #169 follow-up slice is active in this status branch.
 - PR #182 scoped revision maintenance mutations to the current project and documented the revision command options.
 - PR #180 documented scoped review maintenance after PR #179 scoped review mutations to the current project.
 - PR #174 shipped issue #169 Slice B trace dataset conversion as a maintainer-only local runner for opt-in Slice A trace files.
@@ -28,7 +29,8 @@
 
 ## Current decision / next work
 
-The current repo state is main synced through PR #183, with this branch only reconciling status docs.
+The current repo state is main synced through PR #186, with this branch only reconciling status docs.
+PR #186 fixed issue #177 by adding explicit `--all` support to Pi review and delete while preserving scoped defaults, no-text-leak refusal behavior, and accurate Pi tool documentation.
 PR #183 fixed issue #145 by increasing new memory IDs to 128 random bits while preserving legacy short IDs and duplicate-ID folding semantics.
 PR #182 and PR #179 scoped revision and review maintenance mutations to the current project, with PR #180 documenting scoped review maintenance.
 PR #174 shipped issue #169 Slice B: `pnpm --filter @memory-lane/lifecycle eval:trace-dataset-converter -- --traces <dir> --out <file>` converts opt-in Slice A trace files into a deterministic smoke dataset for explicit core adapter use.
@@ -66,6 +68,7 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 
 ## Current verification evidence
 
+- PR #186 verification passed focused Pi scope regressions, the full 32-test Pi adapter suite, the Pi adapter build, `git diff --check`, Fable 5 diff review with no blockers, and no-mistakes run `01KX79Y2WT7H2VTRNGP3JHT2WE` with `checks-passed` and no findings.
 - PR #183 verification passed focused core storage tests, core and workspace builds, the full workspace test suite, `git diff --check`, Fable 5 diff review with no blockers, and no-mistakes run `01KX70XJNHAPD2X06C29RNPEVG` with `checks-passed` and no findings.
 - PR #161 verification passed `pnpm --filter @memory-lane/core build && pnpm --filter @memory-lane/cli build`, `pnpm --filter @memory-lane/core exec node --test --import tsx test/config.test.ts`, `pnpm --filter @memory-lane/cli exec node --test --import tsx test/cli.test.ts`, isolated original issue reproduction with temp storage, `pnpm build`, `pnpm test`, and `git diff --check`.
 - PR #161 used Fable 5 for diagnosis and implementation review.
