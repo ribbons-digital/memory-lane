@@ -1,14 +1,14 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { createHash } from "node:crypto"
-import {
-  containsLikelySecret,
-  loadConfig,
-  type LocalLearningEventInput,
-  type LocalLearningEventSink,
-  type MemoryRecord,
-  type MemoryRevisionActor,
-  type MemorySource,
+import { containsLikelySecret, loadConfig } from "@memory-lane/core"
+import type {
+  LocalLearningEventInput,
+  LocalLearningEventSink,
+  MemoryRecord,
+  MemoryRevisionActor,
+  MemorySource,
+  SemanticMemoryConfig,
 } from "@memory-lane/core"
 import {
   enforceLocalLearningRetention,
@@ -37,7 +37,10 @@ export interface LearningEventV1 {
   provenanceRef?: string
   triggerContextDigest?: string
   recommendationId?: string
-  recommendedAction?: { type: "update-kind"; value: "workflow_rule" }
+  recommendedAction?:
+    | { type: "update-kind"; value: "workflow_rule" }
+    | { type: "replace" }
+    | { type: "supersede" }
   decision?: {
     type: LearningDecisionType
     actor: MemoryRevisionActor | "lifecycle"
@@ -111,8 +114,12 @@ function decision(eventType: LearningEventType, actor: LocalLearningEventInput["
 }
 
 function recommendationAction(input: LocalLearningEventInput): LearningEventV1["recommendedAction"] {
-  if (!input.recommendedAction) return undefined
-  return { type: "update-kind", value: "workflow_rule" }
+  switch (input.recommendedAction) {
+    case "update-kind-workflow-rule": return { type: "update-kind", value: "workflow_rule" }
+    case "replace": return { type: "replace" }
+    case "supersede": return { type: "supersede" }
+    case undefined: return undefined
+  }
 }
 
 function recommendationId(input: LocalLearningEventInput, subjectRef: string, action: LearningEventV1["recommendedAction"]): string | undefined {
@@ -123,7 +130,7 @@ function recommendationId(input: LocalLearningEventInput, subjectRef: string, ac
   return digest({
     subjectRef,
     recommendationType: action.type,
-    recommendedValue: action.value,
+    recommendedValue: action.type === "update-kind" ? action.value : undefined,
     subjectVersion: digest({ id: subject.id, updatedAt: subject.updatedAt, status: subject.status, kind: subject.kind }),
   })
 }
@@ -133,9 +140,18 @@ function recommendationId(input: LocalLearningEventInput, subjectRef: string, ac
  * The sink writes only hashed ids, digests, timestamps, enums, and metadata needed for local outcome analysis.
  */
 export function createLearningEventSink(options: LearningEventCaptureOptions = {}): LocalLearningEventSink {
+  let config: SemanticMemoryConfig | undefined
+  let configLoadFailed = false
+  let retentionEnforced = false
   return (input): void => {
     try {
-      const config = loadConfig(options.configPath)
+      if (configLoadFailed) return
+      try {
+        config ??= loadConfig(options.configPath)
+      } catch {
+        configLoadFailed = true
+        return
+      }
       if (config.learning?.capture !== "on") return
 
       const ownerKey = ownerProjectKey(input.memory)
@@ -171,11 +187,14 @@ export function createLearningEventSink(options: LearningEventCaptureOptions = {
         ...(eventDecision ? { decision: eventDecision } : {}),
         ...(input.relatedMemory ? { relatedSuggestionId: digest({ suggestionId: input.relatedMemory.id }) } : {}),
       }
-      event.eventId = digest({ ...event, eventId: undefined, occurredAt: undefined })
+      event.eventId = digest({ ...event, eventId: undefined })
 
       fs.mkdirSync(directory, { recursive: true })
       fs.writeFileSync(path.join(directory, `${event.eventId}.json`), JSON.stringify(event, null, 2) + "\n", "utf8")
-      enforceLocalLearningRetention(root, now)
+      if (!retentionEnforced) {
+        retentionEnforced = true
+        enforceLocalLearningRetention(root, now)
+      }
     } catch { /* local learning capture is fail-open */ }
   }
 }

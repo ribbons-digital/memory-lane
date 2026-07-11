@@ -223,7 +223,7 @@ Use `memory-lane reindex --force` to recompute existing current vectors.
 ## Safety defaults
 
 - Do not store secrets. Likely secret-looking content is rejected or redacted on supported paths.
-- Local learning capture is opt-in through `learning.capture: "on"`; captured review outcome events are content-free hashed metadata, not memory text or prompts.
+- Local learning capture is opt-in through `learning.capture: "on"`; captured review outcome events are content-free metadata, not memory text or prompts. Identifiers and free-text digests are hashed; source, kind, recommendation, and decision enums remain un-hashed.
 - Do not rely on operational subagent/reviewer/task wrapper chatter becoming memory; lifecycle filters suppress it.
 - Explicit user memory requests remain supported even when they mention reviewer/subagent behavior.
 - Use project scope by default. Use `--all` only when intentionally auditing cross-project memories.

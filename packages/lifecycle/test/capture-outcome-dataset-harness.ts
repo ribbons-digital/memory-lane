@@ -54,10 +54,10 @@ interface LearningDecisionV1 {
   reasonDigest?: string
 }
 
-interface RecommendedActionV1 {
-  type: "update-kind"
-  value: "workflow_rule"
-}
+type RecommendedActionV1 =
+  | { type: "update-kind"; value: "workflow_rule" }
+  | { type: "replace" }
+  | { type: "supersede" }
 
 interface LearningEventV1 {
   schemaVersion: 1
@@ -293,8 +293,10 @@ function parseRecommendedAction(value: unknown, label: string): RecommendedActio
   if (!isObject(value) || Object.keys(value).some((key) => key !== "type" && key !== "value")) {
     throw new Error(`${label} has invalid recommendedAction`)
   }
-  if (value.type !== "update-kind" || value.value !== "workflow_rule") throw new Error(`${label} has invalid recommendedAction`)
-  return { type: "update-kind", value: "workflow_rule" }
+  if (value.type === "update-kind" && value.value === "workflow_rule") return { type: "update-kind", value: "workflow_rule" }
+  if (value.type === "replace" && value.value === undefined) return { type: "replace" }
+  if (value.type === "supersede" && value.value === undefined) return { type: "supersede" }
+  throw new Error(`${label} has invalid recommendedAction`)
 }
 
 function assertConditionalEventFields(event: LearningEventV1, label: string): void {
@@ -311,6 +313,9 @@ function assertConditionalEventFields(event: LearningEventV1, label: string): vo
   if (!decisionType && event.decision !== undefined) throw new Error(`${label} has ambiguous decision for ${event.eventType}`)
   if (event.eventType === "suggestion-created" && (!event.source || !event.initialReviewState)) {
     throw new Error(`${label} suggestion-created requires source and initialReviewState`)
+  }
+  if (event.eventType !== "suggestion-created" && event.initialReviewState !== undefined) {
+    throw new Error(`${label} has initialReviewState on ${event.eventType}`)
   }
   const agreement = event.eventType.startsWith("agreement-recommendation-")
   if (agreement && (!event.recommendationId || !event.recommendedAction)) {
@@ -362,7 +367,7 @@ function parseEvent(filePath: string): LearningEventV1 {
     ...(eventDecision ? { decision: eventDecision } : {}),
     ...(digestString(parsed, "relatedSuggestionId", filePath, true) ? { relatedSuggestionId: String(parsed.relatedSuggestionId) } : {}),
   }
-  if (event.eventId !== digest({ ...event, eventId: undefined, occurredAt: undefined })) throw new Error(`${filePath} has content-mismatched eventId`)
+  if (event.eventId !== digest({ ...event, eventId: undefined })) throw new Error(`${filePath} has content-mismatched eventId`)
   assertConditionalEventFields(event, filePath)
   return event
 }
@@ -509,6 +514,7 @@ function validateSuggestionIdentity(events: LearningEventV1[]): void {
   const created = new Set<string>()
   const eventTimes = new Map<string, LearningEventV1>()
   const recommendations = new Map<string, Pick<LearningEventV1, "suggestionId" | "subjectRef" | "projectRef" | "recommendedAction">>()
+  const priorSuggestionEvent = new Map<string, LearningEventV1>()
   for (const event of events) {
     if (event.eventType !== "agreement-recommendation-accepted") {
       const identity = identities.get(event.suggestionId)
@@ -527,8 +533,13 @@ function validateSuggestionIdentity(events: LearningEventV1[]): void {
       if (!isCompositeReplace) throw new Error(`Ambiguous simultaneous transitions for suggestionId ${event.suggestionId}`)
     }
     if (changesSuggestionState) eventTimes.set(timeKey, event)
+    if (event.eventType.startsWith("suggestion-") && event.eventType !== "suggestion-created") {
+      priorSuggestionEvent.set(event.suggestionId, priorSuggestionEvent.get(event.suggestionId) ?? event)
+    }
     if (event.eventType === "suggestion-created") {
       if (created.has(event.suggestionId)) throw new Error(`Duplicate suggestion-created event for ${event.suggestionId}`)
+      const prior = priorSuggestionEvent.get(event.suggestionId)
+      if (prior) throw new Error(`Suggestion lifecycle event ${prior.eventType} occurs before suggestion-created for ${event.suggestionId}`)
       created.add(event.suggestionId)
     }
     if (event.recommendationId) {

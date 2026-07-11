@@ -212,9 +212,29 @@ test("repeated agreement display keeps one recommendation identity until the sub
   capture(root, configPath, { ...shown, memory: memory({ updatedAt: "2026-07-12T12:00:00.000Z" }) }, "2026-07-12T12:00:00.000Z")
 
   const events = readEvents(root)
-  assert.equal(events.length, 2)
+  assert.equal(events.length, 3)
+  assert.equal(new Set(events.map((event) => event.eventId)).size, 3)
   assert.equal(new Set(events.map((event) => event.recommendationId)).size, 2)
   assert.equal(events.every((event) => event.eventType === "agreement-recommendation-shown"), true)
+
+  const accepted = memory({ status: "approved", kind: "workflow_rule", updatedAt: "2026-07-13T12:00:00.000Z" })
+  for (const recommendedAction of ["replace", "supersede"] as const) {
+    capture(root, configPath, {
+      eventType: "agreement-recommendation-accepted",
+      memory: accepted,
+      previousMemory: shown.memory,
+      actingProjectKey: "owner-project",
+      actor: "cli",
+      recommendedAction,
+    })
+  }
+  assert.deepEqual(
+    readEvents(root)
+      .filter((event) => event.eventType === "agreement-recommendation-accepted")
+      .map((event) => event.recommendedAction?.type)
+      .sort(),
+    ["replace", "supersede"],
+  )
 })
 
 test("event files participate in combined age retention, status counts, and privacy purge", () => {

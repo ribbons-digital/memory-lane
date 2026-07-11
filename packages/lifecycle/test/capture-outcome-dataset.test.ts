@@ -62,7 +62,7 @@ function event(overrides: EventOverrides): LearningEventV1 {
     } : {}),
     ...overrides,
   }
-  body.eventId = digest({ ...body, eventId: undefined, occurredAt: undefined })
+  body.eventId = digest({ ...body, eventId: undefined })
   return body
 }
 
@@ -386,6 +386,11 @@ test("malformed, unsupported, duplicate, and ambiguous events fail deterministic
     { name: "duplicate event", files: [["a.json", created], ["b.json", created]], error: /Duplicate learning eventId/u },
     { name: "duplicate creation", files: [["a.json", created], ["b.json", event({ ...created, occurredAt: "2026-07-02T00:00:00.000Z", triggerContextDigest: ref("new-trigger") })]], error: /Duplicate suggestion-created event/u },
     { name: "ambiguous suggestion identity", files: [["a.json", created], ["b.json", event({ eventType: "suggestion-shown", occurredAt: "2026-07-02T00:00:00.000Z", suggestionId, subjectRef: ref("other-subject") })]], error: /Ambiguous identity for suggestionId/u },
+    { name: "initial review state on non-creation", files: [["bad.json", event({ eventType: "suggestion-reactivated", occurredAt: "2026-07-02T00:00:00.000Z", suggestionId, initialReviewState: "approved" })]], error: /has initialReviewState on suggestion-reactivated/u },
+    { name: "lifecycle event before retained creation", files: [
+      ["a.json", event({ eventType: "suggestion-approved", occurredAt: "2026-06-30T00:00:00.000Z", suggestionId })],
+      ["b.json", created],
+    ], error: /suggestion-approved occurs before suggestion-created/u },
     { name: "ambiguous simultaneous transition", files: [
       ["a.json", created],
       ["b.json", event({ eventType: "suggestion-approved", occurredAt: "2026-07-02T00:00:00.000Z", suggestionId })],
@@ -543,11 +548,12 @@ test("captured repeated agreement display has one denominator identity and one m
   }, "2026-07-03T00:00:00.000Z")
 
   const eventsDirectory = onlyEventDirectory(traceRoot)
-  assert.equal(fs.readdirSync(eventsDirectory).length, 2)
+  assert.equal(fs.readdirSync(eventsDirectory).length, 3)
   const dataset = writeCaptureOutcomeDataset({ eventsDirectory, asOf: DEFAULT_AS_OF, outputPath })
 
   assert.equal(dataset.agreementRecommendations.length, 1)
   assert.equal(dataset.agreementRecommendations[0]!.resolutionState, "accepted")
+  assert.equal(dataset.agreementRecommendations[0]!.repeatedDisplayCount, 1)
   assert.equal(dataset.metrics.agreements.uniqueRecommendationCount, 1)
   assert.equal(dataset.metrics.agreements.resolvedObservationWindowCount, 1)
   assert.equal(dataset.metrics.agreements.acceptedCount, 1)
@@ -621,7 +627,8 @@ test("engine replace exports linked replaced and superseded transitions emitted 
   assert.equal(new Set(linkedTerminals.map((captured) => captured.occurredAt)).size, 1)
   assert.equal(new Set(linkedTerminals.map((captured) => captured.relatedSuggestionId)).size, 1)
 
-  const dataset = writeCaptureOutcomeDataset({ eventsDirectory, projectStorePath: memoryPath, asOf: DEFAULT_AS_OF, outputPath })
+  const asOf = capturedEvents.map((captured) => captured.occurredAt).sort().at(-1)!
+  const dataset = writeCaptureOutcomeDataset({ eventsDirectory, projectStorePath: memoryPath, asOf, outputPath })
   const replacedRecord = dataset.records.find((record) => record.suggestionId === oldSuggestionId)
   assert.ok(replacedRecord)
   assert.equal(replacedRecord.everApproved, true)
