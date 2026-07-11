@@ -60,6 +60,10 @@ const continuityQuery = z.string().optional().describe("Optional query for read-
 
 export interface CreateMemoryLaneMcpServerOptions {
   engine: MemoryEngine
+  /**
+   * Resolve a request-scoped engine for an optional MCP projectPath.
+   * When omitted, the server reuses `engine` and restores its startup project scope after each request.
+   */
   engineForProjectPath?: (projectPath?: string, options?: EngineForProjectPathOptions) => MemoryEngine
   plugins?: LoadedPlugin[]
 }
