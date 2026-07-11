@@ -130,16 +130,16 @@ memory-lane list --status approved
 
 ```bash
 memory-lane search "pnpm"         # lexical search within project scope
-memory-lane review                # list pending for review
+memory-lane review [--all]        # list pending for review
 memory-lane review --suspect-meta # list likely old pending operational prompt pollution only
 memory-lane review --suspect-meta --include-approved # include approved suspect pollution that may affect recall
 memory-lane show <id>             # inspect one exact active memory id in current scope, including descriptor metadata when present
 memory-lane get <id>              # alias for show
 memory-lane rescope <id> --scope project --project <path> --dry-run [--all] # preview same-id scope correction
 memory-lane move <id> --scope global --yes [--all] # alias for rescope; apply with confirmation
-memory-lane approve <id>          # approve a pending memory
-memory-lane reject <id>           # reject a pending memory
-memory-lane delete <id>           # soft-delete a memory
+memory-lane approve <id> [--all]  # approve a pending memory
+memory-lane reject <id> [--all]   # reject a pending memory
+memory-lane delete <id> [--all]   # soft-delete a memory
 memory-lane agreements            # inspect approved operating agreement text
 memory-lane update <id> --text "..." --reason "..." # revise an active memory in place
 memory-lane supersede <new-id> <old-id...> [--yes] [--all] # link approved old memories to an approved successor
@@ -280,7 +280,14 @@ For hook support checks, prefer `memory-lane doctor` first: use `hookDebugLogPat
 
 ### pi adapter boundary
 
-In pi, Memory Lane provides manual tools/commands, explicit `memory_continuity`, and read-only lifecycle context before the agent starts through pi's `before_agent_start` event. Broad continuity prompts such as “what were we last working on?”, “where are we?”, or “what should we work on next?” should route to canonical continuity before recall; this is supported in both the repo-local Pi adapter and the generated native-binary bridge. Repo-local Pi exposes `/memory continuity [query]` plus the `memory_continuity` tool. Release-style generated Pi bridges expose `memory_continuity`, proxy `/memory continuity ...` through the CLI, and use `memory-lane route --prompt <text> --json` for prompt routing parity. Pi also has bounded low-noise lifecycle writes on `input`, `turn_end`, and `tool_result`; native pi `session_before_compact` can queue pending pre-compact summaries when the summary provider is configured and confirmation is disabled. Do not assume automatic `agent_end` or `session_shutdown` summaries. When a durable pi workflow rule, preference, or project fact should be saved, use `memory_save` for explicit user requests or `memory_suggest` for proactive suggestions.
+In pi, Memory Lane provides manual tools/commands, explicit `memory_continuity`, and read-only lifecycle context before the agent starts through pi's `before_agent_start` event.
+Broad continuity prompts such as “what were we last working on?”, “where are we?”, or “what should we work on next?” should route to canonical continuity before recall; this is supported in both the repo-local Pi adapter and the generated native-binary bridge.
+Repo-local Pi exposes `/memory continuity [query]` plus the `memory_continuity` tool.
+Repo-local Pi `/memory review` and `/memory delete <id>` use current-project visibility by default, return not-found behavior without memory text for out-of-scope ids, and accept `--all` only for explicit cross-project review or delete.
+Release-style generated Pi bridges expose `memory_continuity`, proxy `/memory continuity ...` through the CLI, and use `memory-lane route --prompt <text> --json` for prompt routing parity.
+Pi also has bounded low-noise lifecycle writes on `input`, `turn_end`, and `tool_result`; native pi `session_before_compact` can queue pending pre-compact summaries when the summary provider is configured and confirmation is disabled.
+Do not assume automatic `agent_end` or `session_shutdown` summaries.
+When a durable pi workflow rule, preference, or project fact should be saved, use `memory_save` for explicit user requests or `memory_suggest` for proactive suggestions.
 
 ### Sandboxed storage
 
@@ -407,13 +414,18 @@ To upgrade to the latest release while preserving existing harness configs and m
 memory-lane upgrade
 ```
 
-In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save/read explicitly, `memory_continuity` is the canonical broad-continuity tool, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates. `turn_end` may queue pending project-scoped checkpoints, explicit workflow corrections, or high-confidence debugging-postmortem learning candidates when bounded context includes a concrete symptom, cause, prevention, and verification/recovery signal. `tool_result` may queue conservative procedure candidates from safe failed-command recovery evidence. These lifecycle suggestions remain pending review; they are not durable operating agreements until approved. Use `/memory review` to inspect pending suggestions.
+In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save/read explicitly, `memory_continuity` is the canonical broad-continuity tool, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates.
+`turn_end` may queue pending project-scoped checkpoints, explicit workflow corrections, or high-confidence debugging-postmortem learning candidates when bounded context includes a concrete symptom, cause, prevention, and verification/recovery signal.
+`tool_result` may queue conservative procedure candidates from safe failed-command recovery evidence.
+These lifecycle suggestions remain pending review; they are not durable operating agreements until approved.
+Use scoped `/memory review` to inspect pending suggestions, or `/memory review --all` only for deliberate cross-project review.
 
 Optional Memory Lane plugins extend the CLI and MCP server. For example, `@memory-lane/plugin-obsidian-wiki` adds Obsidian/Garden knowledge-base search and reading. Enable plugins in `~/.memory-lane/config.json` under `plugins`.
 
 ## Pi Harness Tools
 
-When used as a pi extension, five tools are available:
+When used as a pi extension, five tools are available.
+Repo-local slash commands include `/memory review [--all]` and `/memory delete <id> [--all]`; omit `--all` for normal current-project plus global visibility.
 
 | Tool | Description |
 |------|-------------|

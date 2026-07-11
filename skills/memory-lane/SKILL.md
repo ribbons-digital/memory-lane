@@ -166,6 +166,7 @@ memory-lane codex pre-compact
 Pi:
 
 - Pi supports manual tools/commands, explicit `memory_continuity`, and read-only lifecycle context through `before_agent_start`.
+- Repo-local Pi `/memory review` and `/memory delete <id>` stay scoped by default; use `--all` only for explicit cross-project maintenance.
 - Broad Pi continuity prompts should route to canonical continuity before recall in both repo-local adapter and generated native-binary bridge.
 - Pi lifecycle writes are intentionally low-noise: explicit memory requests on `input`, higher-signal stop/tool candidates on `turn_end`/`tool_result`.
 - Do not assume automatic pi `agent_end` or `session_shutdown` summaries.
