@@ -160,9 +160,9 @@ export class MemoryEngine {
     }
   }
 
-  /** Re-resolve the project scope from current cwd or given path. */
-  refreshScope(cwd?: string): void {
-    this.scope = resolveProjectScope(cwd)
+  /** Re-resolve the project scope from current cwd or given path, or clear it explicitly with null. */
+  refreshScope(cwd?: string | null): void {
+    this.scope = cwd === null ? null : resolveProjectScope(cwd)
   }
 
   /** Current project scope or null if none available. */

@@ -6,11 +6,82 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { pathToFileURL } from "node:url"
 import { createMemoryLaneMcpServer, MEMORY_LANE_TOOL_NAMES } from "../src/server.ts"
+import { z } from "zod"
 import { createMemoryLaneEngine } from "../src/engine.ts"
 import { isDirectExecution } from "../src/index.ts"
 
 const tempDirs = new Set<string>()
 let listenerRegistered = false
+
+type RegisteredToolResult = {
+  content: Array<{ type: string; text?: string }>
+}
+
+type RegisteredTool = {
+  description: string
+  handler(input: Record<string, unknown>): Promise<RegisteredToolResult>
+}
+
+const memoriesEnvelopeSchema = z.object({
+  ok: z.literal(true),
+  data: z.object({
+    memories: z.array(z.object({ text: z.string() })),
+  }),
+  meta: z.object({
+    count: z.number(),
+    projectScope: z.string(),
+  }),
+})
+
+const statusEnvelopeSchema = z.object({
+  ok: z.literal(true),
+  data: z.object({
+    status: z.object({ projectScope: z.string() }),
+    notes: z.array(z.string()),
+  }),
+  meta: z.object({ projectScope: z.string() }),
+})
+
+function isRegisteredTool(value: unknown): value is RegisteredTool {
+  return value !== null
+    && typeof value === "object"
+    && "description" in value
+    && typeof value.description === "string"
+    && "handler" in value
+    && typeof value.handler === "function"
+}
+
+function registeredTools(server: unknown): object {
+  assert.ok(server !== null && typeof server === "object" && "_registeredTools" in server)
+  const tools: unknown = server._registeredTools
+  assert.ok(tools !== null && typeof tools === "object")
+  return tools
+}
+
+function parseToolJson(result: RegisteredToolResult): unknown {
+  const text = result.content.find((item) => item.type === "text")?.text
+  assert.equal(typeof text, "string")
+  return JSON.parse(text)
+}
+
+function projectScope(prefix: string, id: string): string {
+  const projectPath = tempDir(prefix)
+  fs.writeFileSync(path.join(projectPath, ".memory-lane-scope"), JSON.stringify({ id }), "utf8")
+  return projectPath
+}
+
+function saveProjectMemory(engine: MemoryEngine, projectPath: string, text: string): MemoryRecord {
+  engine.refreshScope(projectPath)
+  const result = engine.save({ text, status: "approved", category: "project", scopeType: "project" })
+  if (result.status !== "saved") throw new Error(`failed to save project fixture: ${result.reason}`)
+  return result.memory
+}
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve: () => void = () => { throw new Error("deferred resolved before initialization") }
+  const promise = new Promise<void>((done) => { resolve = done })
+  return { promise, resolve }
+}
 
 function registerCleanup(): void {
   if (listenerRegistered) return
@@ -40,17 +111,13 @@ function engineInTemp(): MemoryEngine {
 }
 
 function registeredToolNames(server: unknown): string[] {
-  const registeredTools = (server as { _registeredTools?: Record<string, unknown> })._registeredTools
-  assert.equal(typeof registeredTools, "object")
-  assert.notEqual(registeredTools, null)
-  return Object.keys(registeredTools).sort()
+  return Object.keys(registeredTools(server)).sort()
 }
 
-function registeredTool(server: unknown, name: string): any {
-  const registeredTools = (server as { _registeredTools?: Record<string, unknown> })._registeredTools
-  assert.equal(typeof registeredTools, "object")
-  assert.notEqual(registeredTools, null)
-  return registeredTools[name]
+function registeredTool(server: unknown, name: string): RegisteredTool {
+  const tool: unknown = Reflect.get(registeredTools(server), name)
+  assert.ok(isRegisteredTool(tool), `expected ${name} to be a registered MCP tool`)
+  return tool
 }
 
 test("direct index entrypoint detection supports existing client configs", () => {
@@ -222,6 +289,111 @@ test("registered review and mutation tools accept all true", async () => {
   assert.equal(approved.data.memory.status, "approved")
   assert.equal(rejected.data.memory.status, "rejected")
   assert.equal(deleted.data.memory.status, "deleted")
+})
+
+test("fallback registered tool scope resets an omitted read to the startup project", async () => {
+  const projectA = projectScope("memory-lane-mcp-fallback-read-a-", "fallback-read-a")
+  const projectB = projectScope("memory-lane-mcp-fallback-read-b-", "fallback-read-b")
+  const engine = engineInTemp()
+  saveProjectMemory(engine, projectA, "Startup project read memory")
+  saveProjectMemory(engine, projectB, "Explicit project B read memory")
+  engine.refreshScope(projectA)
+  const server = createMemoryLaneMcpServer({ engine })
+  const listTool = registeredTool(server, "memory_list")
+
+  const projectBResult = memoriesEnvelopeSchema.parse(parseToolJson(await listTool.handler({ projectPath: projectB })))
+  const startupResult = memoriesEnvelopeSchema.parse(parseToolJson(await listTool.handler({})))
+
+  assert.deepEqual(projectBResult.data.memories.map((memory) => memory.text), ["Explicit project B read memory"])
+  assert.equal(projectBResult.meta.projectScope, "fallback-read-b")
+  assert.deepEqual(startupResult.data.memories.map((memory) => memory.text), ["Startup project read memory"])
+  assert.equal(startupResult.meta.projectScope, "fallback-read-a")
+})
+
+test("fallback registered tool scope resets an omitted mutation to the startup project", async () => {
+  const projectA = projectScope("memory-lane-mcp-fallback-mutation-a-", "fallback-mutation-a")
+  const projectB = projectScope("memory-lane-mcp-fallback-mutation-b-", "fallback-mutation-b")
+  const engine = engineInTemp()
+  engine.refreshScope(projectA)
+  const server = createMemoryLaneMcpServer({ engine })
+  const saveTool = registeredTool(server, "memory_save")
+  const listTool = registeredTool(server, "memory_list")
+
+  await saveTool.handler({
+    text: "Explicit project B mutation",
+    category: "project",
+    scope: "project",
+    projectPath: projectB,
+  })
+  await saveTool.handler({
+    text: "Omitted path startup mutation",
+    category: "project",
+    scope: "project",
+  })
+
+  const projectBResult = memoriesEnvelopeSchema.parse(parseToolJson(await listTool.handler({ projectPath: projectB })))
+  const startupResult = memoriesEnvelopeSchema.parse(parseToolJson(await listTool.handler({ projectPath: projectA })))
+  assert.deepEqual(projectBResult.data.memories.map((memory) => memory.text), ["Explicit project B mutation"])
+  assert.deepEqual(startupResult.data.memories.map((memory) => memory.text), ["Omitted path startup mutation"])
+})
+
+test("fallback registered tool scope serializes deliberately interleaved calls", async () => {
+  const projectA = projectScope("memory-lane-mcp-fallback-interleaved-a-", "fallback-interleaved-a")
+  const projectB = projectScope("memory-lane-mcp-fallback-interleaved-b-", "fallback-interleaved-b")
+  const engine = engineInTemp()
+  saveProjectMemory(engine, projectA, "Interleaved startup memory")
+  saveProjectMemory(engine, projectB, "Interleaved project B memory")
+  engine.refreshScope(projectA)
+
+  const originalRecall = engine.recall.bind(engine)
+  const recallStarted = deferred()
+  const releaseRecall = deferred()
+  engine.recall = async (query, options) => {
+    if (query === "Interleaved project B memory") {
+      recallStarted.resolve()
+      await releaseRecall.promise
+    }
+    return originalRecall(query, options)
+  }
+
+  try {
+    const server = createMemoryLaneMcpServer({ engine })
+    const projectBRecallPromise = registeredTool(server, "memory_recall").handler({
+      query: "Interleaved project B memory",
+      projectPath: projectB,
+    })
+    await recallStarted.promise
+    const startupListPromise = registeredTool(server, "memory_list").handler({})
+    releaseRecall.resolve()
+
+    const [projectBRecallRaw, startupListRaw] = await Promise.all([projectBRecallPromise, startupListPromise])
+    const projectBRecall = memoriesEnvelopeSchema.parse(parseToolJson(projectBRecallRaw))
+    const startupList = memoriesEnvelopeSchema.parse(parseToolJson(startupListRaw))
+    assert.deepEqual(projectBRecall.data.memories.map((memory) => memory.text), ["Interleaved project B memory"])
+    assert.equal(projectBRecall.meta.projectScope, "fallback-interleaved-b")
+    assert.deepEqual(startupList.data.memories.map((memory) => memory.text), ["Interleaved startup memory"])
+    assert.equal(startupList.meta.projectScope, "fallback-interleaved-a")
+  } finally {
+    releaseRecall.resolve()
+    engine.recall = originalRecall
+  }
+})
+
+test("fallback registered tool scope restores no scope after an explicit path", async () => {
+  const projectB = projectScope("memory-lane-mcp-fallback-none-b-", "fallback-none-b")
+  const engine = engineInTemp()
+  engine.refreshScope(null)
+  const server = createMemoryLaneMcpServer({ engine })
+  const statusTool = registeredTool(server, "memory_status")
+
+  const projectBResult = statusEnvelopeSchema.parse(parseToolJson(await statusTool.handler({ projectPath: projectB })))
+  const unscopedResult = statusEnvelopeSchema.parse(parseToolJson(await statusTool.handler({})))
+
+  assert.equal(projectBResult.data.status.projectScope, "fallback-none-b")
+  assert.equal(projectBResult.meta.projectScope, "fallback-none-b")
+  assert.equal(unscopedResult.data.status.projectScope, "none")
+  assert.equal(unscopedResult.meta.projectScope, "none")
+  assert.ok(unscopedResult.data.notes.some((note) => note.includes("no project scope is active")))
 })
 
 test("read-only MCP tools request non-writable project-path engines", async () => {
