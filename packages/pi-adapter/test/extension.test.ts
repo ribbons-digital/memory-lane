@@ -386,6 +386,123 @@ test("memory continuity command returns canonical continuity context", async () 
   assert.match(notifications.at(-1)?.message ?? "", /PR #52 released v0\.2\.29/u)
 })
 
+test("memory review defaults to the current project and global scope until --all is explicit", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const records = [
+    { id: "current001", text: "CURRENT_PROJECT_PENDING", category: "project", scope: { type: "project", key: "pi-test-project" }, status: "pending", source: "manual", createdAt: "2026-07-10T10:00:00.000Z", updatedAt: "2026-07-10T10:00:00.000Z" },
+    { id: "other001", text: "SECRET_OTHER_PROJECT_PENDING", category: "project", scope: { type: "project", key: "other-project" }, status: "pending", source: "manual", createdAt: "2026-07-10T10:01:00.000Z", updatedAt: "2026-07-10T10:01:00.000Z" },
+    { id: "global001", text: "GLOBAL_PENDING", category: "preference", scope: { type: "global" }, status: "pending", source: "manual", createdAt: "2026-07-10T10:02:00.000Z", updatedAt: "2026-07-10T10:02:00.000Z" },
+  ]
+  fs.writeFileSync(path.join(env.dir, "memory.jsonl"), records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const notifications: FakeNotification[] = []
+  const ctx = ctxWithUi(env.dir, { notifications })
+
+  await runMemoryCommand(pi, "review", ctx)
+
+  const scopedReview = notifications.at(-1)?.message ?? ""
+  assert.match(scopedReview, /CURRENT_PROJECT_PENDING/u)
+  assert.match(scopedReview, /GLOBAL_PENDING/u)
+  assert.doesNotMatch(scopedReview, /other001|SECRET_OTHER_PROJECT_PENDING/u)
+
+  await runMemoryCommand(pi, "review --all", ctx)
+
+  assert.match(notifications.at(-1)?.message ?? "", /SECRET_OTHER_PROJECT_PENDING/u)
+})
+
+test("memory delete refuses another project's id without leaking its text until --all is explicit", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const records = [
+    { id: "other001", text: "SECRET_OTHER_PROJECT_DELETE", category: "project", scope: { type: "project", key: "other-project" }, status: "approved", source: "manual", createdAt: "2026-07-10T11:00:00.000Z", updatedAt: "2026-07-10T11:00:00.000Z" },
+  ]
+  const originalLog = records.map((record) => JSON.stringify(record)).join("\n") + "\n"
+  fs.writeFileSync(path.join(env.dir, "memory.jsonl"), originalLog, "utf8")
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const notifications: FakeNotification[] = []
+  const ctx = ctxWithUi(env.dir, { notifications })
+
+  await runMemoryCommand(pi, "delete other001", ctx)
+
+  assert.deepEqual(notifications.at(-1), { message: "Memory not found: other001", level: "warning" })
+  assert.doesNotMatch(notifications.at(-1)?.message ?? "", /SECRET_OTHER_PROJECT_DELETE/u)
+  assert.equal(fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8"), originalLog)
+
+  await runMemoryCommand(pi, "delete other001 --all", ctx)
+
+  assert.deepEqual(notifications.at(-1), { message: "Deleted memory other001", level: "info" })
+  const transitions = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line))
+  assert.equal(transitions.at(-1)?.id, "other001")
+  assert.equal(transitions.at(-1)?.status, "deleted")
+})
+
+test("memory review with null project scope is global-only until --all is explicit", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  fs.rmSync(path.join(env.dir, ".memory-lane-scope"))
+  const records = [
+    { id: "project001", text: "SECRET_PROJECT_PENDING_WITH_NULL_SCOPE", category: "project", scope: { type: "project", key: "other-project" }, status: "pending", source: "manual", createdAt: "2026-07-10T12:00:00.000Z", updatedAt: "2026-07-10T12:00:00.000Z" },
+    { id: "global001", text: "GLOBAL_PENDING_WITH_NULL_SCOPE", category: "preference", scope: { type: "global" }, status: "pending", source: "manual", createdAt: "2026-07-10T12:01:00.000Z", updatedAt: "2026-07-10T12:01:00.000Z" },
+  ]
+  fs.writeFileSync(path.join(env.dir, "memory.jsonl"), records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const notifications: FakeNotification[] = []
+  const ctx = ctxWithUi(env.dir, { notifications })
+
+  await runMemoryCommand(pi, "review", ctx)
+
+  const globalReview = notifications.at(-1)?.message ?? ""
+  assert.match(globalReview, /GLOBAL_PENDING_WITH_NULL_SCOPE/u)
+  assert.doesNotMatch(globalReview, /project001|SECRET_PROJECT_PENDING_WITH_NULL_SCOPE/u)
+
+  await runMemoryCommand(pi, "review --all", ctx)
+
+  assert.match(notifications.at(-1)?.message ?? "", /SECRET_PROJECT_PENDING_WITH_NULL_SCOPE/u)
+})
+
+test("memory delete with null project scope requires explicit --all for a project memory", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  fs.rmSync(path.join(env.dir, ".memory-lane-scope"))
+  const records = [
+    { id: "project001", text: "SECRET_PROJECT_DELETE_WITH_NULL_SCOPE", category: "project", scope: { type: "project", key: "other-project" }, status: "approved", source: "manual", createdAt: "2026-07-10T13:00:00.000Z", updatedAt: "2026-07-10T13:00:00.000Z" },
+  ]
+  const originalLog = records.map((record) => JSON.stringify(record)).join("\n") + "\n"
+  fs.writeFileSync(path.join(env.dir, "memory.jsonl"), originalLog, "utf8")
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const notifications: FakeNotification[] = []
+  const ctx = ctxWithUi(env.dir, { notifications })
+
+  await runMemoryCommand(pi, "delete project001", ctx)
+
+  assert.deepEqual(notifications.at(-1), { message: "Memory not found: project001", level: "warning" })
+  assert.equal(fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8"), originalLog)
+
+  await runMemoryCommand(pi, "delete project001 --all", ctx)
+
+  assert.deepEqual(notifications.at(-1), { message: "Deleted memory project001", level: "info" })
+})
+
+test("memory usage documents explicit all-scope review and delete flags", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const notifications: FakeNotification[] = []
+  const ctx = ctxWithUi(env.dir, { notifications })
+
+  await runMemoryCommand(pi, "help", ctx)
+
+  const usage = notifications.at(-1)?.message ?? ""
+  assert.match(usage, /delete <id> \[--all\]/u)
+  assert.match(usage, /review \[--all\]/u)
+})
+
 test("input ignores implicit durable statements", async () => {
   const env = makeTempEnv()
   cleanup = env.restore
