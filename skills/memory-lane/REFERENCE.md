@@ -28,9 +28,12 @@ All commands support `--json` for machine-readable output.
 memory-lane save "Use pnpm for package management" --category project
 memory-lane save "I prefer dark mode" --category preference
 memory-lane save "Project uses TypeScript 5.4" --category project
+memory-lane save "Released v1.2.3" --category project --kind project_checkpoint
 ```
 
-Categories: `preference`, `personal`, `project`
+Categories: `preference`, `personal`, `project`.
+Use `--kind` on `save` when the inferred kind should be overridden.
+Valid kinds: `preference`, `personal_context`, `project_fact`, `project_checkpoint`, `workflow_rule`, `decision`, `correction`, `procedure`, `session_summary`, `misc`.
 
 ### Suggest (pending review, or approved directly)
 
