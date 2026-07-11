@@ -88,11 +88,19 @@ function provenanceRef(memory: MemoryRecord): string | undefined {
   })
 }
 
-function triggerContextDigest(triggerContext: string | undefined): string | undefined {
-  if (!triggerContext) return undefined
-  const normalized = triggerContext.replace(/\s+/gu, " ").trim().slice(0, TRIGGER_CONTEXT_MAX_CHARS)
+function privateTextDigest(text: string | undefined): string | undefined {
+  if (!text) return undefined
+  const normalized = text.replace(/\s+/gu, " ").trim().slice(0, TRIGGER_CONTEXT_MAX_CHARS)
   if (!normalized) return undefined
   return digest(containsLikelySecret(normalized) ? "[redacted:secret]" : normalized)
+}
+
+function triggerContextDigest(triggerContext: string | undefined): string | undefined {
+  return privateTextDigest(triggerContext)
+}
+
+function reasonDigest(reason: string | undefined): string | undefined {
+  return privateTextDigest(reason)
 }
 
 function decision(eventType: LearningEventType, actor: LocalLearningEventInput["actor"], reason: string | undefined): LearningEventV1["decision"] {
@@ -106,11 +114,12 @@ function decision(eventType: LearningEventType, actor: LocalLearningEventInput["
   }
   const value = values[eventType]
   if (!value) return undefined
+  const redactedReasonDigest = reasonDigest(reason)
   return {
     type: value[0],
     actor: actor ?? "manual",
     reasonCode: value[1],
-    ...(reason ? { reasonDigest: digest(reason.slice(0, TRIGGER_CONTEXT_MAX_CHARS)) } : {}),
+    ...(redactedReasonDigest ? { reasonDigest: redactedReasonDigest } : {}),
   }
 }
 

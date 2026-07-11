@@ -169,6 +169,32 @@ test("suggestion capture is content-free, stable, and bounds trigger and reason 
   assert.match(events.find((event) => event.eventType === "suggestion-rejected")?.decision?.reasonDigest ?? "", /^[a-f0-9]{64}$/u)
 })
 
+test("secret-like reasons are redacted before digesting", () => {
+  const dir = tempDir()
+  const root = path.join(dir, "traces")
+  const configPath = path.join(dir, "config.json")
+  writeConfig(configPath, { capture: "on" })
+
+  for (const [index, reason] of ["API_KEY=secret-alpha-123", "password: secret-beta-456"].entries()) {
+    capture(root, configPath, {
+      eventType: "suggestion-rejected",
+      memory: memory({ id: `private-memory-id-${index}`, status: "rejected", updatedAt: `2026-07-10T11:0${index}:00.000Z` }),
+      previousMemory: memory({ id: `private-memory-id-${index}` }),
+      actingProjectKey: "owner-project",
+      actor: "cli",
+      reason,
+    })
+  }
+
+  const reasonDigests = readEvents(root).map((event) => event.decision?.reasonDigest)
+  assert.equal(reasonDigests.length, 2)
+  assert.equal(new Set(reasonDigests).size, 1)
+  assert.match(reasonDigests[0] ?? "", /^[a-f0-9]{64}$/u)
+  const bytes = eventFiles(root).map((file) => fs.readFileSync(file, "utf8")).join("\n")
+  assert.equal(bytes.includes("secret-alpha-123"), false)
+  assert.equal(bytes.includes("secret-beta-456"), false)
+})
+
 test("memory compaction cannot erase captured suggestion and terminal decision events", () => {
   const dir = tempDir()
   const root = path.join(dir, "traces")
