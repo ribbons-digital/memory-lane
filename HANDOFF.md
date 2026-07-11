@@ -2,10 +2,11 @@
 
 ## Current state
 
+- PR #190 merged issue #181 as main commit `14240fb`, making `memory-lane save --kind` persist explicit valid kinds, preserve omitted-kind inference, reject invalid kinds before writes, and list accepted kinds in CLI help.
 - PR #188 merged issue #178 as main commits `b2093df`, `4870a2f`, and `9d5422a`, isolating fallback MCP request scopes while preserving bundled per-path engine behavior.
 - PR #186 merged issue #177 as main commit `a7745af`, adding explicit `--all` maintenance mode to Pi review and delete while preserving scoped defaults.
 - PR #183 merged issue #145 as main commit `9b16939`, increasing new memory IDs to 128 random bits while preserving legacy short IDs and duplicate-ID folding semantics.
-- Current repo status: main is synced through PR #188; no issue #169 follow-up slice is active in this status branch.
+- Current repo status: main is synced through PR #190; no issue #169 follow-up slice is active in this status branch.
 - PR #182 scoped revision maintenance mutations to the current project and documented the revision command options.
 - PR #180 documented scoped review maintenance after PR #179 scoped review mutations to the current project.
 - PR #174 shipped issue #169 Slice B trace dataset conversion as a maintainer-only local runner for opt-in Slice A trace files.
@@ -30,8 +31,8 @@
 
 ## Current decision / next work
 
-The current repo state is main synced through PR #188, with this branch only reconciling status docs.
-PR #188 fixed issue #178 by serializing shared fallback-engine tool calls, restoring the exact startup scope before and after each request, and leaving supplied per-path engine factories unchanged.
+The current repo state is main synced through PR #190, with this branch only reconciling status docs.
+PR #190 fixed issue #181 by forwarding explicit save kinds through the CLI, preserving inference when omitted, rejecting invalid kinds before persistence, and documenting every accepted kind in CLI help.
 PR #183 fixed issue #145 by increasing new memory IDs to 128 random bits while preserving legacy short IDs and duplicate-ID folding semantics.
 PR #182 and PR #179 scoped revision and review maintenance mutations to the current project, with PR #180 documenting scoped review maintenance.
 PR #174 shipped issue #169 Slice B: `pnpm --filter @memory-lane/lifecycle eval:trace-dataset-converter -- --traces <dir> --out <file>` converts opt-in Slice A trace files into a deterministic smoke dataset for explicit core adapter use.
@@ -69,6 +70,7 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 
 ## Current verification evidence
 
+- PR #190 verification passed the explicit-kind end-to-end reproduction, focused and full CLI tests, workspace build and tests, Fable 5 completed-diff review with no blockers, and no-mistakes run `01KX85C9R19E0KKDT2M4BTGJ78` with `checks-passed` and no findings after the CodeRabbit help-value fix.
 - PR #188 verification passed the original registered-tool reproduction, focused fallback scope regressions, the full 60-test MCP suite, the full 430-test core suite, workspace build and tests, `git diff --check`, Fable 5 diff review with no blockers, and no-mistakes run `01KX7QS7515YEH2Q4CZK7EHP40` with outcome `passed` and no findings after restoring startup scope in a `finally` path.
 - PR #186 verification passed focused Pi scope regressions, the full 32-test Pi adapter suite, the Pi adapter build, `git diff --check`, Fable 5 diff review with no blockers, and no-mistakes run `01KX79Y2WT7H2VTRNGP3JHT2WE` with `checks-passed` and no findings.
 - PR #183 verification passed focused core storage tests, core and workspace builds, the full workspace test suite, `git diff --check`, Fable 5 diff review with no blockers, and no-mistakes run `01KX70XJNHAPD2X06C29RNPEVG` with `checks-passed` and no findings.
