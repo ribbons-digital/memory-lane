@@ -10,3 +10,5 @@ export { handlePreCompact, handleSessionEnd, hasExistingSessionSummaryProvenance
 export { captureLifecycleTrace, classifyTraceFidelity, purgeTraces, shouldCaptureLifecycleTrace, traceStatus, REDACTED_SECRET_CONTENT, TRACE_RETENTION_DAYS, TRACE_RETENTION_MAX_BYTES, TRACE_SCHEMA_VERSION } from "./trace-capture.js"
 export type { CaptureTraceInput, CaptureTraceOptions, PurgeTraceResult, TraceEvent, TraceHarness, TraceMessage, TraceRecordV1, TraceStatus } from "./trace-capture.js"
 export type { SessionEndCandidate } from "./session-end.js"
+export { createLearningEventSink, LEARNING_EVENT_SCHEMA_VERSION, TRIGGER_CONTEXT_MAX_CHARS } from "./learning-events.js"
+export type { LearningEventCaptureOptions, LearningEventType, LearningEventV1, LearningDecisionType, LearningReasonCode } from "./learning-events.js"

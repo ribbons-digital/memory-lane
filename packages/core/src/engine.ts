@@ -40,7 +40,7 @@ import type {
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig, HandoffMode,
   FreshnessStatus, ContinuityHintSummary, ContinuityReadModel, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
   SupersedeResult, ReplaceResult, MemoryRevisionActor, ResolvedContinuityBaseline, ContinuityBaselineDiagnostic,
-  LegacyProjectMigrationApplyResult, LegacyProjectMigrationPlan,
+  LegacyProjectMigrationApplyResult, LegacyProjectMigrationPlan, LocalLearningActor, LocalLearningEventInput, LocalLearningEventSink,
 } from "./types.js"
 
 function displayValue(value: unknown): string {
@@ -93,6 +93,7 @@ export class MemoryEngine {
   private readonly env: NodeJS.ProcessEnv | Record<string, string | undefined>
   private readonly pendingEmbeddings = new Set<Promise<void>>()
   private readonly pendingEmbeddingControllers = new Set<AbortController>()
+  private readonly learningEventSink?: LocalLearningEventSink
 
   constructor(opts?: MemoryEngineConfig) {
     const memoryPath = opts?.memoryPath ?? path.join(DEFAULT_DIR, "memory.jsonl")
@@ -104,6 +105,7 @@ export class MemoryEngine {
     this.hookDebugLogPath = opts?.hookDebugLogPath ?? defaultHookDebugLogPath()
     this.integrationPaths = opts?.integrationPaths
     this.env = opts?.env ?? process.env
+    this.learningEventSink = opts?.learningEventSink
     this.refreshScope()
 
     // Auto-compact on startup if dead weight exceeds threshold
@@ -111,6 +113,13 @@ export class MemoryEngine {
       this.storage.compact()
     }
   }
+
+  private emitLearningEvent(input: Omit<LocalLearningEventInput, "actingProjectKey">): void {
+    try {
+      this.learningEventSink?.({ ...input, actingProjectKey: this.scope?.key })
+    } catch { /* local learning capture is fail-open */ }
+  }
+
 
   private appendEmbedding(memory: MemoryRecord, vector: number[], profileName: string, model: string): void {
     this.storage.appendEmbedding({
@@ -317,6 +326,7 @@ export class MemoryEngine {
     this.storage.appendMemory(upgraded)
     this.invalidateEmbedding(dup.id, "updated")
     if (shouldAutoEmbed(upgraded, this.config.semantic, this.embProvider)) this.scheduleEmbedding(upgraded)
+    this.emitLearningEvent({ eventType: "suggestion-approved", memory: upgraded, previousMemory: dup, actor: "lifecycle", triggerContext: input.learningTriggerContext })
     return { status: "saved", memory: upgraded }
   }
 
@@ -328,6 +338,7 @@ export class MemoryEngine {
     const memory = createNewMemory(input, ctx, this.scope)
     this.storage.appendMemory(memory)
     if (shouldAutoEmbed(memory, this.config.semantic, this.embProvider)) this.scheduleEmbedding(memory)
+    this.emitLearningEvent({ eventType: "suggestion-created", memory, triggerContext: input.learningTriggerContext })
     return { status: "saved", memory }
   }
 
@@ -355,13 +366,19 @@ export class MemoryEngine {
   }
 
   /** Approve a pending memory by id. Respects project scope unless `all` is true. */
-  approve(id: string, opts?: { all?: boolean }): MemoryMutationResult | undefined {
+  approve(id: string, opts?: { all?: boolean; actor?: LocalLearningActor }): MemoryMutationResult | undefined {
     const mem = this.findScopedMemory(id, (memory) => memory.status !== "deleted", opts)
     if (!mem) return undefined
     const updated = clone(mem, { status: "approved" })
     this.storage.appendMemory(updated)
     this.invalidateEmbedding(id, "updated")
     if (shouldAutoEmbed(updated, this.config.semantic, this.embProvider)) this.scheduleEmbedding(updated)
+    this.emitLearningEvent({
+      eventType: mem.status === "rejected" ? "suggestion-reactivated" : "suggestion-approved",
+      memory: updated,
+      previousMemory: mem,
+      actor: opts?.actor ?? "manual",
+    })
     return this.mutationResultWithMirrorWarnings(updated)
   }
 
@@ -391,13 +408,19 @@ export class MemoryEngine {
   }
 
   /** Update an active approved or pending memory by id. Respects project scope unless `all` is true. */
-  update(id: string, patch: UpdateInput, opts?: { all?: boolean }): MemoryMutationResult | undefined {
+  update(id: string, patch: UpdateInput, opts?: { all?: boolean; actor?: LocalLearningActor }): MemoryMutationResult | undefined {
     const preview = this.buildUpdatePreview(id, patch, opts)
     if (!preview) return undefined
     const updated = preview.proposed
     this.storage.appendMemory(updated)
     this.invalidateEmbedding(id, "updated")
     if (shouldAutoEmbed(updated, this.config.semantic, this.embProvider)) this.scheduleEmbedding(updated)
+    if (preview.current.status !== "approved" && updated.status === "approved") {
+      this.emitLearningEvent({ eventType: "suggestion-approved", memory: updated, previousMemory: preview.current, actor: opts?.actor ?? patch.revisedBy ?? "manual", reason: patch.reason })
+    }
+    if (preview.current.kind !== "workflow_rule" && updated.kind === "workflow_rule") {
+      this.emitLearningEvent({ eventType: "agreement-recommendation-accepted", memory: updated, previousMemory: preview.current, actor: opts?.actor ?? patch.revisedBy ?? "manual", reason: patch.reason, recommendedAction: "update-kind-workflow-rule" })
+    }
     return this.mutationResultWithMirrorWarnings(updated)
   }
 
@@ -460,10 +483,18 @@ export class MemoryEngine {
     oldIds: string[],
     opts?: { reason?: string; revisedBy?: MemoryRevisionActor; dryRun?: boolean; all?: boolean },
   ): SupersedeResult {
+    const previousById = new Map(this.storage.listMemories().map((memory) => [memory.id, memory]))
     const preview = this.buildSupersedePreview(newId, oldIds, opts)
     if (opts?.dryRun) return preview
 
     this.appendMemoryRecords([preview.successor, ...preview.superseded])
+    for (const memory of preview.superseded) {
+      const previousMemory = previousById.get(memory.id)
+      this.emitLearningEvent({ eventType: "suggestion-superseded", memory, previousMemory, relatedMemory: preview.successor, actor: opts?.revisedBy ?? "manual", reason: opts?.reason })
+      if (memory.kind !== "workflow_rule" && preview.successor.kind === "workflow_rule") {
+        this.emitLearningEvent({ eventType: "agreement-recommendation-accepted", memory, previousMemory, relatedMemory: preview.successor, actor: opts?.revisedBy ?? "manual", reason: opts?.reason, recommendedAction: "supersede" })
+      }
+    }
     const mirrorWarnings = this.syncMirrorAndCollectWarnings()
     return mirrorWarnings.length ? { ...preview, mirrorWarnings } : preview
   }
@@ -529,27 +560,38 @@ export class MemoryEngine {
 
     this.appendMemoryRecords([successor, ...superseded])
     if (shouldAutoEmbed(successor, this.config.semantic, this.embProvider)) this.scheduleEmbedding(successor)
+    this.emitLearningEvent({ eventType: "suggestion-created", memory: successor })
+    for (const [index, memory] of superseded.entries()) {
+      const previousMemory = oldRecords[index]
+      this.emitLearningEvent({ eventType: "suggestion-replaced", memory, previousMemory, relatedMemory: successor, actor: input.revisedBy ?? "manual", reason: input.reason })
+      this.emitLearningEvent({ eventType: "suggestion-superseded", memory, previousMemory, relatedMemory: successor, actor: input.revisedBy ?? "manual", reason: input.reason })
+      if (memory.kind !== "workflow_rule" && successor.kind === "workflow_rule") {
+        this.emitLearningEvent({ eventType: "agreement-recommendation-accepted", memory, previousMemory, relatedMemory: successor, actor: input.revisedBy ?? "manual", reason: input.reason, recommendedAction: "replace" })
+      }
+    }
     const mirrorWarnings = this.syncMirrorAndCollectWarnings()
     return mirrorWarnings.length ? { ...result, mirrorWarnings } : result
   }
 
   /** Reject a memory by id. Respects project scope unless `all` is true. */
-  reject(id: string, opts?: { all?: boolean }): MemoryMutationResult | undefined {
+  reject(id: string, opts?: { all?: boolean; actor?: LocalLearningActor }): MemoryMutationResult | undefined {
     const mem = this.findScopedMemory(id, (memory) => memory.status !== "deleted", opts)
     if (!mem) return undefined
     const updated = clone(mem, { status: "rejected" })
     this.storage.appendMemory(updated)
     this.invalidateEmbedding(id, "deleted")
+    this.emitLearningEvent({ eventType: "suggestion-rejected", memory: updated, previousMemory: mem, actor: opts?.actor ?? "manual" })
     return this.mutationResultWithMirrorWarnings(updated)
   }
 
   /** Soft-delete a memory by id. Respects project scope unless `all` is true. */
-  delete(id: string, opts?: { all?: boolean }): MemoryMutationResult | undefined {
+  delete(id: string, opts?: { all?: boolean; actor?: LocalLearningActor }): MemoryMutationResult | undefined {
     const mem = this.findScopedMemory(id, (memory) => memory.status !== "deleted", opts)
     if (!mem) return undefined
     const updated = clone(mem, { status: "deleted" })
     this.storage.appendMemory(updated)
     this.invalidateEmbedding(id, "deleted")
+    this.emitLearningEvent({ eventType: "suggestion-deleted", memory: updated, previousMemory: mem, actor: opts?.actor ?? "manual" })
     return this.mutationResultWithMirrorWarnings(updated)
   }
 
@@ -883,6 +925,17 @@ export class MemoryEngine {
       obsidianMemoriesFolderExists: memories ? fs.existsSync(memories) : false,
       obsidianImportsFolderExists: imports ? fs.existsSync(imports) : false,
       obsidianWarnings: warnings,
+    }
+  }
+
+  recordSuggestionsShown(memories: MemoryRecord[], actor: LocalLearningActor = "manual"): void {
+    for (const memory of memories) this.emitLearningEvent({ eventType: "suggestion-shown", memory, actor })
+  }
+
+  recordAgreementRecommendationsShown(list: OperatingAgreementList, actor: LocalLearningActor = "manual"): void {
+    for (const selection of [...list.primary, ...list.relatedCandidates]) {
+      if (!selection.recommendedKind) continue
+      this.emitLearningEvent({ eventType: "agreement-recommendation-shown", memory: selection.memory, actor, recommendedAction: "update-kind-workflow-rule" })
     }
   }
 

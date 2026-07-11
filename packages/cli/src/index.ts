@@ -5,7 +5,7 @@ import * as path from "node:path"
 import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, deepMergeConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type WorkflowArea } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
-import { classifyPromptRoute, handleSessionEnd, createOpenAICompatibleProvider, purgeTraces, traceStatus, type TraceStatus } from "@memory-lane/lifecycle"
+import { classifyPromptRoute, createLearningEventSink, handleSessionEnd, createOpenAICompatibleProvider, purgeTraces, traceStatus, type TraceStatus } from "@memory-lane/lifecycle"
 import { runPiHookCommand } from "./pi-hook.js"
 import { handleMcp } from "./commands/mcp.js"
 import { handleInit } from "./commands/init.js"
@@ -149,6 +149,7 @@ function createEngine(paths: MemoryPaths | EngineStoragePaths, projPath?: string
     autoCompact: opts.autoCompact,
     configPath,
     embeddingProvider: createEmbeddingProvider(configPath),
+    learningEventSink: createLearningEventSink({ configPath, env: process.env }),
   })
   engine.refreshScope(projPath ?? process.cwd())
   return engine
@@ -251,7 +252,7 @@ function handleSearch(ctx: CliContext): void {
 
 function handleDelete(ctx: CliContext): void {
   const id = requireId(ctx, "delete")
-  const mem = ctx.engine.delete(id, { all: hasFlag(ctx.argv, "all") })
+  const mem = ctx.engine.delete(id, { all: hasFlag(ctx.argv, "all"), actor: "cli" })
   if (!mem) {
     console.log(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
@@ -261,7 +262,7 @@ function handleDelete(ctx: CliContext): void {
 
 function handleApprove(ctx: CliContext): void {
   const id = requireId(ctx, "approve")
-  const mem = ctx.engine.approve(id, { all: hasFlag(ctx.argv, "all") })
+  const mem = ctx.engine.approve(id, { all: hasFlag(ctx.argv, "all"), actor: "cli" })
   if (!mem) {
     console.log(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
@@ -271,7 +272,7 @@ function handleApprove(ctx: CliContext): void {
 
 function handleReject(ctx: CliContext): void {
   const id = requireId(ctx, "reject")
-  const mem = ctx.engine.reject(id, { all: hasFlag(ctx.argv, "all") })
+  const mem = ctx.engine.reject(id, { all: hasFlag(ctx.argv, "all"), actor: "cli" })
   if (!mem) {
     console.log(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
@@ -332,7 +333,7 @@ async function handleUpdate(ctx: CliContext): Promise<void> {
     console.log(formatUpdatePreview(preview, ctx.json))
     return
   }
-  const mem = ctx.engine.update(id, patch, { all: hasFlag(ctx.argv, "all") })
+  const mem = ctx.engine.update(id, patch, { all: hasFlag(ctx.argv, "all"), actor: "cli" })
   if (!mem) {
     console.log(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
@@ -406,6 +407,7 @@ function handleReview(ctx: CliContext): void {
     return true
   })
   const activeFilters = Object.fromEntries(Object.entries(filters).filter(([, value]) => Boolean(value)))
+  ctx.engine.recordSuggestionsShown(memories, "cli")
   console.log(formatReviewMemories(memories, ctx.json, {
     suspectMeta,
     includeApproved,
@@ -427,6 +429,7 @@ function handleAgreements(ctx: CliContext): void {
     limit: optionalNonNegativeInteger(ctx.argv, "limit"),
     relatedLimit: optionalNonNegativeInteger(ctx.argv, "related-limit"),
   })
+  ctx.engine.recordAgreementRecommendationsShown(result, "cli")
   console.log(formatOperatingAgreements(result, ctx.json))
 }
 

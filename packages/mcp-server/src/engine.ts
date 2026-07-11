@@ -5,6 +5,7 @@ import {
   type MemoryEngineConfig,
 } from "@memory-lane/core"
 import { loadPlugins, type BundledPluginModule, type LoadedPlugin } from "@memory-lane/plugin-api"
+import { createLearningEventSink } from "@memory-lane/lifecycle"
 
 export interface CreateMemoryLaneEngineOptions {
   cwd?: string
@@ -84,6 +85,7 @@ export async function createMemoryLaneEngine(options: CreateMemoryLaneEngineOpti
       configPath: paths.configPath,
       embeddingProvider: createEmbeddingProvider(paths.configPath, env),
       env,
+      learningEventSink: createLearningEventSink({ configPath: paths.configPath, env: env as NodeJS.ProcessEnv }),
     })
     engine.refreshScope(engineCwd)
     createdEngines.add(engine)
