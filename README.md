@@ -253,6 +253,7 @@ EOF
 Replace `/absolute/path/to/memory-lane` with your checkout path, then run `/reload` in pi. The timestamp query avoids stale module caches while iterating locally. Re-run `pnpm build` after changing Memory Lane source, then `/reload` pi again.
 
 The local checkout pi adapter provides manual `memory_save`, `memory_suggest`, `memory_continuity`, and `memory_recall` tools plus `/memory ...` commands, including `/memory continuity [query]`.
+Repo-local pi `/memory review` and `/memory delete <id>` stay scoped to the active project plus globals by default; add `--all` only for explicit cross-project maintenance.
 Release-style generated pi bridges expose the same continuity tool, proxy `/memory continuity ...` through the CLI, and use `memory-lane route --prompt <text> --json` for shared prompt-routing parity.
 It also injects project context through pi's `before_agent_start` event.
 Broad continuity prompts such as “what were we last working on?”, “where did we leave off?”, and “what's next?” route to canonical Memory Lane continuity (`memory-lane continuity --json`, or `memory-lane continuity --query ...` for topic-specific workstreams) before topic-specific recall, while ordinary targeted prompts continue to use bounded recall.
@@ -1131,7 +1132,10 @@ pi also writes memories through higher-signal lifecycle events:
 - `turn_end` - the last user and assistant messages are evaluated for memory-worthy candidates and strong completed-progress checkpoint evidence after a turn completes.
 - `tool_result` - successful shell workflow commands such as `pnpm test`, `pnpm build`, and `pnpm install` are captured as project workflow rules; successful release/merge commands may queue pending checkpoint candidates.
 
-Automatic writes skip secrets, transient imperatives, reviewer/subagent meta-prompts, and duplicates within a turn. Inferred checkpoint candidates stay pending until review; use `/memory review` in pi or the normal CLI/MCP review surfaces to approve or reject them. Set `MEMORY_LANE_DEBUG=1` to append privacy-safe debug records to `~/.memory-lane/pi-debug.jsonl` (no prompts or tool outputs are logged).
+Automatic writes skip secrets, transient imperatives, reviewer/subagent meta-prompts, and duplicates within a turn.
+Inferred checkpoint candidates stay pending until review; use `/memory review` in pi or the normal CLI/MCP review surfaces to approve or reject them.
+Repo-local pi `/memory review` and `/memory delete <id>` respect current-project visibility by default, return not-found behavior without memory text for out-of-scope ids, and require `--all` for deliberate cross-project review or delete.
+Set `MEMORY_LANE_DEBUG=1` to append privacy-safe debug records to `~/.memory-lane/pi-debug.jsonl` (no prompts or tool outputs are logged).
 
 For session summaries, use `/memory session-summary` in pi. The command reads the current conversation branch through pi's session manager, asks for interactive confirmation, sends the compact transcript to the configured `memory.sessionEndSummary` provider, and saves any result as a pending `session_summary` memory with pi `session_end` provenance. The native pi adapter and release-style generated pi bridge can also save pending pre-compact `session_summary` memories with pi `pre_compact` provenance from `session_before_compact` when `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`; they do not override pi's own compaction summary. Memory Lane does not automatically summarize pi sessions on `agent_end` or `session_shutdown`.
 
