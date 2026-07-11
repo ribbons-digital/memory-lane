@@ -302,6 +302,7 @@ test("fallback registered tool scope resets an omitted read to the startup proje
   const listTool = registeredTool(server, "memory_list")
 
   const projectBResult = memoriesEnvelopeSchema.parse(parseToolJson(await listTool.handler({ projectPath: projectB })))
+  assert.equal(engine.getProjectScope()?.key, "fallback-read-a")
   const startupResult = memoriesEnvelopeSchema.parse(parseToolJson(await listTool.handler({})))
 
   assert.deepEqual(projectBResult.data.memories.map((memory) => memory.text), ["Explicit project B read memory"])
@@ -387,6 +388,7 @@ test("fallback registered tool scope restores no scope after an explicit path", 
   const statusTool = registeredTool(server, "memory_status")
 
   const projectBResult = statusEnvelopeSchema.parse(parseToolJson(await statusTool.handler({ projectPath: projectB })))
+  assert.equal(engine.getProjectScope(), null)
   const unscopedResult = statusEnvelopeSchema.parse(parseToolJson(await statusTool.handler({})))
 
   assert.equal(projectBResult.data.status.projectScope, "fallback-none-b")
