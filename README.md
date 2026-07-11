@@ -443,7 +443,8 @@ with argument:
 /absolute/path/to/memory-lane/packages/mcp-server/dist/index.js
 ```
 
-Set the working directory to the project you want Memory Lane to scope against, for example `/absolute/path/to/your/project`.
+Set the working directory to the project you want Memory Lane to use as the startup project scope, for example `/absolute/path/to/your/project`.
+Explicit MCP `projectPath` calls are scoped only to that request and do not change the startup scope used by later omitted-path calls.
 
 End users do not need these manual development shims - `memory-lane init` installs release-style integrations automatically.
 
@@ -1073,7 +1074,10 @@ The MCP server exposes explicit tools only:
 - `memory_reject` - reject a memory by id within the current project scope; pass `all: true` only for cross-project maintenance
 - `memory_delete` - soft-delete a memory by id within the current project scope; pass `all: true` only for cross-project maintenance
 
-MCP review and mutations use global plus the requested `projectPath` by default. Without an active project scope they are global-only. Explicit `all: true` bypasses this boundary for administrative workflows; a refused cross-project id returns `not_found` without returning the target memory text.
+MCP tools use global plus the requested `projectPath` by default.
+When `projectPath` is omitted, they use the project scope captured when the MCP server started; if the server started without an active project scope, omitted-path calls are global-only.
+An explicit `projectPath` is scoped to that one tool call and does not change the scope used by later omitted-path reads or mutations.
+Explicit `all: true` bypasses this boundary for administrative workflows; a refused cross-project id returns `not_found` without returning the target memory text.
 
 Use `memory_continuity({ projectPath })` from MCP clients before answering continuity questions such as project resumption, last-worked-on, accomplished, next-action, or project-status prompts. Use `memory_continuity({ projectPath, query: "resume building X" })` when the user asks for a specific workstream. Prefer it over `memory_recall` for continuity; `memory_recall` is a topic-specific follow-up after continuity inspection, not an authority by itself.
 

@@ -85,5 +85,6 @@ Legacy project-memory diagnostics are read-only and may include bounded sample p
 Use `memory_review` to list pending memories, then `memory_approve` or `memory_reject` with a memory `id` to finish the review loop. Use `memory_delete` with a memory `id` to soft-delete an existing memory.
 
 Each tool accepts optional `projectPath` where project-scoped behavior should be resolved from a specific directory.
-If omitted, Memory Lane uses the MCP server process current working directory.
+If omitted, Memory Lane uses the project scope captured when the MCP server started, usually from the server process current working directory.
+Explicit `projectPath` calls are isolated to that request and do not change the startup scope used by later omitted-path calls.
 With default storage, write tools use `projectPath` to route new project-scoped memories to that project's `.memory-lane/`, while read tools use it to merge that project store with the home store without creating fallback storage.
