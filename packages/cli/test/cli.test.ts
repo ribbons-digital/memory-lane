@@ -3600,7 +3600,7 @@ describe("CLI integration", () => {
   it("mcp, continuity, and save kind commands are documented in help output", () => {
     const result = runProcess(["help"])
     assert.equal(result.status, 0)
-    assert.match(result.stdout, /save <text> .*\[--kind <kind>\]/u)
+    assert.match(result.stdout, /save <text> .*\[--kind preference\|personal_context\|project_fact\|project_checkpoint\|workflow_rule\|decision\|correction\|procedure\|session_summary\|misc\]/u)
     assert.match(result.stdout, /continuity \[--json\]\s+Canonical continuity read model for resumption\/status questions/u)
     assert.match(result.stdout, /mcp\s+Run the bundled Memory Lane MCP server over stdio/)
   })
