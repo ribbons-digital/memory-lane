@@ -28,6 +28,7 @@ export interface LearningEventV1 {
   eventId: string
   eventType: LearningEventType
   occurredAt: string
+  occurrenceIndex?: number
   suggestionId: string
   suggestionType: NonNullable<MemoryRecord["kind"]>
   subjectRef: string
@@ -135,12 +136,8 @@ function recommendationId(input: LocalLearningEventInput, subjectRef: string, ac
   })
 }
 
-function eventIdFor(event: LearningEventV1, duplicateIndex?: number): string {
-  return digest({
-    ...event,
-    eventId: undefined,
-    ...(duplicateIndex === undefined ? {} : { duplicateIndex }),
-  })
+function eventIdFor(event: LearningEventV1): string {
+  return digest({ ...event, eventId: undefined })
 }
 
 function writeEventFile(directory: string, event: LearningEventV1): void {
@@ -150,8 +147,10 @@ function writeEventFile(directory: string, event: LearningEventV1): void {
     return
   }
 
-  for (let duplicateIndex: number | undefined; ; duplicateIndex = duplicateIndex === undefined ? 1 : duplicateIndex + 1) {
-    event.eventId = eventIdFor(event, duplicateIndex)
+  for (let occurrenceIndex: number | undefined; ; occurrenceIndex = occurrenceIndex === undefined ? 1 : occurrenceIndex + 1) {
+    if (occurrenceIndex === undefined) delete event.occurrenceIndex
+    else event.occurrenceIndex = occurrenceIndex
+    event.eventId = eventIdFor(event)
     try {
       fs.writeFileSync(path.join(directory, `${event.eventId}.json`), JSON.stringify(event, null, 2) + "\n", { encoding: "utf8", flag: "wx" })
       return

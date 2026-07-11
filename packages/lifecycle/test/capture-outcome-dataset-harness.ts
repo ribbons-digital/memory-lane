@@ -64,6 +64,7 @@ interface LearningEventV1 {
   eventId: string
   eventType: EventType
   occurredAt: string
+  occurrenceIndex?: number
   suggestionId: string
   suggestionType: SuggestionType
   subjectRef: string
@@ -337,7 +338,7 @@ function parseEvent(filePath: string): LearningEventV1 {
   if (!isObject(parsed)) throw new Error(`${filePath} must contain an event object`)
   if (parsed.schemaVersion !== 1) throw new Error(`${filePath} uses unsupported event schemaVersion ${String(parsed.schemaVersion)}`)
   const allowedKeys: Record<string, true> = {
-    schemaVersion: true, eventId: true, eventType: true, occurredAt: true, suggestionId: true, suggestionType: true,
+    schemaVersion: true, eventId: true, eventType: true, occurredAt: true, occurrenceIndex: true, suggestionId: true, suggestionType: true,
     subjectRef: true, projectRef: true, source: true, initialReviewState: true, provenanceRef: true, triggerContextDigest: true,
     recommendationId: true, recommendedAction: true, decision: true, relatedSuggestionId: true,
   }
@@ -347,6 +348,10 @@ function parseEvent(filePath: string): LearningEventV1 {
   const initialValue = optionalString(parsed, "initialReviewState", filePath)
   if (sourceValue && !SOURCES.includes(sourceValue as SuggestionSource)) throw new Error(`${filePath} has invalid source`)
   if (initialValue && !INITIAL_STATES.includes(initialValue as InitialReviewState)) throw new Error(`${filePath} has invalid initialReviewState`)
+  const occurrenceIndex = parsed.occurrenceIndex
+  if (occurrenceIndex !== undefined && (!Number.isInteger(occurrenceIndex) || Number(occurrenceIndex) < 1)) {
+    throw new Error(`${filePath} has invalid occurrenceIndex`)
+  }
   const recommendedAction = parseRecommendedAction(parsed.recommendedAction, filePath)
   const eventDecision = parseDecision(parsed.decision, filePath)
   const event: LearningEventV1 = {
@@ -354,6 +359,7 @@ function parseEvent(filePath: string): LearningEventV1 {
     eventId: digestString(parsed, "eventId", filePath)!,
     eventType: knownString(parsed, "eventType", EVENT_TYPES, filePath),
     occurredAt: canonicalTimestamp(parsed.occurredAt, `${filePath} occurredAt`),
+    ...(occurrenceIndex === undefined ? {} : { occurrenceIndex: Number(occurrenceIndex) }),
     suggestionId: digestString(parsed, "suggestionId", filePath)!,
     suggestionType: knownString(parsed, "suggestionType", SUGGESTION_TYPES, filePath),
     subjectRef: digestString(parsed, "subjectRef", filePath)!,
@@ -368,6 +374,9 @@ function parseEvent(filePath: string): LearningEventV1 {
     ...(digestString(parsed, "relatedSuggestionId", filePath, true) ? { relatedSuggestionId: String(parsed.relatedSuggestionId) } : {}),
   }
   if (event.eventId !== digest({ ...event, eventId: undefined })) throw new Error(`${filePath} has content-mismatched eventId`)
+  if (event.occurrenceIndex !== undefined && !event.eventType.endsWith("-shown")) {
+    throw new Error(`${filePath} has occurrenceIndex on ${event.eventType}`)
+  }
   assertConditionalEventFields(event, filePath)
   return event
 }

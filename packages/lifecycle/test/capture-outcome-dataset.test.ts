@@ -537,7 +537,7 @@ test("captured repeated agreement display has one denominator identity and one m
   }
 
   capture(traceRoot, configPath, shown, "2026-07-01T00:00:00.000Z")
-  capture(traceRoot, configPath, shown, "2026-07-02T00:00:00.000Z")
+  capture(traceRoot, configPath, shown, "2026-07-01T00:00:00.000Z")
   capture(traceRoot, configPath, {
     eventType: "agreement-recommendation-accepted",
     memory: updated,
