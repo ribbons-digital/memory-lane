@@ -564,7 +564,8 @@ After review, apply the plan with `memory-lane migrate project-local --apply-pla
 ## CLI Commands
 
 ```
-memory-lane save <text>           Save an approved memory
+memory-lane save <text> [--kind <kind>]
+                                  Save an approved memory with optional explicit kind
 memory-lane suggest <text>        Queue a pending suggestion for review
 memory-lane recall [query]        Recall memories (semantic or lexical)
 memory-lane show|get <id> [--all] Show one memory by exact id, including descriptor metadata when present
@@ -607,6 +608,7 @@ memory-lane obsidian ...          Manage optional Obsidian mirror/import workflo
 ```
 
 All commands support `--json` for machine-readable output and `--project <path>` to set the project scope.
+`memory-lane save` accepts `--kind` to override text-based kind inference; valid values are `preference`, `personal_context`, `project_fact`, `project_checkpoint`, `workflow_rule`, `decision`, `correction`, `procedure`, `session_summary`, and `misc`.
 
 ### Freshness metadata
 

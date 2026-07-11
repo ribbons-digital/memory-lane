@@ -987,7 +987,7 @@ export function usage(pluginCommands: PluginUsageCommand[] = []): string {
   return `memory-lane <command> [args...] [--json] [--project <path>]
 
 Commands:
-  save <text> [--scope global|project] [--category preference|personal|project] [--status approved|pending]
+  save <text> [--scope global|project] [--category preference|personal|project] [--kind preference|personal_context|project_fact|project_checkpoint|workflow_rule|decision|correction|procedure|session_summary|misc] [--status approved|pending]
   suggest <text> [--scope global|project] [--category preference|personal|project]
   recall [query] [--top-k 8]
   show|get <id> [--all]

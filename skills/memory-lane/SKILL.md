@@ -52,6 +52,7 @@ All commands support `--json` when machine-readable output is useful.
 ```bash
 # Save / suggest
 memory-lane save "Use pnpm for package management" --category project
+memory-lane save "Released v1.2.3" --category project --kind project_checkpoint
 memory-lane suggest "Consider adding CI pipeline for linting" --category project
 memory-lane suggest "User prefers pnpm" --category preference --status approved
 
@@ -92,6 +93,7 @@ memory-lane uninstall --yes
 memory-lane mcp
 ```
 
+Use `--kind` on `memory-lane save` when an explicit memory kind should override inference.
 Detailed command/reference material lives in `skills/memory-lane/REFERENCE.md`. Read that file only when the compact guidance above is insufficient.
 
 ## Revision and cleanup rules

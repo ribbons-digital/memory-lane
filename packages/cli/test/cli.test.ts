@@ -7,7 +7,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
-import { MemoryEngine, type ContinuityReadModel, type MemoryRecord } from "@memory-lane/core"
+import { MemoryEngine, type ContinuityMemoryPreview, type ContinuityReadModel, type MemoryRecord } from "@memory-lane/core"
 import { formatContinuityReadModel, formatMemoryGet } from "../src/formatters.ts"
 import { runPiHookCommand } from "../src/pi-hook.ts"
 
@@ -428,6 +428,77 @@ describe("CLI integration", () => {
     run(["save", "use pnpm"], env)
     const list = run(["list"], env)
     assert.ok(list.includes("use pnpm"))
+  })
+
+  it("save --kind project_checkpoint persists and reports the explicit kind in JSON", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const payload = JSON.parse(run([
+      "save", "Released v1.2.3 after completing the migration",
+      "--kind", "project_checkpoint",
+      "--json",
+    ], env))
+    const persisted = JSON.parse(fs.readFileSync(memFile, "utf8").trim())
+
+    assert.equal(payload.data.saved.kind, "project_checkpoint")
+    assert.equal(persisted.kind, "project_checkpoint")
+  })
+
+  it("save preserves an explicit workflow_rule kind in human list output", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+
+    run([
+      "save", "Always run focused tests before committing",
+      "--category", "preference",
+      "--scope", "global",
+      "--kind", "workflow_rule",
+    ], env)
+    const persisted = JSON.parse(fs.readFileSync(memFile, "utf8").trim())
+    const list = run(["list"], env)
+
+    assert.equal(persisted.kind, "workflow_rule")
+    assert.match(list, /\(global\/preference\/workflow_rule\).*Always run focused tests before committing/u)
+  })
+
+  it("save without --kind retains text-based kind inference", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const payload = JSON.parse(run([
+      "save", "Checkpoint: migration completed successfully",
+      "--category", "project",
+      "--json",
+    ], env))
+    const persisted = JSON.parse(fs.readFileSync(memFile, "utf8").trim())
+
+    assert.equal(payload.data.saved.kind, "project_checkpoint")
+    assert.equal(persisted.kind, "project_checkpoint")
+  })
+
+  it("save rejects an invalid --kind without persisting a record", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const result = runProcess(["save", "Invalid kind must not persist", "--kind", "not_a_kind", "--json"], { env })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout + result.stderr, /Invalid kind: not_a_kind/u)
+    assert.equal(fs.existsSync(memFile) ? fs.readFileSync(memFile, "utf8") : "", "")
   })
 
   it("save allows long branch-like tokens without secret context", () => {
@@ -2199,14 +2270,24 @@ describe("CLI integration", () => {
   })
 
   it("continuity human output skips operating guidance already rendered elsewhere", () => {
+    const preview = (id: string, text: string): ContinuityMemoryPreview => ({
+      id,
+      preview: text,
+      status: "approved",
+      category: "project",
+      scope: { type: "project", key: "manual-model" },
+      source: "manual",
+      createdAt: "2026-06-22T00:00:00.000Z",
+      updatedAt: "2026-06-22T00:00:00.000Z",
+    })
     const model: ContinuityReadModel = {
       projectScope: "manual-model",
       generatedAt: "2026-06-22T00:00:00.000Z",
       status: { visibleApprovedCount: 2, pendingReviewCount: 0, pendingContinuityCount: 0 },
-      latestApproved: { project: { id: "procedure", preview: "Run review before implementation." } },
+      latestApproved: { project: preview("procedure", "Run review before implementation.") },
       operatingGuidance: [
-        { id: "procedure", preview: "Run review before implementation." },
-        { id: "followup", preview: "Check CI before merge." },
+        preview("procedure", "Run review before implementation."),
+        preview("followup", "Check CI before merge."),
       ],
       pendingContinuity: [],
       freshness: {
@@ -3526,9 +3607,10 @@ describe("CLI integration", () => {
     assert.equal(list.data.memories[0].text, "Valid memory")
   })
 
-  it("mcp and continuity commands are documented in help output", () => {
+  it("mcp, continuity, and save kind commands are documented in help output", () => {
     const result = runProcess(["help"])
     assert.equal(result.status, 0)
+    assert.match(result.stdout, /save <text> .*\[--kind preference\|personal_context\|project_fact\|project_checkpoint\|workflow_rule\|decision\|correction\|procedure\|session_summary\|misc\]/u)
     assert.match(result.stdout, /continuity \[--json\]\s+Canonical continuity read model for resumption\/status questions/u)
     assert.match(result.stdout, /mcp\s+Run the bundled Memory Lane MCP server over stdio/)
   })
