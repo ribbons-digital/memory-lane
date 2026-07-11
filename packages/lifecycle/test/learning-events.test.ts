@@ -208,7 +208,7 @@ test("repeated agreement display keeps one recommendation identity until the sub
   }
 
   capture(root, configPath, shown, "2026-07-10T12:00:00.000Z")
-  capture(root, configPath, shown, "2026-07-11T12:00:00.000Z")
+  capture(root, configPath, shown, "2026-07-10T12:00:00.000Z")
   capture(root, configPath, { ...shown, memory: memory({ updatedAt: "2026-07-12T12:00:00.000Z" }) }, "2026-07-12T12:00:00.000Z")
 
   const events = readEvents(root)

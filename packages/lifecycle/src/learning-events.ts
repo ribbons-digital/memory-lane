@@ -135,6 +135,32 @@ function recommendationId(input: LocalLearningEventInput, subjectRef: string, ac
   })
 }
 
+function eventIdFor(event: LearningEventV1, duplicateIndex?: number): string {
+  return digest({
+    ...event,
+    eventId: undefined,
+    ...(duplicateIndex === undefined ? {} : { duplicateIndex }),
+  })
+}
+
+function writeEventFile(directory: string, event: LearningEventV1): void {
+  if (!event.eventType.endsWith("-shown")) {
+    event.eventId = eventIdFor(event)
+    fs.writeFileSync(path.join(directory, `${event.eventId}.json`), JSON.stringify(event, null, 2) + "\n", "utf8")
+    return
+  }
+
+  for (let duplicateIndex: number | undefined; ; duplicateIndex = duplicateIndex === undefined ? 1 : duplicateIndex + 1) {
+    event.eventId = eventIdFor(event, duplicateIndex)
+    try {
+      fs.writeFileSync(path.join(directory, `${event.eventId}.json`), JSON.stringify(event, null, 2) + "\n", { encoding: "utf8", flag: "wx" })
+      return
+    } catch (error) {
+      if (!error || typeof error !== "object" || (error as NodeJS.ErrnoException).code !== "EEXIST") throw error
+    }
+  }
+}
+
 /**
  * Create a fail-open sink for opt-in, content-free local learning events.
  * The sink writes only hashed ids, digests, timestamps, enums, and metadata needed for local outcome analysis.
@@ -187,10 +213,8 @@ export function createLearningEventSink(options: LearningEventCaptureOptions = {
         ...(eventDecision ? { decision: eventDecision } : {}),
         ...(input.relatedMemory ? { relatedSuggestionId: digest({ suggestionId: input.relatedMemory.id }) } : {}),
       }
-      event.eventId = digest({ ...event, eventId: undefined })
-
       fs.mkdirSync(directory, { recursive: true })
-      fs.writeFileSync(path.join(directory, `${event.eventId}.json`), JSON.stringify(event, null, 2) + "\n", "utf8")
+      writeEventFile(directory, event)
       if (!retentionEnforced) {
         retentionEnforced = true
         enforceLocalLearningRetention(root, now)
