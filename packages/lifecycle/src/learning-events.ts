@@ -164,6 +164,7 @@ function writeEventFile(directory: string, event: LearningEventV1): void {
 /**
  * Create a fail-open sink for opt-in, content-free local learning events.
  * The sink writes only hashed ids, digests, timestamps, enums, and metadata needed for local outcome analysis.
+ * It caches config for the sink lifetime and enforces local learning retention at most once per sink.
  */
 export function createLearningEventSink(options: LearningEventCaptureOptions = {}): LocalLearningEventSink {
   let config: SemanticMemoryConfig | undefined

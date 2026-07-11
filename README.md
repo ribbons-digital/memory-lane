@@ -218,11 +218,11 @@ pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset /path/to/lon
 ```
 
 You can also set `MEMORY_LANE_LONG_MEMORY_SMOKE_DATASET=/path/to/longmemeval-smoke.json` instead of passing `--dataset`.
+The adapter accepts a tiny LongMemEval-compatible smoke subset with `question_id`, `haystack_session_ids`, `haystack_sessions`, optional `haystack_dates`, `answer_session_ids`, and `_abs` abstention records; it does not download data, call a model, use a judge, commit external datasets, or change production retrieval/lifecycle behavior.
+Its stable JSON report uses deterministic retrieval session-id recall, maps categories into the test-only benchmark taxonomy, skips `_abs` abstention records into `abstentionResults`, reports recall misses as metrics, and treats malformed evidence-session mappings as zero-tolerance adapter failures.
 
 The capture-outcome dataset exporter is a maintainer eval tool for local learning events.
 It requires explicit `--events`, canonical `--as-of`, and `--out` paths, accepts optional `--home-store`, `--project-store`, and `--traces` supporting inputs, writes atomically, rejects symlinked or overlapping input/output paths, emits no raw content, distinguishes unresolved and 30-day expired-unacted agreement recommendations, and reports right-censored suggestion survival metrics instead of inferring inactivity as intent.
-The adapter accepts a tiny LongMemEval-compatible smoke subset with `question_id`, `haystack_session_ids`, `haystack_sessions`, optional `haystack_dates`, `answer_session_ids`, and `_abs` abstention records; it does not download data, call a model, use a judge, commit external datasets, or change production retrieval/lifecycle behavior.
-Its stable JSON report uses deterministic retrieval session-id recall, maps categories into the test-only benchmark taxonomy, skips `_abs` abstention records into `abstentionResults`, reports recall misses as metrics, and treats malformed evidence-session mappings as zero-tolerance adapter failures.
 
 Lifecycle evals live in `@memory-lane/lifecycle`:
 
@@ -925,7 +925,10 @@ Values:
 Local learning is opt-in and disabled unless `learning.capture` is set to `"on"`.
 The init wizard asks for this consent once and writes either `"on"` or `"off"` to the config.
 When enabled, Memory Lane records local, content-free learning files under `~/.memory-lane/traces` by default.
-Captured lifecycle traces are redacted, and capture-outcome events store only schema versions, timestamps, event enums, hashed ids, digests, source/kind metadata, actor/reason enums, recommendation metadata, and supporting-evidence flags.
+Captured lifecycle traces are redacted, and local learning events store only schema versions, timestamps, event enums, hashed ids, digests, source/kind metadata, actor/reason enums, and recommendation metadata.
+The hashed fields are suggestion ids, subject refs, project refs, provenance refs, trigger-context digests, reason digests, recommendation ids, and related suggestion ids.
+Source, suggestion kind, event type, decision type, actor, reason code, recommended action, and initial review state stay as enums for local analysis.
+`initialReviewState` appears only on `suggestion-created` events.
 They do not store raw memory text, prompts, transcripts, hook payloads, tool inputs, tool outputs, or secrets.
 
 ```json
@@ -1093,6 +1096,7 @@ const pending = engine.list("pending")
 
 // Optional content-free local learning exposure events for custom review UIs.
 engine.recordSuggestionsShown(pending, "manual")
+engine.recordAgreementRecommendationsShown(engine.operatingAgreements(), "manual")
 ```
 
 ## MCP Server
