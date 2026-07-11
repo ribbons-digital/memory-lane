@@ -200,6 +200,7 @@ function handleSave(ctx: CliContext): void {
     text,
     scopeType: flag(ctx.argv, "scope") as any,
     category: flag(ctx.argv, "category") as any,
+    kind: flag(ctx.argv, "kind") as any,
     status: (flag(ctx.argv, "status") as any) ?? "approved",
     freshness: optionalFreshness(ctx.argv),
   })

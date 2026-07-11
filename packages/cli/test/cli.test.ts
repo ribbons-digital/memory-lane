@@ -430,6 +430,77 @@ describe("CLI integration", () => {
     assert.ok(list.includes("use pnpm"))
   })
 
+  it("save --kind project_checkpoint persists and reports the explicit kind in JSON", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const payload = JSON.parse(run([
+      "save", "Released v1.2.3 after completing the migration",
+      "--kind", "project_checkpoint",
+      "--json",
+    ], env))
+    const persisted = JSON.parse(fs.readFileSync(memFile, "utf8").trim())
+
+    assert.equal(payload.data.saved.kind, "project_checkpoint")
+    assert.equal(persisted.kind, "project_checkpoint")
+  })
+
+  it("save preserves an explicit workflow_rule kind in human list output", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+
+    run([
+      "save", "Always run focused tests before committing",
+      "--category", "preference",
+      "--scope", "global",
+      "--kind", "workflow_rule",
+    ], env)
+    const persisted = JSON.parse(fs.readFileSync(memFile, "utf8").trim())
+    const list = run(["list"], env)
+
+    assert.equal(persisted.kind, "workflow_rule")
+    assert.match(list, /\(global\/preference\/workflow_rule\).*Always run focused tests before committing/u)
+  })
+
+  it("save without --kind retains text-based kind inference", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const payload = JSON.parse(run([
+      "save", "Checkpoint: migration completed successfully",
+      "--category", "project",
+      "--json",
+    ], env))
+    const persisted = JSON.parse(fs.readFileSync(memFile, "utf8").trim())
+
+    assert.equal(payload.data.saved.kind, "project_checkpoint")
+    assert.equal(persisted.kind, "project_checkpoint")
+  })
+
+  it("save rejects an invalid --kind without persisting a record", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const result = runProcess(["save", "Invalid kind must not persist", "--kind", "not_a_kind", "--json"], { env })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout + result.stderr, /Invalid kind: not_a_kind/u)
+    assert.equal(fs.existsSync(memFile) ? fs.readFileSync(memFile, "utf8") : "", "")
+  })
+
   it("save allows long branch-like tokens without secret context", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,
