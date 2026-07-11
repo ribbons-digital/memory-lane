@@ -3597,9 +3597,10 @@ describe("CLI integration", () => {
     assert.equal(list.data.memories[0].text, "Valid memory")
   })
 
-  it("mcp and continuity commands are documented in help output", () => {
+  it("mcp, continuity, and save kind commands are documented in help output", () => {
     const result = runProcess(["help"])
     assert.equal(result.status, 0)
+    assert.match(result.stdout, /save <text> .*\[--kind <kind>\]/u)
     assert.match(result.stdout, /continuity \[--json\]\s+Canonical continuity read model for resumption\/status questions/u)
     assert.match(result.stdout, /mcp\s+Run the bundled Memory Lane MCP server over stdio/)
   })
