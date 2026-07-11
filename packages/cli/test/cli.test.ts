@@ -7,7 +7,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
-import { MemoryEngine, type ContinuityReadModel, type MemoryRecord } from "@memory-lane/core"
+import { MemoryEngine, type ContinuityMemoryPreview, type ContinuityReadModel, type MemoryRecord } from "@memory-lane/core"
 import { formatContinuityReadModel, formatMemoryGet } from "../src/formatters.ts"
 import { runPiHookCommand } from "../src/pi-hook.ts"
 
@@ -2270,14 +2270,24 @@ describe("CLI integration", () => {
   })
 
   it("continuity human output skips operating guidance already rendered elsewhere", () => {
+    const preview = (id: string, text: string): ContinuityMemoryPreview => ({
+      id,
+      preview: text,
+      status: "approved",
+      category: "project",
+      scope: { type: "project", key: "manual-model" },
+      source: "manual",
+      createdAt: "2026-06-22T00:00:00.000Z",
+      updatedAt: "2026-06-22T00:00:00.000Z",
+    })
     const model: ContinuityReadModel = {
       projectScope: "manual-model",
       generatedAt: "2026-06-22T00:00:00.000Z",
       status: { visibleApprovedCount: 2, pendingReviewCount: 0, pendingContinuityCount: 0 },
-      latestApproved: { project: { id: "procedure", preview: "Run review before implementation." } },
+      latestApproved: { project: preview("procedure", "Run review before implementation.") },
       operatingGuidance: [
-        { id: "procedure", preview: "Run review before implementation." },
-        { id: "followup", preview: "Check CI before merge." },
+        preview("procedure", "Run review before implementation."),
+        preview("followup", "Check CI before merge."),
       ],
       pendingContinuity: [],
       freshness: {
