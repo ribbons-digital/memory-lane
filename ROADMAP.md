@@ -29,13 +29,14 @@ Keep it safe to read wholesale in fresh sessions.
 Latest known release: `v0.2.47` from main commit `28e5961`, after PR #132 fixed compiled binary and install-manifest version metadata.
 Release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMORY_LANE_VERSION=v0.2.47 pnpm build:binary`, `pnpm smoke:binary`, GitHub Actions release run `28768281598`, and a downloaded release-asset `status --json` version check.
 
-Main is synced through PR #186, which fixed issue #177 by adding explicit `--all` support to Pi review and delete while preserving scoped defaults and no-text-leak refusal behavior.
+Main is synced through PR #188, which fixed issue #178 by isolating shared fallback MCP request scopes across sequential and concurrent calls while preserving bundled per-path engine behavior.
 PR #174 shipped issue #169 Slice B as a maintainer-only lifecycle runner that converts opt-in Slice A trace files into a deterministic `schemaVersion: 1` LongMemEval-compatible smoke dataset for explicit core adapter use.
 PR #179 and PR #182 scoped review and revision maintenance mutations to the current project, with PR #180 documenting scoped review maintenance.
 The next issue #169 follow-up slice still requires separate user approval.
 
 Recent shipped work:
 
+- PR #188 fixed issue #178 by serializing fallback MCP tool calls, restoring startup scope before and after each request, and adding registered read, mutation, interleaving, and null-scope regressions.
 - PR #186 fixed issue #177 by adding explicit cross-project Pi review and delete maintenance through `--all`.
 - PR #183 fixed issue #145 by increasing new memory IDs from 32 to 128 random bits while preserving legacy IDs and duplicate-ID folding semantics.
 - PR #182 scoped revision maintenance mutations to the current project.
