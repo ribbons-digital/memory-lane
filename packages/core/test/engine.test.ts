@@ -95,6 +95,17 @@ describe("MemoryEngine", () => {
     return thrown
   }
 
+  it("clears an active project scope when refreshScope receives null", () => {
+    const e = engine()
+    const { projectA } = projectScopes()
+
+    e.refreshScope(projectA)
+    assert.equal(e.getProjectScope()?.key, "scope-project-a")
+
+    e.refreshScope(null)
+    assert.equal(e.getProjectScope(), null)
+  })
+
   it("rejects empty text", () => {
     const e = engine()
     const r = e.save({ text: "" })
