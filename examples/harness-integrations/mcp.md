@@ -82,7 +82,9 @@ The client should call `memory_continuity` before `memory_recall` for broad prio
 It can call `memory_status` to inspect counts, project scope, semantic status, storage/config paths, legacy project-memory diagnostics, and integration diagnostics without modifying memory.
 Legacy project-memory diagnostics are read-only and may include bounded sample previews when legacy home-stored project memories exist.
 
-Use `memory_review` to list pending memories, then `memory_approve` or `memory_reject` with a memory `id` to finish the review loop. Use `memory_delete` with a memory `id` to soft-delete an existing memory.
+Use `memory_review` to list pending memories, then `memory_approve` or `memory_reject` with a memory `id` to finish the review loop.
+Use `memory_delete` with a memory `id` to soft-delete an existing memory.
+When opt-in local learning capture is enabled, these review and mutation tools emit content-free exposure or outcome events with hashed ids, digests, event enums, and actor metadata, never memory text.
 
 Each tool accepts optional `projectPath` where project-scoped behavior should be resolved from a specific directory.
 If omitted, Memory Lane uses the project scope captured when the MCP server started, usually from the server process current working directory.

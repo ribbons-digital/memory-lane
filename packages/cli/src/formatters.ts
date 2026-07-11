@@ -1018,7 +1018,7 @@ Commands:
   reindex [--force]
   status [--since <ISO timestamp>]
   tuneup [purge] [--json]
-                  Review local learning state or purge captured traces
+                  Review local learning state or purge local learning captures
   init [--yes|--recommended|--all|--list|--only <integrations>] [--project]
                   Run the first-time setup wizard; --only accepts comma-separated harnesses
   init --project-local [--project <path>]

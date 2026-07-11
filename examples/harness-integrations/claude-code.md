@@ -161,7 +161,11 @@ Explicit `MEMORY_LANE_FILE`, `MEMORY_LANE_EMBEDDINGS_FILE`, and `MEMORY_LANE_CON
 
 ## Privacy and review
 
-Memory Lane inspects prompts, bounded transcript tails, and bounded tool-output previews locally. It does not save raw transcripts, hook payloads, prompts, tool inputs, or full tool outputs. Secret detection runs before save and before injection.
+Memory Lane inspects prompts, bounded transcript tails, and bounded tool-output previews locally.
+It does not save raw transcripts, hook payloads, prompts, tool inputs, or full tool outputs.
+Secret detection runs before save and before injection.
+If opt-in local learning is enabled with `learning.capture: "on"`, Memory Lane may also write content-free trace and review outcome files under the local learning data root.
+Those files contain redacted traces or hashed ids, digests, timestamps, event enums, and review metadata, not raw memory text or prompt content.
 
 Review pending inferred memories with:
 

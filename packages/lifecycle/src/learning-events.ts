@@ -48,6 +48,7 @@ export interface LearningEventV1 {
 }
 
 export interface LearningEventCaptureOptions {
+  /** Config path used to read opt-in learning.capture and excluded project keys. */
   configPath?: string
   env?: NodeJS.ProcessEnv
   traceRoot?: string
@@ -127,6 +128,10 @@ function recommendationId(input: LocalLearningEventInput, subjectRef: string, ac
   })
 }
 
+/**
+ * Create a fail-open sink for opt-in, content-free local learning events.
+ * The sink writes only hashed ids, digests, timestamps, enums, and metadata needed for local outcome analysis.
+ */
 export function createLearningEventSink(options: LearningEventCaptureOptions = {}): LocalLearningEventSink {
   return (input): void => {
     try {

@@ -160,6 +160,7 @@ memory-lane reindex               # embed approved memories missing current vect
 memory-lane init                  # first-time setup wizard for harnesses
 memory-lane init --yes            # auto-configure all detected harnesses
 memory-lane init --project-local  # initialize sandbox-friendly project-local storage
+memory-lane tuneup [purge]        # inspect or purge local learning capture data
 memory-lane session-end --confirm # generate a pending session-summary memory from stdin JSON
 memory-lane claude pre-compact   # Claude Code hook: pre-compaction pending summary
 memory-lane codex pre-compact    # Codex hook: pre-compaction pending summary
@@ -170,6 +171,15 @@ memory-lane mcp                   # run the bundled MCP server over stdio
 ```
 
 Freshness status is read-only and memory-text-free. It reports approved visible-memory changes since a checkpoint timestamp so agents can notice possible newer continuity without injecting large memory bodies.
+
+### Local learning capture
+
+Local learning capture is opt-in through `learning.capture: "on"`.
+When enabled, Memory Lane may write redacted traces and content-free review outcome events under the local learning data root, defaulting to `~/.memory-lane/traces` or `MEMORY_LANE_TRACES_DIR`.
+Events cover suggestion creation, review exposure, approve, reject, delete, replace, supersede, reactivation, agreement recommendation exposure, and agreement recommendation acceptance.
+They store hashed ids, digests, timestamps, event enums, source/kind metadata, actor/reason enums, and recommendation metadata, not memory text, prompts, transcripts, hook payloads, or tool output.
+`learning.excludedProjects` suppresses capture when either the owning project scope or the acting project scope is excluded.
+Use `memory-lane tuneup --json`, `memory-lane status --json`, or `memory-lane tuneup purge` for inspection and purge.
 
 ### Checkpoint candidate review labels
 

@@ -723,7 +723,9 @@ export interface PreCompactSummaryConfig {
 }
 
 export interface LearningConfig {
+  /** Opt-in local learning capture. When omitted, capture is off. */
   capture?: "on" | "off"
+  /** Project scope keys for which local learning trace and event capture is suppressed. */
   excludedProjects?: string[]
 }
 
@@ -755,6 +757,7 @@ export interface SemanticMemoryConfig {
   }
 }
 
+/** Content-free local learning event kinds emitted for review exposure, outcomes, and operating-agreement recommendations. */
 export type LocalLearningEventType =
   | "suggestion-created"
   | "suggestion-shown"
@@ -769,7 +772,7 @@ export type LocalLearningEventType =
 
 export type LocalLearningActor = MemoryRevisionActor | "lifecycle"
 
-/** Internal content-bearing handoff to the local capture sink. The sink must persist only digests and enums. */
+/** Internal content-bearing handoff to the local capture sink. The sink must persist only digests, timestamps, ids derived from hashes, and enums. */
 export interface LocalLearningEventInput {
   eventType: LocalLearningEventType
   memory: MemoryRecord
@@ -782,6 +785,7 @@ export interface LocalLearningEventInput {
   recommendedAction?: "update-kind-workflow-rule" | "replace" | "supersede"
 }
 
+/** Optional fail-open sink used by integrations that opt in to local, content-free learning event capture. */
 export type LocalLearningEventSink = (input: LocalLearningEventInput) => void
 
 export interface MemoryEngineConfig {

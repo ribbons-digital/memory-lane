@@ -928,10 +928,12 @@ export class MemoryEngine {
     }
   }
 
+  /** Record content-free local learning exposure events for suggestions shown by custom review UIs. */
   recordSuggestionsShown(memories: MemoryRecord[], actor: LocalLearningActor = "manual"): void {
     for (const memory of memories) this.emitLearningEvent({ eventType: "suggestion-shown", memory, actor })
   }
 
+  /** Record content-free local learning exposure events for operating-agreement recommendations shown by custom UIs. */
   recordAgreementRecommendationsShown(list: OperatingAgreementList, actor: LocalLearningActor = "manual"): void {
     for (const selection of [...list.primary, ...list.relatedCandidates]) {
       if (!selection.recommendedKind) continue
