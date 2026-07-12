@@ -273,11 +273,12 @@ Replace `/absolute/path/to/memory-lane` with your checkout path, then run `/relo
 The local checkout pi adapter provides manual `memory_save`, `memory_suggest`, `memory_continuity`, and `memory_recall` tools plus `/memory ...` commands, including `/memory continuity [query]`.
 Repo-local pi `/memory review` and `/memory delete <id>` stay scoped to the active project plus globals by default; add `--all` only for explicit cross-project maintenance.
 Release-style generated pi bridges expose the same continuity tool, proxy `/memory continuity ...` through the CLI, and use `memory-lane route --prompt <text> --json` for shared prompt-routing parity.
-It also injects project context through pi's `before_agent_start` event.
+They also inject project context through pi's `before_agent_start` event.
 Broad continuity prompts such as “what were we last working on?”, “where did we leave off?”, and “what's next?” route to canonical Memory Lane continuity (`memory-lane continuity --json`, or `memory-lane continuity --query ...` for topic-specific workstreams) before topic-specific recall, while ordinary targeted prompts continue to use bounded recall.
 Both repo-local and generated pi continuity rendering de-duplicate repeated continuity ids and promote actionable warning inspection commands before operating guidance.
-To reduce memory noise, pi `input` only saves explicit memory requests such as “Remember that ...”; ordinary prompt submissions are not auto-saved.
-`turn_end` and `tool_result` still capture higher-signal lifecycle evidence such as completed durable project statements, successful workflow commands (e.g., `pnpm test`, `pnpm build`, `pnpm install`), and strong checkpoint evidence such as completed releases or merged PRs through the shared lifecycle policy.
+To reduce memory noise, repo-local pi `input` only saves explicit memory requests such as “Remember that ...”; ordinary prompt submissions are not auto-saved.
+Repo-local pi `turn_end` and `tool_result` still capture higher-signal lifecycle evidence such as completed durable project statements, successful workflow commands (e.g., `pnpm test`, `pnpm build`, `pnpm install`), and strong checkpoint evidence such as completed releases or merged PRs through the shared lifecycle policy.
+Release-style generated pi bridges currently do not register `input`, `turn_end`, or `tool_result`; keep OMP installer work gated until the pinned OMP contract report passes.
 Inferred checkpoint captures are pending by default and require review before they affect approved continuity.
 For session summaries, pi uses the explicit `/memory session-summary` command: it reads the current branch through pi's session manager, asks for interactive confirmation, and saves any generated summary as a pending `session_summary` memory with pi `session_end` provenance.
 The native pi adapter and release-style generated pi bridge also listen to `session_before_compact` and can save a pending pre-compact `session_summary` with pi `pre_compact` provenance when `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`; they do not override pi's own compaction summary.
@@ -776,7 +777,7 @@ Configure it in `~/.memory-lane/config.json`:
 ```
 
 Pre-compact summarization reuses `memory.sessionEndSummary`, but hook events cannot ask for confirmation.
-To let Claude `PreCompact`, Codex `PreCompact`, or native pi `session_before_compact` save pending summaries, set `memory.sessionEndSummary.requireConfirmation` to `false`; keep `memory.preCompactSummary.enabled` omitted or set it to `true`.
+To let Claude `PreCompact`, Codex `PreCompact`, or the native pi adapter or release-style generated pi bridge `session_before_compact` save pending summaries, set `memory.sessionEndSummary.requireConfirmation` to `false`; keep `memory.preCompactSummary.enabled` omitted or set it to `true`.
 Set `memory.preCompactSummary.enabled` to `false` to opt out of pre-compact summaries while leaving manual/session-end summaries enabled.
 
 Run it manually with explicit confirmation:
@@ -808,7 +809,7 @@ When transcript/session messages include canonical ISO timestamps, the saved pen
 No current-time fallback is used.
 Claude Code supports `memory-lane claude session-end` through its documented `SessionEnd` hook.
 By default it still requires confirmation and will not save from a bare hook unless `memory.sessionEndSummary.requireConfirmation` is set to `false` or the payload includes `confirmed: true` for manual testing.
-Claude Code, Codex CLI, and the native pi adapter support pre-compact summaries through `PreCompact` / `session_before_compact` when `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`.
+Claude Code, Codex CLI, the native pi adapter, and the release-style generated pi bridge support pre-compact summaries through `PreCompact` / `session_before_compact` when `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`.
 These summaries save pending `session_summary` memories with `pre_compact` provenance and never block or override host compaction.
 Set `memory.preCompactSummary.enabled` to `false` to opt out.
 pi also supports explicit session summaries through `/memory session-summary`, using pi's session manager plus interactive confirmation.
@@ -1189,7 +1190,7 @@ Shared lifecycle handlers can also queue compact `project_checkpoint` candidates
 
 The pi adapter supports manual Memory Lane tools and commands (`memory_save`, `memory_suggest`, `memory_continuity`, `memory_recall`, and `/memory ...`). It performs read-only lifecycle context injection through pi's documented `before_agent_start` event: broad continuity prompts route to canonical Memory Lane continuity, memory-management prompts route to list/status/review guidance, and other relevant approved memories may be injected as hidden `memory-lane` context before the agent starts.
 
-pi also writes memories through higher-signal lifecycle events:
+The repo-local pi adapter also writes memories through higher-signal lifecycle events:
 
 - `input` - explicit memory requests only ("Remember that..."); ordinary prompt submissions are ignored to avoid noisy memory queues.
 - `turn_end` - the last user and assistant messages are evaluated for memory-worthy candidates and strong completed-progress checkpoint evidence after a turn completes.
@@ -1200,7 +1201,11 @@ Inferred checkpoint candidates stay pending until review; use `/memory review` i
 Repo-local pi `/memory review` and `/memory delete <id>` respect current-project visibility by default, return not-found behavior without memory text for out-of-scope ids, and require `--all` for deliberate cross-project review or delete.
 Set `MEMORY_LANE_DEBUG=1` to append privacy-safe debug records to `~/.memory-lane/pi-debug.jsonl` (no prompts or tool outputs are logged).
 
-For session summaries, use `/memory session-summary` in pi. The command reads the current conversation branch through pi's session manager, asks for interactive confirmation, sends the compact transcript to the configured `memory.sessionEndSummary` provider, and saves any result as a pending `session_summary` memory with pi `session_end` provenance. The native pi adapter and release-style generated pi bridge can also save pending pre-compact `session_summary` memories with pi `pre_compact` provenance from `session_before_compact` when `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`; they do not override pi's own compaction summary. Memory Lane does not automatically summarize pi sessions on `agent_end` or `session_shutdown`.
+For session summaries, use `/memory session-summary` in pi.
+The command reads the current conversation branch through pi's session manager, asks for interactive confirmation, sends the compact transcript to the configured `memory.sessionEndSummary` provider, and saves any result as a pending `session_summary` memory with pi `session_end` provenance.
+The native pi adapter and release-style generated pi bridge can also save pending pre-compact `session_summary` memories with pi `pre_compact` provenance from `session_before_compact` when `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`; they do not override pi's own compaction summary.
+The release-style generated pi bridge currently does not register repo-local `input`, `turn_end`, or `tool_result` lifecycle writes.
+Memory Lane does not automatically summarize pi sessions on `agent_end` or `session_shutdown`.
 
 ### Context policy
 
