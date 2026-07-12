@@ -29,7 +29,7 @@ Keep it safe to read wholesale in fresh sessions.
 Latest known release: `v0.2.47` from main commit `28e5961`, after PR #132 fixed compiled binary and install-manifest version metadata.
 Release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMORY_LANE_VERSION=v0.2.47 pnpm build:binary`, `pnpm smoke:binary`, GitHub Actions release run `28768281598`, and a downloaded release-asset `status --json` version check.
 
-This branch implements issue #175 Slice C on top of main synced through PR #190, which fixed issue #181 by honoring explicit `memory-lane save --kind` values, preserving inference when omitted, rejecting invalid kinds before writes, and listing accepted kinds in CLI help.
+PR #192 shipped issue #175 Slice C on main commit `415af0b`, adding durable local outcome events and the deterministic capture-outcome dataset exporter.
 Slice C records opt-in, content-free local learning events for suggestion and operating-agreement outcomes, keeps them under existing consent, exclusion, retention, status, and purge surfaces, and adds a maintainer-only capture-outcome dataset exporter.
 PR #174 shipped issue #169 Slice B as a maintainer-only lifecycle runner that converts opt-in Slice A trace files into a deterministic `schemaVersion: 1` LongMemEval-compatible smoke dataset for explicit core adapter use.
 PR #179 and PR #182 scoped review and revision maintenance mutations to the current project, with PR #180 documenting scoped review maintenance.
@@ -37,7 +37,7 @@ The next issue #169 follow-up slice still requires separate user approval.
 
 Recent shipped work:
 
-- This branch implements issue #175 Slice C by adding opt-in versioned outcome events, review exposure events, agreement recommendation events, exclusion-aware scope routing, and a deterministic local capture-outcome exporter.
+- PR #192 shipped issue #175 Slice C with opt-in versioned outcome events, review exposure events, agreement recommendation events, exclusion-aware scope routing, bounded retention, and a deterministic local capture-outcome exporter.
 - PR #190 fixed issue #181 by passing explicit save kinds to core validation and persistence, preserving omitted-kind inference, and adding JSON, human-output, invalid-kind no-write, and CLI-help regressions.
 - PR #188 fixed issue #178 by serializing fallback MCP tool calls, restoring startup scope before and after each request, and adding registered read, mutation, interleaving, and null-scope regressions.
 - PR #186 fixed issue #177 by adding explicit cross-project Pi review and delete maintenance through `--all`.
@@ -116,9 +116,9 @@ Deterministic eval coverage now includes:
 - deterministic local long-session synthetic benchmark coverage from PR #127;
 - optional external long-memory smoke adapter coverage from PR #130;
 - trace dataset converter coverage from PR #174;
-- capture-outcome dataset coverage from issue #175 Slice C.
+- capture-outcome dataset coverage from PR #192.
 
-Issue #175 Slice C adds `pnpm --filter @memory-lane/lifecycle eval:capture-outcome-dataset -- --events <dir> --as-of <ISO> --out <file>` for maintainers with opt-in local learning events.
+PR #192 shipped issue #175 Slice C with `pnpm --filter @memory-lane/lifecycle eval:capture-outcome-dataset -- --events <dir> --as-of <ISO> --out <file>` for maintainers using opt-in local learning events.
 The exporter requires explicit hardened input and output paths, writes atomically, emits no raw content, distinguishes unresolved and 30-day expired-unacted agreement recommendations, and reports right-censored suggestion survival without inferring inactivity as intent.
 No default CI or public user command is added.
 PR #174 shipped Slice B, which converts local opt-in trace files into a deterministic smoke dataset without public CLI exposure or default CI wiring.
@@ -140,7 +140,7 @@ Do not add embeddings, LLM judges, production ranking rewrites, auto-downloads, 
   Keep review-first; no auto-consolidation or auto-approval.
 - **Hardening backlog:** installer/init wizard improvements, Claude Desktop MCP config path tests, import dry-run secret warnings, and broader read-only taxonomy checks.
 - **Outcome-informed learning:** use approval, rejection, delete, replace, supersede, reactivation, review exposure, and agreement recommendation decisions as reviewable signals for future suggesters, without silent self-training or durable policy mutation.
-  Slice C is implemented on this branch for content-free events and the maintainer capture-outcome exporter; later proposal/application slices still require separate approval.
+  PR #192 shipped Slice C content-free events and the maintainer capture-outcome exporter; later proposal/application slices still require separate approval.
 - **Opt-in memory sharing:** let teams share selected project memories across machines or collaborators.
 - **Retrieval/ranking upgrades:** consider RRF, reranking, graph expansion, or embedding-default changes only after eval evidence.
 - **Memory-Lane-configured continuity classifier:** future harness-agnostic design only.
