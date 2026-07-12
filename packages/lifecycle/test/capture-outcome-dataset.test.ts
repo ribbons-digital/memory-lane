@@ -375,6 +375,28 @@ test("canonical as-of and explicit runner paths reject aliases, ambiguity, and m
   assert.equal(fs.existsSync(path.dirname(outputPath)), false)
 })
 
+test("same-millisecond creation and decision events are applied in lifecycle order", () => {
+  const eventsDirectory = tempDir()
+  const approvedId = ref("same-millisecond-approved")
+  const rejectedId = ref("same-millisecond-rejected")
+  writeEvents(eventsDirectory, [
+    event({ eventType: "suggestion-approved", occurredAt: "2026-07-01T00:00:00.000Z", suggestionId: approvedId }),
+    event({ eventType: "suggestion-created", occurredAt: "2026-07-01T00:00:00.000Z", suggestionId: approvedId }),
+    event({ eventType: "suggestion-rejected", occurredAt: "2026-07-02T00:00:00.000Z", suggestionId: rejectedId }),
+    event({ eventType: "suggestion-created", occurredAt: "2026-07-02T00:00:00.000Z", suggestionId: rejectedId }),
+  ])
+
+  const dataset = buildCaptureOutcomeDataset({ eventsDirectory, asOf: DEFAULT_AS_OF })
+  const records = new Map(dataset.records.map((record) => [record.suggestionId, record]))
+
+  assert.equal(records.get(approvedId)?.resolutionState, "resolved-approved")
+  assert.equal(records.get(approvedId)?.currentObservableState, "approved")
+  assert.deepEqual(records.get(approvedId)?.transitionHistory.map(({ fromState, toState }) => [fromState, toState]), [["pending", "approved"]])
+  assert.equal(records.get(rejectedId)?.resolutionState, "resolved-rejected")
+  assert.equal(records.get(rejectedId)?.currentObservableState, "rejected")
+  assert.deepEqual(records.get(rejectedId)?.transitionHistory.map(({ fromState, toState }) => [fromState, toState]), [["pending", "rejected"]])
+})
+
 test("malformed, unsupported, duplicate, and ambiguous events fail deterministically without mutating inputs", () => {
   const suggestionId = ref("validation-suggestion")
   const created = event({ eventType: "suggestion-created", occurredAt: "2026-07-01T00:00:00.000Z", suggestionId })

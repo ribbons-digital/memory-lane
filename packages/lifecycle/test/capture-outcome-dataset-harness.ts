@@ -36,6 +36,18 @@ const INITIAL_STATES = ["pending", "approved"] as const
 const DECISION_TYPES = ["approve", "reject", "delete", "supersede", "replace", "reactivate"] as const
 const DECISION_ACTORS = ["manual", "cli", "mcp", "lifecycle"] as const
 const REASON_CODES = ["unspecified", "approved", "rejected", "deleted", "superseded", "replaced", "reactivated"] as const
+const EVENT_TYPE_PRECEDENCE: Record<typeof EVENT_TYPES[number], number> = {
+  "suggestion-created": 0,
+  "suggestion-shown": 1,
+  "suggestion-approved": 2,
+  "suggestion-rejected": 2,
+  "suggestion-deleted": 2,
+  "suggestion-superseded": 2,
+  "suggestion-replaced": 2,
+  "suggestion-reactivated": 2,
+  "agreement-recommendation-shown": 0,
+  "agreement-recommendation-accepted": 1,
+}
 const HEX_DIGEST = /^[a-f0-9]{64}$/u
 
 type EventType = typeof EVENT_TYPES[number]
@@ -404,7 +416,7 @@ function readEvents(eventsDirectory: string): { events: LearningEventV1[]; fileC
     if (ids.has(event.eventId)) throw new Error(`Duplicate learning eventId ${event.eventId}`)
     ids.add(event.eventId)
   }
-  events.sort((left, right) => left.occurredAt.localeCompare(right.occurredAt) || left.eventId.localeCompare(right.eventId))
+  events.sort((left, right) => left.occurredAt.localeCompare(right.occurredAt) || EVENT_TYPE_PRECEDENCE[left.eventType] - EVENT_TYPE_PRECEDENCE[right.eventType] || left.eventId.localeCompare(right.eventId))
   return { events, fileCount: files.length }
 }
 
@@ -541,7 +553,7 @@ function validateSuggestionIdentity(events: LearningEventV1[]): void {
         simultaneous.decision?.reasonDigest === event.decision?.reasonDigest
       if (!isCompositeReplace) throw new Error(`Ambiguous simultaneous transitions for suggestionId ${event.suggestionId}`)
     }
-    if (changesSuggestionState) eventTimes.set(timeKey, event)
+    if (changesSuggestionState && event.eventType !== "suggestion-created") eventTimes.set(timeKey, event)
     if (event.eventType.startsWith("suggestion-") && event.eventType !== "suggestion-created") {
       priorSuggestionEvent.set(event.suggestionId, priorSuggestionEvent.get(event.suggestionId) ?? event)
     }
