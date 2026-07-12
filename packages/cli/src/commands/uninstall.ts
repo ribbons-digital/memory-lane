@@ -298,11 +298,13 @@ export async function handleUninstall(argv: string[]): Promise<void> {
     }
   }
 
-  if (fs.existsSync(binaryPath)) {
-    fs.unlinkSync(binaryPath)
-    console.log(`  ✓ Removed binary: ${binaryPath}`)
+  if (removeIntegrations) {
+    if (fs.existsSync(binaryPath)) {
+      fs.unlinkSync(binaryPath)
+      console.log(`  ✓ Removed binary: ${binaryPath}`)
+    }
+    fs.rmSync(read.path, { force: true })
   }
-  fs.rmSync(read.path, { force: true })
 
   if (removeData && fs.existsSync(dataDir)) {
     fs.rmSync(dataDir, { recursive: true, force: true })

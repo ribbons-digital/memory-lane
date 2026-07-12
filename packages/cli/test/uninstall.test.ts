@@ -17,11 +17,12 @@ function run(args: string[], env?: NodeJS.ProcessEnv) {
   }).trim()
 }
 
-function runWithStatus(args: string[], env?: NodeJS.ProcessEnv) {
+function runWithStatus(args: string[], env?: NodeJS.ProcessEnv, input?: string) {
   const cli = path.resolve(__dirname, "../dist/index.js")
   return spawnSync(process.execPath, [cli, ...args], {
     encoding: "utf8",
     env: { ...process.env, ...env },
+    input,
   })
 }
 
@@ -282,6 +283,21 @@ describe("uninstall", () => {
     assert.equal(fs.readFileSync(piPath, "utf8"), "keep pi")
     assert.equal(fs.readFileSync(unsafeOmpPath, "utf8"), "keep omp")
     assert.equal(fs.existsSync(binaryPath), true)
+  })
+
+  it("preserves the binary and manifest when integrations are retained", () => {
+    const piPath = path.join(home, ".pi", "agent", "extensions", "memory-lane", "index.ts")
+    fs.mkdirSync(path.dirname(piPath), { recursive: true })
+    fs.writeFileSync(piPath, "keep pi", "utf8")
+    writeManifest([{ harness: "pi", configPath: piPath }])
+    const result = runWithStatus(["uninstall"], { HOME: home }, "n\nn\n")
+    assert.equal(result.status, 0, result.stderr)
+    assert.equal(fs.readFileSync(piPath, "utf8"), "keep pi")
+    assert.equal(fs.existsSync(binaryPath), true)
+    const manifest = readInstallManifest(dataDir)
+    assert.equal(manifest.status, "valid")
+    if (manifest.status !== "valid") return
+    assert.deepEqual(manifest.manifest.integrations, [{ harness: "pi", configPath: piPath }])
   })
 
   it("refuses malformed manifests and tampered OMP paths without deleting", () => {

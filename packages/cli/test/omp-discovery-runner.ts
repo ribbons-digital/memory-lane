@@ -140,6 +140,32 @@ export function ompDiscoveryCommandPlan(options: {
   }
 }
 
+export async function closeRpcChild(
+  child: ChildProcessWithoutNullStreams,
+  graceMs = 5_000,
+): Promise<void> {
+  child.stdin.end()
+  if (child.exitCode !== null) return
+  const closed = deferred<void>()
+  let terminateTimer: NodeJS.Timeout | undefined
+  let killTimer: NodeJS.Timeout | undefined
+  const onExit = () => {
+    clearTimeout(terminateTimer)
+    clearTimeout(killTimer)
+    closed.resolve()
+  }
+  child.once("exit", onExit)
+  if (child.exitCode !== null) {
+    child.removeListener("exit", onExit)
+    return
+  }
+  terminateTimer = setTimeout(() => {
+    child.kill("SIGTERM")
+    killTimer = setTimeout(() => child.kill("SIGKILL"), graceMs)
+  }, graceMs)
+  await closed.promise
+}
+
 class RpcSession {
   readonly child: ChildProcessWithoutNullStreams
   readonly frames: RpcFrame[] = []
@@ -199,20 +225,10 @@ class RpcSession {
   }
 
   async close(): Promise<void> {
-    this.child.stdin.end()
-    if (this.child.exitCode !== null) return
-    const closed = deferred<void>()
-    const timer = setTimeout(() => {
-      this.child.kill("SIGTERM")
-      closed.resolve()
-    }, 5_000)
-    this.child.once("exit", () => {
-      clearTimeout(timer)
-      closed.resolve()
-    })
-    await closed.promise
+    return closeRpcChild(this.child)
   }
 }
+
 
 async function runDiscoveryCase(options: {
   form: "adapter" | "bridge"
