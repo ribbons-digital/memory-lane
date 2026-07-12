@@ -2,6 +2,7 @@
 
 ## Current state
 
+- PR #198 merged issue #185 Slice 2 as main commit `a880293`, adding first-class OMP detection, init, manifest, doctor, upgrade, selective uninstall, strict recorded-path maintenance, issue #147 custom binary-path handling, and real installed-path discovery without `--extension`.
 - PR #192 merged issue #175 Slice C as main commit `415af0b`, adding durable local outcome events, bounded retention, and a deterministic maintainer capture-outcome dataset exporter.
 - PR #196 merged issue #185 Slice 1B as main commit `cccd858`, closing the pinned OMP `16.4.5` lifecycle contract with native interactive `input`, deterministic native `tool_result`, generated-bridge `input`/`turn_end`/`tool_result` handlers, task-session capture suppression, and an `overallPass: true` fixture.
 - PR #194 merged issue #185 Slice 1A as main commit `04dc166`, adding the pinned real-OMP `16.4.5` contract runner, production source-form equivalence checks, lifecycle boundary normalization evidence, and an aggregate gate that remained intentionally false until Slice 1B closed native event verification and generated-bridge handler gaps.
@@ -9,8 +10,8 @@
 - PR #188 merged issue #178 as main commits `b2093df`, `4870a2f`, and `9d5422a`, isolating fallback MCP request scopes while preserving bundled per-path engine behavior.
 - PR #186 merged issue #177 as main commit `a7745af`, adding explicit `--all` maintenance mode to Pi review and delete while preserving scoped defaults.
 - PR #183 merged issue #145 as main commit `9b16939`, increasing new memory IDs to 128 random bits while preserving legacy short IDs and duplicate-ID folding semantics.
-- Current repo status: main is synced through PR #196, and issue #185 Slice 1B has closed the production lifecycle contract gap with the committed OMP report at `overallPass: true`.
-- Issue #185 Slice 2 installer, manifest, init, doctor, upgrade, and uninstall support remains separate and requires explicit approval before implementation.
+- Current repo status: main is synced through PR #198, issue #185 Slice 2 has shipped, and the strict OMP `16.4.5` lifecycle fixture remains at `overallPass: true`.
+- Issue #185 remains open only for separately approval-gated Slice 3 documentation and any later explicitly approved work.
 - PR #182 scoped revision maintenance mutations to the current project and documented the revision command options.
 - PR #180 documented scoped review maintenance after PR #179 scoped review mutations to the current project.
 - PR #174 shipped issue #169 Slice B trace dataset conversion as a maintainer-only local runner for opt-in Slice A trace files.
@@ -35,9 +36,11 @@
 
 ## Current decision / next work
 
-Main is synced through PR #196 at commit `cccd858`, which completed issue #185 Slice 1B.
-Slice 1B verified native `input` through genuine interactive OMP, exercised native `tool_result` deterministically, added generated-bridge `input`, `turn_end`, and `tool_result` handlers through shared CLI lifecycle entry points, suppressed automatic capture only for proven OMP delegated task sessions, and regenerated the pinned OMP `16.4.5` report with `overallPass: true`.
-Issue #185 Slice 2 installer, manifest, init, doctor, upgrade, and uninstall support remains separately approval-gated and must account for the manifest-path interaction recorded in issue #147.
+Main is synced through PR #198 at commit `a880293`, which completed issue #185 Slice 2.
+Slice 2 added first-class OMP detection, interactive and noninteractive init, manifest recording, doctor, upgrade, full and selective uninstall, default and `PI_CODING_AGENT_DIR` roots, durable recorded-path maintenance, and real OMP discovery without `--extension`.
+Pi and OMP reuse the same verified development adapter-import and self-contained release bridge sources while remaining independently installable and removable.
+Issue #147 is closed: upgrade now preserves a valid manifest-recorded release `binaryPath`, passes its parent directory to the installer, and uses the platform default only when the manifest is genuinely missing.
+Issue #185 Slice 3 remains separately approval-gated and has not started.
 Issue #175 Slice C records versioned, content-free local learning events for suggestion creation, review exposure, approval, rejection, deletion, replacement, supersession, reactivation, agreement recommendation exposure, and agreement recommendation acceptance when `learning.capture` is enabled.
 It routes event files by the owning memory scope, suppresses capture when either owner or acting project is excluded, and adds the maintainer-only capture-outcome dataset exporter at `pnpm --filter @memory-lane/lifecycle eval:capture-outcome-dataset -- --events <dir> --as-of <ISO> --out <file>`.
 PR #190 fixed issue #181 by forwarding explicit save kinds through the CLI, preserving inference when omitted, rejecting invalid kinds before persistence, and documenting every accepted kind in CLI help.
@@ -78,6 +81,7 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 
 ## Current verification evidence
 
+- PR #198 verification passed workspace build and tests, focused installer and maintenance regressions, strict OMP manifest-path safety coverage, Pi/OMP production-source byte equivalence, real installed-path discovery on OMP `16.4.5` with `overallPass: true`, Fable 5 pre-PR review, and completed no-mistakes run `01KXB7W0PQKDKADBQ16QQZHEAC`.
 - PR #196 verification passed the committed OMP `16.4.5` report at `packages/cli/test/fixtures/omp-contract-16.4.5.json`, focused OMP contract runner regressions, production source-form equivalence tests, genuine real-TTY `input` evidence, deterministic success/error host-tool evidence, generated-bridge lifecycle coverage, task-session suppression evidence, and no-mistakes run `01KXAQF6TQD55CRMDVF30XCG0F` with `checks-passed`; the real-runtime gate reported `overallPass: true`.
 - PR #192 verification passed the Obsidian mirror, core, and lifecycle builds; focused core and lifecycle learning-event tests; the full lifecycle suite; a long-lived sink retention demo covering interval, boundary, clock-rollback, and privacy behavior; and no-mistakes run `01KX9VG9PTMM94FDTXY0KS2YJF` with outcome `passed` and no findings.
 - PR #190 verification passed the explicit-kind end-to-end reproduction, focused and full CLI tests, workspace build and tests, Fable 5 completed-diff review with no blockers, and no-mistakes run `01KX85C9R19E0KKDT2M4BTGJ78` with `checks-passed` and no findings after the CodeRabbit help-value fix.
@@ -126,5 +130,5 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.47` / commit `28e5961`.
-- Current main status: PR #196 merged issue #185 Slice 1B as commit `cccd858`, closing the OMP lifecycle contract with `overallPass: true`; issue #185 Slice 2 installer, manifest, init, doctor, upgrade, and uninstall work remains separately approval-gated with its issue #147 manifest-path dependency.
-- Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, PR #127, PR #130, PR #174, and PR #192.
+- Current main status: PR #198 merged issue #185 Slice 2 as commit `a880293`, shipping first-class OMP installer and maintenance support while preserving the strict pinned OMP `16.4.5` lifecycle contract; issue #147 is closed.
+- Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, PR #127, PR #130, PR #174, PR #192, PR #196, and PR #198.
