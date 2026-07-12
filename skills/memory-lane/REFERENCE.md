@@ -458,7 +458,6 @@ Pi and OMP use the same verified production source selector but remain separate 
 Re-running `init` preserves unrelated existing manifest integrations and updates only the integrations configured in that run.
 If the existing install manifest is malformed or missing its integrations array, `init` stops instead of replacing it.
 After installation, doctor, upgrade, and uninstall use the manifest-recorded OMP path rather than re-resolving the current environment.
-Doctor also reports the pinned OMP lifecycle contract metadata: `testedVersion: "16.4.5"`, `testedAt: "2026-07-12"`, and `overallPass: true`.
 Use `memory-lane uninstall --only omp --yes` to remove OMP without removing Pi, the shared binary, unrelated OMP extensions, or memory data.
 Named OMP profiles are not auto-discovered.
 Set `PI_CODING_AGENT_DIR` to a named profile's agent directory before init, or configure that profile's `extensions:` list manually.
@@ -472,7 +471,6 @@ Upgrade preserves a valid manifest-recorded release binary path and refuses malf
 Uninstall also refuses malformed or unsafe manifest paths instead of falling back to the current environment.
 
 In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save/read explicitly, `memory_continuity` is the canonical broad-continuity tool, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates in both the repo-local adapter and release-style generated bridge.
-For local OMP `16.4.5` adapter development, rebuild, exit the active OMP process, and restart or use `omp --continue`; `ctx.reload()` and `/reload-plugins` do not load rebuilt Memory Lane source behind an unchanged extension entrypoint.
 The pinned OMP `16.4.5` contract verifies all five lifecycle events across both production forms with `overallPass: true`, and the real discovery smoke verifies default-root and `PI_CODING_AGENT_DIR` installation without `--extension`.
 `turn_end` may queue pending project-scoped checkpoints, explicit workflow corrections, or high-confidence debugging-postmortem learning candidates when bounded context includes a concrete symptom, cause, prevention, and verification/recovery signal.
 `tool_result` may queue conservative procedure candidates from safe failed-command recovery evidence.

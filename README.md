@@ -1092,11 +1092,7 @@ Embedding provider calls honor optional per-profile `timeoutMs` and default to 3
 
 When `MEMORY_LANE_HOOK_DEBUG=1`, Claude/Codex hook debug records include privacy-safe context decision metadata for injection events: `contextPolicyMode`, `contextEvent`, `contextSelected`, `contextOmitted`, `contextMaxItems`, `contextMaxChars`, and `contextOmittedReasons`. They never include raw prompts, transcripts, tool output, memory text, or injected context text.
 
-`memory-lane doctor` also reports read-only integration diagnostics.
-It checks whether common local config files appear to contain Memory Lane setup for Claude Desktop MCP, Codex hooks, Claude Code hooks, and the pi and OMP extensions.
-OMP diagnostics include the pinned lifecycle contract's tested version, test date, and aggregate pass status.
-These checks inspect config/entrypoint files only; they do not read prompts, transcripts, tool outputs, memory text, MCP traffic, or hook debug log contents.
-MCP provides explicit tools; hooks, pi, and OMP provide automatic lifecycle recall/save where supported.
+`memory-lane doctor` also reports read-only integration diagnostics. It checks whether common local config files appear to contain Memory Lane setup for Claude Desktop MCP, Codex hooks, Claude Code hooks, and the pi and OMP extensions. These checks inspect config/entrypoint files only; they do not read prompts, transcripts, tool outputs, memory text, MCP traffic, or hook debug log contents. MCP provides explicit tools; hooks, pi, and OMP provide automatic lifecycle recall/save where supported.
 
 ## Environment Variables
 
@@ -1230,7 +1226,6 @@ Use `memory_continuity({ projectPath })` from MCP clients before answering conti
 
 Use `memory_status` from MCP clients when you want the same kind of read-only setup/status overview that `memory-lane doctor` provides in a terminal.
 It reports counts and diagnostics only; it does not return raw memory text or run lifecycle hooks, except that legacy project-memory diagnostics may include bounded sample previews when legacy candidates exist.
-OMP integration diagnostics include the pinned lifecycle contract's tested version, test date, and aggregate pass status.
 Use filtered `memory_review` calls when you want an MCP client to inspect only pending session summaries or continuity candidates from a specific adapter/event before approving or rejecting them.
 
 **Tip for Claude Desktop and Codex Desktop:** if you ask the model to save or recall a memory without mentioning the MCP, it may first try the `memory-lane` CLI, fail because the sandbox cannot write to `~/.memory-lane`, and then fall back to MCP. To skip that error turn, explicitly say "use the Memory Lane MCP" in your request.
