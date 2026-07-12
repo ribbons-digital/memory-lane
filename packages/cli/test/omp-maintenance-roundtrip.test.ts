@@ -5,6 +5,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
+import { OMP_CONTRACT_DIAGNOSTIC } from "../../core/src/integration-diagnostics.js"
 import { readInstallManifest } from "../src/installer/manifest.js"
 
 const testDir = path.dirname(fileURLToPath(import.meta.url))
@@ -60,7 +61,12 @@ test("OMP override install upgrade doctor and uninstall keep the recorded path",
     exists: true,
     detected: true,
     warnings: [],
+    contract: OMP_CONTRACT_DIAGNOSTIC,
   })
+  const humanDoctor = run(["doctor"], clearedEnv).stdout
+  assert.match(humanDoctor, /"testedVersion": "16\.4\.5"/u)
+  assert.match(humanDoctor, /"testedAt": "2026-07-12"/u)
+  assert.match(humanDoctor, /"overallPass": true/u)
 
   run(["uninstall", "--only", "omp", "--yes"], clearedEnv)
   assert.equal(fs.existsSync(ompPath), false)
@@ -96,6 +102,7 @@ test("doctor uses the resolver before install and reports malformed manifests wi
     exists: true,
     detected: true,
     warnings: [],
+    contract: OMP_CONTRACT_DIAGNOSTIC,
   })
 
   fs.mkdirSync(dataDir, { recursive: true })

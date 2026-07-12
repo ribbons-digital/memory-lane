@@ -49,4 +49,8 @@ memory-lane uninstall --only omp --yes
 ```
 
 Unsafe manifest-recorded OMP paths make doctor report a warning without inspecting a default path.
+Doctor also reports the pinned OMP lifecycle contract's tested version, test date, and aggregate pass status.
 Malformed or unsafe manifest paths stop upgrade or uninstall instead of falling back to a default path.
+
+For local adapter development and the tested rebuild-and-restart workflow, see [OMP: load and restart the local adapter](../../README.md#omp-load-and-restart-the-local-adapter).
+The adjacent README section records the OMP-only APIs that Memory Lane intentionally does not use.

@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { diagnoseIntegrations, resolveOmpAgentDir } from "../src/integration-diagnostics.js"
+import { diagnoseIntegrations, OMP_CONTRACT_DIAGNOSTIC, resolveOmpAgentDir } from "../src/integration-diagnostics.js"
 
 function tempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-integrations-"))
@@ -163,6 +163,7 @@ test("diagnoses Pi and OMP extensions independently with explicit warnings", () 
   assert.equal(report.ompExtension.detected, true)
   assert.equal(report.ompExtension.checkedPath, ompExtension)
   assert.deepEqual(report.ompExtension.warnings, ["manifest warning"])
+  assert.deepEqual(report.ompExtension.contract, OMP_CONTRACT_DIAGNOSTIC)
 })
 
 test("reports an unusable manifest-recorded OMP target without default substitution", () => {
@@ -177,5 +178,6 @@ test("reports an unusable manifest-recorded OMP target without default substitut
   assert.equal(report.ompExtension.exists, false)
   assert.equal(report.ompExtension.detected, false)
   assert.deepEqual(report.ompExtension.warnings, ["Install manifest omp configPath must be absolute."])
+  assert.deepEqual(report.ompExtension.contract, OMP_CONTRACT_DIAGNOSTIC)
   assert.equal(fs.existsSync(path.join(root, ".omp")), false)
 })

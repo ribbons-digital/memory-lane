@@ -36,6 +36,18 @@ export interface IntegrationDiagnosticPaths {
 
 export type IntegrationDiagnosticWarnings = Partial<Record<keyof IntegrationDiagnosticPaths, string[]>>
 
+export interface OmpContractDiagnostic {
+  testedVersion: string
+  testedAt: string
+  overallPass: true
+}
+
+export const OMP_CONTRACT_DIAGNOSTIC: Readonly<OmpContractDiagnostic> = Object.freeze({
+  testedVersion: "16.4.5",
+  testedAt: "2026-07-12",
+  overallPass: true,
+})
+
 export interface IntegrationDiagnostics {
   summary: {
     mcpExplicitToolsOnly: true
@@ -70,6 +82,7 @@ export interface IntegrationDiagnostics {
     exists: boolean
     detected: boolean
     warnings: string[]
+    contract: OmpContractDiagnostic
   }
   notes: string[]
 }
@@ -223,7 +236,7 @@ function diagnoseClaudeDesktopMcp(file: string): IntegrationDiagnostics["claudeD
 function diagnoseExtension(
   file: string | null,
   extraWarnings: string[] = [],
-): IntegrationDiagnostics["piExtension"] | IntegrationDiagnostics["ompExtension"] {
+): Omit<IntegrationDiagnostics["ompExtension"], "contract"> {
   if (!file) {
     return { checkedPath: null, exists: false, detected: false, warnings: [...extraWarnings] }
   }
@@ -260,7 +273,10 @@ export function diagnoseIntegrations(options: DiagnoseIntegrationsOptions = {}):
       project: diagnoseJsonHookFile(paths.claudeCodeProjectSettings, "claude"),
     },
     piExtension: diagnoseExtension(paths.piExtension, options.warnings?.piExtension) as IntegrationDiagnostics["piExtension"],
-    ompExtension: diagnoseExtension(paths.ompExtension, options.warnings?.ompExtension),
+    ompExtension: {
+      ...diagnoseExtension(paths.ompExtension, options.warnings?.ompExtension),
+      contract: OMP_CONTRACT_DIAGNOSTIC,
+    },
     notes: [
       "MCP provides explicit Memory Lane tools only; it does not run lifecycle hooks.",
       "Codex and Claude Code hooks provide automatic lifecycle recall/save where configured.",

@@ -241,6 +241,7 @@ The discovery gate installs both production source forms into isolated default a
 The lifecycle gate uses a credential-free loopback provider for deterministic tool execution, loads both production extension forms through real `omp --extension` scratch profiles, records sanitized per-event evidence, and exits non-zero when any expected registration is missing, any lifecycle event remains unverified, or any lifecycle event fails.
 Neither gate needs a network-dependent model call or touches the real user profile or memory store.
 The tested lifecycle version and date live in `packages/cli/test/fixtures/omp-contract-16.4.5.json`.
+The current committed lifecycle contract was tested against OMP `16.4.5` on `2026-07-12` and reports `overallPass: true`.
 The committed report must keep `overallPass: true`.
 
 #### Optional local evals
@@ -313,6 +314,54 @@ For session summaries, pi uses the explicit `/memory session-summary` command: i
 The native pi adapter and release-style generated pi bridge also listen to `session_before_compact` and can save a pending pre-compact `session_summary` with pi `pre_compact` provenance when `memory.sessionEndSummary.enabled` is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or not `false`; they do not override pi's own compaction summary.
 It does not automatically summarize on `agent_end` or `session_shutdown`.
 The release-style generated pi extension is intentionally a self-contained CLI bridge so pi never tries to import the native `memory-lane` binary as TypeScript.
+
+#### OMP: load and restart the local adapter
+
+OMP `16.4.5` does not provide an in-session command that reloads an already loaded extension module from source.
+An isolated real-OMP smoke confirmed that `ctx.reload()` and `/reload-plugins` preserve existing registrations but do not pick up a rebuilt adapter behind an unchanged extension entrypoint.
+The reliable OMP development loop is therefore rebuild, exit OMP, and start or resume OMP again.
+
+Set the extension root to the default OMP agent directory or an explicit profile directory, then create the shim:
+
+```bash
+export PI_CODING_AGENT_DIR="${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}"
+mkdir -p "$PI_CODING_AGENT_DIR/extensions/memory-lane"
+cat > "$PI_CODING_AGENT_DIR/extensions/memory-lane/index.ts" <<'EOF'
+export default async function memoryLaneDevelopmentExtension(pi: any) {
+  const adapter = await import(
+    "file:///absolute/path/to/memory-lane/packages/pi-adapter/dist/index.js"
+  )
+  return adapter.default(pi)
+}
+EOF
+```
+
+Replace `/absolute/path/to/memory-lane` with the absolute checkout path.
+Run `pnpm build`, start OMP, and confirm that `/memory`, `/remember`, `memory_save`, `memory_suggest`, `memory_continuity`, and `memory_recall` are available.
+After changing Memory Lane source, run `pnpm build` again, exit the active OMP process, and start OMP again.
+Use `omp --continue` from the same project when you want to resume the latest session after the restart.
+OMP's `/reload-plugins` command refreshes plugin registries and related resources, but it does not reload the active Memory Lane extension source.
+Named OMP profiles are not guessed; set `PI_CODING_AGENT_DIR` to the profile's absolute agent directory before starting OMP or configure the profile's `extensions:` list manually.
+
+#### OMP: intentionally unused host APIs
+
+Memory Lane's verified OMP production contract uses `input`, `before_agent_start`, `turn_end`, `tool_result`, and `session_before_compact`.
+The native adapter and generated bridge route these events through the same cross-harness lifecycle policy.
+Other OMP-only APIs remain intentionally unused:
+
+- `session_stop` can request another model-visible continuation before a turn settles.
+  Memory Lane records settled evidence through `turn_end`; it does not change OMP control flow or risk duplicate capture by continuing a completed turn.
+- `before_provider_request` can replace the raw provider request payload.
+  Memory Lane injects bounded context through the host-level `before_agent_start` event instead of coupling memory policy to provider-specific wire formats.
+- `message_start`, `message_update`, and `message_end` expose message and token-stream observability.
+  Memory Lane waits for complete bounded turn evidence from `turn_end` rather than persisting partial or duplicated streaming state.
+- `tool_execution_start`, `tool_execution_update`, `tool_execution_end`, `tool_approval_requested`, `tool_approval_resolved`, and `tool_call` expose execution telemetry, approval state, or pre-execution control.
+  Memory Lane consumes the completed normalized `tool_result` and does not mutate tool calls, approval decisions, or streaming execution.
+- `ctx.memory` is OMP's optional host-owned structured-memory runtime.
+  Memory Lane keeps one cross-harness, review-governed store and CLI/tool surface instead of introducing a second OMP-specific backend or ownership model.
+
+These omissions are deliberate boundaries, not inferred OMP compatibility.
+Adding an OMP-only handler requires a separately reviewed behavior need and must not create a second lifecycle-policy implementation.
 
 #### Claude Code CLI: paste hooks manually
 
@@ -1226,6 +1275,7 @@ Shared lifecycle handlers can also queue compact `project_checkpoint` candidates
 
 OMP uses the same native adapter-import or generated CLI-bridge source selected for pi, but installs it under the independently resolved OMP agent root.
 `memory-lane doctor` reports Pi and OMP separately.
+OMP diagnostics also report the pinned lifecycle contract's tested version, test date, and aggregate pass status without changing extension detection or warning semantics.
 When the install manifest records OMP, doctor, upgrade, and uninstall inspect that exact recorded extension path even if the environment override is later removed.
 Without a recorded OMP integration, doctor checks the shared resolver's default or `PI_CODING_AGENT_DIR` path without creating files.
 Named-profile auto-discovery remains unsupported; use an absolute `PI_CODING_AGENT_DIR` during init or configure the profile's `extensions:` list manually.
