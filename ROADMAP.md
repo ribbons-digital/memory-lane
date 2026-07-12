@@ -37,10 +37,13 @@ The next issue #169 follow-up slice still requires separate user approval.
 Issue #185 Slice 1A shipped in PR #194 as main commit `04dc166`, pinning a real OMP `16.4.5` two-form contract runner, production source-form equivalence, lifecycle evidence, boundary normalization, and strict aggregate registration/event gates.
 Issue #185 Slice 1B shipped in PR #196 as main commit `cccd858`: native `input` is verified through genuine interactive OMP, native `tool_result` is exercised deterministically, the generated bridge registers `input`, `turn_end`, and `tool_result` through shared CLI lifecycle entry points, proven OMP delegated task sessions suppress automatic capture, and the pinned report has `overallPass: true`.
 Issue #185 Slice 2 shipped in PR #198 as main commit `a880293`: OMP is a first-class detected and selectable harness with default and `PI_CODING_AGENT_DIR` installation roots, manifest-recorded path durability across doctor, upgrade, and uninstall, Pi side-by-side preservation, selective uninstall, strict path safety, the issue #147 custom binary-path fix, and real OMP `16.4.5` discovery without `--extension`.
-Issue #185 Slice 3 remains separate, requires explicit user approval, and has not started.
+Issue #185 Slice 3 shipped in PR #200 as main commit `17f2893`: documentation now records the verified OMP `16.4.5` rebuild-and-restart development loop and intentionally unused OMP-only APIs, while doctor exposes fixture-locked tested-version, test-date, and aggregate-pass metadata.
+Issue #185 is closed after all three first-class OMP integration slices shipped.
+PR #200 post-merge cleanup synced main and deleted the merged branch.
 
 Recent shipped work:
 
+- PR #200 shipped issue #185 Slice 3, documenting the real OMP development loop and intentional API boundaries, adding doctor contract metadata, closing the first-class OMP integration issue, and completing post-merge branch cleanup.
 - PR #198 shipped issue #185 Slice 2, adding first-class OMP installer and maintenance support, closing issue #147, preserving the strict pinned lifecycle contract, and proving normal installed-path discovery for both production source forms.
 - PR #196 shipped issue #185 Slice 1B, closing the OMP lifecycle contract gap with generated-bridge `input`, `turn_end`, and `tool_result` handlers, native interactive input evidence, deterministic success/error tool-result evidence, task-session capture suppression, and an `overallPass: true` pinned fixture.
 - PR #192 shipped issue #175 Slice C with opt-in versioned outcome events, review exposure events, agreement recommendation events, exclusion-aware scope routing, bounded retention, and a deterministic local capture-outcome exporter.
