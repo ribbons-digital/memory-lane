@@ -1,3 +1,4 @@
+import * as path from "node:path"
 import { Type } from "typebox"
 import { classifyPromptRoute, createLearningEventSink, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy } from "@memory-lane/lifecycle"
 import type { PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
@@ -18,6 +19,8 @@ export interface ExtensionContext {
   }
   sessionManager?: {
     getSessionFile?(): string | undefined
+    getHeader?(): unknown
+    getArtifactsDir?(): string | undefined
     getBranch?(): Array<{
       type: string
       message?: {
@@ -26,6 +29,7 @@ export interface ExtensionContext {
       }
     }>
   }
+  getSystemPrompt?(): string[]
 }
 
 export interface ExtensionAPI {
@@ -130,6 +134,22 @@ function piSessionId(ctx: ExtensionContext): string | undefined {
     return ctx.sessionManager?.getSessionFile?.()
   } catch {
     return undefined
+  }
+}
+
+const OMP_TASK_ROLE_SENTENCE = "You are a worker agent for delegated tasks."
+
+function isOmpTaskSession(ctx: ExtensionContext): boolean {
+  try {
+    const sessionFile = ctx.sessionManager?.getSessionFile?.()
+    const artifactsDir = ctx.sessionManager?.getArtifactsDir?.()
+    const systemPrompt = ctx.getSystemPrompt?.()
+    if (typeof sessionFile !== "string" || typeof artifactsDir !== "string" || !Array.isArray(systemPrompt)) return false
+    const nestedSessionFile = path.resolve(path.dirname(sessionFile)) === path.resolve(artifactsDir)
+    const delegatedWorkerRole = systemPrompt.some((part) => typeof part === "string" && part.includes(OMP_TASK_ROLE_SENTENCE))
+    return nestedSessionFile && delegatedWorkerRole
+  } catch {
+    return false
   }
 }
 
@@ -324,13 +344,21 @@ function normalizedTurnEnd(event: unknown, ctx: ExtensionContext): { turnId?: st
 function normalizedToolResult(event: unknown): { turnId?: string; toolName?: string; toolInput: unknown; toolResponse: unknown } {
   const record = eventRecord(event)
   const turnIndex = typeof record.turnIndex === "number" ? String(record.turnIndex) : undefined
+  const contentText = textPartsFromContent(record.content).join("\n").trim()
+  const isError = typeof record.isError === "boolean" ? record.isError : undefined
   return {
     turnId: stringField(record, "turnId") ?? turnIndex,
     toolName: stringField(record, "toolName"),
     toolInput: "toolInput" in record ? record.toolInput : record.input,
     toolResponse: "toolResponse" in record
       ? record.toolResponse
-      : { content: record.content, details: record.details, isError: record.isError },
+      : {
+          content: record.content,
+          details: record.details,
+          isError,
+          text: contentText || undefined,
+          exitCode: isError === undefined ? undefined : isError ? 1 : 0,
+        },
   }
 }
 
@@ -629,6 +657,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   // ── Read-only lifecycle recall injection ─────────────────
 
   pi.on("before_agent_start", async (event, ctx) => {
+    if (isOmpTaskSession(ctx)) return undefined
     const prompt = typeof event.prompt === "string" ? event.prompt.trim() : ""
     if (!prompt) return undefined
 
@@ -706,6 +735,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   // ── Pre-compaction summary handler ───────────────────────
 
   pi.on("session_before_compact", async (event, ctx) => {
+    if (isOmpTaskSession(ctx)) return undefined
     try {
       const config = loadConfig(process.env.PI_MEMORY_CONFIG_FILE ?? process.env.MEMORY_LANE_CONFIG)
       if (!preCompactSummaryEnabled(config)) return undefined
@@ -762,6 +792,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   // ── Input event handler (auto-save / suggest on user input) ──
 
   pi.on("input", async (event, ctx) => {
+    if (isOmpTaskSession(ctx)) return { action: "continue" }
     // Skip extension-generated events to avoid loops
     if (event.source === "extension") return { action: "continue" }
 
@@ -789,6 +820,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   // ── Turn end handler ───────────────────────────────────────
 
   pi.on("turn_end", async (event, ctx) => {
+    if (isOmpTaskSession(ctx)) return undefined
     const normalized = normalizedTurnEnd(event, ctx)
     const turnId = normalized.turnId ?? piSessionId(ctx)
 
@@ -811,6 +843,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   // ── Tool result handler ────────────────────────────────────
 
   pi.on("tool_result", async (event, ctx) => {
+    if (isOmpTaskSession(ctx)) return undefined
     const normalized = normalizedToolResult(event)
     const turnId = normalized.turnId ?? piSessionId(ctx)
 

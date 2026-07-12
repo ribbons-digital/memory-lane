@@ -79,6 +79,20 @@ function baseCtx(cwd: string): ExtensionContext {
   }
 }
 
+function ompTaskCtx(cwd: string): ExtensionContext {
+  const artifactsDir = path.join(cwd, "artifacts")
+  return {
+    cwd,
+    ui: { notify() {} },
+    getSystemPrompt: () => ["You are a worker agent for delegated tasks."],
+    sessionManager: {
+      getSessionFile: () => path.join(artifactsDir, "child.jsonl"),
+      getArtifactsDir: () => artifactsDir,
+      getBranch: () => [],
+    },
+  }
+}
+
 type FakeNotification = { message: string; level?: "info" | "warning" | "error" }
 
 type FakeBranchEntry = {
@@ -219,6 +233,89 @@ test("before_agent_start injects shared lifecycle memory block for relevant appr
     source: "memory-lane",
     lifecycleEvent: "user_prompt_submit",
   })
+  assert.equal(fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8"), before)
+})
+
+test("OMP task-session detection requires nested ownership and delegated-worker role", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const saveTool = pi.tools.get("memory_save")
+  await saveTool.execute("tool-1", { text: "This repo uses pnpm test for verification", category: "project" }, undefined, () => {}, baseCtx(env.dir))
+
+  const artifactsDir = path.join(env.dir, "artifacts")
+  const nestedSessionFile = path.join(artifactsDir, "child.jsonl")
+  const delegatedPrompt = () => ["You are a worker agent for delegated tasks."]
+  const ordinaryPrompt = () => ["You are the main coding agent."]
+  const contexts: ExtensionContext[] = [
+    baseCtx(env.dir),
+    {
+      ...baseCtx(env.dir),
+      sessionManager: {
+        getSessionFile: () => path.join(env.dir, "branch.jsonl"),
+        getHeader: () => ({ parentSession: "main-session" }),
+      },
+    },
+    {
+      ...baseCtx(env.dir),
+      getSystemPrompt: ordinaryPrompt,
+      sessionManager: {
+        getSessionFile: () => nestedSessionFile,
+        getArtifactsDir: () => artifactsDir,
+      },
+    },
+    { ...baseCtx(env.dir), getSystemPrompt: delegatedPrompt },
+    {
+      ...baseCtx(env.dir),
+      getSystemPrompt: delegatedPrompt,
+      sessionManager: { getArtifactsDir: () => artifactsDir },
+    },
+    {
+      ...baseCtx(env.dir),
+      getSystemPrompt: (() => "malformed") as unknown as () => string[],
+      sessionManager: {
+        getSessionFile: () => nestedSessionFile,
+        getArtifactsDir: () => artifactsDir,
+      },
+    },
+    {
+      ...baseCtx(env.dir),
+      getSystemPrompt: () => { throw new Error("unavailable") },
+      sessionManager: {
+        getSessionFile: () => { throw new Error("unavailable") },
+        getArtifactsDir: () => artifactsDir,
+      },
+    },
+  ]
+
+  for (const ctx of contexts) {
+    const result = await runBeforeAgentStart(pi, { prompt: "How do I verify this repo?" }, ctx)
+    assert.equal(result?.message.customType, "memory-lane")
+  }
+  assert.equal(await runBeforeAgentStart(pi, { prompt: "How do I verify this repo?" }, ompTaskCtx(env.dir)), undefined)
+})
+
+test("OMP task sessions suppress every automatic lifecycle handler", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const mainCtx = baseCtx(env.dir)
+  const taskCtx = ompTaskCtx(env.dir)
+  const saveTool = pi.tools.get("memory_save")
+  await saveTool.execute("tool-1", { text: "This repo uses pnpm test for verification", category: "project" }, undefined, () => {}, mainCtx)
+  const before = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8")
+
+  assert.equal(await runBeforeAgentStart(pi, { prompt: "How do I verify this repo?" }, taskCtx), undefined)
+  assert.deepEqual(await runEvent(pi, "input", { source: "interactive", text: "Remember that this repo uses pnpm test" }, taskCtx), { action: "continue" })
+  assert.equal(await runEvent(pi, "turn_end", { lastUserMessage: "Remember that this repo uses pnpm test" }, taskCtx), undefined)
+  assert.equal(await runEvent(pi, "tool_result", {
+    toolName: "bash",
+    toolInput: { command: "pnpm test" },
+    toolResponse: { exit_code: 0, stdout: "passing" },
+  }, taskCtx), undefined)
+  assert.equal(await runEvent(pi, "session_before_compact", { reason: "threshold" }, taskCtx), undefined)
   assert.equal(fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8"), before)
 })
 

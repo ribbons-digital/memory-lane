@@ -6,7 +6,7 @@ import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import { classifyPromptRoute, createLearningEventSink, handleSessionEnd, createOpenAICompatibleProvider, purgeTraces, traceStatus, type TraceStatus } from "@memory-lane/lifecycle"
-import { runPiHookCommand } from "./pi-hook.js"
+import { runPiHookCommand, type PiCommand } from "./pi-hook.js"
 import { handleMcp } from "./commands/mcp.js"
 import { handleInit } from "./commands/init.js"
 import { handleUninstall } from "./commands/uninstall.js"
@@ -767,7 +767,7 @@ function handleMigrate(ctx: CliContext): void {
 
 const claudeHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start", "session-end", "pre-compact"])
 const codexHookCommands = new Set<string>(["user-prompt-submit", "stop", "post-tool-use", "session-start", "session-end", "pre-compact"])
-const piHookCommands = new Set<string>(["pre-compact"])
+const piHookCommands: Record<PiCommand, true> = { input: true, "turn-end": true, "post-tool-use": true, "pre-compact": true }
 
 async function handleCodex(ctx: CliContext): Promise<void> {
   const event = ctx.rest[0]
@@ -803,12 +803,12 @@ async function handleClaude(ctx: CliContext): Promise<void> {
 
 async function handlePi(ctx: CliContext): Promise<void> {
   const event = ctx.rest[0]
-  if (!piHookCommands.has(event)) {
-    console.log(formatError("Unknown Pi hook event. Usage: memory-lane pi pre-compact", ctx.json))
+  if (!Object.hasOwn(piHookCommands, event)) {
+    console.log(formatError("Unknown Pi hook event. Usage: memory-lane pi input|turn-end|post-tool-use|pre-compact", ctx.json))
     process.exit(2)
   }
   const payloadText = await readStdin()
-  const output = await runPiHookCommand(event as "pre-compact", {
+  const output = await runPiHookCommand(event as PiCommand, {
     engine: ctx.engine,
     payloadText,
     env: process.env,

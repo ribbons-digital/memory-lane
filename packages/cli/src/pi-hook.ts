@@ -1,7 +1,7 @@
 import {
   appendHookDebugLog, hookDebugEnabled, loadConfig, skippedSecretCount, type HookDebugLogStatus, type MemoryEngine, type SaveResult,
 } from "@memory-lane/core"
-import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePreCompact, shouldCaptureLifecycleTrace, type SessionMessage } from "@memory-lane/lifecycle"
+import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleStop, shouldCaptureLifecycleTrace, type PostToolUseInput, type SessionMessage } from "@memory-lane/lifecycle"
 
 export interface RunPiHookOptions {
   engine: MemoryEngine
@@ -11,17 +11,39 @@ export interface RunPiHookOptions {
   configPath?: string
 }
 
-type PiCommand = "pre-compact"
+export type PiCommand = "input" | "turn-end" | "post-tool-use" | "pre-compact"
 
-interface PiPreCompactPayloadInput {
+interface PiLifecyclePayloadInput {
   cwd: string
   sessionId?: string
   turnId?: string
+}
+
+interface PiInputPayloadInput extends PiLifecyclePayloadInput {
+  source?: string
+  text: string
+}
+
+interface PiTurnEndPayloadInput extends PiLifecyclePayloadInput {
+  lastUserMessage?: string
+  lastAssistantMessage?: string
+}
+
+interface PiPostToolUsePayloadInput extends PiLifecyclePayloadInput {
+  toolName: string
+  toolInput: unknown
+  toolResponse: unknown
+}
+
+interface PiPreCompactPayloadInput extends PiLifecyclePayloadInput {
   trigger?: string
   messages: SessionMessage[]
 }
 
 type ParsedPiPayload =
+  | { kind: "input"; input: PiInputPayloadInput }
+  | { kind: "turn-end"; input: PiTurnEndPayloadInput }
+  | { kind: "post-tool-use"; input: PiPostToolUsePayloadInput }
   | { kind: "pre-compact"; input: PiPreCompactPayloadInput }
   | { kind: "invalid"; reason: string }
 
@@ -52,7 +74,7 @@ function parseSessionMessages(value: unknown): SessionMessage[] {
   return messages
 }
 
-function parsePiPayload(text: string): ParsedPiPayload {
+function parsePiPayload(command: PiCommand, text: string): ParsedPiPayload {
   let payload: unknown
   try {
     payload = JSON.parse(text)
@@ -62,14 +84,62 @@ function parsePiPayload(text: string): ParsedPiPayload {
 
   const obj = asRecord(payload)
   if (!obj) return { kind: "invalid", reason: "payload is not an object" }
-  const cwd = stringField(obj, "cwd")
+  const cwd = stringField(obj, "cwd")?.trim()
   if (!cwd) return { kind: "invalid", reason: "payload missing cwd" }
+  const event = stringField(obj, "event")
+  if (event && event !== command) return { kind: "invalid", reason: `event mismatch: command ${command} received ${event}` }
+  const common: PiLifecyclePayloadInput = {
+    cwd,
+    sessionId: (stringField(obj, "session_id") ?? stringField(obj, "sessionId"))?.trim() || undefined,
+    turnId: (stringField(obj, "turn_id") ?? stringField(obj, "turnId"))?.trim() || undefined,
+  }
+
+  if (command === "input") {
+    const textValue = stringField(obj, "text")
+    if (textValue === undefined) return { kind: "invalid", reason: "input payload missing text" }
+    return {
+      kind: "input",
+      input: {
+        ...common,
+        source: stringField(obj, "source"),
+        text: textValue,
+      },
+    }
+  }
+
+  if (command === "turn-end") {
+    return {
+      kind: "turn-end",
+      input: {
+        ...common,
+        lastUserMessage: stringField(obj, "last_user_message") ?? stringField(obj, "lastUserMessage"),
+        lastAssistantMessage: stringField(obj, "last_assistant_message") ?? stringField(obj, "lastAssistantMessage"),
+      },
+    }
+  }
+
+  if (command === "post-tool-use") {
+    const toolName = (stringField(obj, "tool_name") ?? stringField(obj, "toolName"))?.trim()
+    if (!toolName) return { kind: "invalid", reason: "post-tool-use payload missing tool name" }
+    return {
+      kind: "post-tool-use",
+      input: {
+        ...common,
+        toolName,
+        toolInput: "tool_input" in obj ? obj.tool_input : obj.toolInput,
+        toolResponse: "tool_response" in obj
+          ? obj.tool_response
+          : "toolResponse" in obj
+            ? obj.toolResponse
+            : { content: obj.content, details: obj.details, isError: obj.is_error ?? obj.isError },
+      },
+    }
+  }
+
   return {
     kind: "pre-compact",
     input: {
-      cwd,
-      sessionId: (stringField(obj, "session_id") ?? stringField(obj, "sessionId"))?.trim() || undefined,
-      turnId: (stringField(obj, "turn_id") ?? stringField(obj, "turnId"))?.trim() || undefined,
+      ...common,
       trigger: stringField(obj, "trigger"),
       messages: parseSessionMessages(obj.messages),
     },
@@ -114,11 +184,12 @@ function output(data: { saved?: number; skipped?: number; discarded?: number; re
   return JSON.stringify({ ok: true, data: { saved: 0, skipped: 0, discarded: 0, ...data } })
 }
 
-function counts(saved: SaveResult[]): { saved: number; skipped: number; skippedSecret?: number } {
+function counts(saved: SaveResult[], discarded = 0): { saved: number; skipped: number; skippedSecret?: number; discarded: number } {
   return {
     saved: saved.filter((result) => result.status === "saved").length,
     skipped: saved.filter((result) => result.status === "skipped").length,
     skippedSecret: skippedSecretCount(saved),
+    discarded,
   }
 }
 
@@ -137,13 +208,61 @@ export async function runPiHookCommand(command: PiCommand, options: RunPiHookOpt
     }, { filePath: options.hookDebugLogPath })
   }
 
-  const parsed = parsePiPayload(options.payloadText)
+  const parsed = parsePiPayload(command, options.payloadText)
   if (parsed.kind === "invalid") {
     log("noop", { reason: parsed.reason })
     return output({ reason: parsed.reason })
   }
 
   try {
+    if (parsed.kind === "input") {
+      if (parsed.input.source === "extension") {
+        const reason = "extension-generated input"
+        log("noop", { reason })
+        return output({ reason })
+      }
+      options.engine.refreshScope(parsed.input.cwd)
+      const result = handleStop(options.engine, {
+        cwd: parsed.input.cwd,
+        sessionId: parsed.input.sessionId,
+        turnId: parsed.input.turnId ?? parsed.input.sessionId,
+        lastUserMessage: parsed.input.text,
+      }, { adapter: "pi" })
+      const resultCounts = counts(result.saved, result.discarded.length)
+      log("ok", { ...resultCounts, additionalContext: false, warningCount: 0 })
+      return output(resultCounts)
+    }
+
+    if (parsed.kind === "turn-end") {
+      options.engine.refreshScope(parsed.input.cwd)
+      const result = handleStop(options.engine, {
+        cwd: parsed.input.cwd,
+        sessionId: parsed.input.sessionId,
+        turnId: parsed.input.turnId ?? parsed.input.sessionId,
+        lastUserMessage: parsed.input.lastUserMessage,
+        lastAssistantMessage: parsed.input.lastAssistantMessage,
+      }, { adapter: "pi" })
+      const resultCounts = counts(result.saved, result.discarded.length)
+      log("ok", { ...resultCounts, additionalContext: false, warningCount: 0 })
+      return output(resultCounts)
+    }
+
+    if (parsed.kind === "post-tool-use") {
+      options.engine.refreshScope(parsed.input.cwd)
+      const input: PostToolUseInput = {
+        cwd: parsed.input.cwd,
+        sessionId: parsed.input.sessionId,
+        turnId: parsed.input.turnId ?? parsed.input.sessionId,
+        toolName: parsed.input.toolName,
+        toolInput: parsed.input.toolInput,
+        toolResponse: parsed.input.toolResponse,
+      }
+      const result = handlePostToolUse(options.engine, input, { adapter: "pi" })
+      const resultCounts = counts(result.saved, result.discarded.length)
+      log("ok", { ...resultCounts, additionalContext: false, warningCount: 0 })
+      return output(resultCounts)
+    }
+
     const config = loadConfig(options.configPath)
     if (parsed.input.messages.length && shouldCaptureLifecycleTrace(parsed.input.cwd, config)) {
       captureLifecycleTrace({
@@ -203,7 +322,7 @@ export async function runPiHookCommand(command: PiCommand, options: RunPiHookOpt
 
     const savedResults = saveSessionSummaryCandidates(options.engine, candidates)
     const resultCounts = counts(savedResults)
-    log("ok", { saved: resultCounts.saved, skipped: resultCounts.skipped, skippedSecret: resultCounts.skippedSecret, discarded: 0, additionalContext: false, warningCount: 0 })
+    log("ok", { ...resultCounts, additionalContext: false, warningCount: 0 })
     return output(resultCounts)
   } catch (error) {
     const reason = "hook handling failed"
