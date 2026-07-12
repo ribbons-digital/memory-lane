@@ -808,40 +808,45 @@ async function runSourceForm(options: {
   }
 }
 
-function taskSessionResult(results: Array<{ form: SourceForm; entries: LogEntry[]; memoryText: string }>) {
-  const sourceForms = results.map((result) => {
+export function taskSessionResult(results: Array<{ form: SourceForm; entries: LogEntry[]; memoryText: string }>) {
+  const evaluatedForms = results.map((result) => {
     const childEvents = result.entries.filter((entry) => entry.kind === "event" && entry.owner === "production" && entry.contextValues?.taskSession === true)
     const observedEvents = [...new Set(childEvents.map((entry) => entry.name))].sort()
     const requiredEvents = ["before_agent_start", "turn_end", "tool_result"]
     const missingEvents = requiredEvents.filter((event) => !observedEvents.includes(event))
-    const reliableTaskSignals = childEvents.length > 0 && childEvents.every((entry) =>
-      entry.contextValues?.nestedSessionFile === true && entry.contextValues.subagentRole === true)
+    const nestedSessionFile = childEvents.length > 0
+      && childEvents.every((entry) => entry.contextValues?.nestedSessionFile === true)
+    const subagentRole = childEvents.length > 0
+      && childEvents.every((entry) => entry.contextValues?.subagentRole === true)
+    const reliableTaskSignals = nestedSessionFile && subagentRole
     const suppressedResults = requiredEvents.every((event) =>
       childEvents.filter((entry) => entry.name === event).every((entry) => Object.keys(entry.resultShape ?? {}).length === 0))
     const persistedTaskMemory = result.memoryText.includes("OMP task-session capture should be suppressed")
     return {
-      sourceForm: result.form,
-      observedEvents,
-      missingEvents,
-      taskSignals: {
-        nestedSessionFile: reliableTaskSignals,
-        subagentRole: reliableTaskSignals,
-        parentLineageObserved: childEvents.some((entry) => entry.contextValues?.parentLineage === true),
+      reliableTaskSignals,
+      report: {
+        sourceForm: result.form,
+        observedEvents,
+        missingEvents,
+        taskSignals: {
+          nestedSessionFile,
+          subagentRole,
+          parentLineageObserved: childEvents.some((entry) => entry.contextValues?.parentLineage === true),
+        },
+        automaticCaptureSuppressed: suppressedResults && !persistedTaskMemory,
       },
-      automaticCaptureSuppressed: suppressedResults && !persistedTaskMemory,
     }
   })
-  const status = sourceForms.every((result) =>
-    result.missingEvents.length === 0
-    && result.taskSignals.nestedSessionFile
-    && result.taskSignals.subagentRole
-    && result.automaticCaptureSuppressed)
+  const status = evaluatedForms.every(({ reliableTaskSignals, report }) =>
+    report.missingEvents.length === 0
+    && reliableTaskSignals
+    && report.automaticCaptureSuppressed)
     ? "pass"
     : "fail"
   return {
     status,
     policy: "Suppress automatic lifecycle capture only when nested session-file ownership and OMP's delegated-worker system role both identify a task session.",
-    sourceForms,
+    sourceForms: evaluatedForms.map(({ report }) => report),
   }
 }
 

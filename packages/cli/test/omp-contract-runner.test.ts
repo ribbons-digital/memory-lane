@@ -13,6 +13,7 @@ import {
   ompContractOverallPass,
   isolatedOmpEnvironment,
   ompRpcCommandPlan,
+  taskSessionResult,
   validateOmpContract,
   type ContractEvent,
   type EventStatus,
@@ -161,6 +162,26 @@ describe("OMP contract runner", () => {
     assert.doesNotMatch(fixture, /\/Users\/|\/var\/folders\/|\/private\/var\//u)
     assert.doesNotMatch(fixture, /MEMORY_LANE_CONTRACT_KEY|contract-only/u)
     assert.doesNotMatch(fixture, /Released v9\.9\.9 after OMP contract verification/u)
+  })
+
+  it("reports OMP task-session ownership and worker-role signals independently", () => {
+    const requiredEvents = ["before_agent_start", "turn_end", "tool_result"]
+    for (const [nestedSessionFile, subagentRole] of [[true, false], [false, true]] as const) {
+      const entries = requiredEvents.map((name) => ({
+        kind: "event" as const,
+        name,
+        owner: "production" as const,
+        contextValues: { taskSession: true, nestedSessionFile, subagentRole, parentLineage: false },
+        resultShape: {},
+      }))
+      const result = taskSessionResult([{ form: "adapter", entries, memoryText: "" }])
+      assert.equal(result.status, "fail")
+      assert.deepEqual(result.sourceForms[0].taskSignals, {
+        nestedSessionFile,
+        subagentRole,
+        parentLineageObserved: false,
+      })
+    }
   })
 
   it("requires every lifecycle event to pass, including production-design omissions", () => {
