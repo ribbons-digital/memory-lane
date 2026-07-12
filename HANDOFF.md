@@ -126,5 +126,5 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.47` / commit `28e5961`.
-- Current branch status: issue #185 Slice 1B closes the OMP lifecycle contract with `overallPass: true`; OMP installer work and the next issue #169 follow-up remain separately scoped and require user approval.
+- Current main status: PR #196 merged issue #185 Slice 1B as commit `cccd858`, closing the OMP lifecycle contract with `overallPass: true`; issue #185 Slice 2 installer, manifest, init, doctor, upgrade, and uninstall work remains separately approval-gated with its issue #147 manifest-path dependency.
 - Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, PR #127, PR #130, PR #174, and PR #192.
