@@ -290,6 +290,50 @@ function sessionMessagesFromUnknownMessages(values: unknown): SessionMessage[] {
   return messages
 }
 
+function eventRecord(event: unknown): Record<string, unknown> {
+  return event && typeof event === "object" ? event as Record<string, unknown> : {}
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key]
+  return typeof value === "string" ? value : undefined
+}
+
+function lastBranchMessage(ctx: ExtensionContext, role: "user" | "assistant"): string | undefined {
+  try {
+    const branch = ctx.sessionManager?.getBranch?.()
+    if (!Array.isArray(branch)) return undefined
+    return sessionMessagesFromPiBranch(branch).filter((message) => message.role === role).at(-1)?.content
+  } catch {
+    return undefined
+  }
+}
+
+function normalizedTurnEnd(event: unknown, ctx: ExtensionContext): { turnId?: string; lastUserMessage?: string; lastAssistantMessage?: string } {
+  const record = eventRecord(event)
+  const message = eventRecord(record.message)
+  const turnIndex = typeof record.turnIndex === "number" ? String(record.turnIndex) : undefined
+  const assistantContent = textPartsFromContent(message.content).join("\n").trim()
+  return {
+    turnId: stringField(record, "turnId") ?? turnIndex,
+    lastUserMessage: stringField(record, "lastUserMessage") ?? lastBranchMessage(ctx, "user"),
+    lastAssistantMessage: stringField(record, "lastAssistantMessage") ?? (assistantContent || lastBranchMessage(ctx, "assistant")),
+  }
+}
+
+function normalizedToolResult(event: unknown): { turnId?: string; toolName?: string; toolInput: unknown; toolResponse: unknown } {
+  const record = eventRecord(event)
+  const turnIndex = typeof record.turnIndex === "number" ? String(record.turnIndex) : undefined
+  return {
+    turnId: stringField(record, "turnId") ?? turnIndex,
+    toolName: stringField(record, "toolName"),
+    toolInput: "toolInput" in record ? record.toolInput : record.input,
+    toolResponse: "toolResponse" in record
+      ? record.toolResponse
+      : { content: record.content, details: record.details, isError: record.isError },
+  }
+}
+
 function sessionMessagesFromPiCompactionEvent(event: any): SessionMessage[] {
   const preparation = event?.preparation
   const preparedMessages = [
@@ -745,7 +789,8 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   // ── Turn end handler ───────────────────────────────────────
 
   pi.on("turn_end", async (event, ctx) => {
-    const turnId = event.turnId ?? piSessionId(ctx)
+    const normalized = normalizedTurnEnd(event, ctx)
+    const turnId = normalized.turnId ?? piSessionId(ctx)
 
     try {
       const e = getEngine(ctx.cwd)
@@ -753,8 +798,8 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         cwd: ctx.cwd,
         sessionId: piSessionId(ctx),
         turnId,
-        lastUserMessage: event.lastUserMessage,
-        lastAssistantMessage: event.lastAssistantMessage,
+        lastUserMessage: normalized.lastUserMessage,
+        lastAssistantMessage: normalized.lastAssistantMessage,
       }, { adapter: "pi" })
 
       await runLifecycleWrite("turn_end", ctx, turnId, result)
@@ -766,7 +811,8 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   // ── Tool result handler ────────────────────────────────────
 
   pi.on("tool_result", async (event, ctx) => {
-    const turnId = event.turnId ?? piSessionId(ctx)
+    const normalized = normalizedToolResult(event)
+    const turnId = normalized.turnId ?? piSessionId(ctx)
 
     try {
       const e = getEngine(ctx.cwd)
@@ -774,9 +820,9 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         cwd: ctx.cwd,
         sessionId: piSessionId(ctx),
         turnId,
-        toolName: event.toolName,
-        toolInput: event.toolInput,
-        toolResponse: event.toolResponse,
+        toolName: normalized.toolName ?? "unknown",
+        toolInput: normalized.toolInput,
+        toolResponse: normalized.toolResponse,
       } as PostToolUseInput, { adapter: "pi" })
 
       await runLifecycleWrite("tool_result", ctx, turnId, result)

@@ -201,6 +201,19 @@ When changing generated harness adapters, installer templates, or release-style 
 
 For pi specifically, `before_agent_start` must return a custom message object such as `{ message: { customType, content, display, details? } }`; returning a raw string is invalid even if the extension loads successfully.
 
+For OMP compatibility work, run the real-runtime contract gate against the repository-pinned OMP version before releasing changes to the pi adapter, generated extension sources, or future OMP installer support:
+
+```bash
+pnpm --filter @memory-lane/pi-adapter build
+pnpm --filter @memory-lane/cli build
+pnpm --filter @memory-lane/cli eval:omp-contract -- --as-of YYYY-MM-DD --out test/fixtures/omp-contract-16.4.5.json
+```
+
+The gate requires OMP `16.4.5`, an authenticated model, and `expect` for the interactive TUI probe.
+It loads both production extension forms through a real `omp --extension` scratch profile, records sanitized per-event evidence, and exits non-zero when a registered contract remains unverified or fails.
+The tested version and date live in `packages/cli/test/fixtures/omp-contract-16.4.5.json`.
+Do not claim first-class OMP lifecycle parity while that report has `overallPass: false`.
+
 #### Optional local evals
 
 Memory Lane eval runners are developer commands and stay outside default CI unless a specific task says otherwise.
