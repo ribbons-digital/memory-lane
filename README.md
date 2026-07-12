@@ -624,6 +624,8 @@ memory-lane init --project-local  Initialize sandbox-friendly project-local stor
 memory-lane upgrade [--yes]       Download the latest binary and re-apply existing harness configs
 memory-lane tuneup [purge]        Inspect or purge local learning capture data
 memory-lane session-end --confirm Generate a pending session summary from stdin JSON
+memory-lane pi input|turn-end|post-tool-use|pre-compact
+                                  Generated Pi bridge lifecycle commands from stdin JSON
 memory-lane obsidian ...          Manage optional Obsidian mirror/import workflows
 ```
 

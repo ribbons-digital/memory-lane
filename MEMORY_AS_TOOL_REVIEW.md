@@ -168,7 +168,7 @@ Memory Lane's recall stack is stronger and more structured than the paper's simp
 | Lifecycle injection | Budgeted selected memory context | `packages/lifecycle/src/injection.ts` |
 | MCP tools | `memory_recall`, `memory_continuity`, `memory_status`, etc. | `packages/mcp-server` |
 | CLI tools | `memory-lane recall`, `continuity`, `status`, `review`, etc. | `packages/cli` |
-| Pi adapter | `memory_continuity`, `memory_recall`, `/memory continuity` | `packages/pi-adapter` |
+| Pi adapter and generated bridge | `memory_continuity`, `memory_recall`, `/memory continuity`, and low-noise lifecycle writes | `packages/pi-adapter`, `packages/cli/src/installer/config.ts` |
 
 ### Difference from the paper
 
@@ -336,8 +336,8 @@ memory-lane status --json
 5. **Consolidation remains mostly manual.**
    - Revision primitives exist, but Memory Lane does not yet propose synthesized replacements or conflict resolutions.
 
-6. **A generated Pi parity detail was found during review.**
-   - Repo-local Pi and the generated/native Pi bridge should keep operating-guidance rendering aligned with the shared model and CLI caps when future adapter parity work happens.
+6. **Generated Pi parity is now covered by the OMP contract.**
+   - Repo-local Pi and the generated/native Pi bridge share continuity routing and low-noise lifecycle writes for `input`, `turn_end`, and `tool_result`; future adapter work should keep the pinned OMP contract green.
 
 ---
 

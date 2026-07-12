@@ -156,6 +156,11 @@ memory-lane codex user-prompt-submit
 memory-lane codex stop
 memory-lane codex post-tool-use
 memory-lane codex pre-compact
+
+memory-lane pi input
+memory-lane pi turn-end
+memory-lane pi post-tool-use
+memory-lane pi pre-compact
 ```
 
 - Claude adapter is for **Claude Code CLI hooks**, not Claude Desktop.
