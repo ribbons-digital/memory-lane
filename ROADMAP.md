@@ -34,9 +34,9 @@ Slice C records opt-in, content-free local learning events for suggestion and op
 PR #174 shipped issue #169 Slice B as a maintainer-only lifecycle runner that converts opt-in Slice A trace files into a deterministic `schemaVersion: 1` LongMemEval-compatible smoke dataset for explicit core adapter use.
 PR #179 and PR #182 scoped review and revision maintenance mutations to the current project, with PR #180 documenting scoped review maintenance.
 The next issue #169 follow-up slice still requires separate user approval.
-Issue #185 Slice 1 now has a pinned OMP `16.4.5` real-runtime contract smoke covering both production extension forms through `omp --extension` in scratch profiles.
-The native adapter passes `before_agent_start`, normalized `turn_end`, and `session_before_compact`; automated TUI did not expose `input`, and the configured model did not execute the forced tool, so live `tool_result` remains unverified.
-The release bridge passes its registered `before_agent_start` and `session_before_compact` paths but does not register `input`, `turn_end`, or `tool_result`; first-class OMP installer work remains gated while the committed report has `overallPass: false`.
+Issue #185 Slice 1A shipped in PR #194 as main commit `04dc166`, pinning a real OMP `16.4.5` two-form contract runner, production source-form equivalence, lifecycle evidence, boundary normalization, and strict aggregate registration/event gates.
+Issue #185 Slice 1B is next: verify native `input` through genuine interactive OMP, exercise native `tool_result` deterministically, add generated-bridge `input`, `turn_end`, and `tool_result` handlers through shared CLI lifecycle entry points, define task/subagent behavior, and regenerate the pinned report until `overallPass: true`.
+First-class OMP installer work remains gated until Slice 1B closes those contract gaps.
 
 Recent shipped work:
 

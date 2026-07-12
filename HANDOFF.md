@@ -3,13 +3,13 @@
 ## Current state
 
 - PR #192 merged issue #175 Slice C as main commit `415af0b`, adding durable local outcome events, bounded retention, and a deterministic maintainer capture-outcome dataset exporter.
-- Issue #185 Slice 1 is active on `feat/omp-contract-185`, with a real OMP `16.4.5` contract runner and committed per-event report; installer support remains blocked because the report has `overallPass: false`.
+- PR #194 merged issue #185 Slice 1A as main commit `04dc166`, adding the pinned real-OMP `16.4.5` contract runner, production source-form equivalence checks, lifecycle boundary normalization evidence, and an aggregate gate that remains intentionally false until Slice 1B closes native event verification and generated-bridge handler gaps.
 - PR #190 merged issue #181 as main commit `14240fb`, making `memory-lane save --kind` persist explicit valid kinds, preserve omitted-kind inference, reject invalid kinds before writes, and list accepted kinds in CLI help.
 - PR #188 merged issue #178 as main commits `b2093df`, `4870a2f`, and `9d5422a`, isolating fallback MCP request scopes while preserving bundled per-path engine behavior.
 - PR #186 merged issue #177 as main commit `a7745af`, adding explicit `--all` maintenance mode to Pi review and delete while preserving scoped defaults.
 - PR #183 merged issue #145 as main commit `9b16939`, increasing new memory IDs to 128 random bits while preserving legacy short IDs and duplicate-ID folding semantics.
-- Current repo status: main is synced through PR #192, which completed issue #175 Slice C.
-- Slice C adds opt-in content-free local learning events for suggestion and agreement outcomes plus a maintainer capture-outcome dataset exporter.
+- Current repo status: main is synced through PR #194; the next approved work is issue #185 Slice 1B, while installer support remains blocked until the OMP contract reports `overallPass: true`.
+- Slice 1B must verify native `input` and `tool_result`, add generated-bridge `input`, `turn_end`, and `tool_result` handlers through shared CLI lifecycle entry points, define task/subagent behavior, and regenerate the pinned report.
 - PR #182 scoped revision maintenance mutations to the current project and documented the revision command options.
 - PR #180 documented scoped review maintenance after PR #179 scoped review mutations to the current project.
 - PR #174 shipped issue #169 Slice B trace dataset conversion as a maintainer-only local runner for opt-in Slice A trace files.
