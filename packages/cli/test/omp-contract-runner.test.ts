@@ -4,7 +4,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
-import { installPi, piAdapterImportSource, piCliBridgeSource } from "../src/installer/config.js"
+import { installOmp, installPi, piAdapterImportSource, piCliBridgeSource } from "../src/installer/config.js"
 import {
   CONTRACT_EVENTS,
   EXPECTED_REGISTRATIONS,
@@ -281,7 +281,7 @@ describe("OMP contract runner", () => {
   })
 })
 
-describe("production Pi extension source equivalence", () => {
+describe("production Pi and OMP extension source equivalence", () => {
   it("installPi writes byte-identical adapter-import source for a development checkout", () => {
     const root = tempDir()
     const homeDir = path.join(root, "home")
@@ -302,6 +302,34 @@ describe("production Pi extension source equivalence", () => {
 
     const result = installPi(installOptions(homeDir, binaryPath))
 
+    assert.equal(fs.readFileSync(result.configPath!, "utf8"), piCliBridgeSource(binaryPath))
+  })
+
+  it("installOmp writes byte-identical adapter-import source for a development checkout", () => {
+    const root = tempDir()
+    const homeDir = path.join(root, "home")
+    const agentDir = path.join(root, "omp-agent")
+    const binaryPath = path.join(root, "packages/cli/dist/index.js")
+    const adapterPath = path.join(root, "packages/pi-adapter/dist/index.js")
+    fs.mkdirSync(path.dirname(adapterPath), { recursive: true })
+    fs.writeFileSync(adapterPath, "export default function () {}\n", "utf8")
+
+    const result = installOmp({
+      ...installOptions(homeDir, binaryPath),
+      env: { PI_CODING_AGENT_DIR: agentDir },
+    })
+
+    assert.equal(result.configPath, path.join(agentDir, "extensions", "memory-lane", "index.ts"))
+    assert.equal(fs.readFileSync(result.configPath!, "utf8"), piAdapterImportSource(adapterPath))
+  })
+
+  it("installOmp writes byte-identical CLI bridge source for a release binary", () => {
+    const root = tempDir()
+    const homeDir = path.join(root, "home")
+    const binaryPath = path.join(root, "bin/memory-lane")
+    const result = installOmp({ ...installOptions(homeDir, binaryPath), env: {} })
+
+    assert.equal(result.configPath, path.join(homeDir, ".omp", "agent", "extensions", "memory-lane", "index.ts"))
     assert.equal(fs.readFileSync(result.configPath!, "utf8"), piCliBridgeSource(binaryPath))
   })
 })

@@ -31,7 +31,10 @@ export interface IntegrationDiagnosticPaths {
   claudeCodeUserSettings: string[]
   claudeCodeProjectSettings: string | null
   piExtension: string
+  ompExtension: string | null
 }
+
+export type IntegrationDiagnosticWarnings = Partial<Record<keyof IntegrationDiagnosticPaths, string[]>>
 
 export interface IntegrationDiagnostics {
   summary: {
@@ -62,30 +65,61 @@ export interface IntegrationDiagnostics {
     detected: boolean
     warnings: string[]
   }
+  ompExtension: {
+    checkedPath: string | null
+    exists: boolean
+    detected: boolean
+    warnings: string[]
+  }
   notes: string[]
 }
 
 export interface DiagnoseIntegrationsOptions {
   cwd?: string | null
   paths?: Partial<IntegrationDiagnosticPaths>
+  warnings?: IntegrationDiagnosticWarnings
+  env?: NodeJS.ProcessEnv | Record<string, string | undefined>
+  homeDir?: string
 }
 
 const emptyCommands = (): HookCommandStatus => ({ userPromptSubmit: false, stop: false, postToolUse: false })
 
-export function defaultIntegrationDiagnosticPaths(cwd?: string | null): IntegrationDiagnosticPaths {
-  const home = os.homedir()
+/**
+ * Resolve OMP's default-profile agent directory.
+ * Relative overrides intentionally follow OMP's cwd-dependent path.resolve behavior.
+ */
+export function resolveOmpAgentDir(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+  homeDir: string,
+): string {
+  const override = env.PI_CODING_AGENT_DIR?.trim()
+  return override ? path.resolve(override) : path.join(homeDir, ".omp", "agent")
+}
+
+export function defaultIntegrationDiagnosticPaths(
+  cwd?: string | null,
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+  homeDir: string = env.HOME || os.homedir(),
+): IntegrationDiagnosticPaths {
+  const ompAgentDir = resolveOmpAgentDir(env, homeDir)
   return {
-    claudeDesktopConfig: path.join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json"),
-    codexUserHooks: path.join(home, ".codex", "hooks.json"),
+    claudeDesktopConfig: path.join(homeDir, "Library", "Application Support", "Claude", "claude_desktop_config.json"),
+    codexUserHooks: path.join(homeDir, ".codex", "hooks.json"),
     codexProjectHooks: cwd ? path.join(cwd, ".codex", "hooks.json") : null,
-    claudeCodeUserSettings: [path.join(home, ".claude", "settings.json"), path.join(home, ".claude", "settings.local.json")],
+    claudeCodeUserSettings: [path.join(homeDir, ".claude", "settings.json"), path.join(homeDir, ".claude", "settings.local.json")],
     claudeCodeProjectSettings: cwd ? path.join(cwd, ".claude", "settings.local.json") : null,
-    piExtension: path.join(home, ".pi", "agent", "extensions", "memory-lane", "index.ts"),
+    piExtension: path.join(homeDir, ".pi", "agent", "extensions", "memory-lane", "index.ts"),
+    ompExtension: path.join(ompAgentDir, "extensions", "memory-lane", "index.ts"),
   }
 }
 
-function mergePaths(cwd: string | null | undefined, overrides?: Partial<IntegrationDiagnosticPaths>): IntegrationDiagnosticPaths {
-  const defaults = defaultIntegrationDiagnosticPaths(cwd)
+function mergePaths(
+  cwd: string | null | undefined,
+  overrides: Partial<IntegrationDiagnosticPaths> | undefined,
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+  homeDir: string,
+): IntegrationDiagnosticPaths {
+  const defaults = defaultIntegrationDiagnosticPaths(cwd, env, homeDir)
   return { ...defaults, ...overrides }
 }
 
@@ -186,18 +220,31 @@ function diagnoseClaudeDesktopMcp(file: string): IntegrationDiagnostics["claudeD
   return { checkedPath: file, exists: parsed.exists, configured: Boolean(server), hasCommand, hasArgs, warnings: parsed.warnings }
 }
 
-function diagnosePiExtension(file: string): IntegrationDiagnostics["piExtension"] {
+function diagnoseExtension(
+  file: string | null,
+  extraWarnings: string[] = [],
+): IntegrationDiagnostics["piExtension"] | IntegrationDiagnostics["ompExtension"] {
+  if (!file) {
+    return { checkedPath: null, exists: false, detected: false, warnings: [...extraWarnings] }
+  }
   const read = readText(file)
   const detected = Boolean(read.text && (
     read.text.includes("memory-lane")
     || read.text.includes("@memory-lane/pi-adapter")
     || read.text.includes("memoryLaneExtension")
   ))
-  return { checkedPath: file, exists: read.exists, detected, warnings: read.warning ? [read.warning] : [] }
+  return {
+    checkedPath: file,
+    exists: read.exists,
+    detected,
+    warnings: [...extraWarnings, ...(read.warning ? [read.warning] : [])],
+  }
 }
 
 export function diagnoseIntegrations(options: DiagnoseIntegrationsOptions = {}): IntegrationDiagnostics {
-  const paths = mergePaths(options.cwd, options.paths)
+  const env = options.env ?? process.env
+  const homeDir = options.homeDir ?? env.HOME ?? os.homedir()
+  const paths = mergePaths(options.cwd, options.paths, env, homeDir)
   const codexUserHooks = diagnoseJsonHookFile(paths.codexUserHooks, "codex")
   const codexProjectHooks = diagnoseJsonHookFile(paths.codexProjectHooks, "codex")
   return {
@@ -212,11 +259,12 @@ export function diagnoseIntegrations(options: DiagnoseIntegrationsOptions = {}):
       user: diagnoseJsonHookFiles(paths.claudeCodeUserSettings, "claude"),
       project: diagnoseJsonHookFile(paths.claudeCodeProjectSettings, "claude"),
     },
-    piExtension: diagnosePiExtension(paths.piExtension),
+    piExtension: diagnoseExtension(paths.piExtension, options.warnings?.piExtension) as IntegrationDiagnostics["piExtension"],
+    ompExtension: diagnoseExtension(paths.ompExtension, options.warnings?.ompExtension),
     notes: [
       "MCP provides explicit Memory Lane tools only; it does not run lifecycle hooks.",
       "Codex and Claude Code hooks provide automatic lifecycle recall/save where configured.",
-      "pi currently supports manual Memory Lane tools and read-only lifecycle recall; pi autosave/tool capture is deferred.",
+      "Pi and OMP extensions provide Memory Lane tools and lifecycle integration when installed.",
     ],
   }
 }

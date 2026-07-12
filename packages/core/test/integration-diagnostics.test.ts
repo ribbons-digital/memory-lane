@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { diagnoseIntegrations } from "../src/integration-diagnostics.js"
+import { diagnoseIntegrations, resolveOmpAgentDir } from "../src/integration-diagnostics.js"
 
 function tempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-integrations-"))
@@ -21,6 +21,7 @@ test("reports missing integration configs without creating files", () => {
       claudeCodeUserSettings: [path.join(root, ".claude", "settings.json"), path.join(root, ".claude", "settings.local.json")],
       claudeCodeProjectSettings: path.join(project, ".claude", "settings.local.json"),
       piExtension: path.join(root, ".pi", "agent", "extensions", "memory-lane", "index.ts"),
+      ompExtension: path.join(root, ".omp", "agent", "extensions", "memory-lane", "index.ts"),
     },
   })
 
@@ -32,6 +33,8 @@ test("reports missing integration configs without creating files", () => {
   assert.equal(report.claudeCodeHooks.project.exists, false)
   assert.equal(report.piExtension.exists, false)
   assert.equal(report.piExtension.detected, false)
+  assert.equal(report.ompExtension.exists, false)
+  assert.equal(report.ompExtension.detected, false)
   assert.equal(report.summary.mcpExplicitToolsOnly, true)
   assert.equal(report.summary.hooksAutomaticLifecycle, true)
   assert.equal(report.summary.piAutosaveEnabled, false)
@@ -126,4 +129,53 @@ test("detects pi extension and reports malformed JSON warnings without throwing"
   assert.match(report.codexHooks.user.warnings.join("\n"), /Invalid JSON/u)
   assert.equal(report.piExtension.exists, true)
   assert.equal(report.piExtension.detected, true)
+})
+
+test("resolves the OMP default profile root without filesystem access", () => {
+  const home = path.join(tempDir(), "home")
+  assert.equal(resolveOmpAgentDir({}, home), path.join(home, ".omp", "agent"))
+  assert.equal(fs.existsSync(home), false)
+})
+
+test("resolves an explicit OMP agent root like OMP default-profile mode", () => {
+  const root = tempDir()
+  assert.equal(resolveOmpAgentDir({ PI_CODING_AGENT_DIR: "custom-agent" }, path.join(root, "home")), path.resolve("custom-agent"))
+  assert.equal(resolveOmpAgentDir({ PI_CODING_AGENT_DIR: path.join(root, "absolute-agent") }, path.join(root, "home")), path.join(root, "absolute-agent"))
+})
+
+test("diagnoses Pi and OMP extensions independently with explicit warnings", () => {
+  const root = tempDir()
+  const piExtension = path.join(root, ".pi", "agent", "extensions", "memory-lane", "index.ts")
+  const ompExtension = path.join(root, ".omp", "agent", "extensions", "memory-lane", "index.ts")
+  fs.mkdirSync(path.dirname(piExtension), { recursive: true })
+  fs.mkdirSync(path.dirname(ompExtension), { recursive: true })
+  fs.writeFileSync(piExtension, "export default async function memoryLaneExtension() {}", "utf8")
+  fs.writeFileSync(ompExtension, "export default async function memoryLaneExtension() {}", "utf8")
+
+  const report = diagnoseIntegrations({
+    paths: { piExtension, ompExtension },
+    warnings: { ompExtension: ["manifest warning"] },
+    homeDir: root,
+    env: {},
+  })
+
+  assert.equal(report.piExtension.detected, true)
+  assert.equal(report.ompExtension.detected, true)
+  assert.equal(report.ompExtension.checkedPath, ompExtension)
+  assert.deepEqual(report.ompExtension.warnings, ["manifest warning"])
+})
+
+test("reports an unusable manifest-recorded OMP target without default substitution", () => {
+  const root = tempDir()
+  const report = diagnoseIntegrations({
+    paths: { ompExtension: null },
+    warnings: { ompExtension: ["Install manifest omp configPath must be absolute."] },
+    homeDir: root,
+    env: {},
+  })
+  assert.equal(report.ompExtension.checkedPath, null)
+  assert.equal(report.ompExtension.exists, false)
+  assert.equal(report.ompExtension.detected, false)
+  assert.deepEqual(report.ompExtension.warnings, ["Install manifest omp configPath must be absolute."])
+  assert.equal(fs.existsSync(path.join(root, ".omp")), false)
 })

@@ -14,7 +14,8 @@ import { loadConfig, getDefaultConfigPath } from "./config.js"
 import { createSingleStoreEngineStorage, type MemoryEngineStorage } from "./storage-facade.js"
 import { defaultHookDebugLogPath, hookDebugEnabled } from "./hook-debug-log.js"
 import { retrieveSemanticMemories } from "./retrieval.js"
-import { diagnoseIntegrations, type IntegrationDiagnosticPaths } from "./integration-diagnostics.js"
+import { diagnoseIntegrations } from "./integration-diagnostics.js"
+import type { IntegrationDiagnosticPaths, IntegrationDiagnosticWarnings } from "./integration-diagnostics.js"
 import { VALID_REVISION_ACTORS, validateSaveInput } from "./storage-validation.js"
 import {
   hasRealUpdateChange, revisionForSuccessor, revisionForSuperseded, revisionWarnings, sameIdRevision,
@@ -90,6 +91,7 @@ export class MemoryEngine {
   private readonly configPath?: string
   private readonly hookDebugLogPath: string
   private readonly integrationPaths?: Partial<IntegrationDiagnosticPaths>
+  private readonly integrationWarnings?: IntegrationDiagnosticWarnings
   private readonly env: NodeJS.ProcessEnv | Record<string, string | undefined>
   private readonly pendingEmbeddings = new Set<Promise<void>>()
   private readonly pendingEmbeddingControllers = new Set<AbortController>()
@@ -104,6 +106,7 @@ export class MemoryEngine {
     this.embProvider = opts?.embeddingProvider
     this.hookDebugLogPath = opts?.hookDebugLogPath ?? defaultHookDebugLogPath()
     this.integrationPaths = opts?.integrationPaths
+    this.integrationWarnings = opts?.integrationWarnings
     this.env = opts?.env ?? process.env
     this.learningEventSink = opts?.learningEventSink
     this.refreshScope()
@@ -1012,7 +1015,12 @@ export class MemoryEngine {
       deadWeightRatio: total ? mems.filter((m) => m.status === "deleted" || m.status === "rejected").length / total : 0,
       activeProfileName: config.activeEmbeddingProfile,
       projectScope: this.scope?.key ?? "none",
-      integrations: diagnoseIntegrations({ cwd: this.scope?.cwd ?? null, paths: this.integrationPaths }),
+      integrations: diagnoseIntegrations({
+        cwd: this.scope?.cwd ?? null,
+        paths: this.integrationPaths,
+        warnings: this.integrationWarnings,
+        env: this.env,
+      }),
       freshness: this.freshnessStatus({ since: opts?.freshnessSince }),
       continuityHints: this.continuityHints({ since: opts?.freshnessSince }),
       continuityBaseline: this.continuityBaselineDoctor(),

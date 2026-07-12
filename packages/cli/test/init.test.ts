@@ -17,6 +17,7 @@ function createFakeBinDir(): string {
     fs.writeFileSync(file, "#!/bin/sh\necho fake\n", "utf8")
     fs.chmodSync(file, 0o755)
   }
+  fs.symlinkSync(process.execPath, path.join(dir, process.platform === "win32" ? "node.exe" : "node"))
   return dir
 }
 
@@ -40,7 +41,7 @@ describe("init wizard", () => {
     const cli = path.resolve(__dirname, "../dist/index.js")
     return execFileSync("node", [cli, ...args], {
       encoding: "utf8",
-      env: { ...process.env, PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH}`, ...env },
+      env: { ...process.env, PATH: fakeBinDir, ...env },
       cwd,
       input: stdin,
     }).trim()
@@ -50,7 +51,7 @@ describe("init wizard", () => {
     const cli = path.resolve(__dirname, "../dist/index.js")
     const result = spawnSync("node", [cli, ...args], {
       encoding: "utf8",
-      env: { ...process.env, PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH}`, ...env },
+      env: { ...process.env, PATH: fakeBinDir, ...env },
       cwd,
       input: stdin,
     })
@@ -65,7 +66,7 @@ describe("init wizard", () => {
   function runInteractive(args: string[], env: NodeJS.ProcessEnv, steps: Array<{ prompt: string; input: string }>, cwd?: string): Promise<{ status: number | null; stdout: string; stderr: string }> {
     const cli = path.resolve(__dirname, "../dist/index.js")
     const child = spawn("node", [cli, ...args], {
-      env: { ...process.env, PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH}`, ...env },
+      env: { ...process.env, PATH: fakeBinDir, ...env },
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
     })
@@ -700,7 +701,7 @@ esac
     assert.equal(manifest.binaryPath, binaryPath)
     assert.equal(manifest.version, VERSION)
     assert.ok(Array.isArray(manifest.integrations))
-    assert.ok(manifest.integrations.some((i: any) => i.harness === "pi"))
+    assert.ok(manifest.integrations.some((integration: { harness?: unknown }) => integration.harness === "pi"))
   })
 
   it("writes Claude Desktop MCP config in --yes mode", () => {
@@ -729,6 +730,110 @@ esac
     assert.match(output, /Claude Desktop/u)
     assert.match(output, /Codex Desktop/u)
     assert.equal(fs.existsSync(path.join(home, ".memory-lane/install.json")), false)
+  })
+
+  it("lists OMP with its first-class display name", () => {
+    const output = run(["init", "--list"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+    assert.match(output, /OMP \(Oh My Pi\)\s+not detected/u)
+  })
+
+  it("installs detected OMP through --yes", () => {
+    const agentDir = path.join(home, ".omp", "agent")
+    fs.mkdirSync(agentDir, { recursive: true })
+    run(["init", "--yes"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+    const ompExtension = path.join(agentDir, "extensions", "memory-lane", "index.ts")
+    assert.equal(fs.existsSync(ompExtension), true)
+    const manifest = JSON.parse(fs.readFileSync(path.join(home, ".memory-lane", "install.json"), "utf8")) as {
+      integrations: Array<{ harness: string; configPath: string }>
+    }
+    assert.deepEqual(manifest.integrations.find((entry) => entry.harness === "omp"), {
+      harness: "omp",
+      configPath: ompExtension,
+    })
+  })
+
+  it("installs explicitly selected OMP under PI_CODING_AGENT_DIR", () => {
+    const agentDir = path.join(tempDir(), "custom-agent")
+    run(["init", "--only", "omp"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+      PI_CODING_AGENT_DIR: agentDir,
+    })
+    assert.equal(fs.existsSync(path.join(agentDir, "extensions", "memory-lane", "index.ts")), true)
+    assert.equal(fs.existsSync(path.join(home, ".omp", "agent")), false)
+  })
+
+  it("installs Pi and OMP side by side without losing Pi manifest ownership", () => {
+    run(["init", "--only", "pi"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+    const piExtension = path.join(home, ".pi", "agent", "extensions", "memory-lane", "index.ts")
+    const piBefore = fs.readFileSync(piExtension, "utf8")
+    const agentDir = path.join(tempDir(), "override-agent")
+    run(["init", "--only", "omp"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+      PI_CODING_AGENT_DIR: agentDir,
+    })
+    const manifest = JSON.parse(fs.readFileSync(path.join(home, ".memory-lane", "install.json"), "utf8")) as {
+      integrations: Array<{ harness: string; configPath: string }>
+    }
+    assert.deepEqual(manifest.integrations.map((entry) => entry.harness).sort(), ["omp", "pi"])
+    assert.equal(fs.readFileSync(piExtension, "utf8"), piBefore)
+    assert.equal(fs.existsSync(path.join(agentDir, "extensions", "memory-lane", "index.ts")), true)
+  })
+
+  it("interactive numbered selection can choose OMP", () => {
+    const agentDir = path.join(tempDir(), "interactive-agent")
+    const output = run(["init"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+      PI_CODING_AGENT_DIR: agentDir,
+    }, undefined, "6\n")
+    assert.match(output, /OMP \(Oh My Pi\) configured/u)
+    assert.equal(fs.existsSync(path.join(agentDir, "extensions", "memory-lane", "index.ts")), true)
+  })
+
+  it("interactive OMP selection asks before overwriting an existing extension", async () => {
+    const agentDir = path.join(tempDir(), "existing-agent")
+    const extension = path.join(agentDir, "extensions", "memory-lane", "index.ts")
+    fs.mkdirSync(path.dirname(extension), { recursive: true })
+    fs.writeFileSync(extension, "existing OMP extension", "utf8")
+    const result = await runInteractive(["init"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+      PI_CODING_AGENT_DIR: agentDir,
+    }, [
+      { prompt: "Select integrations", input: "6\n" },
+      { prompt: "Enable local learning?", input: "n\n" },
+      { prompt: "already has a Memory Lane configuration", input: "n\n" },
+    ])
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /OMP \(Oh My Pi\) skipped/u)
+    assert.equal(fs.readFileSync(extension, "utf8"), "existing OMP extension")
+  })
+
+  it("refuses to overwrite a malformed install manifest before OMP installation", () => {
+    const dataDir = path.join(home, ".memory-lane")
+    const agentDir = path.join(tempDir(), "malformed-manifest-agent")
+    fs.mkdirSync(dataDir, { recursive: true })
+    fs.writeFileSync(path.join(dataDir, "install.json"), "{", "utf8")
+    const result = runWithStatus(["init", "--only", "omp", "--yes"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+      PI_CODING_AGENT_DIR: agentDir,
+    })
+    assert.equal(result.status, 1)
+    assert.match(result.stdout, /Invalid JSON in install manifest/u)
+    assert.equal(fs.existsSync(path.join(agentDir, "extensions", "memory-lane", "index.ts")), false)
+    assert.equal(fs.readFileSync(path.join(dataDir, "install.json"), "utf8"), "{")
   })
 
   it("--only configures an explicitly selected undetected Claude Desktop", () => {

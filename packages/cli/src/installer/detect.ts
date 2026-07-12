@@ -1,10 +1,14 @@
+import { resolveOmpAgentDir } from "@memory-lane/core"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import type { DetectedHarness, Harness } from "./types.js"
 
-export function commandExists(cmd: string): boolean {
-  const paths = (process.env.PATH ?? "").split(path.delimiter)
+export function commandExists(
+  cmd: string,
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): boolean {
+  const paths = (env.PATH ?? "").split(path.delimiter)
   const extensions = os.platform() === "win32" ? [".exe", ".cmd", ".bat", ".ps1"] : [""]
   for (const dir of paths) {
     for (const ext of extensions) {
@@ -25,9 +29,14 @@ export function expandHome(input: string, homeDir: string): string {
   return input
 }
 
-export function detectHarnesses(options: { homeDir: string }): DetectedHarness[] {
+export function detectHarnesses(options: {
+  homeDir: string
+  env?: NodeJS.ProcessEnv | Record<string, string | undefined>
+}): DetectedHarness[] {
   const { homeDir } = options
+  const env = options.env ?? process.env
   const platform = os.platform()
+  const ompAgentDir = resolveOmpAgentDir(env, homeDir)
 
   const claudeDesktopConfig =
     platform === "darwin"
@@ -44,13 +53,13 @@ export function detectHarnesses(options: { homeDir: string }): DetectedHarness[]
     {
       harness: "claude-code-cli",
       name: "Claude Code CLI",
-      detected: commandExists("claude"),
+      detected: commandExists("claude", env),
       configPath: path.join(homeDir, ".claude/settings.json"),
     },
     {
       harness: "codex-cli",
       name: "Codex CLI",
-      detected: commandExists("codex"),
+      detected: commandExists("codex", env),
       configPath: path.join(homeDir, ".codex/hooks.json"),
     },
     {
@@ -71,6 +80,12 @@ export function detectHarnesses(options: { homeDir: string }): DetectedHarness[]
       detected: fs.existsSync(path.join(homeDir, ".pi/agent")),
       configPath: path.join(homeDir, ".pi/agent/extensions/memory-lane/index.ts"),
     },
+    {
+      harness: "omp",
+      name: "OMP (Oh My Pi)",
+      detected: fs.existsSync(ompAgentDir) || commandExists("omp", env),
+      configPath: path.join(ompAgentDir, "extensions", "memory-lane", "index.ts"),
+    },
   ]
 }
 
@@ -85,6 +100,7 @@ export function harnessName(harness: Harness): string {
     "claude-desktop": "Claude Desktop",
     "codex-desktop": "Codex Desktop",
     pi: "pi",
+    omp: "OMP (Oh My Pi)",
   }
   return names[harness]
 }
