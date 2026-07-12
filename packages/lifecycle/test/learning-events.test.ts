@@ -2,9 +2,11 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { MemoryEngine, type LocalLearningEventInput, type MemoryRecord } from "@memory-lane/core"
+import { MemoryEngine } from "@memory-lane/core"
+import type { LocalLearningEventInput, MemoryRecord } from "@memory-lane/core"
 import { tempDir } from "../../core/test/helpers.js"
-import { createLearningEventSink, TRIGGER_CONTEXT_MAX_CHARS, type LearningEventV1 } from "../src/learning-events.ts"
+import { createLearningEventSink, LEARNING_EVENT_RETENTION_INTERVAL_MS, TRIGGER_CONTEXT_MAX_CHARS } from "../src/learning-events.ts"
+import type { LearningEventV1 } from "../src/learning-events.ts"
 import { localLearningProjectHash, purgeTraces, traceStatus, TRACE_RETENTION_DAYS, TRACE_RETENTION_MAX_BYTES } from "../src/trace-capture.ts"
 
 function writeConfig(configPath: string, learning: { capture: "on" | "off"; excludedProjects?: string[] }): void {
@@ -268,8 +270,8 @@ test("event files participate in combined age retention, status counts, and priv
   const root = path.join(dir, "traces")
   const configPath = path.join(dir, "config.json")
   writeConfig(configPath, { capture: "on" })
-  const now = new Date("2026-07-10T12:00:00.000Z")
-  const sink = createLearningEventSink({ traceRoot: root, configPath, now: () => now })
+  let now = new Date("2026-07-10T12:00:00.000Z")
+  const sink = createLearningEventSink({ traceRoot: root, configPath, now: () => new Date(now) })
   sink({ eventType: "suggestion-created", memory: memory({ id: "first-memory-id" }), actingProjectKey: "owner-project" })
   const eventDir = path.join(root, localLearningProjectHash("owner-project"), "events")
   const expiredEvent = path.join(eventDir, "expired.json")
@@ -283,14 +285,18 @@ test("event files participate in combined age retention, status counts, and priv
   fs.utimesSync(oversizedEvent, oversizedAt, oversizedAt)
 
   sink({ eventType: "suggestion-created", memory: memory({ id: "second-memory-id" }), actingProjectKey: "owner-project" })
+  assert.equal(fs.existsSync(expiredEvent), true)
+  assert.equal(fs.existsSync(oversizedEvent), true)
 
+  now = new Date(now.getTime() + LEARNING_EVENT_RETENTION_INTERVAL_MS)
+  sink({ eventType: "suggestion-created", memory: memory({ id: "third-memory-id" }), actingProjectKey: "owner-project" })
   assert.equal(fs.existsSync(expiredEvent), false)
   assert.equal(fs.existsSync(oversizedEvent), false)
   const beforePurge = traceStatus(configPath, root)
-  assert.equal(beforePurge.fileCount, 2)
+  assert.equal(beforePurge.fileCount, 3)
   assert.ok(beforePurge.totalBytes > 0)
   const purged = purgeTraces(undefined, root)
-  assert.equal(purged.removedFiles, 2)
+  assert.equal(purged.removedFiles, 3)
   assert.equal(purged.removedBytes, beforePurge.totalBytes)
   assert.deepEqual(traceStatus(configPath, root).fileCount, 0)
 })
