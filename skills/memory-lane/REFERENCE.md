@@ -307,7 +307,7 @@ Lifecycle autosave filters transient reviewer, subagent, and task prompts such a
 
 For hook support checks, prefer `memory-lane doctor` first: use `hookDebugLogPath`, `hookDebugLogExists`, `hookDebugLogSizeBytes`, `hookDebugLogLastModified`, and `hookDebugWarnings` to confirm log availability without reading raw log contents. Only inspect `~/.memory-lane/hooks-log.jsonl` itself when the user asks or when troubleshooting requires it.
 
-### pi adapter boundary
+### pi and OMP adapter boundary
 
 In pi, Memory Lane provides manual tools/commands, explicit `memory_continuity`, and read-only lifecycle context before the agent starts through pi's `before_agent_start` event.
 Broad continuity prompts such as “what were we last working on?”, “where are we?”, or “what should we work on next?” should route to canonical continuity before recall; this is supported in both the repo-local Pi adapter and the generated native-binary bridge.
@@ -317,6 +317,9 @@ Release-style generated Pi bridges expose `memory_continuity`, proxy `/memory co
 Repo-local Pi and release-style generated Pi bridges both have bounded low-noise lifecycle writes on `input`, `turn_end`, and `tool_result` through shared CLI lifecycle policy.
 They save explicit memory requests from `input`, capture higher-signal candidates from `turn_end` and `tool_result`, apply secret filtering and deduplication, route project scope through the active cwd, and keep inferred candidates pending for review.
 On OMP, automatic lifecycle capture is suppressed only when both nested session-file ownership and the delegated-worker system role identify a task session.
+OMP uses the same production handlers for `input`, `before_agent_start`, `turn_end`, `tool_result`, and `session_before_compact`.
+OMP-only `session_stop`, `before_provider_request`, `message_*`, tool execution/approval/control events, and `ctx.memory` are intentionally unused: Memory Lane avoids continuation control, provider-wire mutation, partial streaming capture, pre-execution tool mutation, and a second host-specific memory backend.
+Do not add OMP-only handlers without a separately reviewed behavior need; shared lifecycle policy remains the single implementation.
 The native pi adapter and release-style generated pi bridge `session_before_compact` handlers can queue pending pre-compact summaries when the summary provider is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or not `false`.
 Do not assume automatic `agent_end` or `session_shutdown` summaries.
 When a durable pi workflow rule, preference, or project fact should be saved, use `memory_save` for explicit user requests or `memory_suggest` for proactive suggestions.

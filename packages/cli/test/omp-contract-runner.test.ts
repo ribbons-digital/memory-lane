@@ -4,6 +4,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
+import { OMP_CONTRACT_DIAGNOSTIC } from "../../core/src/integration-diagnostics.js"
 import { installOmp, installPi, piAdapterImportSource, piCliBridgeSource } from "../src/installer/config.js"
 import {
   CONTRACT_EVENTS,
@@ -78,6 +79,11 @@ function passingSourceForms(): Array<{
 describe("OMP contract runner", () => {
   it("committed fixture preserves the pinned report contract and recorded lifecycle result matrix", () => {
     const report = readFixture()
+    assert.deepEqual(OMP_CONTRACT_DIAGNOSTIC, {
+      testedVersion: report.expectedVersion,
+      testedAt: report.testedAt,
+      overallPass: report.overallPass,
+    })
 
     assert.deepEqual({
       schemaVersion: report.schemaVersion,
