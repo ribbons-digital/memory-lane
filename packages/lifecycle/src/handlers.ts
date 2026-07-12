@@ -166,6 +166,15 @@ function filterSameTurnCheckpointCandidates(existingCandidates: MemoryCandidate[
   })
 }
 
+function candidateTriggerContext(input: StopInput | PostToolUseInput): string | undefined {
+  if (!("toolName" in input)) return input.lastUserMessage
+  try {
+    return JSON.stringify({ toolName: input.toolName, toolInput: input.toolInput })
+  } catch {
+    return undefined
+  }
+}
+
 function persistCandidates(
   engine: MemoryEngine,
   candidates: MemoryCandidate[],
@@ -190,6 +199,7 @@ function persistCandidates(
       status: candidate.decision === "save-approved" ? "approved" : "pending",
       source: candidateSource(candidate, "agent-suggested"),
       provenance: provenance(input, lifecycleEvent, "toolName" in input ? input.toolName : undefined, options?.adapter),
+      learningTriggerContext: candidateTriggerContext(input),
     }))
   }
 

@@ -194,6 +194,7 @@ export async function handleMemoryReview(engine: MemoryEngine, input: ReviewTool
     applyProjectPath(engine, input.projectPath)
     const filters = activeReviewFilters(input)
     const memories = filterReviewMemories(engine.reviewPending({ all: input.all ?? false }), filters)
+    engine.recordSuggestionsShown(memories, "mcp")
     return jsonContent(envelope(engine, { memories: memories.map(withCheckpointCandidate), groups: groupReviewMemories(memories), notes: scopeNotes(engine) }, memories.length, filters))
   } catch (error) {
     return jsonContent(errorEnvelope(error))
@@ -203,7 +204,7 @@ export async function handleMemoryReview(engine: MemoryEngine, input: ReviewTool
 export async function handleMemoryApprove(engine: MemoryEngine, input: MemoryIdToolInput) {
   try {
     applyProjectPath(engine, input.projectPath)
-    return jsonContent(envelope(engine, mutationData(input.id, engine.approve(input.id, { all: input.all ?? false }))))
+    return jsonContent(envelope(engine, mutationData(input.id, engine.approve(input.id, { all: input.all ?? false, actor: "mcp" }))))
   } catch (error) {
     return jsonContent(errorEnvelope(error))
   }
@@ -212,7 +213,7 @@ export async function handleMemoryApprove(engine: MemoryEngine, input: MemoryIdT
 export async function handleMemoryReject(engine: MemoryEngine, input: MemoryIdToolInput) {
   try {
     applyProjectPath(engine, input.projectPath)
-    return jsonContent(envelope(engine, mutationData(input.id, engine.reject(input.id, { all: input.all ?? false }))))
+    return jsonContent(envelope(engine, mutationData(input.id, engine.reject(input.id, { all: input.all ?? false, actor: "mcp" }))))
   } catch (error) {
     return jsonContent(errorEnvelope(error))
   }
@@ -221,7 +222,7 @@ export async function handleMemoryReject(engine: MemoryEngine, input: MemoryIdTo
 export async function handleMemoryDelete(engine: MemoryEngine, input: MemoryIdToolInput) {
   try {
     applyProjectPath(engine, input.projectPath)
-    return jsonContent(envelope(engine, mutationData(input.id, engine.delete(input.id, { all: input.all ?? false }))))
+    return jsonContent(envelope(engine, mutationData(input.id, engine.delete(input.id, { all: input.all ?? false, actor: "mcp" }))))
   } catch (error) {
     return jsonContent(errorEnvelope(error))
   }

@@ -23,12 +23,16 @@ Memory Lane has **multiple capture pathways**, all harness-triggered through lif
 | `PostToolUse` | `packages/lifecycle/src/tool-outcomes.ts` | Recovery procedures (pnpm test/build/install recovery), tool outcome evidence |
 | `PostToolUse` (checkpoints) | `packages/lifecycle/src/checkpoint-capture.ts` | Successful release/merge commands |
 | `SessionEnd` | `packages/lifecycle/src/session-end.ts` | LLM-generated structured session summaries → pending `session_summary` |
+| Local learning events | `packages/lifecycle/src/learning-events.ts` and `packages/core/src/engine.ts` | Opt-in content-free events for suggestion creation, review exposure, approve/reject/delete/replace/supersede/reactivation, and agreement recommendation exposure/acceptance |
 | Direct save/suggest | `packages/core/src/engine.ts` (`save()`, `suggest()`) | Explicit CLI/MCP tool saves, pi adapter `input`/`memory_save`/`memory_suggest` |
 
-All capture pathways write to **JSONL file storage** via `MemoryEngine.save()` /
+Memory capture pathways write to **JSONL file storage** via `MemoryEngine.save()` /
 `suggest()`. Candidates are prefixed to text (e.g., `"Workflow correction: ..."`,
 `"Procedure: ..."`). Deduplication uses content keys in `correctionKeyFromText()`,
 `postmortemLearningKeyFromText()`, etc.
+
+Local learning events are not memories and do not expand the memory schema.
+They stay under the opt-in trace/event data root, store hashed ids and enums rather than raw content, and route project events by the owning scope while honoring excluded projects for both owner and acting project.
 
 ### Paper correspondence
 

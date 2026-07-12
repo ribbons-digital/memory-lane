@@ -527,6 +527,8 @@ export interface SaveInput {
   freshness?: MemoryFreshness
   /** Optional bounded descriptor metadata for Memory Index cards. */
   descriptor?: MemoryDescriptorMetadata
+  /** Ephemeral trigger text for digested local learning capture; never stored on the memory record. */
+  learningTriggerContext?: string
 }
 
 export interface UpdateInput {
@@ -721,7 +723,9 @@ export interface PreCompactSummaryConfig {
 }
 
 export interface LearningConfig {
+  /** Opt-in local learning capture. When omitted, capture is off. */
   capture?: "on" | "off"
+  /** Project scope keys for which local learning trace and event capture is suppressed. */
   excludedProjects?: string[]
 }
 
@@ -753,6 +757,37 @@ export interface SemanticMemoryConfig {
   }
 }
 
+/** Content-free local learning event kinds emitted for review exposure, outcomes, and operating-agreement recommendations. */
+export type LocalLearningEventType =
+  | "suggestion-created"
+  | "suggestion-shown"
+  | "suggestion-approved"
+  | "suggestion-rejected"
+  | "suggestion-deleted"
+  | "suggestion-superseded"
+  | "suggestion-replaced"
+  | "suggestion-reactivated"
+  | "agreement-recommendation-shown"
+  | "agreement-recommendation-accepted"
+
+export type LocalLearningActor = MemoryRevisionActor | "lifecycle"
+
+/** Internal content-bearing handoff to the local capture sink. The sink must persist only digests, timestamps, ids derived from hashes, and enums. */
+export interface LocalLearningEventInput {
+  eventType: LocalLearningEventType
+  memory: MemoryRecord
+  previousMemory?: MemoryRecord
+  relatedMemory?: MemoryRecord
+  actor?: LocalLearningActor
+  reason?: string
+  actingProjectKey?: string
+  triggerContext?: string
+  recommendedAction?: "update-kind-workflow-rule" | "replace" | "supersede"
+}
+
+/** Optional fail-open sink used by integrations that opt in to local, content-free learning event capture. */
+export type LocalLearningEventSink = (input: LocalLearningEventInput) => void
+
 export interface MemoryEngineConfig {
   memoryPath?: string
   embeddingsPath?: string
@@ -765,6 +800,8 @@ export interface MemoryEngineConfig {
   hookDebugLogPath?: string
   integrationPaths?: Partial<IntegrationDiagnosticPaths>
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>
+  /** Fail-open local learning event sink. MemoryEngine never depends on sink success. */
+  learningEventSink?: LocalLearningEventSink
 }
 
 export interface CompactReport {

@@ -1,6 +1,7 @@
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { execFileSync, spawn, spawnSync } from "node:child_process"
+import { createHash } from "node:crypto"
 import * as http from "node:http"
 import * as fs from "node:fs"
 import * as os from "node:os"
@@ -734,6 +735,73 @@ describe("CLI integration", () => {
     assert.equal(after.find((memory) => memory.id === deleteId)?.status, "deleted")
     assert.equal(after.find((memory) => memory.id === updateId)?.text, "explicit all update")
     assert.equal(after.find((memory) => memory.id === dryRunId)?.text, dryRunText)
+  })
+
+  it("routes all-scope decision capture through two-sided project consent", () => {
+    const cases = [
+      { name: "excluded owner", excludedProject: "cli-event-owner", expectEvent: false },
+      { name: "excluded caller", excludedProject: "cli-event-caller", expectEvent: false },
+      { name: "non-excluded owner and caller", excludedProject: "unrelated-project", expectEvent: true },
+    ]
+
+    for (const item of cases) {
+      const caseDir = tempDir()
+      const ownerProject = path.join(caseDir, "owner")
+      const callerProject = path.join(caseDir, "caller")
+      const tracesDir = path.join(caseDir, "traces")
+      const memoryFile = path.join(caseDir, "memory.jsonl")
+      const embeddingsFile = path.join(caseDir, "embeddings.jsonl")
+      const configFile = path.join(caseDir, "config.json")
+      fs.mkdirSync(ownerProject, { recursive: true })
+      fs.mkdirSync(callerProject, { recursive: true })
+      fs.writeFileSync(path.join(ownerProject, ".memory-lane-scope"), JSON.stringify({ id: "cli-event-owner" }))
+      fs.writeFileSync(path.join(callerProject, ".memory-lane-scope"), JSON.stringify({ id: "cli-event-caller" }))
+      fs.writeFileSync(configFile, JSON.stringify({ learning: { capture: "off" } }))
+      const env = {
+        MEMORY_LANE_FILE: memoryFile,
+        MEMORY_LANE_EMBEDDINGS_FILE: embeddingsFile,
+        MEMORY_LANE_CONFIG: configFile,
+        MEMORY_LANE_TRACES_DIR: tracesDir,
+        NO_COLOR: "1",
+      }
+      const saved = JSON.parse(run([
+        "save", `Pending ${item.name} CLI decision`,
+        "--scope", "project",
+        "--status", "pending",
+        "--project", ownerProject,
+        "--json",
+      ], env))
+      const id = saved.data.saved.id as string
+      fs.writeFileSync(configFile, JSON.stringify({ learning: { capture: "on", excludedProjects: [item.excludedProject] } }))
+
+      const approved = runProcess(["approve", id, "--all", "--project", callerProject, "--json"], { env })
+
+      assert.equal(approved.status, 0, `${item.name}: ${approved.stderr || approved.stdout}`)
+      assert.equal(JSON.parse(approved.stdout).data.approved.status, "approved", item.name)
+      const eventFiles: string[] = []
+      if (fs.existsSync(tracesDir)) {
+        const pendingDirectories = [tracesDir]
+        while (pendingDirectories.length) {
+          const directory = pendingDirectories.pop()
+          assert.ok(directory)
+          for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+            const child = path.join(directory, entry.name)
+            if (entry.isDirectory()) pendingDirectories.push(child)
+            else if (entry.isFile() && entry.name.endsWith(".json") && entry.name !== "_projects.json") eventFiles.push(child)
+          }
+        }
+      }
+      assert.equal(eventFiles.length, item.expectEvent ? 1 : 0, item.name)
+      if (item.expectEvent) {
+        const event = JSON.parse(fs.readFileSync(eventFiles[0], "utf8"))
+        assert.equal(event.eventType, "suggestion-approved")
+        assert.equal(event.decision.actor, "cli")
+        const ownerHash = createHash("sha256").update("cli-event-owner").digest("hex").slice(0, 8)
+        const callerHash = createHash("sha256").update("cli-event-caller").digest("hex").slice(0, 8)
+        assert.equal(eventFiles[0].includes(path.join("traces", ownerHash, "events")), true)
+        assert.equal(eventFiles[0].includes(callerHash), false)
+      }
+    }
   })
 
   it("keeps rescope supersede and replace project-scoped unless --all is explicit", () => {

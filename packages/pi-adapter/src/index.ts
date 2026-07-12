@@ -1,5 +1,5 @@
 import { Type } from "typebox"
-import { classifyPromptRoute, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy } from "@memory-lane/lifecycle"
+import { classifyPromptRoute, createLearningEventSink, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy } from "@memory-lane/lifecycle"
 import type { PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
 import {
   MemoryEngine, buildContinuityWarningRenderPlan, continuityWarningInspectionActions, createSingleStoreEngineStorage, createTwoTierEngineStorage, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableEngineStoragePaths, type SaveResult,
@@ -97,6 +97,7 @@ function getEngine(cwd: string): MemoryEngine {
       embeddingsPath: paths.home.embeddingsPath,
       storage,
       configPath: paths.configPath,
+      learningEventSink: createLearningEventSink({ configPath: paths.configPath, env: memoryEnv() }),
     })
     engineKey = key
   }
@@ -441,6 +442,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
           else notify(ctx, `Recalled ${result.memories.length} memories.\n` + result.memories.map(formatMemory).join("\n"))
         } else if (cmd === "review") {
           const pending = e.reviewPending({ all: allScope })
+          e.recordSuggestionsShown(pending, "lifecycle")
           notify(ctx, pending.length ? pending.map(formatMemory).join("\n") : "No pending memories.")
         } else if (cmd === "compact") {
           const report = e.compact()

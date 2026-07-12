@@ -221,6 +221,10 @@ You can also set `MEMORY_LANE_LONG_MEMORY_SMOKE_DATASET=/path/to/longmemeval-smo
 The adapter accepts a tiny LongMemEval-compatible smoke subset with `question_id`, `haystack_session_ids`, `haystack_sessions`, optional `haystack_dates`, `answer_session_ids`, and `_abs` abstention records; it does not download data, call a model, use a judge, commit external datasets, or change production retrieval/lifecycle behavior.
 Its stable JSON report uses deterministic retrieval session-id recall, maps categories into the test-only benchmark taxonomy, skips `_abs` abstention records into `abstentionResults`, reports recall misses as metrics, and treats malformed evidence-session mappings as zero-tolerance adapter failures.
 
+The capture-outcome dataset exporter is a maintainer eval tool for local learning events.
+It requires explicit `--events`, canonical `--as-of`, and `--out` paths, where `--events` points at one direct events directory such as `~/.memory-lane/traces/<project-hash>/events`, not the trace root.
+It accepts optional `--home-store`, `--project-store`, and `--traces` supporting inputs, writes atomically, rejects symlinked or overlapping input/output paths, emits no raw content, distinguishes unresolved and 30-day expired-unacted agreement recommendations, and reports right-censored suggestion survival metrics instead of inferring inactivity as intent.
+
 Lifecycle evals live in `@memory-lane/lifecycle`:
 
 ```bash
@@ -228,6 +232,7 @@ pnpm --filter @memory-lane/lifecycle eval:lifecycle-injection
 pnpm --filter @memory-lane/lifecycle eval:prompt-routing
 pnpm --filter @memory-lane/lifecycle eval:long-session-synthetic
 pnpm --filter @memory-lane/lifecycle eval:trace-dataset-converter -- --traces /path/to/project-traces --out /tmp/memory-lane-trace-smoke.json
+pnpm --filter @memory-lane/lifecycle eval:capture-outcome-dataset -- --events /path/to/events --as-of 2026-08-01T00:00:00.000Z --out /path/to/capture-outcomes.json
 ```
 
 The trace dataset converter is a maintainer-only local runner for opt-in Slice A trace files.
@@ -571,7 +576,7 @@ memory-lane recall [query]        Recall memories (semantic or lexical)
 memory-lane show|get <id> [--all] Show one memory by exact id, including descriptor metadata when present
 memory-lane list [--status ...]   List memories
 memory-lane search <query>        Lexical text search
-memory-lane approve <id> [--all]  Approve a pending memory
+memory-lane approve <id> [--all]  Approve pending or reactivate rejected memory
 memory-lane reject <id> [--all]   Reject a memory
 memory-lane delete <id> [--all]   Soft-delete a memory
 memory-lane review [--all]        Show pending memories
@@ -603,6 +608,7 @@ memory-lane migrate project-local --apply-plan <path> --yes
 memory-lane reindex [--force]     Embed approved memories missing current vectors; --force recomputes
 memory-lane init --project-local  Initialize sandbox-friendly project-local storage
 memory-lane upgrade [--yes]       Download the latest binary and re-apply existing harness configs
+memory-lane tuneup [purge]        Inspect or purge local learning capture data
 memory-lane session-end --confirm Generate a pending session summary from stdin JSON
 memory-lane obsidian ...          Manage optional Obsidian mirror/import workflows
 ```
@@ -915,6 +921,34 @@ Values:
 
 `memory-lane doctor`, `memory-lane doctor --json`, `memory-lane status --json`, and MCP `memory_status` report `handoffMode`, `handoffModeBehaviorActive`, `handoffModeNote`, and text-free `automaticHandoffDiagnostics` without memory bodies or proposal previews. Human `memory-lane status` stays compact; use `status --json` for the full handoff-mode diagnostic fields.
 
+### Local learning capture
+
+Local learning is opt-in and disabled unless `learning.capture` is set to `"on"`.
+The init wizard asks for this consent once and writes either `"on"` or `"off"` to the config.
+When enabled, Memory Lane records local, content-free learning files under `~/.memory-lane/traces` by default.
+Captured lifecycle traces are redacted, and local learning events store only schema versions, timestamps, event enums, hashed ids, digests, source/kind metadata, actor/reason enums, and recommendation metadata.
+The hashed fields are suggestion ids, subject refs, project refs, provenance refs, trigger-context digests, reason digests, recommendation ids, and related suggestion ids.
+Source, suggestion kind, event type, decision type, actor, reason code, recommended action, and initial review state stay as enums for local analysis.
+`initialReviewState` appears only on `suggestion-created` events.
+They do not store raw memory text, prompts, transcripts, hook payloads, tool inputs, tool outputs, or secrets.
+
+```json
+{
+  "learning": {
+    "capture": "on",
+    "excludedProjects": ["project-scope-key-to-skip"]
+  }
+}
+```
+
+Local capture observes suggestion creation, review exposure, approve, reject, delete, replace, supersede, reactivation, agreement recommendation exposure, and agreement recommendation acceptance.
+Events are written below the owning memory scope, with global memories under `_global/events` and project memories under `<project-hash>/events` using a stable hash of the project scope key.
+Capture is conservatively skipped when either the owning project or the acting project appears in `learning.excludedProjects`.
+Each learning event sink caches config for its lifetime and enforces retention on its first successful write, then at most once every five minutes per sink; if the injected clock moves backward, the next successful write re-checks retention.
+Use `memory-lane status --json` or `memory-lane tuneup --json` to inspect counts and paths.
+Use `memory-lane tuneup purge` to remove local learning capture files.
+Retention and purge use the same local learning data root as trace capture.
+
 ### Semantic search config
 
 ```json
@@ -969,6 +1003,7 @@ When `MEMORY_LANE_HOOK_DEBUG=1`, Claude/Codex hook debug records include privacy
 | `MEMORY_LANE_CONFIG` | `~/.memory-lane/config.json` | Config file path |
 | `MEMORY_LANE_FILE` | `~/.memory-lane/memory.jsonl` | Memory store path |
 | `MEMORY_LANE_EMBEDDINGS_FILE` | `~/.memory-lane/embeddings.jsonl` | Embeddings store path |
+| `MEMORY_LANE_TRACES_DIR` | `~/.memory-lane/traces` | Local learning trace and event data root |
 
 Explicit environment paths always win, keep Memory Lane in single-store mode, and never auto-fallback.
 When no explicit paths are set, the default engine uses home storage plus the resolved project store when a project scope is known; an existing parent `.memory-lane/` does not make every memory category project-local.
@@ -987,8 +1022,11 @@ import {
   resolveEngineStoragePaths,
   type MemoryEngineStorage,
 } from "@memory-lane/core"
+import { createLearningEventSink } from "@memory-lane/lifecycle"
 
-const engine = new MemoryEngine()
+const engine = new MemoryEngine({
+  learningEventSink: createLearningEventSink({ configPath: process.env.MEMORY_LANE_CONFIG, env: process.env }),
+})
 
 // Existing memoryPath and embeddingsPath options build the legacy single-store facade.
 const testEngine = new MemoryEngine({ memoryPath: "/tmp/memory.jsonl", embeddingsPath: "/tmp/embeddings.jsonl" })
@@ -1057,13 +1095,18 @@ const memories = engine.search("pnpm")
 // List
 const all = engine.list()
 const pending = engine.list("pending")
+
+// Optional content-free local learning exposure events for custom review UIs.
+engine.recordSuggestionsShown(pending, "manual")
+engine.recordAgreementRecommendationsShown(engine.operatingAgreements(), "manual")
 ```
 
 ## MCP Server
 
 Memory Lane includes a local stdio MCP server for clients that support explicit MCP tools, such as Claude Desktop and Cursor. The workspace package is `@memory-lane/mcp-server`, and its built bin is `memory-lane-mcp`.
 
-The MCP server exposes explicit tools only:
+The MCP server exposes explicit tools only.
+When local learning capture is enabled, `memory_review` records content-free suggestion exposure events and mutation tools record their review outcome events.
 
 - `memory_save` - save an approved memory
 - `memory_suggest` - queue a pending suggestion, or save approved when `status: "approved"`
@@ -1107,9 +1150,10 @@ See `examples/harness-integrations/mcp.md` for client configuration examples.
 ## Memory Lifecycle
 
 ```
-user/agent → suggest() → pending → approve() → approved
-                                 → reject()  → rejected
-approved   → delete()           → deleted
+user/agent → suggest() → pending  → approve() → approved
+                                  → reject()  → rejected → approve() → approved
+approved   → delete()            → deleted
+approved   → replace()/supersede() → approved historical record with revision links
 ```
 
 Compaction removes deleted + rejected tombstones and stale embeddings while preserving malformed or schema-invalid JSONL rows for diagnostics. Trigger: `memory-lane compact` or startup auto-check (>30% dead weight + >100 valid records).

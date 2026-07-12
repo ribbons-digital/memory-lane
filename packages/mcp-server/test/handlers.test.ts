@@ -3,7 +3,8 @@ import assert from "node:assert/strict"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { MemoryEngine } from "@memory-lane/core"
+import { MemoryEngine, type LocalLearningEventInput } from "@memory-lane/core"
+import { createLearningEventSink } from "@memory-lane/lifecycle"
 import {
   handleMemoryApprove,
   handleMemoryContinuity,
@@ -260,6 +261,75 @@ test("review mutation handlers refuse cross-project ids unless all is true", asy
       assert.equal(allowed.data.memory.status, scenario.finalStatus)
       assert.equal(allowed.data.memory.text, secretText)
     })
+  }
+})
+
+test("review mutation handlers emit MCP decision events through the shared engine source", async (t) => {
+  const scenarios = [
+    { name: "approve", initialStatus: "pending", eventType: "suggestion-approved", invoke: handleMemoryApprove },
+    { name: "reject", initialStatus: "pending", eventType: "suggestion-rejected", invoke: handleMemoryReject },
+    { name: "delete", initialStatus: "approved", eventType: "suggestion-deleted", invoke: handleMemoryDelete },
+  ] as const
+
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, async () => {
+      const dir = tempDir()
+      const events: LocalLearningEventInput[] = []
+      const engine = new MemoryEngine({
+        memoryPath: path.join(dir, "memory.jsonl"),
+        embeddingsPath: path.join(dir, "embeddings.jsonl"),
+        configPath: path.join(dir, "config.json"),
+        learningEventSink: (event) => { events.push(event) },
+      })
+      const saved = engine.save({ text: `MCP ${scenario.name} event`, status: scenario.initialStatus, source: "agent-suggested" })
+      assert.equal(saved.status, "saved")
+      if (saved.status !== "saved") throw new Error("expected saved fixture")
+
+      const result = parseToolResult(await scenario.invoke(engine, { id: saved.memory.id }))
+
+      assert.equal(result.ok, true)
+      assert.deepEqual(events.map((event) => event.eventType), ["suggestion-created", scenario.eventType])
+      assert.equal(events[1]?.actor, "mcp")
+      assert.equal(events[1]?.memory.id, saved.memory.id)
+      assert.equal(events[1]?.previousMemory?.status, scenario.initialStatus)
+    })
+  }
+})
+
+test("all-scope MCP decisions honor both owning and acting project exclusions", async () => {
+  const cases = [
+    { name: "excluded owner", excludedProject: "mcp-event-owner" },
+    { name: "excluded caller", excludedProject: "mcp-event-caller" },
+  ]
+
+  for (const item of cases) {
+    const dir = tempDir()
+    const ownerProject = path.join(dir, "owner")
+    const callerProject = path.join(dir, "caller")
+    const configPath = path.join(dir, "config.json")
+    const traceRoot = path.join(dir, "traces")
+    fs.mkdirSync(ownerProject, { recursive: true })
+    fs.mkdirSync(callerProject, { recursive: true })
+    fs.writeFileSync(path.join(ownerProject, ".memory-lane-scope"), JSON.stringify({ id: "mcp-event-owner" }))
+    fs.writeFileSync(path.join(callerProject, ".memory-lane-scope"), JSON.stringify({ id: "mcp-event-caller" }))
+    fs.writeFileSync(configPath, JSON.stringify({ learning: { capture: "off" } }))
+    const engine = new MemoryEngine({
+      memoryPath: path.join(dir, "memory.jsonl"),
+      embeddingsPath: path.join(dir, "embeddings.jsonl"),
+      configPath,
+      learningEventSink: createLearningEventSink({ configPath, traceRoot }),
+    })
+    engine.refreshScope(ownerProject)
+    const saved = engine.save({ text: `Pending ${item.name} MCP decision`, status: "pending", scopeType: "project" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") throw new Error("expected saved fixture")
+    fs.writeFileSync(configPath, JSON.stringify({ learning: { capture: "on", excludedProjects: [item.excludedProject] } }))
+
+    const result = parseToolResult(await handleMemoryApprove(engine, { id: saved.memory.id, all: true, projectPath: callerProject }))
+
+    assert.equal(result.data.status, "updated", item.name)
+    assert.equal(result.data.memory.status, "approved", item.name)
+    assert.equal(fs.existsSync(traceRoot), false, item.name)
   }
 })
 

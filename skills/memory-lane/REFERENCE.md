@@ -140,8 +140,8 @@ memory-lane show <id>             # inspect one exact active memory id in curren
 memory-lane get <id>              # alias for show
 memory-lane rescope <id> --scope project --project <path> --dry-run [--all] # preview same-id scope correction
 memory-lane move <id> --scope global --yes [--all] # alias for rescope; apply with confirmation
-memory-lane approve <id> [--all]  # approve a pending memory
-memory-lane reject <id> [--all]   # reject a pending memory
+memory-lane approve <id> [--all]  # approve pending or reactivate rejected memory
+memory-lane reject <id> [--all]   # reject a pending or approved memory
 memory-lane delete <id> [--all]   # soft-delete a memory
 memory-lane agreements            # inspect approved operating agreement text
 memory-lane update <id> --text "..." --reason "..." # revise an active memory in place
@@ -160,6 +160,7 @@ memory-lane reindex               # embed approved memories missing current vect
 memory-lane init                  # first-time setup wizard for harnesses
 memory-lane init --yes            # auto-configure all detected harnesses
 memory-lane init --project-local  # initialize sandbox-friendly project-local storage
+memory-lane tuneup [purge]        # inspect or purge local learning capture data
 memory-lane session-end --confirm # generate a pending session-summary memory from stdin JSON
 memory-lane claude pre-compact   # Claude Code hook: pre-compaction pending summary
 memory-lane codex pre-compact    # Codex hook: pre-compaction pending summary
@@ -170,6 +171,19 @@ memory-lane mcp                   # run the bundled MCP server over stdio
 ```
 
 Freshness status is read-only and memory-text-free. It reports approved visible-memory changes since a checkpoint timestamp so agents can notice possible newer continuity without injecting large memory bodies.
+
+### Local learning capture
+
+Local learning capture is opt-in through `learning.capture: "on"`.
+When enabled, Memory Lane may write redacted traces and content-free review outcome events under the local learning data root, defaulting to `~/.memory-lane/traces` or `MEMORY_LANE_TRACES_DIR`.
+Events cover suggestion creation, review exposure, approve, reject, delete, replace, supersede, reactivation, agreement recommendation exposure, and agreement recommendation acceptance.
+They are written below the owning scope as `_global/events` or `<project-hash>/events`.
+They store hashed ids, digests, timestamps, event enums, source/kind metadata, actor/reason enums, and recommendation metadata, not memory text, prompts, transcripts, hook payloads, or tool output.
+Hashed fields include suggestion ids, subject refs, project refs, provenance refs, trigger-context digests, reason digests, recommendation ids, and related suggestion ids.
+Source, suggestion kind, event type, decision type, actor, reason code, recommended action, and initial review state stay as enums; `initialReviewState` is only present on `suggestion-created` events.
+`learning.excludedProjects` suppresses capture when either the owning project scope or the acting project scope is excluded.
+Each learning event sink caches config for its lifetime and enforces retention on the first successful write, then at most once every five minutes per sink, with a re-check after backward clock movement.
+Use `memory-lane tuneup --json`, `memory-lane status --json`, or `memory-lane tuneup purge` for inspection and purge.
 
 ### Checkpoint candidate review labels
 
@@ -344,8 +358,12 @@ memory-lane save "test command is pnpm test" --project /path/to/project
 
 ```typescript
 import { MemoryEngine } from "@memory-lane/core"
+import { createLearningEventSink } from "@memory-lane/lifecycle"
 
-const engine = new MemoryEngine()
+const engine = new MemoryEngine({
+  // Optional: emit content-free local learning events when learning.capture is on.
+  learningEventSink: createLearningEventSink({ configPath: process.env.MEMORY_LANE_CONFIG, env: process.env }),
+})
 
 // Save approved (no review needed)
 engine.save({ text: "...", status: "approved", category: "project" })
@@ -377,6 +395,10 @@ engine.list()                         // scoped to current project
 engine.list({ all: true })            // all memories, all projects
 engine.list({ status: "approved" })   // approved + scoped
 engine.list("approved")               // legacy: same as above
+
+// Optional exposure events for custom review UIs.
+engine.recordSuggestionsShown(engine.reviewPending(), "manual")
+engine.recordAgreementRecommendationsShown(engine.operatingAgreements(), "manual")
 ```
 
 ## Slash commands

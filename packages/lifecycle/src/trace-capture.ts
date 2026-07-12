@@ -74,7 +74,7 @@ export interface PurgeTraceResult {
   removedBytes: number
 }
 
-function traceRoot(override?: string, env: NodeJS.ProcessEnv = process.env): string {
+export function localLearningRoot(override?: string, env: NodeJS.ProcessEnv = process.env): string {
   if (override) return override
   if (env.MEMORY_LANE_TRACES_DIR) return env.MEMORY_LANE_TRACES_DIR
   return path.join(os.homedir(), ".memory-lane", "traces")
@@ -93,7 +93,7 @@ function resolveProjectKey(cwd: string): string {
   return resolveProjectScope(cwd)?.key ?? path.resolve(cwd)
 }
 
-function projectHash(projectKey: string): string {
+export function localLearningProjectHash(projectKey: string): string {
   return createHash("sha256").update(projectKey).digest("hex").slice(0, 8)
 }
 
@@ -142,7 +142,7 @@ export function classifyTraceFidelity(inputMessagesLength: number, capturedMessa
   return "last-turn-fallback"
 }
 
-function writeProjectIndex(root: string, hash: string, projectKey: string): void {
+export function writeLocalLearningProjectIndex(root: string, hash: string, projectKey: string): void {
   const indexPath = path.join(root, "_projects.json")
   let index: Record<string, string> = {}
   try {
@@ -158,20 +158,24 @@ function writeProjectIndex(root: string, hash: string, projectKey: string): void
 function traceFiles(root: string): Array<{ path: string; size: number; mtimeMs: number }> {
   const files: Array<{ path: string; size: number; mtimeMs: number }> = []
   if (!fs.existsSync(root)) return files
-  for (const dirent of fs.readdirSync(root, { withFileTypes: true })) {
-    if (!dirent.isDirectory()) continue
-    const dir = path.join(root, dirent.name)
+  const visit = (dir: string): void => {
     for (const child of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (!child.isFile() || !child.name.endsWith(".json")) continue
-      const filePath = path.join(dir, child.name)
-      const stat = fs.statSync(filePath)
-      files.push({ path: filePath, size: stat.size, mtimeMs: stat.mtimeMs })
+      const childPath = path.join(dir, child.name)
+      if (child.isDirectory()) {
+        visit(childPath)
+      } else if (child.isFile() && child.name.endsWith(".json")) {
+        const stat = fs.statSync(childPath)
+        files.push({ path: childPath, size: stat.size, mtimeMs: stat.mtimeMs })
+      }
     }
+  }
+  for (const dirent of fs.readdirSync(root, { withFileTypes: true })) {
+    if (dirent.isDirectory()) visit(path.join(root, dirent.name))
   }
   return files
 }
 
-function enforceTraceRetention(root: string, now: Date): void {
+export function enforceLocalLearningRetention(root: string, now: Date): void {
   const cutoffMs = now.getTime() - TRACE_RETENTION_DAYS * 24 * 60 * 60 * 1000
   const files = traceFiles(root)
   const retainedFiles = files.filter((file) => {
@@ -214,8 +218,8 @@ export function captureLifecycleTrace(input: CaptureTraceInput, options: Capture
     const projectKey = resolveProjectKey(input.cwd)
     if (isExcludedProject(config, projectKey)) return undefined
 
-    const root = traceRoot(options.traceRoot, options.env)
-    const hash = projectHash(projectKey)
+    const root = localLearningRoot(options.traceRoot, options.env)
+    const hash = localLearningProjectHash(projectKey)
     const dir = path.join(root, hash)
     const now = options.now ?? new Date()
     const event = traceEvent(options.lifecycleEvent)
@@ -239,11 +243,11 @@ export function captureLifecycleTrace(input: CaptureTraceInput, options: Capture
     }
 
     fs.mkdirSync(dir, { recursive: true })
-    writeProjectIndex(root, hash, projectKey)
+    writeLocalLearningProjectIndex(root, hash, projectKey)
     const id = randomBytes(4).toString("hex")
     const filePath = path.join(dir, `${safeTimestamp(now)}-${event}-${id}.json`)
     fs.writeFileSync(filePath, JSON.stringify(record, null, 2) + "\n", "utf8")
-    enforceTraceRetention(root, now)
+    enforceLocalLearningRetention(root, now)
     return record
   } catch (error) {
     debugCaptureFailure(options, error instanceof Error ? error.message : String(error))
@@ -253,7 +257,7 @@ export function captureLifecycleTrace(input: CaptureTraceInput, options: Capture
 
 export function traceStatus(configPath?: string, rootOverride?: string): TraceStatus {
   const config = loadConfig(configPath)
-  const root = traceRoot(rootOverride)
+  const root = localLearningRoot(rootOverride)
   const files = traceFiles(root)
   const sorted = files.slice().sort((a, b) => a.mtimeMs - b.mtimeMs)
   return {
@@ -268,7 +272,7 @@ export function traceStatus(configPath?: string, rootOverride?: string): TraceSt
 }
 
 export function purgeTraces(configPath?: string, rootOverride?: string): PurgeTraceResult {
-  const root = traceRoot(rootOverride)
+  const root = localLearningRoot(rootOverride)
   const files = traceFiles(root)
   const removedBytes = files.reduce((sum, file) => sum + file.size, 0)
   if (fs.existsSync(root)) fs.rmSync(root, { recursive: true, force: true })
