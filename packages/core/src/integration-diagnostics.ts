@@ -36,12 +36,17 @@ export interface IntegrationDiagnosticPaths {
 
 export type IntegrationDiagnosticWarnings = Partial<Record<keyof IntegrationDiagnosticPaths, string[]>>
 
+/** Metadata for the committed real-OMP lifecycle contract fixture surfaced by doctor/status diagnostics. */
 export interface OmpContractDiagnostic {
+  /** Pinned OMP version used for the committed lifecycle contract. */
   testedVersion: string
+  /** Canonical test date recorded in the committed lifecycle contract fixture. */
   testedAt: string
+  /** Aggregate committed contract result; the published diagnostic is exposed only for the passing fixture. */
   overallPass: true
 }
 
+/** Current committed OMP lifecycle contract metadata reported with OMP integration diagnostics. */
 export const OMP_CONTRACT_DIAGNOSTIC: Readonly<OmpContractDiagnostic> = Object.freeze({
   testedVersion: "16.4.5",
   testedAt: "2026-07-12",

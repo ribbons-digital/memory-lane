@@ -183,8 +183,10 @@ Pi:
 - Repo-local Pi `/memory review` and `/memory delete <id>` stay scoped by default; use `--all` only for explicit cross-project maintenance.
 - Broad Pi continuity prompts should route to canonical continuity before recall in both repo-local adapter and generated native-binary bridge.
 - Repo-local Pi and release-style generated Pi lifecycle writes share the low-noise CLI policy: explicit memory requests on `input`, higher-signal stop/tool candidates on `turn_end`/`tool_result`, secret filtering, deduplication, project routing, and pending review.
-- The pinned OMP `16.4.5` contract verifies all five lifecycle events across both production forms, and the real discovery smoke verifies default-root and `PI_CODING_AGENT_DIR` installation without `--extension`.
+- The pinned OMP `16.4.5` contract verifies `input`, `before_agent_start`, `turn_end`, `tool_result`, and `session_before_compact` across both production forms, and the real discovery smoke verifies default-root and `PI_CODING_AGENT_DIR` installation without `--extension`.
+  Doctor reports the contract's tested version, `testedAt: "2026-07-12"`, and `overallPass: true` without changing detection or warning semantics.
   OMP task sessions suppress automatic lifecycle capture only when nested session-file ownership and the delegated-worker system role are both observed.
+  OMP-only `session_stop`, `before_provider_request`, message stream events, tool execution/approval/control events, and `ctx.memory` are intentionally unused unless a separately reviewed behavior need is approved.
   OMP installer maintenance preserves manifest-recorded binary and extension paths; malformed or unsafe manifest paths should be treated as stop-the-line upgrade/uninstall failures.
 - Do not assume automatic pi `agent_end` or `session_shutdown` summaries.
 - The native pi adapter and release-style generated pi bridge `session_before_compact` handlers can queue pending pre-compact summaries when `memory.sessionEndSummary.enabled` is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is not `false`.
