@@ -3,6 +3,7 @@
 ## Current state
 
 - PR #192 merged issue #175 Slice C as main commit `415af0b`, adding durable local outcome events, bounded retention, and a deterministic maintainer capture-outcome dataset exporter.
+- Issue #185 Slice 1 is active on `feat/omp-contract-185`, with a real OMP `16.4.5` contract runner and committed per-event report; installer support remains blocked because the report has `overallPass: false`.
 - PR #190 merged issue #181 as main commit `14240fb`, making `memory-lane save --kind` persist explicit valid kinds, preserve omitted-kind inference, reject invalid kinds before writes, and list accepted kinds in CLI help.
 - PR #188 merged issue #178 as main commits `b2093df`, `4870a2f`, and `9d5422a`, isolating fallback MCP request scopes while preserving bundled per-path engine behavior.
 - PR #186 merged issue #177 as main commit `a7745af`, adding explicit `--all` maintenance mode to Pi review and delete while preserving scoped defaults.
@@ -34,6 +35,10 @@
 ## Current decision / next work
 
 The current repo state is main synced through PR #192, which completed issue #175 Slice C.
+Issue #185 Slice 1 verifies both production extension forms with real `omp --extension` scratch-profile runs pinned to OMP `16.4.5`.
+The native adapter passes hidden `before_agent_start` injection, normalized `turn_end` capture, and configured `session_before_compact` pending-summary capture.
+Automated TUI did not expose `input`, the configured model did not execute the forced bash call so live `tool_result` remains unverified, and the release bridge does not register `input`, `turn_end`, or `tool_result`.
+Do not begin issue #185 installer work or claim first-class OMP lifecycle parity until those contract gaps are resolved and the pinned report passes.
 Slice C records versioned, content-free local learning events for suggestion creation, review exposure, approval, rejection, deletion, replacement, supersession, reactivation, agreement recommendation exposure, and agreement recommendation acceptance when `learning.capture` is enabled.
 It routes event files by the owning memory scope, suppresses capture when either owner or acting project is excluded, and adds the maintainer-only capture-outcome dataset exporter at `pnpm --filter @memory-lane/lifecycle eval:capture-outcome-dataset -- --events <dir> --as-of <ISO> --out <file>`.
 PR #190 fixed issue #181 by forwarding explicit save kinds through the CLI, preserving inference when omitted, rejecting invalid kinds before persistence, and documenting every accepted kind in CLI help.
@@ -74,6 +79,7 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 
 ## Current verification evidence
 
+- Issue #185 Slice 1 verification includes the committed OMP `16.4.5` report at `packages/cli/test/fixtures/omp-contract-16.4.5.json`, focused OMP contract runner regressions, and the real-runtime gate outcome with `overallPass: false` because adapter `input` and `tool_result` are not live-verified and the release bridge omits `input`, `turn_end`, and `tool_result`.
 - PR #192 verification passed the Obsidian mirror, core, and lifecycle builds; focused core and lifecycle learning-event tests; the full lifecycle suite; a long-lived sink retention demo covering interval, boundary, clock-rollback, and privacy behavior; and no-mistakes run `01KX9VG9PTMM94FDTXY0KS2YJF` with outcome `passed` and no findings.
 - PR #190 verification passed the explicit-kind end-to-end reproduction, focused and full CLI tests, workspace build and tests, Fable 5 completed-diff review with no blockers, and no-mistakes run `01KX85C9R19E0KKDT2M4BTGJ78` with `checks-passed` and no findings after the CodeRabbit help-value fix.
 - PR #188 verification passed the original registered-tool reproduction, focused fallback scope regressions, the full 60-test MCP suite, the full 430-test core suite, workspace build and tests, `git diff --check`, Fable 5 diff review with no blockers, and no-mistakes run `01KX7QS7515YEH2Q4CZK7EHP40` with outcome `passed` and no findings after restoring startup scope in a `finally` path.

@@ -164,7 +164,7 @@ memory-lane tuneup [purge]        # inspect or purge local learning capture data
 memory-lane session-end --confirm # generate a pending session-summary memory from stdin JSON
 memory-lane claude pre-compact   # Claude Code hook: pre-compaction pending summary
 memory-lane codex pre-compact    # Codex hook: pre-compaction pending summary
-/memory session-summary           # pi only: explicitly summarize the current pi session after confirmation
+/memory session-summary           # repo-local pi only: explicitly summarize the current pi session after confirmation
 memory-lane uninstall             # remove binary and integration configs
 memory-lane uninstall --yes       # non-interactive uninstall
 memory-lane mcp                   # run the bundled MCP server over stdio
@@ -193,7 +193,15 @@ Labels may identify pending memories that look like releases, merges, verificati
 
 ### Session-end summarization
 
-Use `memory-lane session-end --confirm` only when the user explicitly wants to generate a manual session summary and `memory.sessionEndSummary` is configured. It reads stdin JSON with a `messages` array, sends the compact transcript to the configured OpenAI-compatible chat model, and saves the result as a pending memory with `source: "session-summary"` and `kind: "session_summary"`. In pi, use `/memory session-summary` for the supported explicit session-summary path; it reads the current branch through pi's session manager, asks for interactive confirmation, and saves a pending `session_summary` with pi `session_end` provenance. Claude/Codex `PreCompact` hooks and native pi `session_before_compact` can queue pending pre-compact summaries with `pre_compact` provenance when the summary provider is configured and `memory.sessionEndSummary.requireConfirmation` is `false`; set `memory.preCompactSummary.enabled` to `false` to opt out. Memory Lane does not automatically summarize pi sessions on `agent_end` or `session_shutdown`. Codex CLI also supports explicit-intent automation through the real `Stop` hook: when the latest user prompt says something like "remember this session", "save a session summary", or "summarize this session to memory", `memory-lane codex stop` treats that as confirmation and saves a pending summary if the provider is configured. `memory.sessionEndSummary.timeoutMs` is optional and defaults to 30000 ms for OpenAI-compatible summary calls. Current Codex CLI hooks do not include a supported `SessionEnd` event, so do not suggest adding `SessionEnd` to `.codex/hooks.json`.
+Use `memory-lane session-end --confirm` only when the user explicitly wants to generate a manual session summary and `memory.sessionEndSummary` is configured.
+It reads stdin JSON with a `messages` array, sends the compact transcript to the configured OpenAI-compatible chat model, and saves the result as a pending memory with `source: "session-summary"` and `kind: "session_summary"`.
+In repo-local pi, use `/memory session-summary` for the supported explicit session-summary path; it reads the current branch through pi's session manager, asks for interactive confirmation, and saves a pending `session_summary` with pi `session_end` provenance.
+Claude/Codex `PreCompact` hooks and the native pi adapter or release-style generated pi bridge `session_before_compact` handlers can queue pending pre-compact summaries with `pre_compact` provenance when the summary provider is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or not `false`.
+Set `memory.preCompactSummary.enabled` to `false` to opt out.
+Memory Lane does not automatically summarize pi sessions on `agent_end` or `session_shutdown`.
+Codex CLI also supports explicit-intent automation through the real `Stop` hook: when the latest user prompt says something like "remember this session", "save a session summary", or "summarize this session to memory", `memory-lane codex stop` treats that as confirmation and saves a pending summary if the provider is configured.
+`memory.sessionEndSummary.timeoutMs` is optional and defaults to 30000 ms for OpenAI-compatible summary calls.
+Current Codex CLI hooks do not include a supported `SessionEnd` event, so do not suggest adding `SessionEnd` to `.codex/hooks.json`.
 
 ```bash
 echo '{"messages":[{"role":"user","content":"Switch to pnpm"},{"role":"assistant","content":"Done."}]}' \
@@ -277,7 +285,7 @@ memory-lane codex post-tool-use
 memory-lane codex pre-compact
 ```
 
-`session-start` performs compact baseline injection for new sessions only when `memory.contextPolicy.mode` allows lifecycle context; `selective` can render tiny always-on memories plus `Memory Index` descriptor cards, `policy-only` emits guidance without memory bodies, and `off` disables lifecycle context. Descriptor cards use stored `description` and `fetchHint` metadata when present, otherwise generated previews. `user-prompt-submit` recalls relevant approved memories for ordinary/topic-specific prompts in `selective` mode, while broad project-position/next-work continuity prompts receive inspection-first continuity guidance without ordinary recall bodies. `stop`, `pre-compact`, and `post-tool-use` save useful memories externally and are silent by default. `pre-compact` can queue pending summaries before compaction only when `memory.sessionEndSummary.requireConfirmation` is `false`; set `memory.preCompactSummary.enabled` to `false` to opt out. Hook commands fail safe: if storage/config/plugin initialization fails, Claude/Codex hook invocations return `{}` and exit successfully so the host session is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr. Current Codex CLI hooks do not expose a `SessionEnd` event; use manual `memory-lane session-end --confirm`, Codex `PreCompact`, or the Codex `Stop` explicit-intent path for session summaries.
+`session-start` performs compact baseline injection for new sessions only when `memory.contextPolicy.mode` allows lifecycle context; `selective` can render tiny always-on memories plus `Memory Index` descriptor cards, `policy-only` emits guidance without memory bodies, and `off` disables lifecycle context. Descriptor cards use stored `description` and `fetchHint` metadata when present, otherwise generated previews. `user-prompt-submit` recalls relevant approved memories for ordinary/topic-specific prompts in `selective` mode, while broad project-position/next-work continuity prompts receive inspection-first continuity guidance without ordinary recall bodies. `stop`, `pre-compact`, and `post-tool-use` save useful memories externally and are silent by default. `pre-compact` can queue pending summaries before compaction only when `memory.sessionEndSummary.requireConfirmation` is `false` and `memory.preCompactSummary.enabled` is omitted or not `false`; set `memory.preCompactSummary.enabled` to `false` to opt out. Hook commands fail safe: if storage/config/plugin initialization fails, Claude/Codex hook invocations return `{}` and exit successfully so the host session is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr. Current Codex CLI hooks do not expose a `SessionEnd` event; use manual `memory-lane session-end --confirm`, Codex `PreCompact`, or the Codex `Stop` explicit-intent path for session summaries.
 
 `UserPromptSubmit` follows `memory.contextPolicy.mode`: `off` suppresses lifecycle context, `policy-only` emits guidance without memory bodies, and `selective` injects a small context block for ordinary/topic-specific prompts; for broad continuity prompts such as “what were we last working on?” or “what should we work on next?”, it injects guidance to inspect canonical continuity instead of injecting recall-selected memory bodies. `Stop`, `PreCompact`, and `PostToolUse` save useful memories externally and are silent by default. Set `MEMORY_LANE_HOOK_DEBUG=1` for concise diagnostics and persistent metadata/count logs at `~/.memory-lane/hooks-log.jsonl`. The hook debug log does not include prompts, transcripts, or tool output.
 
@@ -302,7 +310,9 @@ Broad continuity prompts such as “what were we last working on?”, “where a
 Repo-local Pi exposes `/memory continuity [query]` plus the `memory_continuity` tool.
 Repo-local Pi `/memory review` and `/memory delete <id>` use current-project visibility by default, return not-found behavior without memory text for out-of-scope ids, and accept `--all` only for explicit cross-project review or delete.
 Release-style generated Pi bridges expose `memory_continuity`, proxy `/memory continuity ...` through the CLI, and use `memory-lane route --prompt <text> --json` for prompt routing parity.
-Pi also has bounded low-noise lifecycle writes on `input`, `turn_end`, and `tool_result`; native pi `session_before_compact` can queue pending pre-compact summaries when the summary provider is configured and confirmation is disabled.
+Repo-local Pi also has bounded low-noise lifecycle writes on `input`, `turn_end`, and `tool_result`.
+Release-style generated Pi bridges currently do not register those write handlers.
+The native pi adapter and release-style generated pi bridge `session_before_compact` handlers can queue pending pre-compact summaries when the summary provider is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or not `false`.
 Do not assume automatic `agent_end` or `session_shutdown` summaries.
 When a durable pi workflow rule, preference, or project fact should be saved, use `memory_save` for explicit user requests or `memory_suggest` for proactive suggestions.
 
@@ -440,7 +450,8 @@ To upgrade to the latest release while preserving existing harness configs and m
 memory-lane upgrade
 ```
 
-In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save/read explicitly, `memory_continuity` is the canonical broad-continuity tool, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates.
+In repo-local pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save/read explicitly, `memory_continuity` is the canonical broad-continuity tool, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates.
+Release-style generated pi bridges currently do not register `input`, `turn_end`, or `tool_result`; keep first-class OMP installer work gated until the pinned OMP contract report passes.
 `turn_end` may queue pending project-scoped checkpoints, explicit workflow corrections, or high-confidence debugging-postmortem learning candidates when bounded context includes a concrete symptom, cause, prevention, and verification/recovery signal.
 `tool_result` may queue conservative procedure candidates from safe failed-command recovery evidence.
 These lifecycle suggestions remain pending review; they are not durable operating agreements until approved.

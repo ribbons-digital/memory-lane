@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "host": "omp",
+  "expectedVersion": "16.4.5",
+  "actualVersion": "omp/16.4.5",
+  "testedAt": "2026-07-12",
+  "execution": {
+    "realRuntime": true,
+    "mode": "rpc",
+    "extensionFlag": true,
+    "scratchProfile": true,
+    "scratchAgentDir": true,
+    "compactionMechanism": "rpc compact"
+  },
+  "hostNotes": [
+    "OMP 16.4.5 does not load an explicit --extension when --no-extensions is also present despite its help text, so discovery isolation uses an empty scratch PI_CODING_AGENT_DIR instead."
+  ],
+  "sourceForms": [
+    {
+      "sourceForm": "adapter",
+      "registrations": [
+        "command:remember",
+        "command:memory",
+        "tool:memory_suggest",
+        "tool:memory_save",
+        "tool:memory_continuity",
+        "tool:memory_recall",
+        "before_agent_start",
+        "session_before_compact",
+        "input",
+        "turn_end",
+        "tool_result"
+      ],
+      "missingRegistrations": [],
+      "incompleteEvents": [
+        "input",
+        "tool_result"
+      ],
+      "events": {
+        "input": {
+          "status": "fail",
+          "evidence": [
+            "registered handler was not observed under the real OMP runtime",
+            "OMP interactive PTY loaded and registered the adapter, but no input event was observed within 30 seconds."
+          ]
+        },
+        "before_agent_start": {
+          "status": "pass",
+          "evidence": [
+            "event={\"type\":\"string\",\"prompt\":\"string\",\"images\":\"undefined\",\"systemPrompt\":\"array\"} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"memory\":\"object\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={\"message\":\"object\"}",
+            "event={\"type\":\"string\",\"prompt\":\"string\",\"images\":\"undefined\",\"systemPrompt\":\"array\"} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"memory\":\"object\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={}"
+          ]
+        },
+        "turn_end": {
+          "status": "pass",
+          "evidence": [
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"memory\":\"object\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={}",
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"memory\":\"object\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={}",
+            "raw payload omits legacy Pi fields consumed before normalization: turnId, lastUserMessage, lastAssistantMessage",
+            "configured lifecycle capture evidence was persisted"
+          ]
+        },
+        "tool_result": {
+          "status": "fail",
+          "evidence": [
+            "registered handler was not observed under the real OMP runtime",
+            "The pnpm test sentinel was absent, so the configured model did not execute the forced tool; OMP source confirms tool_result emission only after execution and the live payload remains unverified."
+          ]
+        },
+        "session_before_compact": {
+          "status": "pass",
+          "evidence": [
+            "event={\"type\":\"string\",\"preparation\":\"object\",\"branchEntries\":\"array\",\"customInstructions\":\"string\",\"signal\":\"object\"} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"memory\":\"object\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={}",
+            "raw payload omits legacy Pi fields consumed before normalization: turnId",
+            "configured lifecycle capture evidence was persisted"
+          ]
+        }
+      }
+    },
+    {
+      "sourceForm": "bridge",
+      "registrations": [
+        "command:remember",
+        "command:memory",
+        "tool:memory_save",
+        "tool:memory_suggest",
+        "tool:memory_continuity",
+        "tool:memory_recall",
+        "tool:memory_get",
+        "session_before_compact",
+        "before_agent_start"
+      ],
+      "missingRegistrations": [],
+      "incompleteEvents": [
+        "input",
+        "turn_end",
+        "tool_result"
+      ],
+      "events": {
+        "input": {
+          "status": "not-registered-by-production-design",
+          "evidence": [
+            "packages/cli/src/installer/config.ts: piCliBridgeSource omits this handler"
+          ]
+        },
+        "before_agent_start": {
+          "status": "pass",
+          "evidence": [
+            "event={\"type\":\"string\",\"prompt\":\"string\",\"images\":\"undefined\",\"systemPrompt\":\"array\"} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"memory\":\"object\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={\"message\":\"object\"}",
+            "event={\"type\":\"string\",\"prompt\":\"string\",\"images\":\"undefined\",\"systemPrompt\":\"array\"} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"memory\":\"object\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={\"message\":\"object\"}"
+          ]
+        },
+        "turn_end": {
+          "status": "not-registered-by-production-design",
+          "evidence": [
+            "packages/cli/src/installer/config.ts: piCliBridgeSource omits this handler"
+          ]
+        },
+        "tool_result": {
+          "status": "not-registered-by-production-design",
+          "evidence": [
+            "packages/cli/src/installer/config.ts: piCliBridgeSource omits this handler"
+          ]
+        },
+        "session_before_compact": {
+          "status": "pass",
+          "evidence": [
+            "event={\"type\":\"string\",\"preparation\":\"object\",\"branchEntries\":\"array\",\"customInstructions\":\"string\",\"signal\":\"object\"} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"memory\":\"object\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={}",
+            "raw payload omits legacy Pi fields consumed before normalization: turnId",
+            "configured lifecycle capture evidence was persisted"
+          ]
+        }
+      }
+    }
+  ],
+  "taskSessions": {
+    "status": "unobserved",
+    "reason": "Deterministic task-session invocation is not part of the five-event host contract."
+  },
+  "decision": "OMP requires turn_end boundary normalization, and the normalized live contract passed. Full live lifecycle parity is not established. Failed registered contracts: adapter.input, adapter.tool_result.",
+  "normalization": "OMP turn_end uses message/toolResults rather than legacy Pi last-message fields; the adapter normalizes from the OMP message and session branch. Both source forms already normalize OMP compaction preparation and omit unavailable turnId safely.",
+  "bridgeCapabilityGap": "The production release bridge does not register input, turn_end, or tool_result. Slice 1 records this existing gap without adding capability handlers.",
+  "overallPass": false
+}

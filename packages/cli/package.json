@@ -9,7 +9,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "node --test --import tsx test/*.test.ts"
+    "test": "node --test --import tsx test/*.test.ts",
+    "eval:omp-contract": "tsx test/omp-contract-runner.ts"
   },
   "dependencies": {
     "@memory-lane/claude-adapter": "workspace:*",
