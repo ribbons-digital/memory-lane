@@ -23,6 +23,17 @@ type LogEntry = {
 }
 
 type RpcFrame = Record<string, unknown> & { type?: string; id?: string }
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T | PromiseLike<T>) => void; reject: (reason?: unknown) => void } {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  return { promise, resolve, reject }
+}
+
 export const EXPECTED_REGISTRATIONS: Record<SourceForm, readonly string[]> = {
   adapter: [
     "command:remember",
@@ -124,7 +135,7 @@ class RpcSession {
   async waitFor(predicate: (frame: RpcFrame) => boolean, timeoutMs = 120_000): Promise<RpcFrame> {
     const existing = this.frames.find(predicate)
     if (existing) return existing
-    const { promise, resolve, reject } = Promise.withResolvers<RpcFrame>()
+    const { promise, resolve, reject } = deferred<RpcFrame>()
     let timer: NodeJS.Timeout
     const wake = () => {
       const found = this.frames.find(predicate)
@@ -161,7 +172,7 @@ class RpcSession {
   async close(): Promise<void> {
     this.child.stdin.end()
     if (this.child.exitCode !== null) return
-    const { promise, resolve } = Promise.withResolvers<void>()
+    const { promise, resolve } = deferred<void>()
     const timer = setTimeout(() => { this.child.kill("SIGTERM"); resolve() }, 5_000)
     this.child.once("exit", () => { clearTimeout(timer); resolve() })
     await promise
@@ -174,7 +185,7 @@ function readLog(logPath: string): LogEntry[] {
 }
 
 function delay(ms: number): Promise<void> {
-  const { promise, resolve } = Promise.withResolvers<void>()
+  const { promise, resolve } = deferred<void>()
   setTimeout(resolve, ms)
   return promise
 }
@@ -312,7 +323,7 @@ async function startSummaryServer(): Promise<{ baseUrl: string; close: () => Pro
       response.end(JSON.stringify({ choices: [{ message: { content: "- OMP contract compaction summary." } }] }))
     })
   })
-  const { promise, resolve, reject } = Promise.withResolvers<void>()
+  const { promise, resolve, reject } = deferred<void>()
   server.once("error", reject)
   server.listen(0, "127.0.0.1", resolve)
   await promise
@@ -321,7 +332,7 @@ async function startSummaryServer(): Promise<{ baseUrl: string; close: () => Pro
   return {
     baseUrl: `http://127.0.0.1:${address.port}/v1`,
     async close() {
-      const { promise: closePromise, resolve: closeResolve, reject: closeReject } = Promise.withResolvers<void>()
+      const { promise: closePromise, resolve: closeResolve, reject: closeReject } = deferred<void>()
       server.close((error) => error ? closeReject(error) : closeResolve())
       await closePromise
     },
