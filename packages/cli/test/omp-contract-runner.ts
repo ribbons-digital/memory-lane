@@ -329,7 +329,7 @@ class RpcSession {
     await this.waitFor((frame) => this.frames.indexOf(frame) >= start && frame.type === "agent_end")
     const turnFrames = this.frames.slice(start)
     const failedResponse = turnFrames.find((frame) => frame.type === "response" && frame.success === false)
-    const messageEnd = turnFrames.findLast((frame) => frame.type === "message_end")
+    const messageEnd = [...turnFrames].reverse().find((frame) => frame.type === "message_end")
     const assistantMessage = messageEnd?.message && typeof messageEnd.message === "object" && !Array.isArray(messageEnd.message)
       ? messageEnd.message as Record<string, unknown>
       : undefined
@@ -561,7 +561,8 @@ async function startSummaryServer(logPath: string): Promise<{ baseUrl: string; c
         : []
       const toolNames = tools.map((tool) => {
         const fn = tool.function
-        return fn && typeof fn === "object" && !Array.isArray(fn) && typeof fn.name === "string" ? fn.name : undefined
+        const functionPayload = fn && typeof fn === "object" && !Array.isArray(fn) ? fn as Record<string, unknown> : undefined
+        return typeof functionPayload?.name === "string" ? functionPayload.name : undefined
       }).filter((name): name is string => Boolean(name))
       fs.appendFileSync(logPath, `${JSON.stringify({
         method: request.method,
