@@ -220,7 +220,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
     "memory_approve",
     {
       title: "Approve Memory",
-      description: "Approve a pending Memory Lane memory by id. Respects current project visibility unless all=true is explicitly requested for cross-project maintenance.",
+      description: "Approve a pending or rejected Memory Lane memory by id. Respects current project visibility unless all=true is explicitly requested for cross-project maintenance.",
       inputSchema: {
         id: memoryId,
         all: z.boolean().optional(),
