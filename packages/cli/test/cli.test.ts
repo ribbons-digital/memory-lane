@@ -3208,6 +3208,46 @@ describe("CLI integration", () => {
     assert.doesNotMatch(memories, /esbuild for release packaging|explain the deployment workflow|sk-1234567890abcdef1234567890abcdef/u)
   })
 
+  it("pi post-tool-use normalizes raw OMP-shaped tool results", async () => {
+    const engine = new MemoryEngine({
+      memoryPath: memFile,
+      embeddingsPath: embFile,
+      configPath: cfgFile,
+    })
+
+    const success = await runPiHookCommand("post-tool-use", {
+      engine,
+      payloadText: JSON.stringify({
+        cwd: process.cwd(),
+        session_id: "pi-raw-omp-tool-session",
+        tool_name: "bash",
+        tool_input: { command: "pnpm test" },
+        content: [{ type: "text", text: "OMP raw content without legacy text field" }],
+        details: { source: "omp" },
+        isError: false,
+      }),
+    })
+    assert.equal(JSON.parse(success).data.saved, 1)
+
+    const error = await runPiHookCommand("post-tool-use", {
+      engine,
+      payloadText: JSON.stringify({
+        cwd: process.cwd(),
+        session_id: "pi-raw-omp-tool-session",
+        tool_name: "bash",
+        tool_input: { command: "pnpm build" },
+        content: [{ type: "text", text: "Build passed but OMP marked it as failed" }],
+        details: { source: "omp" },
+        isError: true,
+      }),
+    })
+    assert.equal(JSON.parse(error).data.saved, 0)
+
+    const memories = fs.readFileSync(memFile, "utf8")
+    assert.match(memories, /`pnpm test` is the test command for this repo/u)
+    assert.doesNotMatch(memories, /`pnpm build` is the build command for this repo/u)
+  })
+
   it("pi lifecycle commands no-op safely for malformed absent and failed payload fields", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,

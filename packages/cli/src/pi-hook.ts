@@ -47,12 +47,42 @@ type ParsedPiPayload =
   | { kind: "pre-compact"; input: PiPreCompactPayloadInput }
   | { kind: "invalid"; reason: string }
 
+const MAX_RAW_OMP_TOOL_TEXT_CHARS = 12_000
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 }
 
 function stringField(obj: Record<string, unknown>, key: string): string | undefined {
   return typeof obj[key] === "string" ? obj[key] as string : undefined
+}
+
+function textPartsFromContent(content: unknown): string[] {
+  if (typeof content === "string") return [content]
+  if (!Array.isArray(content)) return []
+  const parts: string[] = []
+  for (const part of content) {
+    const obj = asRecord(part)
+    if (!obj) continue
+    if (obj.type === "text" && typeof obj.text === "string") parts.push(obj.text)
+  }
+  return parts
+}
+
+function normalizedRawOmpToolResponse(obj: Record<string, unknown>): Record<string, unknown> {
+  const contentText = textPartsFromContent(obj.content).join("\n").trim().slice(0, MAX_RAW_OMP_TOOL_TEXT_CHARS)
+  const isError = typeof obj.is_error === "boolean"
+    ? obj.is_error
+    : typeof obj.isError === "boolean"
+      ? obj.isError
+      : undefined
+  return {
+    content: obj.content,
+    details: obj.details,
+    isError,
+    text: contentText || undefined,
+    exitCode: isError === undefined ? undefined : isError ? 1 : 0,
+  }
 }
 
 function parseSessionMessages(value: unknown): SessionMessage[] {
@@ -131,7 +161,7 @@ function parsePiPayload(command: PiCommand, text: string): ParsedPiPayload {
           ? obj.tool_response
           : "toolResponse" in obj
             ? obj.toolResponse
-            : { content: obj.content, details: obj.details, isError: obj.is_error ?? obj.isError },
+            : normalizedRawOmpToolResponse(obj),
       },
     }
   }
