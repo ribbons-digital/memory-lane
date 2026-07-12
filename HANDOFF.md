@@ -34,12 +34,11 @@
 
 ## Current decision / next work
 
-The current repo state is main synced through PR #192, which completed issue #175 Slice C.
-Issue #185 Slice 1 verifies both production extension forms with real `omp --extension` scratch-profile runs pinned to OMP `16.4.5`.
-The native adapter passes hidden `before_agent_start` injection, normalized `turn_end` capture, and configured `session_before_compact` pending-summary capture.
-Automated TUI did not expose `input`, the configured model did not execute the forced bash call so live `tool_result` remains unverified, and the release bridge does not register `input`, `turn_end`, or `tool_result`.
+The current repo state is main synced through PR #194, which completed issue #185 Slice 1A.
+Issue #185 Slice 1B is the next approved work.
+It must verify native `input` through genuine interactive OMP, exercise native `tool_result` deterministically, add generated-bridge `input`, `turn_end`, and `tool_result` handlers through shared CLI lifecycle entry points, define task/subagent behavior, and regenerate the pinned OMP `16.4.5` report until `overallPass: true`.
 Do not begin issue #185 installer work or claim first-class OMP lifecycle parity until those contract gaps are resolved and the pinned report passes.
-Slice C records versioned, content-free local learning events for suggestion creation, review exposure, approval, rejection, deletion, replacement, supersession, reactivation, agreement recommendation exposure, and agreement recommendation acceptance when `learning.capture` is enabled.
+Issue #175 Slice C records versioned, content-free local learning events for suggestion creation, review exposure, approval, rejection, deletion, replacement, supersession, reactivation, agreement recommendation exposure, and agreement recommendation acceptance when `learning.capture` is enabled.
 It routes event files by the owning memory scope, suppresses capture when either owner or acting project is excluded, and adds the maintainer-only capture-outcome dataset exporter at `pnpm --filter @memory-lane/lifecycle eval:capture-outcome-dataset -- --events <dir> --as-of <ISO> --out <file>`.
 PR #190 fixed issue #181 by forwarding explicit save kinds through the CLI, preserving inference when omitted, rejecting invalid kinds before persistence, and documenting every accepted kind in CLI help.
 PR #183 fixed issue #145 by increasing new memory IDs to 128 random bits while preserving legacy short IDs and duplicate-ID folding semantics.
@@ -127,5 +126,5 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.47` / commit `28e5961`.
-- Current repo status: main is synced through PR #192; the next issue #169 follow-up remains separately scoped and requires user approval.
+- Current repo status: main is synced through PR #194; issue #185 Slice 1B is the next approved work, and the next issue #169 follow-up remains separately scoped and requires user approval.
 - Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, PR #127, PR #130, PR #174, and PR #192.
