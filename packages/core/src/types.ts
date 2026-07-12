@@ -798,11 +798,8 @@ export interface MemoryEngineConfig {
   configPath?: string
   embeddingProvider?: EmbeddingProvider
   hookDebugLogPath?: string
-  /** Optional paths for read-only integration diagnostics, including manifest-recorded OMP paths. */
   integrationPaths?: Partial<IntegrationDiagnosticPaths>
-  /** Optional read-only diagnostic warnings to surface with integration status. */
   integrationWarnings?: IntegrationDiagnosticWarnings
-  /** Environment used by integration diagnostics and lifecycle helpers, including PI_CODING_AGENT_DIR. */
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>
   /** Fail-open local learning event sink. MemoryEngine never depends on sink success. */
   learningEventSink?: LocalLearningEventSink

@@ -31,11 +31,9 @@ export interface IntegrationDiagnosticPaths {
   claudeCodeUserSettings: string[]
   claudeCodeProjectSettings: string | null
   piExtension: string
-  /** OMP extension entrypoint to inspect; null means a manifest warning made the recorded path unsafe to read. */
   ompExtension: string | null
 }
 
-/** Extra read-only integration diagnostic warnings, such as manifest path warnings surfaced by the CLI. */
 export type IntegrationDiagnosticWarnings = Partial<Record<keyof IntegrationDiagnosticPaths, string[]>>
 
 export interface IntegrationDiagnostics {
@@ -79,9 +77,7 @@ export interface IntegrationDiagnostics {
 export interface DiagnoseIntegrationsOptions {
   cwd?: string | null
   paths?: Partial<IntegrationDiagnosticPaths>
-  /** Optional warnings to attach to the corresponding integration without reading additional files. */
   warnings?: IntegrationDiagnosticWarnings
-  /** Environment used for OMP default-root resolution, including PI_CODING_AGENT_DIR. */
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>
   homeDir?: string
 }
