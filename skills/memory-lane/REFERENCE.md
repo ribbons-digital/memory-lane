@@ -177,10 +177,12 @@ Freshness status is read-only and memory-text-free. It reports approved visible-
 Local learning capture is opt-in through `learning.capture: "on"`.
 When enabled, Memory Lane may write redacted traces and content-free review outcome events under the local learning data root, defaulting to `~/.memory-lane/traces` or `MEMORY_LANE_TRACES_DIR`.
 Events cover suggestion creation, review exposure, approve, reject, delete, replace, supersede, reactivation, agreement recommendation exposure, and agreement recommendation acceptance.
+They are written below the owning scope as `_global/events` or `<project-hash>/events`.
 They store hashed ids, digests, timestamps, event enums, source/kind metadata, actor/reason enums, and recommendation metadata, not memory text, prompts, transcripts, hook payloads, or tool output.
 Hashed fields include suggestion ids, subject refs, project refs, provenance refs, trigger-context digests, reason digests, recommendation ids, and related suggestion ids.
 Source, suggestion kind, event type, decision type, actor, reason code, recommended action, and initial review state stay as enums; `initialReviewState` is only present on `suggestion-created` events.
 `learning.excludedProjects` suppresses capture when either the owning project scope or the acting project scope is excluded.
+Each learning event sink caches config for its lifetime and enforces retention on the first successful write, then at most once every five minutes per sink, with a re-check after backward clock movement.
 Use `memory-lane tuneup --json`, `memory-lane status --json`, or `memory-lane tuneup purge` for inspection and purge.
 
 ### Checkpoint candidate review labels
@@ -356,8 +358,12 @@ memory-lane save "test command is pnpm test" --project /path/to/project
 
 ```typescript
 import { MemoryEngine } from "@memory-lane/core"
+import { createLearningEventSink } from "@memory-lane/lifecycle"
 
-const engine = new MemoryEngine()
+const engine = new MemoryEngine({
+  // Optional: emit content-free local learning events when learning.capture is on.
+  learningEventSink: createLearningEventSink({ configPath: process.env.MEMORY_LANE_CONFIG, env: process.env }),
+})
 
 // Save approved (no review needed)
 engine.save({ text: "...", status: "approved", category: "project" })
@@ -389,6 +395,10 @@ engine.list()                         // scoped to current project
 engine.list({ all: true })            // all memories, all projects
 engine.list({ status: "approved" })   // approved + scoped
 engine.list("approved")               // legacy: same as above
+
+// Optional exposure events for custom review UIs.
+engine.recordSuggestionsShown(engine.reviewPending(), "manual")
+engine.recordAgreementRecommendationsShown(engine.operatingAgreements(), "manual")
 ```
 
 ## Slash commands

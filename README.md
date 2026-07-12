@@ -222,7 +222,8 @@ The adapter accepts a tiny LongMemEval-compatible smoke subset with `question_id
 Its stable JSON report uses deterministic retrieval session-id recall, maps categories into the test-only benchmark taxonomy, skips `_abs` abstention records into `abstentionResults`, reports recall misses as metrics, and treats malformed evidence-session mappings as zero-tolerance adapter failures.
 
 The capture-outcome dataset exporter is a maintainer eval tool for local learning events.
-It requires explicit `--events`, canonical `--as-of`, and `--out` paths, accepts optional `--home-store`, `--project-store`, and `--traces` supporting inputs, writes atomically, rejects symlinked or overlapping input/output paths, emits no raw content, distinguishes unresolved and 30-day expired-unacted agreement recommendations, and reports right-censored suggestion survival metrics instead of inferring inactivity as intent.
+It requires explicit `--events`, canonical `--as-of`, and `--out` paths, where `--events` points at one direct events directory such as `~/.memory-lane/traces/<project-hash>/events`, not the trace root.
+It accepts optional `--home-store`, `--project-store`, and `--traces` supporting inputs, writes atomically, rejects symlinked or overlapping input/output paths, emits no raw content, distinguishes unresolved and 30-day expired-unacted agreement recommendations, and reports right-censored suggestion survival metrics instead of inferring inactivity as intent.
 
 Lifecycle evals live in `@memory-lane/lifecycle`:
 
@@ -941,8 +942,9 @@ They do not store raw memory text, prompts, transcripts, hook payloads, tool inp
 ```
 
 Local capture observes suggestion creation, review exposure, approve, reject, delete, replace, supersede, reactivation, agreement recommendation exposure, and agreement recommendation acceptance.
-Events are written below the owning memory scope, with global memories under `_global` and project memories under a stable hash of the project scope key.
+Events are written below the owning memory scope, with global memories under `_global/events` and project memories under `<project-hash>/events` using a stable hash of the project scope key.
 Capture is conservatively skipped when either the owning project or the acting project appears in `learning.excludedProjects`.
+Each learning event sink caches config for its lifetime and enforces retention on its first successful write, then at most once every five minutes per sink; if the injected clock moves backward, the next successful write re-checks retention.
 Use `memory-lane status --json` or `memory-lane tuneup --json` to inspect counts and paths.
 Use `memory-lane tuneup purge` to remove local learning capture files.
 Retention and purge use the same local learning data root as trace capture.

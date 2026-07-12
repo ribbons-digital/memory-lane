@@ -56,6 +56,7 @@ export interface LearningEventCaptureOptions {
   /** Config path used to read opt-in learning.capture and excluded project keys. */
   configPath?: string
   env?: NodeJS.ProcessEnv
+  /** Local learning data root for trace and event files; defaults to MEMORY_LANE_TRACES_DIR or ~/.memory-lane/traces. */
   traceRoot?: string
   now?: () => Date
 }
@@ -173,7 +174,8 @@ function writeEventFile(directory: string, event: LearningEventV1): void {
 /**
  * Create a fail-open sink for opt-in, content-free local learning events.
  * The sink writes only hashed ids, digests, timestamps, enums, and metadata needed for local outcome analysis.
- * It caches config for the sink lifetime and periodically enforces local learning retention.
+ * It caches config for the sink lifetime and enforces local learning retention on the first successful write, then no more than once every five minutes per sink.
+ * If the injected clock moves backward, the next successful write re-checks retention.
  */
 export function createLearningEventSink(options: LearningEventCaptureOptions = {}): LocalLearningEventSink {
   let config: SemanticMemoryConfig | undefined
