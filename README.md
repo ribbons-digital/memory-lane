@@ -1,6 +1,6 @@
 # Memory Lane
 
-Memory Lane gives AI coding agents a local, review-governed memory they can share across Claude Code, Codex, MCP clients, pi, and any harness that can shell out.
+Memory Lane gives AI coding agents a local, review-governed memory they can share across Claude Code, Codex, MCP clients, pi, OMP, and any harness that can shell out.
 It is for the boring but painful problem every agent workflow hits: a new session should know the current project state, durable preferences, decisions, corrections, and procedures without depending on one vendor's chat history.
 
 The default path is small:
@@ -1043,7 +1043,7 @@ Embedding provider calls honor optional per-profile `timeoutMs` and default to 3
 
 When `MEMORY_LANE_HOOK_DEBUG=1`, Claude/Codex hook debug records include privacy-safe context decision metadata for injection events: `contextPolicyMode`, `contextEvent`, `contextSelected`, `contextOmitted`, `contextMaxItems`, `contextMaxChars`, and `contextOmittedReasons`. They never include raw prompts, transcripts, tool output, memory text, or injected context text.
 
-`memory-lane doctor` also reports read-only integration diagnostics. It checks whether common local config files appear to contain Memory Lane setup for Claude Desktop MCP, Codex hooks, Claude Code hooks, and the pi extension. These checks inspect config/entrypoint files only; they do not read prompts, transcripts, tool outputs, memory text, MCP traffic, or hook debug log contents. MCP provides explicit tools; hooks and pi provide automatic lifecycle recall/save where supported.
+`memory-lane doctor` also reports read-only integration diagnostics. It checks whether common local config files appear to contain Memory Lane setup for Claude Desktop MCP, Codex hooks, Claude Code hooks, and the pi and OMP extensions. These checks inspect config/entrypoint files only; they do not read prompts, transcripts, tool outputs, memory text, MCP traffic, or hook debug log contents. MCP provides explicit tools; hooks, pi, and OMP provide automatic lifecycle recall/save where supported.
 
 ## Environment Variables
 
@@ -1210,13 +1210,13 @@ Compaction removes deleted + rejected tombstones and stale embeddings while pres
 ## Harness Integrations
 
 Run `memory-lane init` to auto-detect and configure supported harnesses, or see [`examples/harness-integrations/`](./examples/harness-integrations/) for manual snippets for:
-- MCP Server
-- Claude Code CLI
-- OpenAI Codex CLI
-- Cursor
-- Windsurf
+- [MCP Server](./examples/harness-integrations/mcp.md)
+- [Claude Code CLI](./examples/harness-integrations/claude-code.md)
+- [OpenAI Codex CLI](./examples/harness-integrations/codex-cli.md)
+- [Cursor](./examples/harness-integrations/cursor.md)
+- [Windsurf](./examples/harness-integrations/windsurf.md)
 - pi
-- OMP (Oh My Pi)
+- [OMP (Oh My Pi)](./examples/harness-integrations/omp.md)
 
 Lifecycle autosave intentionally filters transient reviewer, subagent, and task prompts such as commit review requests, “do not modify files” review tasks, and delegated status-report instructions. Those operational prompts are not durable memory. Explicit memory requests remain supported and authoritative: use `memory-lane save ...` or phrases like “Remember that ...” for durable workflow rules, preferences, or project facts.
 
