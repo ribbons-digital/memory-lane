@@ -35,12 +35,12 @@ PR #174 shipped issue #169 Slice B as a maintainer-only lifecycle runner that co
 PR #179 and PR #182 scoped review and revision maintenance mutations to the current project, with PR #180 documenting scoped review maintenance.
 The next issue #169 follow-up slice still requires separate user approval.
 Issue #185 Slice 1A shipped in PR #194 as main commit `04dc166`, pinning a real OMP `16.4.5` two-form contract runner, production source-form equivalence, lifecycle evidence, boundary normalization, and strict aggregate registration/event gates.
-Issue #185 Slice 1B is implemented on the current branch: native `input` is verified through genuine interactive OMP, native `tool_result` is exercised deterministically, the generated bridge registers `input`, `turn_end`, and `tool_result` through shared CLI lifecycle entry points, proven OMP delegated task sessions suppress automatic capture, and the pinned report has `overallPass: true`.
-First-class OMP installer work remains separate future work beyond the lifecycle contract slice.
+Issue #185 Slice 1B shipped in PR #196 as main commit `cccd858`: native `input` is verified through genuine interactive OMP, native `tool_result` is exercised deterministically, the generated bridge registers `input`, `turn_end`, and `tool_result` through shared CLI lifecycle entry points, proven OMP delegated task sessions suppress automatic capture, and the pinned report has `overallPass: true`.
+Issue #185 Slice 2 first-class OMP installer work remains separate and requires explicit approval before implementation, including a decision on its issue #147 manifest-path dependency.
 
 Recent shipped work:
 
-- Issue #185 Slice 1B closed the OMP lifecycle contract gap with generated-bridge `input`, `turn_end`, and `tool_result` handlers, native interactive input evidence, deterministic tool-result evidence, task-session capture suppression, and an `overallPass: true` pinned fixture.
+- PR #196 shipped issue #185 Slice 1B, closing the OMP lifecycle contract gap with generated-bridge `input`, `turn_end`, and `tool_result` handlers, native interactive input evidence, deterministic success/error tool-result evidence, task-session capture suppression, and an `overallPass: true` pinned fixture.
 - PR #192 shipped issue #175 Slice C with opt-in versioned outcome events, review exposure events, agreement recommendation events, exclusion-aware scope routing, bounded retention, and a deterministic local capture-outcome exporter.
 - PR #190 fixed issue #181 by passing explicit save kinds to core validation and persistence, preserving omitted-kind inference, and adding JSON, human-output, invalid-kind no-write, and CLI-help regressions.
 - PR #188 fixed issue #178 by serializing fallback MCP tool calls, restoring startup scope before and after each request, and adding registered read, mutation, interleaving, and null-scope regressions.
