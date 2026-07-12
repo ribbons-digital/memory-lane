@@ -212,7 +212,7 @@ pnpm --filter @memory-lane/cli eval:omp-contract -- --as-of YYYY-MM-DD --manual-
 The gate requires OMP `16.4.5` and a genuine interactive terminal for the two prompted `input` submissions.
 It uses a credential-free loopback provider for deterministic tool execution, loads both production extension forms through real `omp --extension` scratch profiles, records sanitized per-event evidence, and exits non-zero when any expected registration is missing, any lifecycle event remains unverified, or any lifecycle event fails.
 The tested version and date live in `packages/cli/test/fixtures/omp-contract-16.4.5.json`.
-The committed report must keep `overallPass: true` before future OMP installer work can begin.
+The committed report must keep `overallPass: true` before any separately approved issue #185 Slice 2 OMP installer, manifest, init, doctor, upgrade, or uninstall work can begin.
 
 #### Optional local evals
 

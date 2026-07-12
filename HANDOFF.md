@@ -10,7 +10,7 @@
 - PR #186 merged issue #177 as main commit `a7745af`, adding explicit `--all` maintenance mode to Pi review and delete while preserving scoped defaults.
 - PR #183 merged issue #145 as main commit `9b16939`, increasing new memory IDs to 128 random bits while preserving legacy short IDs and duplicate-ID folding semantics.
 - Current repo status: main is synced through PR #196, and issue #185 Slice 1B has closed the production lifecycle contract gap with the committed OMP report at `overallPass: true`.
-- Issue #185 Slice 2 installer support remains separate and requires explicit approval before implementation.
+- Issue #185 Slice 2 installer, manifest, init, doctor, upgrade, and uninstall support remains separate and requires explicit approval before implementation.
 - PR #182 scoped revision maintenance mutations to the current project and documented the revision command options.
 - PR #180 documented scoped review maintenance after PR #179 scoped review mutations to the current project.
 - PR #174 shipped issue #169 Slice B trace dataset conversion as a maintainer-only local runner for opt-in Slice A trace files.

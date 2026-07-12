@@ -36,7 +36,7 @@ PR #179 and PR #182 scoped review and revision maintenance mutations to the curr
 The next issue #169 follow-up slice still requires separate user approval.
 Issue #185 Slice 1A shipped in PR #194 as main commit `04dc166`, pinning a real OMP `16.4.5` two-form contract runner, production source-form equivalence, lifecycle evidence, boundary normalization, and strict aggregate registration/event gates.
 Issue #185 Slice 1B shipped in PR #196 as main commit `cccd858`: native `input` is verified through genuine interactive OMP, native `tool_result` is exercised deterministically, the generated bridge registers `input`, `turn_end`, and `tool_result` through shared CLI lifecycle entry points, proven OMP delegated task sessions suppress automatic capture, and the pinned report has `overallPass: true`.
-Issue #185 Slice 2 first-class OMP installer work remains separate and requires explicit approval before implementation, including a decision on its issue #147 manifest-path dependency.
+Issue #185 Slice 2 first-class OMP installer, manifest, init, doctor, upgrade, and uninstall work remains separate and requires explicit approval before implementation, including a decision on its issue #147 manifest-path dependency.
 
 Recent shipped work:
 

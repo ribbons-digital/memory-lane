@@ -453,7 +453,7 @@ memory-lane upgrade
 ```
 
 In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save/read explicitly, `memory_continuity` is the canonical broad-continuity tool, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates in both the repo-local adapter and release-style generated bridge.
-The pinned OMP `16.4.5` contract now verifies all five lifecycle events across both production forms with `overallPass: true`; keep future OMP installer work separate from the lifecycle contract slice.
+The pinned OMP `16.4.5` contract now verifies all five lifecycle events across both production forms with `overallPass: true`; keep future issue #185 Slice 2 OMP installer, manifest, init, doctor, upgrade, and uninstall work separate from the lifecycle contract slice, separately approval-gated, and dependent on issue #147 manifest-path handling.
 `turn_end` may queue pending project-scoped checkpoints, explicit workflow corrections, or high-confidence debugging-postmortem learning candidates when bounded context includes a concrete symptom, cause, prevention, and verification/recovery signal.
 `tool_result` may queue conservative procedure candidates from safe failed-command recovery evidence.
 These lifecycle suggestions remain pending review; they are not durable operating agreements until approved.
