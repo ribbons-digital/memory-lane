@@ -196,7 +196,8 @@ Labels may identify pending memories that look like releases, merges, verificati
 Use `memory-lane session-end --confirm` only when the user explicitly wants to generate a manual session summary and `memory.sessionEndSummary` is configured.
 It reads stdin JSON with a `messages` array, sends the compact transcript to the configured OpenAI-compatible chat model, and saves the result as a pending memory with `source: "session-summary"` and `kind: "session_summary"`.
 In repo-local pi, use `/memory session-summary` for the supported explicit session-summary path; it reads the current branch through pi's session manager, asks for interactive confirmation, and saves a pending `session_summary` with pi `session_end` provenance.
-Claude/Codex `PreCompact` hooks and the native pi adapter or release-style generated pi bridge `session_before_compact` handlers can queue pending pre-compact summaries with `pre_compact` provenance when the summary provider is configured and `memory.sessionEndSummary.requireConfirmation` is `false`; set `memory.preCompactSummary.enabled` to `false` to opt out.
+Claude/Codex `PreCompact` hooks and the native pi adapter or release-style generated pi bridge `session_before_compact` handlers can queue pending pre-compact summaries with `pre_compact` provenance when the summary provider is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or not `false`.
+Set `memory.preCompactSummary.enabled` to `false` to opt out.
 Memory Lane does not automatically summarize pi sessions on `agent_end` or `session_shutdown`.
 Codex CLI also supports explicit-intent automation through the real `Stop` hook: when the latest user prompt says something like "remember this session", "save a session summary", or "summarize this session to memory", `memory-lane codex stop` treats that as confirmation and saves a pending summary if the provider is configured.
 `memory.sessionEndSummary.timeoutMs` is optional and defaults to 30000 ms for OpenAI-compatible summary calls.
@@ -311,7 +312,7 @@ Repo-local Pi `/memory review` and `/memory delete <id>` use current-project vis
 Release-style generated Pi bridges expose `memory_continuity`, proxy `/memory continuity ...` through the CLI, and use `memory-lane route --prompt <text> --json` for prompt routing parity.
 Repo-local Pi also has bounded low-noise lifecycle writes on `input`, `turn_end`, and `tool_result`.
 Release-style generated Pi bridges currently do not register those write handlers.
-The native pi adapter and release-style generated pi bridge `session_before_compact` handlers can queue pending pre-compact summaries when the summary provider is configured and confirmation is disabled.
+The native pi adapter and release-style generated pi bridge `session_before_compact` handlers can queue pending pre-compact summaries when the summary provider is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or not `false`.
 Do not assume automatic `agent_end` or `session_shutdown` summaries.
 When a durable pi workflow rule, preference, or project fact should be saved, use `memory_save` for explicit user requests or `memory_suggest` for proactive suggestions.
 

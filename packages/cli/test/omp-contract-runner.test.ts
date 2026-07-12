@@ -10,8 +10,12 @@ import {
   EXPECTED_REGISTRATIONS,
   PINNED_OMP_VERSION,
   REQUIRED_FLAGS,
+  ompContractOverallPass,
   ompRpcCommandPlan,
   validateOmpContract,
+  type ContractEvent,
+  type EventStatus,
+  type SourceForm,
 } from "./omp-contract-runner.js"
 
 const fixturePath = fileURLToPath(new URL("fixtures/omp-contract-16.4.5.json", import.meta.url))
@@ -46,6 +50,18 @@ function installOptions(homeDir: string, binaryPath: string) {
     homeDir,
   }
 }
+function passingSourceForms(): Array<{
+  sourceForm: SourceForm
+  registrations: string[]
+  events: Record<ContractEvent, { status: EventStatus }>
+}> {
+  return (["adapter", "bridge"] as const).map((sourceForm) => ({
+    sourceForm,
+    registrations: [...EXPECTED_REGISTRATIONS[sourceForm]],
+    events: Object.fromEntries(CONTRACT_EVENTS.map((event) => [event, { status: "pass" }])) as Record<ContractEvent, { status: EventStatus }>,
+  }))
+}
+
 
 describe("OMP contract runner", () => {
   it("committed fixture preserves the pinned report contract and recorded lifecycle result matrix", () => {
@@ -114,6 +130,32 @@ describe("OMP contract runner", () => {
       Object.fromEntries(report.sourceForms.map(({ sourceForm, registrations }) => [sourceForm, [...registrations].sort()])),
       Object.fromEntries(Object.entries(EXPECTED_REGISTRATIONS).map(([sourceForm, registrations]) => [sourceForm, [...registrations].sort()])),
     )
+  })
+
+  it("requires every lifecycle event to pass, including production-design omissions", () => {
+    const sourceForms = passingSourceForms()
+    assert.equal(ompContractOverallPass(sourceForms), true, "complete lifecycle and registration coverage should pass")
+
+    sourceForms[1].events.input.status = "not-registered-by-production-design"
+    sourceForms[1].events.turn_end.status = "not-registered-by-production-design"
+    sourceForms[1].events.tool_result.status = "not-registered-by-production-design"
+
+    assert.equal(ompContractOverallPass(sourceForms), false)
+  })
+
+  it("requires every expected command and tool registration when lifecycle events pass", () => {
+    const missingRegistrationCases = [
+      { sourceForm: "adapter", registration: "command:remember" },
+      { sourceForm: "bridge", registration: "tool:memory_get" },
+    ] as const
+
+    for (const { sourceForm, registration } of missingRegistrationCases) {
+      const sourceForms = passingSourceForms()
+      const result = sourceForms.find((candidate) => candidate.sourceForm === sourceForm)!
+      result.registrations = result.registrations.filter((observed) => observed !== registration)
+
+      assert.equal(ompContractOverallPass(sourceForms), false, `${sourceForm} without ${registration}`)
+    }
   })
 
   it("rejects OMP versions other than the pinned contract version", () => {

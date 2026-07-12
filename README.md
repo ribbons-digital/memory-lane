@@ -281,7 +281,7 @@ Repo-local pi `turn_end` and `tool_result` still capture higher-signal lifecycle
 Release-style generated pi bridges currently do not register `input`, `turn_end`, or `tool_result`; keep OMP installer work gated until the pinned OMP contract report passes.
 Inferred checkpoint captures are pending by default and require review before they affect approved continuity.
 For session summaries, pi uses the explicit `/memory session-summary` command: it reads the current branch through pi's session manager, asks for interactive confirmation, and saves any generated summary as a pending `session_summary` memory with pi `session_end` provenance.
-The native pi adapter and release-style generated pi bridge also listen to `session_before_compact` and can save a pending pre-compact `session_summary` with pi `pre_compact` provenance when `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`; they do not override pi's own compaction summary.
+The native pi adapter and release-style generated pi bridge also listen to `session_before_compact` and can save a pending pre-compact `session_summary` with pi `pre_compact` provenance when `memory.sessionEndSummary.enabled` is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or `true`; they do not override pi's own compaction summary.
 It does not automatically summarize on `agent_end` or `session_shutdown`.
 The release-style generated pi extension is intentionally a self-contained CLI bridge so pi never tries to import the native `memory-lane` binary as TypeScript.
 
@@ -809,7 +809,7 @@ When transcript/session messages include canonical ISO timestamps, the saved pen
 No current-time fallback is used.
 Claude Code supports `memory-lane claude session-end` through its documented `SessionEnd` hook.
 By default it still requires confirmation and will not save from a bare hook unless `memory.sessionEndSummary.requireConfirmation` is set to `false` or the payload includes `confirmed: true` for manual testing.
-Claude Code, Codex CLI, the native pi adapter, and the release-style generated pi bridge support pre-compact summaries through `PreCompact` / `session_before_compact` when `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`.
+Claude Code, Codex CLI, the native pi adapter, and the release-style generated pi bridge support pre-compact summaries through `PreCompact` / `session_before_compact` when `memory.sessionEndSummary.enabled` is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or `true`.
 These summaries save pending `session_summary` memories with `pre_compact` provenance and never block or override host compaction.
 Set `memory.preCompactSummary.enabled` to `false` to opt out.
 pi also supports explicit session summaries through `/memory session-summary`, using pi's session manager plus interactive confirmation.
@@ -1203,7 +1203,7 @@ Set `MEMORY_LANE_DEBUG=1` to append privacy-safe debug records to `~/.memory-lan
 
 For session summaries, use `/memory session-summary` in pi.
 The command reads the current conversation branch through pi's session manager, asks for interactive confirmation, sends the compact transcript to the configured `memory.sessionEndSummary` provider, and saves any result as a pending `session_summary` memory with pi `session_end` provenance.
-The native pi adapter and release-style generated pi bridge can also save pending pre-compact `session_summary` memories with pi `pre_compact` provenance from `session_before_compact` when `memory.sessionEndSummary.enabled` is configured and `memory.sessionEndSummary.requireConfirmation` is `false`; they do not override pi's own compaction summary.
+The native pi adapter and release-style generated pi bridge can also save pending pre-compact `session_summary` memories with pi `pre_compact` provenance from `session_before_compact` when `memory.sessionEndSummary.enabled` is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or `true`; they do not override pi's own compaction summary.
 The release-style generated pi bridge currently does not register repo-local `input`, `turn_end`, or `tool_result` lifecycle writes.
 Memory Lane does not automatically summarize pi sessions on `agent_end` or `session_shutdown`.
 

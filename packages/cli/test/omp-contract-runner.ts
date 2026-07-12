@@ -11,7 +11,7 @@ export const REQUIRED_FLAGS = ["--extension", "--profile", "--mode", "--config",
 export const CONTRACT_EVENTS = ["input", "before_agent_start", "turn_end", "tool_result", "session_before_compact"] as const
 export type ContractEvent = typeof CONTRACT_EVENTS[number]
 export type SourceForm = "adapter" | "bridge"
-type EventStatus = "pass" | "fail" | "not-registered-by-production-design"
+export type EventStatus = "pass" | "fail" | "not-registered-by-production-design"
 
 type LogEntry = {
   kind: "registration" | "event" | "mechanism"
@@ -65,6 +65,20 @@ export const EXPECTED_REGISTRATIONS: Record<SourceForm, readonly string[]> = {
 const EXPECTED_EVENTS: Record<SourceForm, ReadonlySet<ContractEvent>> = {
   adapter: new Set(CONTRACT_EVENTS),
   bridge: new Set(["before_agent_start", "session_before_compact"]),
+}
+type AggregateSourceForm = {
+  sourceForm: SourceForm
+  registrations: readonly string[]
+  events: Record<ContractEvent, { status: EventStatus }>
+}
+
+export function ompContractOverallPass(sourceForms: readonly AggregateSourceForm[]): boolean {
+  return (Object.keys(EXPECTED_REGISTRATIONS) as SourceForm[]).every((sourceForm) => {
+    const result = sourceForms.find((candidate) => candidate.sourceForm === sourceForm)
+    return result !== undefined
+      && CONTRACT_EVENTS.every((event) => result.events[event]?.status === "pass")
+      && EXPECTED_REGISTRATIONS[sourceForm].every((registration) => result.registrations.includes(registration))
+  })
 }
 
 function parseFlag(name: string): string | undefined {
@@ -488,12 +502,19 @@ async function main(): Promise<void> {
       summaryBaseUrl: summary.baseUrl,
       cliPath,
     })
-    const sourceForms = [adapter, bridge].map((result) => ({
-      sourceForm: result.form,
-      registrations: [...new Set(result.entries.filter((entry) => entry.kind === "registration").map((entry) => entry.name))],
-      events: result.events,
-    }))
-    const overallPass = sourceForms.every((form) => Object.values(form.events).every((event) => event.status !== "fail"))
+    const sourceForms = [adapter, bridge].map((result) => {
+      const registrations = [...new Set(result.entries.filter((entry) => entry.kind === "registration").map((entry) => entry.name))]
+      const missingRegistrations = EXPECTED_REGISTRATIONS[result.form].filter((name) => !registrations.includes(name))
+      const incompleteEvents = Object.entries(result.events).filter(([, event]) => event.status !== "pass").map(([name]) => name)
+      return {
+        sourceForm: result.form,
+        registrations,
+        missingRegistrations,
+        incompleteEvents,
+        events: result.events,
+      }
+    })
+    const overallPass = ompContractOverallPass(sourceForms)
     const failedRegisteredEvents = sourceForms.flatMap((form) => Object.entries(form.events)
       .filter(([, result]) => result.status === "fail")
       .map(([event]) => `${form.sourceForm}.${event}`))
