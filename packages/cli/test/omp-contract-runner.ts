@@ -76,7 +76,7 @@ const EXPECTED_EVENTS: Record<SourceForm, Record<ContractEvent, true>> = {
 type AggregateSourceForm = {
   sourceForm: SourceForm
   registrations: readonly string[]
-  events: Record<ContractEvent, { status: EventStatus; evidence?: readonly string[] }>
+  events: Record<ContractEvent, { status: EventStatus }>
 }
 
 export function ompContractOverallPass(sourceForms: readonly AggregateSourceForm[]): boolean {
@@ -84,18 +84,6 @@ export function ompContractOverallPass(sourceForms: readonly AggregateSourceForm
     const result = sourceForms.find((candidate) => candidate.sourceForm === sourceForm)
     return result !== undefined
       && CONTRACT_EVENTS.every((event) => result.events[event]?.status === "pass")
-      && EXPECTED_REGISTRATIONS[sourceForm].every((registration) => result.registrations.includes(registration))
-  })
-}
-
-function ompContractNoninteractivePass(sourceForms: readonly AggregateSourceForm[]): boolean {
-  return (Object.keys(EXPECTED_REGISTRATIONS) as SourceForm[]).every((sourceForm) => {
-    const result = sourceForms.find((candidate) => candidate.sourceForm === sourceForm)
-    return result !== undefined
-      && CONTRACT_EVENTS.every((event) => event === "input" || result.events[event]?.status === "pass")
-      && result.events.input?.status === "fail"
-      && (result.events.input.evidence ?? []).includes("manual real-TTY input was not requested; noninteractive execution cannot pass input")
-      && result.registrations.includes("input")
       && EXPECTED_REGISTRATIONS[sourceForm].every((registration) => result.registrations.includes(registration))
   })
 }
@@ -940,13 +928,13 @@ async function main(): Promise<void> {
       providerRegistered: result.entries.some((entry) => entry.kind === "mechanism" && entry.owner === "harness" && entry.name === "provider"),
       contractToolRegistered: result.entries.some((entry) => entry.kind === "registration" && entry.owner === "harness" && entry.name === "tool:shell:memory-lane-contract"),
     }))
-    const lifecyclePass = manualInput ? ompContractOverallPass(sourceForms) : ompContractNoninteractivePass(sourceForms)
+    const lifecyclePass = ompContractOverallPass(sourceForms)
     const overallPass = lifecyclePass
       && taskSessions.status === "pass"
       && toolError.status === "pass"
       && harnessArtifacts.every((artifact) => artifact.providerRegistered && artifact.contractToolRegistered)
     const failedRegisteredEvents = sourceForms.flatMap((form) => Object.entries(form.events)
-      .filter(([event, result]) => result.status === "fail" && (manualInput || event !== "input"))
+      .filter(([, result]) => result.status === "fail")
       .map(([event]) => `${form.sourceForm}.${event}`))
     const adapterTurnEndPassed = sourceForms.find((form) => form.sourceForm === "adapter")?.events.turn_end.status === "pass"
     const decision = [
@@ -955,9 +943,7 @@ async function main(): Promise<void> {
         : "OMP turn_end boundary normalization did not pass the live contract.",
       failedRegisteredEvents.length
         ? `Full live lifecycle parity is not established. Failed registered contracts: ${failedRegisteredEvents.join(", ")}.`
-        : manualInput
-          ? "All registered live lifecycle contracts passed."
-          : "All noninteractive-verifiable registered live lifecycle contracts passed.",
+        : "All registered live lifecycle contracts passed.",
     ].join(" ")
     const report = {
       schemaVersion: 1,
