@@ -176,7 +176,7 @@ Pi:
 - Repo-local Pi `/memory review` and `/memory delete <id>` stay scoped by default; use `--all` only for explicit cross-project maintenance.
 - Broad Pi continuity prompts should route to canonical continuity before recall in both repo-local adapter and generated native-binary bridge.
 - Repo-local Pi and release-style generated Pi lifecycle writes share the low-noise CLI policy: explicit memory requests on `input`, higher-signal stop/tool candidates on `turn_end`/`tool_result`, secret filtering, deduplication, project routing, and pending review.
-- The pinned OMP `16.4.5` contract verifies all five lifecycle events across both production forms; keep future OMP installer work gated on its committed `overallPass: true` report.
+- The pinned OMP `16.4.5` contract verifies all five lifecycle events across both production forms; keep future issue #185 Slice 2 OMP installer, manifest, init, doctor, upgrade, and uninstall work separately approval-gated, dependent on issue #147 manifest-path handling, and gated on the committed `overallPass: true` report.
   OMP task sessions suppress automatic lifecycle capture only when nested session-file ownership and the delegated-worker system role are both observed.
 - Do not assume automatic pi `agent_end` or `session_shutdown` summaries.
 - The native pi adapter and release-style generated pi bridge `session_before_compact` handlers can queue pending pre-compact summaries when `memory.sessionEndSummary.enabled` is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is not `false`.
