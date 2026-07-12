@@ -113,7 +113,9 @@ irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/inst
 ```
 
 After installing, run `memory-lane init` again any time to reconfigure or add new integrations.
-`init` records the running CLI version in `~/.memory-lane/install.json` so future upgrades can refresh the manifest with the newly installed release version.
+`init` records the running CLI version, binary path, data directory, and configured integrations in `~/.memory-lane/install.json` so future upgrades can refresh the manifest with the newly installed release version.
+Re-running `init` preserves unrelated existing manifest integrations and updates only the integrations configured in that run.
+If an existing install manifest is malformed or missing its integrations array, `init` stops instead of replacing it.
 When `init` writes JSON harness configs, it preserves unrelated settings and hooks, replaces older Memory Lane hook entries, and creates a one-time `<config>.memory-lane.bak` backup before the first successful write.
 If an existing JSON config is malformed, `init` leaves it untouched and reports the parse error instead of overwriting it.
 
@@ -140,6 +142,7 @@ When existing configs are refreshed, the install manifest version is updated to 
 Upgrade treats the manifest `binaryPath` and each OMP integration `configPath` as durable installation facts.
 Custom release directories are preserved, and a manifest-recorded OMP extension is refreshed at its recorded path even when `PI_CODING_AGENT_DIR` is later absent or changed.
 Present but malformed or unsafe manifest paths stop upgrade instead of redirecting configuration to a default path.
+Upgrade also refuses a manifest `dataDir` that does not match the active `~/.memory-lane` directory.
 
 Your memory data in `~/.memory-lane/` is preserved.
 
@@ -160,6 +163,7 @@ memory-lane uninstall --only omp --yes
 
 Selective OMP uninstall preserves Pi, other integrations, the Memory Lane binary, memory data, unrelated OMP extensions, and OMP configuration.
 It uses the manifest-recorded OMP path and does not redirect to the current `PI_CODING_AGENT_DIR` or default root.
+Malformed or unsafe manifest paths stop uninstall rather than falling back to a default path.
 The full `memory-lane uninstall --yes` command retains its existing all-integrations behavior.
 
 ### Build from source
@@ -645,9 +649,9 @@ memory-lane migrate project-local --dry-run [--write-plan <path>]
 memory-lane migrate project-local --apply-plan <path> --yes
                                   Apply a reviewed project-local migration plan
 memory-lane reindex [--force]     Embed approved memories missing current vectors; --force recomputes
+memory-lane init [--yes|--recommended|--all|--list|--only <integrations>]
+                                  Configure detected harnesses or selected integrations, including OMP
 memory-lane init --project-local  Initialize sandbox-friendly project-local storage
-memory-lane init [--yes] [--only omp]
-                                  Configure detected harnesses or explicitly configure OMP
 memory-lane upgrade [--yes]       Download the latest binary and re-apply manifest-recorded configs
 memory-lane uninstall [--yes] [--only omp]
                                   Remove every integration, or remove only OMP while preserving Pi and data

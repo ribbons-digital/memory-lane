@@ -452,6 +452,8 @@ memory-lane init
 OMP is detected when its resolved agent directory exists or the `omp` command is available.
 Its extension path is `~/.omp/agent/extensions/memory-lane/index.ts` by default or `<PI_CODING_AGENT_DIR>/extensions/memory-lane/index.ts` when an absolute override is configured.
 Pi and OMP use the same verified production source selector but remain separate manifest integrations and separate files.
+Re-running `init` preserves unrelated existing manifest integrations and updates only the integrations configured in that run.
+If the existing install manifest is malformed or missing its integrations array, `init` stops instead of replacing it.
 After installation, doctor, upgrade, and uninstall use the manifest-recorded OMP path rather than re-resolving the current environment.
 Use `memory-lane uninstall --only omp --yes` to remove OMP without removing Pi, the shared binary, unrelated OMP extensions, or memory data.
 Named OMP profiles are not auto-discovered.
@@ -462,7 +464,8 @@ To upgrade to the latest release while preserving existing harness configs and m
 ```bash
 memory-lane upgrade
 ```
-Upgrade preserves a valid manifest-recorded release binary path and refuses malformed, relative, or unmanaged paths instead of silently redirecting to a platform default.
+Upgrade preserves a valid manifest-recorded release binary path and refuses malformed, relative, unmanaged, or wrong-data-directory manifest paths instead of silently redirecting to a platform default.
+Uninstall also refuses malformed or unsafe manifest paths instead of falling back to the current environment.
 
 In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save/read explicitly, `memory_continuity` is the canonical broad-continuity tool, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates in both the repo-local adapter and release-style generated bridge.
 The pinned OMP `16.4.5` contract verifies all five lifecycle events across both production forms with `overallPass: true`, and the real discovery smoke verifies default-root and `PI_CODING_AGENT_DIR` installation without `--extension`.
