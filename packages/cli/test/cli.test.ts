@@ -3162,13 +3162,16 @@ describe("CLI integration", () => {
     assert.equal(JSON.parse(thirdExplicit.stdout).data.saved, 1)
 
     const duplicate = runInput("Remember that deployment verification uses pnpm build")
-    const ordinary = runInput("Can you explain the deployment workflow?")
+    const ordinaryDurable = runInput("This project uses esbuild for release packaging")
+    const ordinaryQuestion = runInput("Can you explain the deployment workflow?")
     const secret = runInput("Remember that the token api_key = sk-1234567890abcdef1234567890abcdef should be used")
     assert.equal(duplicate.status, 0, duplicate.stderr)
-    assert.equal(ordinary.status, 0, ordinary.stderr)
+    assert.equal(ordinaryDurable.status, 0, ordinaryDurable.stderr)
+    assert.equal(ordinaryQuestion.status, 0, ordinaryQuestion.stderr)
     assert.equal(secret.status, 0, secret.stderr)
     assert.equal(JSON.parse(duplicate.stdout).data.saved, 0)
-    assert.equal(JSON.parse(ordinary.stdout).data.saved, 0)
+    assert.equal(JSON.parse(ordinaryDurable.stdout).data.saved, 0)
+    assert.equal(JSON.parse(ordinaryQuestion.stdout).data.saved, 0)
     assert.equal(JSON.parse(secret.stdout).data.saved, 0)
 
     const turnEnd = runProcess(["pi", "turn-end", "--json"], {
@@ -3202,7 +3205,7 @@ describe("CLI integration", () => {
     assert.match(memories, /release smoke verification uses pnpm smoke:binary/u)
     assert.match(memories, /`pnpm test` is the test command for this repo/u)
     assert.equal(memories.match(/deployment verification uses pnpm build/gu)?.length, 1)
-    assert.doesNotMatch(memories, /explain the deployment workflow|sk-1234567890abcdef1234567890abcdef/u)
+    assert.doesNotMatch(memories, /esbuild for release packaging|explain the deployment workflow|sk-1234567890abcdef1234567890abcdef/u)
   })
 
   it("pi lifecycle commands no-op safely for malformed absent and failed payload fields", () => {

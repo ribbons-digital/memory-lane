@@ -1,5 +1,5 @@
 import {
-  appendHookDebugLog, hookDebugEnabled, loadConfig, skippedSecretCount, type HookDebugLogStatus, type MemoryEngine, type SaveResult,
+  appendHookDebugLog, hookDebugEnabled, loadConfig, parseExplicitMemoryRequest, skippedSecretCount, type HookDebugLogStatus, type MemoryEngine, type SaveResult,
 } from "@memory-lane/core"
 import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleStop, shouldCaptureLifecycleTrace, type PostToolUseInput, type SessionMessage } from "@memory-lane/lifecycle"
 
@@ -221,12 +221,23 @@ export async function runPiHookCommand(command: PiCommand, options: RunPiHookOpt
         log("noop", { reason })
         return output({ reason })
       }
+      const text = parsed.input.text.trim()
+      if (!text) {
+        const reason = "empty input"
+        log("noop", { reason })
+        return output({ reason })
+      }
+      if (!parseExplicitMemoryRequest(text)) {
+        const reason = "input is not an explicit memory request"
+        log("noop", { reason })
+        return output({ reason })
+      }
       options.engine.refreshScope(parsed.input.cwd)
       const result = handleStop(options.engine, {
         cwd: parsed.input.cwd,
         sessionId: parsed.input.sessionId,
         turnId: parsed.input.turnId ?? parsed.input.sessionId,
-        lastUserMessage: parsed.input.text,
+        lastUserMessage: text,
       }, { adapter: "pi" })
       const resultCounts = counts(result.saved, result.discarded.length)
       log("ok", { ...resultCounts, additionalContext: false, warningCount: 0 })
