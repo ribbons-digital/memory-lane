@@ -11,7 +11,9 @@ import {
   PINNED_OMP_VERSION,
   REQUIRED_FLAGS,
   ompContractOverallPass,
+  isolatedOmpEnvironment,
   ompRpcCommandPlan,
+  taskSessionResult,
   validateOmpContract,
   type ContractEvent,
   type EventStatus,
@@ -35,6 +37,16 @@ type ContractFixture = {
   execution: Record<string, unknown>
   sourceForms: FixtureSourceForm[]
   overallPass: boolean
+  toolError: { status: string }
+  taskSessions: {
+    status: string
+    sourceForms: Array<{
+      sourceForm: SourceForm
+      missingEvents: string[]
+      taskSignals: { nestedSessionFile: boolean; subagentRole: boolean; parentLineageObserved: boolean }
+      automaticCaptureSuppressed: boolean
+    }>
+  }
 }
 
 function readFixture(): ContractFixture {
@@ -90,19 +102,22 @@ describe("OMP contract runner", () => {
         realRuntime: true,
         mode: "rpc",
         extensionFlag: true,
+        scratchHome: true,
         scratchProfile: true,
         scratchAgentDir: true,
+        manualRealTtyInput: true,
         compactionMechanism: "rpc compact",
+        modelMechanism: "loopback OpenAI-compatible deterministic contract provider",
       },
       sourceForms: [
         {
           sourceForm: "adapter",
           eventNames: [...CONTRACT_EVENTS],
           statuses: {
-            input: "fail",
+            input: "pass",
             before_agent_start: "pass",
             turn_end: "pass",
-            tool_result: "fail",
+            tool_result: "pass",
             session_before_compact: "pass",
           },
         },
@@ -110,18 +125,27 @@ describe("OMP contract runner", () => {
           sourceForm: "bridge",
           eventNames: [...CONTRACT_EVENTS],
           statuses: {
-            input: "not-registered-by-production-design",
+            input: "pass",
             before_agent_start: "pass",
-            turn_end: "not-registered-by-production-design",
-            tool_result: "not-registered-by-production-design",
+            turn_end: "pass",
+            tool_result: "pass",
             session_before_compact: "pass",
           },
         },
       ],
-      overallPass: false,
+      overallPass: true,
     })
+    assert.ok(report.sourceForms[0].events.input.evidence.includes("genuine real-TTY input and accepted pass-through result were observed"))
     assert.ok(report.sourceForms[0].events.turn_end.evidence.includes("raw payload omits legacy Pi fields consumed before normalization: turnId, lastUserMessage, lastAssistantMessage"))
-    assert.ok(report.sourceForms[1].events.tool_result.evidence.includes("packages/cli/src/installer/config.ts: piCliBridgeSource omits this handler"))
+    assert.ok(report.sourceForms[1].events.tool_result.evidence.includes("deterministic registered tool executed successfully before live tool_result delivery"))
+    assert.equal(report.toolError.status, "pass")
+    assert.equal(report.taskSessions.status, "pass")
+    assert.ok(report.taskSessions.sourceForms.every((form) =>
+      form.missingEvents.length === 0
+      && form.taskSignals.nestedSessionFile
+      && form.taskSignals.subagentRole
+      && !form.taskSignals.parentLineageObserved
+      && form.automaticCaptureSuppressed))
   })
 
   it("committed fixture matches the expected registration matrix for both production source forms", () => {
@@ -130,6 +154,34 @@ describe("OMP contract runner", () => {
       Object.fromEntries(report.sourceForms.map(({ sourceForm, registrations }) => [sourceForm, [...registrations].sort()])),
       Object.fromEntries(Object.entries(EXPECTED_REGISTRATIONS).map(([sourceForm, registrations]) => [sourceForm, [...registrations].sort()])),
     )
+  })
+
+  it("committed fixture is bounded sanitized and free of machine-local evidence", () => {
+    const fixture = fs.readFileSync(fixturePath, "utf8")
+    assert.ok(Buffer.byteLength(fixture) < 50_000)
+    assert.doesNotMatch(fixture, /\/Users\/|\/var\/folders\/|\/private\/var\//u)
+    assert.doesNotMatch(fixture, /MEMORY_LANE_CONTRACT_KEY|contract-only/u)
+    assert.doesNotMatch(fixture, /Released v9\.9\.9 after OMP contract verification/u)
+  })
+
+  it("reports OMP task-session ownership and worker-role signals independently", () => {
+    const requiredEvents = ["before_agent_start", "turn_end", "tool_result"]
+    for (const [nestedSessionFile, subagentRole] of [[true, false], [false, true]] as const) {
+      const entries = requiredEvents.map((name) => ({
+        kind: "event" as const,
+        name,
+        owner: "production" as const,
+        contextValues: { taskSession: true, nestedSessionFile, subagentRole, parentLineage: false },
+        resultShape: {},
+      }))
+      const result = taskSessionResult([{ form: "adapter", entries, memoryText: "" }])
+      assert.equal(result.status, "fail")
+      assert.deepEqual(result.sourceForms[0].taskSignals, {
+        nestedSessionFile,
+        subagentRole,
+        parentLineageObserved: false,
+      })
+    }
   })
 
   it("requires every lifecycle event to pass, including production-design omissions", () => {
@@ -181,6 +233,24 @@ describe("OMP contract runner", () => {
       "a longer flag name must not satisfy the required --extension option",
     )
   })
+  it("isolates loopback OMP execution from package-manager proxy injection", () => {
+    const env = isolatedOmpEnvironment({
+      HTTP_PROXY: "http://socket-firewall.invalid",
+      HTTPS_PROXY: "http://socket-firewall.invalid",
+      ALL_PROXY: "http://socket-firewall.invalid",
+      http_proxy: "http://socket-firewall.invalid",
+      https_proxy: "http://socket-firewall.invalid",
+      all_proxy: "http://socket-firewall.invalid",
+      KEEP_ME: "preserved",
+    }, { HOME: "/scratch/home" })
+    for (const key of ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]) {
+      assert.equal(env[key], undefined)
+    }
+    assert.equal(env.NO_PROXY, "127.0.0.1,localhost")
+    assert.equal(env.no_proxy, env.NO_PROXY)
+    assert.equal(env.KEEP_ME, "preserved")
+    assert.equal(env.HOME, "/scratch/home")
+  })
 
   it("constructs the isolated RPC launch plan without invoking OMP", () => {
     assert.deepEqual(ompRpcCommandPlan({
@@ -202,8 +272,9 @@ describe("OMP contract runner", () => {
         "--config", "/scratch/omp-contract.yml",
         "--extension", "/scratch/memory-lane-contract.ts",
         "--auto-approve",
-        "--tools", "bash",
-        "--append-system-prompt", "Contract instruction: obey explicit requests to call the bash tool exactly once.",
+        "--model", "memory-lane-contract/contract-model",
+        "--tools", "task,shell:memory-lane-contract",
+        "--append-system-prompt", "Memory Lane contract runtime. Follow the current user request exactly.",
         "--max-time", "180",
       ],
     })

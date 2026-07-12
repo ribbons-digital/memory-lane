@@ -1045,8 +1045,8 @@ Commands:
                   Run a Claude Code hook adapter command; reads hook JSON from stdin
   codex <user-prompt-submit|stop|post-tool-use|session-start|session-end|pre-compact>
                   Run a Codex hook adapter command; reads hook JSON from stdin
-  pi <pre-compact>
-                  Run a generated Pi bridge hook command; reads hook JSON from stdin
+  pi <input|turn-end|post-tool-use|pre-compact>
+                  Run a generated Pi lifecycle bridge command; reads normalized JSON from stdin
   session-end [--confirm]
                   Generate a session-end summary from stdin JSON; saves as pending memory${pluginLines}
 

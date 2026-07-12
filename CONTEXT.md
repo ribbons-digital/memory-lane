@@ -24,7 +24,7 @@ Memory Lane has **multiple capture pathways**, all harness-triggered through lif
 | `PostToolUse` (checkpoints) | `packages/lifecycle/src/checkpoint-capture.ts` | Successful release/merge commands |
 | `SessionEnd` | `packages/lifecycle/src/session-end.ts` | LLM-generated structured session summaries → pending `session_summary` |
 | Local learning events | `packages/lifecycle/src/learning-events.ts` and `packages/core/src/engine.ts` | Opt-in content-free events for suggestion creation, review exposure, approve/reject/delete/replace/supersede/reactivation, and agreement recommendation exposure/acceptance |
-| Direct save/suggest | `packages/core/src/engine.ts` (`save()`, `suggest()`) | Explicit CLI/MCP tool saves, pi adapter `input`/`memory_save`/`memory_suggest` |
+| Direct save/suggest | `packages/core/src/engine.ts` (`save()`, `suggest()`) | Explicit CLI/MCP tool saves, pi adapter and generated bridge `input`/`memory_save`/`memory_suggest` |
 
 Memory capture pathways write to **JSONL file storage** via `MemoryEngine.save()` /
 `suggest()`. Candidates are prefixed to text (e.g., `"Workflow correction: ..."`,
@@ -56,8 +56,8 @@ harness-driven and rule-based.**
 
 3. **No `write_file`/`edit_file` tool.** The paper's agent calls explicit file tools.
    Memory Lane uses `memory_save` / `memory_suggest` — but these are opaque to the
-   agent (no `write_file` tool exists). The generated Pi bridge has `memory_save` and
-   `memory_suggest`, not a generic write tool.
+   agent (no `write_file` tool exists). The generated Pi bridge has `memory_save`,
+   `memory_suggest`, and lifecycle `input`, not a generic write tool.
 
 ---
 
@@ -226,7 +226,7 @@ Memory Lane already has several mechanisms that work **harness-neutrally**:
 | `harnessGuidance` | Same file | Per-harness CLI/MCP command suggestions from shared core |
 | `answerGuidance` | Same file | Generic guidance that works regardless of harness |
 | SKILL.md | `skills/memory-lane/SKILL.md` | Agent-facing instructions, harness-agnostic |
-| Generated bridge template | `packages/cli/src/installer/config.ts` | Same continuity rendering for all native-binary installs; uses `memory-lane route --prompt <text> --json` for shared route-decision parity |
+| Generated bridge template | `packages/cli/src/installer/config.ts` | Same continuity rendering for all native-binary installs; uses `memory-lane route --prompt <text> --json` for shared route-decision parity and routes `input`/`turn_end`/`tool_result` through shared CLI lifecycle policy |
 | Core exports | `packages/core/src/index.ts` | All continuity/retrieval/classification functions available to any adapter |
 
 **Steering directions** (what Memory Lane tells harnesses):

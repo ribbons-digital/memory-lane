@@ -156,6 +156,11 @@ memory-lane codex user-prompt-submit
 memory-lane codex stop
 memory-lane codex post-tool-use
 memory-lane codex pre-compact
+
+memory-lane pi input
+memory-lane pi turn-end
+memory-lane pi post-tool-use
+memory-lane pi pre-compact
 ```
 
 - Claude adapter is for **Claude Code CLI hooks**, not Claude Desktop.
@@ -170,8 +175,9 @@ Pi:
 - Pi supports manual tools/commands, explicit `memory_continuity`, and read-only lifecycle context through `before_agent_start`.
 - Repo-local Pi `/memory review` and `/memory delete <id>` stay scoped by default; use `--all` only for explicit cross-project maintenance.
 - Broad Pi continuity prompts should route to canonical continuity before recall in both repo-local adapter and generated native-binary bridge.
-- Repo-local Pi lifecycle writes are intentionally low-noise: explicit memory requests on `input`, higher-signal stop/tool candidates on `turn_end`/`tool_result`.
-- Release-style generated Pi bridges currently do not register `input`, `turn_end`, or `tool_result`; keep first-class OMP installer work gated until the pinned OMP contract report passes.
+- Repo-local Pi and release-style generated Pi lifecycle writes share the low-noise CLI policy: explicit memory requests on `input`, higher-signal stop/tool candidates on `turn_end`/`tool_result`, secret filtering, deduplication, project routing, and pending review.
+- The pinned OMP `16.4.5` contract verifies all five lifecycle events across both production forms; keep future OMP installer work gated on its committed `overallPass: true` report.
+  OMP task sessions suppress automatic lifecycle capture only when nested session-file ownership and the delegated-worker system role are both observed.
 - Do not assume automatic pi `agent_end` or `session_shutdown` summaries.
 - The native pi adapter and release-style generated pi bridge `session_before_compact` handlers can queue pending pre-compact summaries when `memory.sessionEndSummary.enabled` is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is not `false`.
 

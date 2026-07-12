@@ -3126,6 +3126,154 @@ describe("CLI integration", () => {
     assert.match(result.stdout + result.stderr, /Unknown Pi hook event/)
   })
 
+  it("pi input turn-end and post-tool-use persist through shared lifecycle policy", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const input = runProcess(["pi", "input", "--json"], {
+      env,
+      stdin: JSON.stringify({
+        cwd: process.cwd(),
+        session_id: "pi-input-session",
+        turn_id: "pi-input-turn",
+        source: "interactive",
+        text: "Remember that this project uses pnpm test for verification",
+      }),
+    })
+    assert.equal(input.status, 0, input.stderr)
+    assert.equal(JSON.parse(input.stdout).data.saved, 1)
+
+    const runInput = (text: string) => runProcess(["pi", "input", "--json"], {
+      env,
+      stdin: JSON.stringify({
+        cwd: process.cwd(),
+        session_id: "pi-input-shared-session",
+        source: "interactive",
+        text,
+      }),
+    })
+    const secondExplicit = runInput("Remember that deployment verification uses pnpm build")
+    const thirdExplicit = runInput("Remember that release smoke verification uses pnpm smoke:binary")
+    assert.equal(secondExplicit.status, 0, secondExplicit.stderr)
+    assert.equal(thirdExplicit.status, 0, thirdExplicit.stderr)
+    assert.equal(JSON.parse(secondExplicit.stdout).data.saved, 1)
+    assert.equal(JSON.parse(thirdExplicit.stdout).data.saved, 1)
+
+    const duplicate = runInput("Remember that deployment verification uses pnpm build")
+    const ordinaryDurable = runInput("This project uses esbuild for release packaging")
+    const ordinaryQuestion = runInput("Can you explain the deployment workflow?")
+    const secret = runInput("Remember that the token api_key = sk-1234567890abcdef1234567890abcdef should be used")
+    assert.equal(duplicate.status, 0, duplicate.stderr)
+    assert.equal(ordinaryDurable.status, 0, ordinaryDurable.stderr)
+    assert.equal(ordinaryQuestion.status, 0, ordinaryQuestion.stderr)
+    assert.equal(secret.status, 0, secret.stderr)
+    assert.equal(JSON.parse(duplicate.stdout).data.saved, 0)
+    assert.equal(JSON.parse(ordinaryDurable.stdout).data.saved, 0)
+    assert.equal(JSON.parse(ordinaryQuestion.stdout).data.saved, 0)
+    assert.equal(JSON.parse(secret.stdout).data.saved, 0)
+
+    const turnEnd = runProcess(["pi", "turn-end", "--json"], {
+      env,
+      stdin: JSON.stringify({
+        cwd: process.cwd(),
+        session_id: "pi-turn-session",
+        last_user_message: "The project verification command is pnpm test",
+        last_assistant_message: "Confirmed.",
+      }),
+    })
+    assert.equal(turnEnd.status, 0, turnEnd.stderr)
+
+    const postToolUse = runProcess(["pi", "post-tool-use", "--json"], {
+      env,
+      stdin: JSON.stringify({
+        cwd: process.cwd(),
+        session_id: "pi-tool-session",
+        turn_id: "pi-tool-turn",
+        tool_name: "shell:memory-lane-contract",
+        tool_input: { command: "pnpm test" },
+        tool_response: { text: "OMP_CONTRACT_TOOL_TEST_PASSED", exitCode: 0 },
+      }),
+    })
+    assert.equal(postToolUse.status, 0, postToolUse.stderr)
+    assert.equal(JSON.parse(postToolUse.stdout).data.saved, 1)
+
+    const memories = fs.readFileSync(memFile, "utf8")
+    assert.match(memories, /this project uses pnpm test for verification/u)
+    assert.match(memories, /deployment verification uses pnpm build/u)
+    assert.match(memories, /release smoke verification uses pnpm smoke:binary/u)
+    assert.match(memories, /`pnpm test` is the test command for this repo/u)
+    assert.equal(memories.match(/deployment verification uses pnpm build/gu)?.length, 1)
+    assert.doesNotMatch(memories, /esbuild for release packaging|explain the deployment workflow|sk-1234567890abcdef1234567890abcdef/u)
+  })
+
+  it("pi post-tool-use normalizes raw OMP-shaped tool results", async () => {
+    const engine = new MemoryEngine({
+      memoryPath: memFile,
+      embeddingsPath: embFile,
+      configPath: cfgFile,
+    })
+
+    const success = await runPiHookCommand("post-tool-use", {
+      engine,
+      payloadText: JSON.stringify({
+        cwd: process.cwd(),
+        session_id: "pi-raw-omp-tool-session",
+        tool_name: "bash",
+        tool_input: { command: "pnpm test" },
+        content: [{ type: "text", text: "OMP raw content without legacy text field" }],
+        details: { source: "omp" },
+        isError: false,
+      }),
+    })
+    assert.equal(JSON.parse(success).data.saved, 1)
+
+    const error = await runPiHookCommand("post-tool-use", {
+      engine,
+      payloadText: JSON.stringify({
+        cwd: process.cwd(),
+        session_id: "pi-raw-omp-tool-session",
+        tool_name: "bash",
+        tool_input: { command: "pnpm build" },
+        content: [{ type: "text", text: "Build passed but OMP marked it as failed" }],
+        details: { source: "omp" },
+        isError: true,
+      }),
+    })
+    assert.equal(JSON.parse(error).data.saved, 0)
+
+    const memories = fs.readFileSync(memFile, "utf8")
+    assert.match(memories, /`pnpm test` is the test command for this repo/u)
+    assert.doesNotMatch(memories, /`pnpm build` is the build command for this repo/u)
+  })
+
+  it("pi lifecycle commands no-op safely for malformed absent and failed payload fields", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    for (const [command, stdin] of [
+      ["input", "{"],
+      ["turn-end", "[]"],
+      ["post-tool-use", JSON.stringify({
+        cwd: process.cwd(),
+        session_id: "pi-failed-tool-session",
+        tool_name: "bash",
+        tool_input: { command: "pnpm test" },
+        tool_response: { text: "failed", exitCode: 1 },
+      })],
+    ]) {
+      const result = runProcess(["pi", command, "--json"], { env, stdin })
+      assert.equal(result.status, 0, result.stderr)
+      const data = JSON.parse(result.stdout).data
+      if (command === "post-tool-use") assert.equal(data.saved, 0)
+      else assert.equal(typeof data.reason, "string")
+    }
+    assert.equal(fs.existsSync(memFile), false)
+  })
+
   it("pi pre-compact accepts hook payload on stdin", () => {
     fs.writeFileSync(cfgFile, JSON.stringify({ memory: { sessionEndSummary: { enabled: true } } }), "utf8")
     const result = runProcess(["pi", "pre-compact", "--json"], {

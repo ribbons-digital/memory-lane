@@ -206,13 +206,13 @@ For OMP compatibility work, run the real-runtime contract gate against the repos
 ```bash
 pnpm --filter @memory-lane/pi-adapter build
 pnpm --filter @memory-lane/cli build
-pnpm --filter @memory-lane/cli eval:omp-contract -- --as-of YYYY-MM-DD --out test/fixtures/omp-contract-16.4.5.json
+pnpm --filter @memory-lane/cli eval:omp-contract -- --as-of YYYY-MM-DD --manual-input --out test/fixtures/omp-contract-16.4.5.json
 ```
 
-The gate requires OMP `16.4.5`, an authenticated model, and `expect` for the interactive TUI probe.
-It loads both production extension forms through a real `omp --extension` scratch profile, records sanitized per-event evidence, and exits non-zero when any expected registration is missing, any lifecycle event remains unverified, or any lifecycle event fails.
+The gate requires OMP `16.4.5` and a genuine interactive terminal for the two prompted `input` submissions.
+It uses a credential-free loopback provider for deterministic tool execution, loads both production extension forms through real `omp --extension` scratch profiles, records sanitized per-event evidence, and exits non-zero when any expected registration is missing, any lifecycle event remains unverified, or any lifecycle event fails.
 The tested version and date live in `packages/cli/test/fixtures/omp-contract-16.4.5.json`.
-Do not claim first-class OMP lifecycle parity while that report has `overallPass: false`.
+The committed report must keep `overallPass: true` before future OMP installer work can begin.
 
 #### Optional local evals
 
@@ -276,9 +276,9 @@ Release-style generated pi bridges expose the same continuity tool, proxy `/memo
 They also inject project context through pi's `before_agent_start` event.
 Broad continuity prompts such as “what were we last working on?”, “where did we leave off?”, and “what's next?” route to canonical Memory Lane continuity (`memory-lane continuity --json`, or `memory-lane continuity --query ...` for topic-specific workstreams) before topic-specific recall, while ordinary targeted prompts continue to use bounded recall.
 Both repo-local and generated pi continuity rendering de-duplicate repeated continuity ids and promote actionable warning inspection commands before operating guidance.
-To reduce memory noise, repo-local pi `input` only saves explicit memory requests such as “Remember that ...”; ordinary prompt submissions are not auto-saved.
-Repo-local pi `turn_end` and `tool_result` still capture higher-signal lifecycle evidence such as completed durable project statements, successful workflow commands (e.g., `pnpm test`, `pnpm build`, `pnpm install`), and strong checkpoint evidence such as completed releases or merged PRs through the shared lifecycle policy.
-Release-style generated pi bridges currently do not register `input`, `turn_end`, or `tool_result`; keep OMP installer work gated until the pinned OMP contract report passes.
+To reduce memory noise, both the repo-local pi adapter and release-style generated pi bridge save `input` only for explicit memory requests such as “Remember that ...”; ordinary prompt submissions are not auto-saved.
+Both production forms route `input`, `turn_end`, and `tool_result` through shared CLI lifecycle policy, preserving explicit-save filtering, durable-statement capture, successful workflow command capture, deduplication, secret filtering, project routing, and pending review status.
+On OMP, automatic lifecycle capture is suppressed only when nested session-file ownership and OMP's delegated-worker system role both identify a task session, preventing duplicate task memories while leaving ordinary sessions unchanged.
 Inferred checkpoint captures are pending by default and require review before they affect approved continuity.
 For session summaries, pi uses the explicit `/memory session-summary` command: it reads the current branch through pi's session manager, asks for interactive confirmation, and saves any generated summary as a pending `session_summary` memory with pi `session_end` provenance.
 The native pi adapter and release-style generated pi bridge also listen to `session_before_compact` and can save a pending pre-compact `session_summary` with pi `pre_compact` provenance when `memory.sessionEndSummary.enabled` is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or not `false`; they do not override pi's own compaction summary.
@@ -624,6 +624,8 @@ memory-lane init --project-local  Initialize sandbox-friendly project-local stor
 memory-lane upgrade [--yes]       Download the latest binary and re-apply existing harness configs
 memory-lane tuneup [purge]        Inspect or purge local learning capture data
 memory-lane session-end --confirm Generate a pending session summary from stdin JSON
+memory-lane pi input|turn-end|post-tool-use|pre-compact
+                                  Generated Pi bridge lifecycle commands from stdin JSON
 memory-lane obsidian ...          Manage optional Obsidian mirror/import workflows
 ```
 
@@ -1190,13 +1192,14 @@ Shared lifecycle handlers can also queue compact `project_checkpoint` candidates
 
 The pi adapter supports manual Memory Lane tools and commands (`memory_save`, `memory_suggest`, `memory_continuity`, `memory_recall`, and `/memory ...`). It performs read-only lifecycle context injection through pi's documented `before_agent_start` event: broad continuity prompts route to canonical Memory Lane continuity, memory-management prompts route to list/status/review guidance, and other relevant approved memories may be injected as hidden `memory-lane` context before the agent starts.
 
-The repo-local pi adapter also writes memories through higher-signal lifecycle events:
+Both the repo-local pi adapter and release-style generated pi bridge write memories through low-noise lifecycle events:
 
 - `input` - explicit memory requests only ("Remember that..."); ordinary prompt submissions are ignored to avoid noisy memory queues.
 - `turn_end` - the last user and assistant messages are evaluated for memory-worthy candidates and strong completed-progress checkpoint evidence after a turn completes.
 - `tool_result` - successful shell workflow commands such as `pnpm test`, `pnpm build`, and `pnpm install` are captured as project workflow rules; successful release/merge commands may queue pending checkpoint candidates.
 
-Automatic writes skip secrets, transient imperatives, reviewer/subagent meta-prompts, and duplicates within a turn.
+Automatic writes route through the shared CLI lifecycle policy, skip secrets, avoid transient imperatives and reviewer/subagent meta-prompts, deduplicate within a turn, and keep inferred candidates pending for review.
+On OMP, automatic lifecycle capture is suppressed only when both nested session-file ownership and the delegated-worker system role identify a task session.
 Inferred checkpoint candidates stay pending until review; use `/memory review` in pi or the normal CLI/MCP review surfaces to approve or reject them.
 Repo-local pi `/memory review` and `/memory delete <id>` respect current-project visibility by default, return not-found behavior without memory text for out-of-scope ids, and require `--all` for deliberate cross-project review or delete.
 Set `MEMORY_LANE_DEBUG=1` to append privacy-safe debug records to `~/.memory-lane/pi-debug.jsonl` (no prompts or tool outputs are logged).
@@ -1204,7 +1207,6 @@ Set `MEMORY_LANE_DEBUG=1` to append privacy-safe debug records to `~/.memory-lan
 For session summaries, use `/memory session-summary` in pi.
 The command reads the current conversation branch through pi's session manager, asks for interactive confirmation, sends the compact transcript to the configured `memory.sessionEndSummary` provider, and saves any result as a pending `session_summary` memory with pi `session_end` provenance.
 The native pi adapter and release-style generated pi bridge can also save pending pre-compact `session_summary` memories with pi `pre_compact` provenance from `session_before_compact` when `memory.sessionEndSummary.enabled` is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or not `false`; they do not override pi's own compaction summary.
-The release-style generated pi bridge currently does not register repo-local `input`, `turn_end`, or `tool_result` lifecycle writes.
 Memory Lane does not automatically summarize pi sessions on `agent_end` or `session_shutdown`.
 
 ### Context policy

@@ -259,6 +259,117 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
     assert.equal(payload.messages[2].toolName, "bash")
   })
 
+  it("generated pi CLI bridge forwards input turn_end and tool_result with OMP normalization", () => {
+    const { nativeBinary, logPath } = writeNativeMemoryLaneStub("lifecycle-calls.jsonl", "console.log(JSON.stringify({ data: { saved: 1 } }));")
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const ctx = {
+        cwd: "/tmp/pi-generated-bridge-project",
+        sessionManager: {
+          getSessionFile() { return "/tmp/pi-session.json" },
+          getBranch() {
+            return [
+              { type: "message", message: { role: "user", content: "Latest OMP user message" } },
+              { type: "message", message: { role: "assistant", content: "Previous assistant message" } },
+            ];
+          },
+        },
+      };
+      const inputResult = await handlers.input({ source: "interactive", text: "Remember the generated bridge input" }, ctx);
+      if (JSON.stringify(inputResult) !== JSON.stringify({ action: "continue" })) throw new Error("invalid input pass-through");
+      const turnResult = await handlers.turn_end({
+        turnIndex: 7,
+        message: { role: "assistant", content: [{ type: "text", text: "Current assistant message" }] },
+        toolResults: [],
+      }, ctx);
+      if (turnResult !== undefined) throw new Error("turn_end must not override OMP");
+      const toolResult = await handlers.tool_result({
+        toolName: "shell:memory-lane-contract",
+        toolCallId: "call-live",
+        input: { command: "pnpm test" },
+        content: [{ type: "text", text: "OMP_CONTRACT_TOOL_TEST_PASSED" }],
+        details: { exitCode: 0 },
+        isError: false,
+      }, ctx);
+      if (toolResult !== undefined) throw new Error("tool_result must not override OMP");
+    `)
+
+    const entries = readJsonlEntries(logPath)
+    assert.deepEqual(entries.map((entry) => entry.args.slice(0, 3)), [
+      ["pi", "input", "--json"],
+      ["pi", "turn-end", "--json"],
+      ["pi", "post-tool-use", "--json"],
+    ])
+    const input = JSON.parse(entries[0].stdin)
+    assert.equal(input.source, "interactive")
+    assert.equal(input.text, "Remember the generated bridge input")
+    const turnEnd = JSON.parse(entries[1].stdin)
+    assert.equal(turnEnd.turn_id, "7")
+    assert.equal(turnEnd.last_user_message, "Latest OMP user message")
+    assert.equal(turnEnd.last_assistant_message, "Current assistant message")
+    const toolResult = JSON.parse(entries[2].stdin)
+    assert.equal(toolResult.tool_name, "shell:memory-lane-contract")
+    assert.deepEqual(toolResult.tool_input, { command: "pnpm test" })
+    assert.equal(toolResult.tool_response.text, "OMP_CONTRACT_TOOL_TEST_PASSED")
+    assert.equal(toolResult.tool_response.exitCode, 0)
+  })
+
+  it("generated pi CLI bridge suppresses lifecycle handlers only for proven OMP task sessions", () => {
+    const { nativeBinary, logPath } = writeNativeMemoryLaneStub("task-policy-calls.jsonl", "console.log(JSON.stringify({ data: { saved: 0 } }));")
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const artifactsDir = "/tmp/pi-task-artifacts";
+      const taskCtx = {
+        cwd: "/tmp/pi-generated-bridge-project",
+        getSystemPrompt() { return ["You are a worker agent for delegated tasks."] },
+        sessionManager: {
+          getSessionFile() { return artifactsDir + "/child.jsonl" },
+          getArtifactsDir() { return artifactsDir },
+          getBranch() { return [] },
+        },
+      };
+      const results = [
+        await handlers.before_agent_start({ prompt: "Recall task context" }, taskCtx),
+        await handlers.input({ source: "interactive", text: "Remember task context" }, taskCtx),
+        await handlers.turn_end({ turnIndex: 1, message: { role: "assistant", content: "done" }, toolResults: [] }, taskCtx),
+        await handlers.tool_result({ toolName: "bash", input: { command: "pnpm test" }, content: [], isError: false }, taskCtx),
+        await handlers.session_before_compact({ preparation: { messagesToSummarize: [] } }, taskCtx),
+      ];
+      if (results[0] !== undefined || JSON.stringify(results[1]) !== JSON.stringify({ action: "continue" }) || results.slice(2).some((result) => result !== undefined)) {
+        throw new Error("task lifecycle suppression returned invalid host results");
+      }
+
+      const nestedOnly = { ...taskCtx, getSystemPrompt() { return ["Main agent"] } };
+      const roleOnly = { ...taskCtx, sessionManager: { getSessionFile() { return "/tmp/main.jsonl" }, getArtifactsDir() { return artifactsDir } } };
+      const parentBranch = { ...roleOnly, getSystemPrompt() { return ["Main agent"] }, sessionManager: { ...roleOnly.sessionManager, getHeader() { return { parentSession: "main" } } } };
+      const missingSession = { ...taskCtx, sessionManager: { getArtifactsDir() { return artifactsDir } } };
+      const malformedPrompt = { ...taskCtx, getSystemPrompt() { return "malformed" } };
+      const throwingContext = {
+        ...taskCtx,
+        getSystemPrompt() { throw new Error("unavailable") },
+        sessionManager: { getSessionFile() { throw new Error("unavailable") }, getArtifactsDir() { return artifactsDir } },
+      };
+      for (const ctx of [{ cwd: taskCtx.cwd }, nestedOnly, roleOnly, parentBranch, missingSession, malformedPrompt, throwingContext]) {
+        const result = await handlers.input({ source: "interactive", text: "Remember main context" }, ctx);
+        if (JSON.stringify(result) !== JSON.stringify({ action: "continue" })) throw new Error("invalid fail-open input result");
+      }
+    `)
+
+    const entries = readJsonlEntries(logPath)
+    assert.equal(entries.length, 7)
+    assert.ok(entries.every((entry) => entry.args[0] === "pi" && entry.args[1] === "input"))
+  })
+
   it("generated pi CLI bridge does not block compaction on slow pre-compact work", () => {
     const { nativeBinary } = writeNativeMemoryLaneStub("slow-precompact-calls.jsonl", `if (args[0] === "pi" && args[1] === "pre-compact") {
   const until = Date.now() + 600;
