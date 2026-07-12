@@ -203,6 +203,28 @@ describe("uninstall", () => {
     assert.equal(fs.existsSync(binaryPath), true)
   })
 
+  it("rejects malformed selective uninstall flags before removing anything", () => {
+    const piPath = path.join(home, ".pi", "agent", "extensions", "memory-lane", "index.ts")
+    fs.mkdirSync(path.dirname(piPath), { recursive: true })
+    fs.writeFileSync(piPath, "keep pi", "utf8")
+    writeManifest([{ harness: "pi", configPath: piPath }])
+    const originalManifest = fs.readFileSync(path.join(dataDir, "install.json"), "utf8")
+
+    for (const args of [
+      ["uninstall", "--only=", "--yes"],
+      ["uninstall", "--only", "--yes"],
+      ["uninstall", "--only", "--yes", "omp"],
+      ["uninstall", "--onlyomp", "--yes"],
+    ]) {
+      const result = runWithStatus(args, { HOME: home })
+      assert.equal(result.status, 1, args.join(" "))
+      assert.match(result.stdout, /Usage: memory-lane uninstall --only omp|selective uninstall supports only/u)
+      assert.equal(fs.readFileSync(piPath, "utf8"), "keep pi")
+      assert.equal(fs.existsSync(binaryPath), true)
+      assert.equal(fs.readFileSync(path.join(dataDir, "install.json"), "utf8"), originalManifest)
+    }
+  })
+
   it("selective OMP uninstall is idempotent when the recorded extension is already missing", () => {
     const ompPath = path.join(home, "custom-omp-agent", "extensions", "memory-lane", "index.ts")
     writeManifest([{ harness: "omp", configPath: ompPath }])

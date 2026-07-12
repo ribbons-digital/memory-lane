@@ -221,14 +221,14 @@ describe("upgrade", () => {
     assert.equal(fs.existsSync(environmentBinaryPath), false)
   })
 
-  it("does not write unsafe manifest-recorded OMP config paths during reapply", () => {
+  it("rejects unsafe manifest-recorded OMP config paths before reapply writes", () => {
     const home = tempDir()
     const dataDir = path.join(home, ".memory-lane")
     const binaryPath = path.join(home, ".local", "bin", "memory-lane")
     const unsafePath = path.join(home, "arbitrary", "index.ts")
     fs.mkdirSync(dataDir, { recursive: true })
 
-    const result = reapplyInstallManifest(
+    assert.throws(() => reapplyInstallManifest(
       {
         binaryPath,
         dataDir,
@@ -243,15 +243,42 @@ describe("upgrade", () => {
         dataDir,
         integrations: [{ harness: "omp", configPath: unsafePath }],
       },
-    )
+    ), /Refusing to manage an unexpected OMP extension path/u)
 
-    assert.equal(result.configuredCount, 0)
     assert.equal(fs.existsSync(unsafePath), false)
-    assert.match(result.results[0].message ?? "", /Refusing to manage an unexpected OMP extension path/u)
-    const next = readInstallManifest(dataDir)
-    assert.equal(next.status, "valid")
-    if (next.status !== "valid") return
-    assert.deepEqual(next.manifest.integrations, [{ harness: "omp", configPath: unsafePath }])
+    assert.equal(readInstallManifest(dataDir).status, "missing")
+  })
+
+  it("unsafe OMP paths stop CLI reapply without changing manifest or target", () => {
+    const home = tempDir()
+    const dataDir = path.join(home, ".memory-lane")
+    const binaryPath = path.join(home, ".local", "bin", "memory-lane")
+    const unsafePath = path.join(home, "arbitrary", "index.ts")
+    fs.mkdirSync(dataDir, { recursive: true })
+    fs.mkdirSync(path.dirname(binaryPath), { recursive: true })
+    fs.writeFileSync(binaryPath, "binary sentinel", "utf8")
+    fs.mkdirSync(path.dirname(unsafePath), { recursive: true })
+    fs.writeFileSync(unsafePath, "target sentinel", "utf8")
+    writeInstallManifest(dataDir, {
+      version: "0.1.0",
+      installedAt: "2026-01-01T00:00:00.000Z",
+      binaryPath,
+      dataDir,
+      integrations: [{ harness: "omp", configPath: unsafePath }],
+    })
+    const manifestPath = path.join(dataDir, "install.json")
+    const originalManifest = fs.readFileSync(manifestPath, "utf8")
+
+    const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist/index.js")
+    const result = spawnSync(process.execPath, [cli, "upgrade", "--reapply-install-manifest", "--yes"], {
+      encoding: "utf8",
+      env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: undefined },
+    })
+
+    assert.equal(result.status, 1)
+    assert.match(result.stdout, /Refusing to manage an unexpected OMP extension path/u)
+    assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest)
+    assert.equal(fs.readFileSync(unsafePath, "utf8"), "target sentinel")
   })
 
   it("uses the platform default only when the manifest is missing", () => {

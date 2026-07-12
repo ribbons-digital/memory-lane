@@ -8,6 +8,7 @@ import {
   mergeManifestIntegrations,
   readInstallManifest,
   validateAbsoluteManifestPath,
+  validateManifestOmpConfigPaths,
   validateOmpExtensionConfigPath,
   writeInstallManifest,
 } from "../installer/manifest.js"
@@ -170,6 +171,7 @@ function installPreviouslyConfigured(
 }
 
 export function reapplyInstallManifest(options: InitOptions, manifest: InstallManifest): ReapplyInstallManifestResult {
+  validateManifestOmpConfigPaths(manifest)
   const { results, replacements } = installPreviouslyConfigured(options, manifest)
   const configuredCount = results.filter((result) => result.configured).length
   const nextManifest: InstallManifest = {
@@ -194,7 +196,10 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
   const manifestResult = readInstallManifest(dataDir)
   const binaryPath = resolveUpgradeBinaryPath(manifestResult, homeDir, isWindows)
   const manifest = manifestResult.status === "valid" ? manifestResult.manifest : undefined
-  if (manifest) validatedManifestDataDir(manifest, dataDir, isWindows)
+  if (manifest) {
+    validatedManifestDataDir(manifest, dataDir, isWindows)
+    validateManifestOmpConfigPaths(manifest)
+  }
 
   if (reapplyOnly) {
     if (!manifest) {

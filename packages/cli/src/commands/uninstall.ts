@@ -8,6 +8,7 @@ import {
   integrationHarness,
   readInstallManifest,
   validateAbsoluteManifestPath,
+  validateManifestOmpConfigPaths,
   validateOmpExtensionConfigPath,
   writeInstallManifest,
 } from "../installer/manifest.js"
@@ -147,12 +148,31 @@ function removeOmpExtension(configPath: string): boolean {
   return true
 }
 
-function onlyValue(argv: string[]): string | undefined {
-  const inline = argv.find((argument) => argument.startsWith("--only="))
-  if (inline) return inline.slice("--only=".length)
-  const index = argv.indexOf("--only")
-  const value = index >= 0 ? argv[index + 1] : undefined
-  return value && !value.startsWith("--") ? value : undefined
+function validateOnlySelection(argv: string[]): string | undefined {
+  const values: string[] = []
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index]
+    if (!argument.startsWith("--only")) continue
+    if (argument === "--only") {
+      const value = argv[index + 1]
+      if (!value || value.startsWith("--")) throw new Error("Usage: memory-lane uninstall --only omp [--yes]")
+      values.push(value)
+      continue
+    }
+    if (argument.startsWith("--only=")) {
+      const value = argument.slice("--only=".length)
+      if (!value.trim()) throw new Error("Usage: memory-lane uninstall --only omp [--yes]")
+      values.push(value)
+      continue
+    }
+    throw new Error("Usage: memory-lane uninstall --only omp [--yes]")
+  }
+  if (values.length === 0) return undefined
+  if (values.length > 1) throw new Error("Usage: memory-lane uninstall --only omp [--yes]")
+  const selected = values[0].trim().toLowerCase()
+  const harness = HARNESS_ALIASES[selected]
+  if (harness !== "omp") throw new Error("Slice 2 selective uninstall supports only: memory-lane uninstall --only omp")
+  return selected
 }
 
 function validateFullManifest(manifest: InstallManifest): string {
@@ -221,11 +241,7 @@ async function uninstallOnlyOmp(
     return
   }
 
-  const configPaths = ompEntries.map((entry) => {
-    const config = validateOmpExtensionConfigPath(entry.configPath)
-    if (!config.ok) throw new Error(config.warning)
-    return config.value
-  })
+  const configPaths = validateManifestOmpConfigPaths({ ...manifest, integrations: ompEntries })
 
   let removed = 0
   for (const configPath of configPaths) {
@@ -246,12 +262,7 @@ async function uninstallOnlyOmp(
 
 export async function handleUninstall(argv: string[]): Promise<void> {
   const yes = argv.includes("--yes")
-  const selected = onlyValue(argv)
-  if (argv.includes("--only") && !selected) throw new Error("Usage: memory-lane uninstall --only omp [--yes]")
-  if (selected) {
-    const harness = HARNESS_ALIASES[selected.trim().toLowerCase()]
-    if (harness !== "omp") throw new Error("Slice 2 selective uninstall supports only: memory-lane uninstall --only omp")
-  }
+  const selected = validateOnlySelection(argv)
 
   const homeDir = resolveHomeDir()
   const dataDir = path.join(homeDir, ".memory-lane")

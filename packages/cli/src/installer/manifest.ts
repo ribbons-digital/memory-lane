@@ -153,6 +153,20 @@ export function validateOmpExtensionConfigPath(
   return validated
 }
 
+export function validateManifestOmpConfigPaths(
+  manifest: InstallManifest,
+  pathApi: PathApi = path,
+): string[] {
+  const configPaths: string[] = []
+  for (const entry of manifest.integrations) {
+    if (integrationHarness(entry) !== "omp") continue
+    const config = validateOmpExtensionConfigPath(entry.configPath, pathApi)
+    if (!config.ok) throw new Error(config.warning)
+    configPaths.push(config.value)
+  }
+  return configPaths
+}
+
 export function ompDiagnosticTarget(
   result: InstallManifestReadResult,
   env: NodeJS.ProcessEnv | Record<string, string | undefined>,
