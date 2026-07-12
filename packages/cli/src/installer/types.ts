@@ -1,4 +1,4 @@
-export type Harness = "claude-code-cli" | "codex-cli" | "claude-desktop" | "codex-desktop" | "pi"
+export type Harness = "claude-code-cli" | "codex-cli" | "claude-desktop" | "codex-desktop" | "pi" | "omp"
 
 export interface DetectedHarness {
   harness: Harness
@@ -15,6 +15,7 @@ export interface InitOptions {
   projectPath?: string
   yes: boolean
   homeDir: string
+  env?: NodeJS.ProcessEnv | Record<string, string | undefined>
 }
 
 export interface IntegrationResult {

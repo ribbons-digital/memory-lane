@@ -94,8 +94,8 @@ irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/inst
 ```
 
 The installer downloads a prebuilt binary, verifies its SHA-256 checksum, and places it on your PATH.
-After installation, run `memory-lane init` to configure Claude Code, Codex, Claude Desktop, Codex Desktop, and pi.
-Use `memory-lane init --yes` to auto-configure all detected harnesses without prompting.
+After installation, run `memory-lane init` to configure Claude Code, Codex, Claude Desktop, Codex Desktop, pi, and OMP (Oh My Pi).
+Use `memory-lane init --yes` to auto-configure all detected harnesses without prompting, or `memory-lane init --only omp` to configure OMP explicitly.
 
 If you are an end user, this installer plus `memory-lane init` path is the recommended setup.
 If you are developing Memory Lane and also using it on the same machine, prefer the [development setup](#development-setup-local-checkout--manual-harness-config) below so release-style init does not replace local shims or hand-edited harness config.
@@ -117,6 +117,13 @@ After installing, run `memory-lane init` again any time to reconfigure or add ne
 When `init` writes JSON harness configs, it preserves unrelated settings and hooks, replaces older Memory Lane hook entries, and creates a one-time `<config>.memory-lane.bak` backup before the first successful write.
 If an existing JSON config is malformed, `init` leaves it untouched and reports the parse error instead of overwriting it.
 
+OMP installs the same verified extension source used by pi at `~/.omp/agent/extensions/memory-lane/index.ts` by default.
+If `PI_CODING_AGENT_DIR` is set, OMP installation uses `<PI_CODING_AGENT_DIR>/extensions/memory-lane/index.ts` instead.
+Use an absolute `PI_CODING_AGENT_DIR`; environment values do not shell-expand `~`.
+Pi and OMP remain independent and may be installed side by side.
+Named OMP profiles are not auto-discovered because their active directory cannot be derived safely outside OMP.
+For a named profile, set `PI_CODING_AGENT_DIR` to that profile's agent directory before running init, or add the installed extension path to that profile's `extensions:` list manually.
+
 ### Upgrading
 
 Run the built-in upgrade command to download the latest binary and re-apply only the harness configs you already had installed:
@@ -130,6 +137,9 @@ On macOS and Linux this re-runs the installer and then refreshes your existing c
 On Windows, when an install manifest is present, the upgrade downloads the new binary and reapplies the existing harness configs automatically.
 `memory-lane init --yes` is only the fallback when no manifest exists.
 When existing configs are refreshed, the install manifest version is updated to the version embedded in the new binary.
+Upgrade treats the manifest `binaryPath` and each OMP integration `configPath` as durable installation facts.
+Custom release directories are preserved, and a manifest-recorded OMP extension is refreshed at its recorded path even when `PI_CODING_AGENT_DIR` is later absent or changed.
+Present but malformed or unsafe manifest paths stop upgrade instead of redirecting configuration to a default path.
 
 Your memory data in `~/.memory-lane/` is preserved.
 
@@ -139,6 +149,18 @@ You can also upgrade manually by re-running the installer and then `memory-lane 
 curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.sh | sh
 memory-lane init --yes
 ```
+
+### Uninstalling OMP without removing Pi
+
+Remove only the manifest-recorded OMP integration with:
+
+```bash
+memory-lane uninstall --only omp --yes
+```
+
+Selective OMP uninstall preserves Pi, other integrations, the Memory Lane binary, memory data, unrelated OMP extensions, and OMP configuration.
+It uses the manifest-recorded OMP path and does not redirect to the current `PI_CODING_AGENT_DIR` or default root.
+The full `memory-lane uninstall --yes` command retains its existing all-integrations behavior.
 
 ### Build from source
 
@@ -201,18 +223,21 @@ When changing generated harness adapters, installer templates, or release-style 
 
 For pi specifically, `before_agent_start` must return a custom message object such as `{ message: { customType, content, display, details? } }`; returning a raw string is invalid even if the extension loads successfully.
 
-For OMP compatibility work, run the real-runtime contract gate against the repository-pinned OMP version before releasing changes to the pi adapter, generated extension sources, or future OMP installer support:
+For OMP compatibility work, run both real-runtime gates against the repository-pinned OMP version before releasing changes to the pi adapter, generated extension sources, or OMP installer:
 
 ```bash
 pnpm --filter @memory-lane/pi-adapter build
 pnpm --filter @memory-lane/cli build
+pnpm --filter @memory-lane/cli eval:omp-discovery
 pnpm --filter @memory-lane/cli eval:omp-contract -- --as-of YYYY-MM-DD --manual-input --out test/fixtures/omp-contract-16.4.5.json
 ```
 
-The gate requires OMP `16.4.5` and a genuine interactive terminal for the two prompted `input` submissions.
-It uses a credential-free loopback provider for deterministic tool execution, loads both production extension forms through real `omp --extension` scratch profiles, records sanitized per-event evidence, and exits non-zero when any expected registration is missing, any lifecycle event remains unverified, or any lifecycle event fails.
-The tested version and date live in `packages/cli/test/fixtures/omp-contract-16.4.5.json`.
-The committed report must keep `overallPass: true` before any separately approved issue #185 Slice 2 OMP installer, manifest, init, doctor, upgrade, or uninstall work can begin.
+Both gates require OMP `16.4.5`; the lifecycle contract additionally requires a genuine interactive terminal for the two prompted `input` submissions.
+The discovery gate installs both production source forms into isolated default and `PI_CODING_AGENT_DIR` roots, launches real OMP without `--extension`, and verifies expected commands and tools through OMP's normal loader.
+The lifecycle gate uses a credential-free loopback provider for deterministic tool execution, loads both production extension forms through real `omp --extension` scratch profiles, records sanitized per-event evidence, and exits non-zero when any expected registration is missing, any lifecycle event remains unverified, or any lifecycle event fails.
+Neither gate needs a network-dependent model call or touches the real user profile or memory store.
+The tested lifecycle version and date live in `packages/cli/test/fixtures/omp-contract-16.4.5.json`.
+The committed report must keep `overallPass: true`.
 
 #### Optional local evals
 
@@ -621,7 +646,11 @@ memory-lane migrate project-local --apply-plan <path> --yes
                                   Apply a reviewed project-local migration plan
 memory-lane reindex [--force]     Embed approved memories missing current vectors; --force recomputes
 memory-lane init --project-local  Initialize sandbox-friendly project-local storage
-memory-lane upgrade [--yes]       Download the latest binary and re-apply existing harness configs
+memory-lane init [--yes] [--only omp]
+                                  Configure detected harnesses or explicitly configure OMP
+memory-lane upgrade [--yes]       Download the latest binary and re-apply manifest-recorded configs
+memory-lane uninstall [--yes] [--only omp]
+                                  Remove every integration, or remove only OMP while preserving Pi and data
 memory-lane tuneup [purge]        Inspect or purge local learning capture data
 memory-lane session-end --confirm Generate a pending session summary from stdin JSON
 memory-lane pi input|turn-end|post-tool-use|pre-compact
@@ -1183,10 +1212,19 @@ Run `memory-lane init` to auto-detect and configure supported harnesses, or see 
 - Cursor
 - Windsurf
 - pi
+- OMP (Oh My Pi)
 
 Lifecycle autosave intentionally filters transient reviewer, subagent, and task prompts such as commit review requests, “do not modify files” review tasks, and delegated status-report instructions. Those operational prompts are not durable memory. Explicit memory requests remain supported and authoritative: use `memory-lane save ...` or phrases like “Remember that ...” for durable workflow rules, preferences, or project facts.
 
 Shared lifecycle handlers can also queue compact `project_checkpoint` candidates from strong Stop/PostToolUse evidence such as completed release statements, successful release commands, or merged PR commands. These inferred captures are pending by default, deduplicated before saving, and never change approved continuity until the existing review flow approves them; no new CLI or MCP command is required. PostToolUse handlers may also queue pending `procedure` candidates when bounded recent tool evidence shows a failed action followed by a successful safe recovery; the saved text is template-derived and omits raw tool output.
+
+### OMP installation and maintenance
+
+OMP uses the same native adapter-import or generated CLI-bridge source selected for pi, but installs it under the independently resolved OMP agent root.
+`memory-lane doctor` reports Pi and OMP separately.
+When the install manifest records OMP, doctor, upgrade, and uninstall inspect that exact recorded extension path even if the environment override is later removed.
+Without a recorded OMP integration, doctor checks the shared resolver's default or `PI_CODING_AGENT_DIR` path without creating files.
+Named-profile auto-discovery remains unsupported; use an absolute `PI_CODING_AGENT_DIR` during init or configure the profile's `extensions:` list manually.
 
 ### pi adapter
 

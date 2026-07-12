@@ -1,4 +1,4 @@
-import type { IntegrationDiagnosticPaths } from "./integration-diagnostics.js"
+import type { IntegrationDiagnosticPaths, IntegrationDiagnosticWarnings } from "./integration-diagnostics.js"
 import type { MemoryEngineStorage } from "./storage-facade.js"
 
 export type MemoryStatus = "pending" | "approved" | "rejected" | "deleted"
@@ -799,6 +799,7 @@ export interface MemoryEngineConfig {
   embeddingProvider?: EmbeddingProvider
   hookDebugLogPath?: string
   integrationPaths?: Partial<IntegrationDiagnosticPaths>
+  integrationWarnings?: IntegrationDiagnosticWarnings
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>
   /** Fail-open local learning event sink. MemoryEngine never depends on sink success. */
   learningEventSink?: LocalLearningEventSink

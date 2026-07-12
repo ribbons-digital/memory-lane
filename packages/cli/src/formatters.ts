@@ -1020,11 +1020,11 @@ Commands:
   tuneup [purge] [--json]
                   Review local learning state or purge local learning captures
   init [--yes|--recommended|--all|--list|--only <integrations>] [--project]
-                  Run the first-time setup wizard; --only accepts comma-separated harnesses
+                  Run setup; --only accepts comma-separated harnesses including omp
   init --project-local [--project <path>]
                   Initialize project-local storage
-  uninstall [--yes]
-                  Remove Memory Lane integration configs and binary
+  uninstall [--yes] [--only omp]
+                  Remove every integration and binary, or remove only OMP while preserving Pi and data
   upgrade [--yes]
                   Download latest binary and re-apply configs
   config [show|enable-semantic|disable-semantic|set <key> <value>]

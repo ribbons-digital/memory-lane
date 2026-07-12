@@ -5,6 +5,11 @@ import * as path from "node:path"
 import * as readline from "node:readline"
 import { detectHarnesses, findDetected, harnessName } from "../installer/detect.js"
 import { hasExistingMemoryLaneConfig, installHarness } from "../installer/config.js"
+import {
+  mergeManifestIntegrations,
+  readInstallManifest,
+  writeInstallManifest,
+} from "../installer/manifest.js"
 import type { DetectedHarness, Harness, InitOptions, InitResult, IntegrationResult } from "../installer/types.js"
 import { VERSION } from "../version.js"
 
@@ -139,7 +144,7 @@ function flagValue(argv: string[], name: string): string | undefined {
   return next && !next.startsWith("--") ? next : undefined
 }
 
-const HARNESS_ALIASES: Record<string, Harness> = {
+export const HARNESS_ALIASES: Record<string, Harness> = {
   "claude-code": "claude-code-cli",
   "claude-code-cli": "claude-code-cli",
   claude: "claude-code-cli",
@@ -150,6 +155,7 @@ const HARNESS_ALIASES: Record<string, Harness> = {
   "codex-desktop": "codex-desktop",
   "codex-desktop-mcp": "codex-desktop",
   pi: "pi",
+  omp: "omp",
 }
 
 function dedupeHarnesses(harnesses: Harness[]): Harness[] {
@@ -180,19 +186,24 @@ function renderHarnessList(harnesses: DetectedHarness[]): string {
     .join("\n")
 }
 
-function writeInstallManifest(options: InitOptions, result: InitResult): void {
-  const manifestPath = path.join(options.dataDir, "install.json")
-  const manifest = {
+function persistInstallManifest(
+  options: InitOptions,
+  result: InitResult,
+  previousIntegrations: Record<string, unknown>[],
+): void {
+  const configured = result.integrations
+    .filter((integration) => integration.configured && integration.configPath)
+    .map((integration) => ({
+      harness: integration.harness,
+      configPath: integration.configPath,
+    }))
+  writeInstallManifest(options.dataDir, {
     version: VERSION,
     installedAt: new Date().toISOString(),
     binaryPath: options.binaryPath,
     dataDir: options.dataDir,
-    integrations: result.integrations.filter((i) => i.configured).map((i) => ({
-      harness: i.harness,
-      configPath: i.configPath,
-    })),
-  }
-  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n", "utf8")
+    integrations: mergeManifestIntegrations(previousIntegrations, configured),
+  })
 }
 
 async function runInteractive(options: InitOptions, harnesses: DetectedHarness[]): Promise<Harness[]> {
@@ -235,14 +246,22 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
     projectPath,
     yes,
     homeDir,
+    env: process.env,
   }
 
-  const harnesses = detectHarnesses({ homeDir })
+  const harnesses = detectHarnesses({ homeDir, env: process.env })
   if (listOnly) {
     console.log("Memory Lane integrations:")
     console.log(renderHarnessList(harnesses))
     return { binaryPath, dataDir, integrations: [], failedIntegrations: [] }
   }
+  const existingManifest = readInstallManifest(dataDir)
+  if (existingManifest.status === "malformed" || existingManifest.status === "partial") {
+    throw new Error(existingManifest.warnings.join(" "))
+  }
+  const previousIntegrations = existingManifest.status === "valid"
+    ? existingManifest.manifest.integrations
+    : []
 
   try {
     const selected = only
@@ -282,7 +301,7 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
 
     const failedIntegrations = integrations.filter((integration) => !integration.configured && !integration.skipped)
     const result: InitResult = { binaryPath, dataDir, integrations, failedIntegrations }
-    writeInstallManifest(options, result)
+    persistInstallManifest(options, result, previousIntegrations)
     if (failedIntegrations.length) {
       console.log("\nMemory Lane init completed with errors.")
       console.log(`Failed integrations: ${failedIntegrations.map((integration) => harnessName(integration.harness)).join(", ")}`)

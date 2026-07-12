@@ -159,6 +159,7 @@ memory-lane compact               # remove deleted/rejected entries while preser
 memory-lane reindex               # embed approved memories missing current vectors
 memory-lane init                  # first-time setup wizard for harnesses
 memory-lane init --yes            # auto-configure all detected harnesses
+memory-lane init --only omp       # explicitly configure OMP
 memory-lane init --project-local  # initialize sandbox-friendly project-local storage
 memory-lane tuneup [purge]        # inspect or purge local learning capture data
 memory-lane session-end --confirm # generate a pending session-summary memory from stdin JSON
@@ -166,8 +167,10 @@ memory-lane claude pre-compact   # Claude Code hook: pre-compaction pending summ
 memory-lane codex pre-compact    # Codex hook: pre-compaction pending summary
 memory-lane pi input|turn-end|post-tool-use|pre-compact # Generated Pi bridge lifecycle commands
 /memory session-summary           # repo-local pi only: explicitly summarize the current pi session after confirmation
-memory-lane uninstall             # remove binary and integration configs
-memory-lane uninstall --yes       # non-interactive uninstall
+memory-lane upgrade --yes         # upgrade the recorded binary and reapply manifest integrations
+memory-lane uninstall             # remove binary and every integration config
+memory-lane uninstall --yes       # non-interactive full uninstall
+memory-lane uninstall --only omp --yes # remove OMP while preserving Pi, binary, and memory data
 memory-lane mcp                   # run the bundled MCP server over stdio
 ```
 
@@ -446,14 +449,23 @@ curl -fsSL https://github.com/ribbons-digital/memory-lane/releases/latest/downlo
 memory-lane init
 ```
 
+OMP is detected when its resolved agent directory exists or the `omp` command is available.
+Its extension path is `~/.omp/agent/extensions/memory-lane/index.ts` by default or `<PI_CODING_AGENT_DIR>/extensions/memory-lane/index.ts` when an absolute override is configured.
+Pi and OMP use the same verified production source selector but remain separate manifest integrations and separate files.
+After installation, doctor, upgrade, and uninstall use the manifest-recorded OMP path rather than re-resolving the current environment.
+Use `memory-lane uninstall --only omp --yes` to remove OMP without removing Pi, the shared binary, unrelated OMP extensions, or memory data.
+Named OMP profiles are not auto-discovered.
+Set `PI_CODING_AGENT_DIR` to a named profile's agent directory before init, or configure that profile's `extensions:` list manually.
+
 To upgrade to the latest release while preserving existing harness configs and memory data, and refreshing the install manifest version to the embedded CLI version:
 
 ```bash
 memory-lane upgrade
 ```
+Upgrade preserves a valid manifest-recorded release binary path and refuses malformed, relative, or unmanaged paths instead of silently redirecting to a platform default.
 
 In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save/read explicitly, `memory_continuity` is the canonical broad-continuity tool, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates in both the repo-local adapter and release-style generated bridge.
-The pinned OMP `16.4.5` contract now verifies all five lifecycle events across both production forms with `overallPass: true`; keep future issue #185 Slice 2 OMP installer, manifest, init, doctor, upgrade, and uninstall work separate from the lifecycle contract slice, separately approval-gated, and dependent on issue #147 manifest-path handling.
+The pinned OMP `16.4.5` contract verifies all five lifecycle events across both production forms with `overallPass: true`, and the real discovery smoke verifies default-root and `PI_CODING_AGENT_DIR` installation without `--extension`.
 `turn_end` may queue pending project-scoped checkpoints, explicit workflow corrections, or high-confidence debugging-postmortem learning candidates when bounded context includes a concrete symptom, cause, prevention, and verification/recovery signal.
 `tool_result` may queue conservative procedure candidates from safe failed-command recovery evidence.
 These lifecycle suggestions remain pending review; they are not durable operating agreements until approved.

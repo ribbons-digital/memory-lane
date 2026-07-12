@@ -13,6 +13,7 @@ import { handleUninstall } from "./commands/uninstall.js"
 import { handleUpgrade } from "./commands/upgrade.js"
 import { handleObsidian } from "./commands/obsidian.js"
 import { flag, hasFlag, positionals } from "./args.js"
+import { ompDiagnosticTarget, readInstallManifest } from "./installer/manifest.js"
 import type { CliContext } from "./commands/context.js"
 import { loadPlugins } from "@memory-lane/plugin-api"
 import type { BundledPluginModule, LoadedPlugin } from "@memory-lane/plugin-api"
@@ -142,6 +143,12 @@ function createEngine(paths: MemoryPaths | EngineStoragePaths, projPath?: string
       : createSingleStoreEngineStorage(paths.home.memoryPath, paths.home.embeddingsPath, paths.kind === "environment" ? "explicit-storage-env" : "single-store")
     : createSingleStoreEngineStorage(paths.memoryPath, paths.embeddingsPath)
   const configPath = paths.configPath
+  const homeDir = process.env.HOME || os.homedir()
+  const ompTarget = ompDiagnosticTarget(
+    readInstallManifest(path.join(homeDir, ".memory-lane")),
+    process.env,
+    homeDir,
+  )
   const engine = new MemoryEngine({
     memoryPath: "explicitEnv" in paths ? paths.home.memoryPath : paths.memoryPath,
     embeddingsPath: "explicitEnv" in paths ? paths.home.embeddingsPath : paths.embeddingsPath,
@@ -150,6 +157,9 @@ function createEngine(paths: MemoryPaths | EngineStoragePaths, projPath?: string
     configPath,
     embeddingProvider: createEmbeddingProvider(configPath),
     learningEventSink: createLearningEventSink({ configPath, env: process.env }),
+    integrationPaths: { ompExtension: ompTarget.path },
+    integrationWarnings: { ompExtension: ompTarget.warnings },
+    env: process.env,
   })
   engine.refreshScope(projPath ?? process.cwd())
   return engine

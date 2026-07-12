@@ -87,14 +87,21 @@ memory-lane compact
 memory-lane reindex
 memory-lane init
 memory-lane init --yes
+memory-lane init --only omp
 memory-lane init --project-local
 memory-lane upgrade --yes
 memory-lane uninstall --yes
+memory-lane uninstall --only omp --yes
 memory-lane mcp
 ```
 
 Use `--kind` on `memory-lane save` when an explicit memory kind should override inference.
 Detailed command/reference material lives in `skills/memory-lane/REFERENCE.md`. Read that file only when the compact guidance above is insufficient.
+
+OMP init installs under `~/.omp/agent` by default or the absolute `PI_CODING_AGENT_DIR` override.
+Manifest-recorded OMP paths take precedence for doctor, upgrade, and uninstall after installation.
+Use `uninstall --only omp` to preserve Pi, the binary, other integrations, and memory data.
+Named OMP profiles are not auto-discovered; set `PI_CODING_AGENT_DIR` to the profile agent directory before init or configure its `extensions:` list manually.
 
 ## Revision and cleanup rules
 

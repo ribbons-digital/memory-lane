@@ -1,3 +1,4 @@
+import { resolveOmpAgentDir } from "@memory-lane/core"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { pathToFileURL } from "node:url"
@@ -483,7 +484,7 @@ function bridgeTaskSession(ctx: unknown): boolean {
   return `import * as path from "node:path"\n${base.slice(0, closing)}${lifecycleHandlers}${base.slice(closing).replace("\n", `\n${helpers}`)}`
 }
 
-function piExtensionSource(binaryPath: string): string {
+export function piExtensionSource(binaryPath: string): string {
   const adapterPath = localPiAdapterPath(binaryPath)
   return adapterPath ? piAdapterImportSource(adapterPath) : piCliBridgeSource(binaryPath)
 }
@@ -494,6 +495,19 @@ export function installPi(options: InitOptions): IntegrationResult {
   fs.writeFileSync(configPath, piExtensionSource(options.binaryPath), "utf8")
   return { harness: "pi", configured: true, configPath }
 }
+export function installOmp(options: InitOptions, recordedConfigPath?: string): IntegrationResult {
+  const env = options.env ?? process.env
+  const configPath = recordedConfigPath ?? path.join(
+    resolveOmpAgentDir(env, options.homeDir),
+    "extensions",
+    "memory-lane",
+    "index.ts",
+  )
+  ensureDir(configPath)
+  fs.writeFileSync(configPath, piExtensionSource(options.binaryPath), "utf8")
+  return { harness: "omp", configured: true, configPath }
+}
+
 
 export function hasExistingMemoryLaneConfig(harness: Harness, configPath: string): boolean {
   if (!fs.existsSync(configPath)) return false
@@ -526,7 +540,7 @@ export function hasExistingMemoryLaneConfig(harness: Harness, configPath: string
     return hasTomlSection(fs.readFileSync(configPath, "utf8"), "mcp_servers.memory-lane")
   }
 
-  if (harness === "pi") {
+  if (harness === "pi" || harness === "omp") {
     return fs.existsSync(configPath)
   }
 
@@ -545,5 +559,7 @@ export function installHarness(harness: Harness, options: InitOptions): Integrat
       return installCodexDesktop(options)
     case "pi":
       return installPi(options)
+    case "omp":
+      return installOmp(options)
   }
 }
