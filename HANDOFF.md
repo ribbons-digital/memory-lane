@@ -122,4 +122,4 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - User-facing package documentation: `README.md`
 - Latest release reference: `v0.2.47` / commit `28e5961`.
 - Current repo status: main is synced through PR #192; the next issue #169 follow-up remains separately scoped and requires user approval.
-- Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, PR #127, and PR #130.
+- Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, PR #127, PR #130, PR #174, and PR #192.
