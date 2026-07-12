@@ -179,7 +179,7 @@ Pi:
 
 Use `memory-lane session-end --confirm` only when the user explicitly wants to generate a manual session summary and `memory.sessionEndSummary` is configured.
 In Pi, use `/memory session-summary`; it reads the current branch through Pi's session manager and asks for confirmation.
-Claude/Codex `PreCompact` and the native pi adapter or release-style generated pi bridge `session_before_compact` handlers can queue pending pre-compact summaries only when the summary provider is configured and `memory.sessionEndSummary.requireConfirmation` is `false`; set `memory.preCompactSummary.enabled` to `false` to opt out.
+Claude/Codex `PreCompact` and the native pi adapter or release-style generated pi bridge `session_before_compact` handlers can queue pending pre-compact summaries only when the summary provider is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or not `false`; set `memory.preCompactSummary.enabled` to `false` to opt out.
 Generated summaries are pending memories for review.
 Raw transcripts are not stored; tool messages are excluded by default and likely secrets are redacted before the transcript is sent to the configured model.
 `memory.sessionEndSummary.timeoutMs` is optional and defaults to 30000 ms for OpenAI-compatible summary calls.
