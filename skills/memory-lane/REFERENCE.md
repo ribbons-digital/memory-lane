@@ -164,6 +164,7 @@ memory-lane tuneup [purge]        # inspect or purge local learning capture data
 memory-lane session-end --confirm # generate a pending session-summary memory from stdin JSON
 memory-lane claude pre-compact   # Claude Code hook: pre-compaction pending summary
 memory-lane codex pre-compact    # Codex hook: pre-compaction pending summary
+memory-lane pi input|turn-end|post-tool-use|pre-compact # Generated Pi bridge lifecycle commands
 /memory session-summary           # repo-local pi only: explicitly summarize the current pi session after confirmation
 memory-lane uninstall             # remove binary and integration configs
 memory-lane uninstall --yes       # non-interactive uninstall
@@ -310,8 +311,9 @@ Broad continuity prompts such as “what were we last working on?”, “where a
 Repo-local Pi exposes `/memory continuity [query]` plus the `memory_continuity` tool.
 Repo-local Pi `/memory review` and `/memory delete <id>` use current-project visibility by default, return not-found behavior without memory text for out-of-scope ids, and accept `--all` only for explicit cross-project review or delete.
 Release-style generated Pi bridges expose `memory_continuity`, proxy `/memory continuity ...` through the CLI, and use `memory-lane route --prompt <text> --json` for prompt routing parity.
-Repo-local Pi also has bounded low-noise lifecycle writes on `input`, `turn_end`, and `tool_result`.
-Release-style generated Pi bridges currently do not register those write handlers.
+Repo-local Pi and release-style generated Pi bridges both have bounded low-noise lifecycle writes on `input`, `turn_end`, and `tool_result` through shared CLI lifecycle policy.
+They save explicit memory requests from `input`, capture higher-signal candidates from `turn_end` and `tool_result`, apply secret filtering and deduplication, route project scope through the active cwd, and keep inferred candidates pending for review.
+On OMP, automatic lifecycle capture is suppressed only when both nested session-file ownership and the delegated-worker system role identify a task session.
 The native pi adapter and release-style generated pi bridge `session_before_compact` handlers can queue pending pre-compact summaries when the summary provider is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or not `false`.
 Do not assume automatic `agent_end` or `session_shutdown` summaries.
 When a durable pi workflow rule, preference, or project fact should be saved, use `memory_save` for explicit user requests or `memory_suggest` for proactive suggestions.
@@ -450,8 +452,8 @@ To upgrade to the latest release while preserving existing harness configs and m
 memory-lane upgrade
 ```
 
-In repo-local pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save/read explicitly, `memory_continuity` is the canonical broad-continuity tool, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates.
-Release-style generated pi bridges currently do not register `input`, `turn_end`, or `tool_result`; keep first-class OMP installer work gated until the pinned OMP contract report passes.
+In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save/read explicitly, `memory_continuity` is the canonical broad-continuity tool, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates in both the repo-local adapter and release-style generated bridge.
+The pinned OMP `16.4.5` contract now verifies all five lifecycle events across both production forms with `overallPass: true`; keep future OMP installer work separate from the lifecycle contract slice.
 `turn_end` may queue pending project-scoped checkpoints, explicit workflow corrections, or high-confidence debugging-postmortem learning candidates when bounded context includes a concrete symptom, cause, prevention, and verification/recovery signal.
 `tool_result` may queue conservative procedure candidates from safe failed-command recovery evidence.
 These lifecycle suggestions remain pending review; they are not durable operating agreements until approved.
