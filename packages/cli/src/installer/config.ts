@@ -2,6 +2,7 @@ import { resolveOmpAgentDir } from "@memory-lane/core"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { pathToFileURL } from "node:url"
+import { validateOmpExtensionConfigPath } from "./manifest.js"
 import type { Harness, InitOptions, IntegrationResult } from "./types.js"
 
 function ensureDir(filePath: string): void {
@@ -503,9 +504,11 @@ export function installOmp(options: InitOptions, recordedConfigPath?: string): I
     "memory-lane",
     "index.ts",
   )
-  ensureDir(configPath)
-  fs.writeFileSync(configPath, piExtensionSource(options.binaryPath), "utf8")
-  return { harness: "omp", configured: true, configPath }
+  const validated = validateOmpExtensionConfigPath(configPath)
+  if (!validated.ok) throw new Error(validated.warning)
+  ensureDir(validated.value)
+  fs.writeFileSync(validated.value, piExtensionSource(options.binaryPath), "utf8")
+  return { harness: "omp", configured: true, configPath: validated.value }
 }
 
 

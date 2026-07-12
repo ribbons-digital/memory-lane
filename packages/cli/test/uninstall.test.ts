@@ -5,8 +5,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
-import { validateOmpExtensionConfigPath } from "../src/commands/uninstall.js"
-import { readInstallManifest } from "../src/installer/manifest.js"
+import { readInstallManifest, validateOmpExtensionConfigPath } from "../src/installer/manifest.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -181,6 +180,29 @@ describe("uninstall", () => {
     assert.deepEqual(manifest.manifest.integrations, [{ harness: "pi", configPath: piPath }])
   })
 
+  it("preflights every selected OMP entry before selective uninstall deletes anything", () => {
+    const firstOmpPath = path.join(home, "custom-omp-agent", "extensions", "memory-lane", "index.ts")
+    const unsafeOmpPath = path.join(home, "custom-omp-agent", "index.ts")
+    fs.mkdirSync(path.dirname(firstOmpPath), { recursive: true })
+    fs.mkdirSync(path.dirname(unsafeOmpPath), { recursive: true })
+    fs.writeFileSync(firstOmpPath, "keep first omp", "utf8")
+    fs.writeFileSync(unsafeOmpPath, "keep unsafe omp", "utf8")
+    writeManifest([
+      { harness: "omp", configPath: firstOmpPath },
+      { harness: "omp", configPath: unsafeOmpPath },
+    ])
+    const originalManifest = fs.readFileSync(path.join(dataDir, "install.json"), "utf8")
+
+    const result = runWithStatus(["uninstall", "--only", "omp", "--yes"], { HOME: home })
+
+    assert.equal(result.status, 1)
+    assert.match(result.stdout, /Refusing to manage an unexpected OMP extension path/u)
+    assert.equal(fs.readFileSync(firstOmpPath, "utf8"), "keep first omp")
+    assert.equal(fs.readFileSync(unsafeOmpPath, "utf8"), "keep unsafe omp")
+    assert.equal(fs.readFileSync(path.join(dataDir, "install.json"), "utf8"), originalManifest)
+    assert.equal(fs.existsSync(binaryPath), true)
+  })
+
   it("selective OMP uninstall is idempotent when the recorded extension is already missing", () => {
     const ompPath = path.join(home, "custom-omp-agent", "extensions", "memory-lane", "index.ts")
     writeManifest([{ harness: "omp", configPath: ompPath }])
@@ -234,7 +256,7 @@ describe("uninstall", () => {
     ])
     const result = runWithStatus(["uninstall", "--yes"], { HOME: home })
     assert.equal(result.status, 1)
-    assert.match(result.stdout, /Refusing to remove an unexpected OMP extension path/u)
+    assert.match(result.stdout, /Refusing to manage an unexpected OMP extension path/u)
     assert.equal(fs.readFileSync(piPath, "utf8"), "keep pi")
     assert.equal(fs.readFileSync(unsafeOmpPath, "utf8"), "keep omp")
     assert.equal(fs.existsSync(binaryPath), true)
@@ -255,7 +277,7 @@ describe("uninstall", () => {
     fs.writeFileSync(unsafePath, "keep", "utf8")
     const unsafe = runWithStatus(["uninstall", "--only", "omp", "--yes"], { HOME: home })
     assert.equal(unsafe.status, 1)
-    assert.match(unsafe.stdout, /Refusing to remove an unexpected OMP extension path/u)
+    assert.match(unsafe.stdout, /Refusing to manage an unexpected OMP extension path/u)
     assert.equal(fs.readFileSync(unsafePath, "utf8"), "keep")
     assert.equal(fs.existsSync(binaryPath), true)
   })

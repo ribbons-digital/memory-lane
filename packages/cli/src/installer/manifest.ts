@@ -132,6 +132,27 @@ export function integrationConfigPath(
   return validateAbsoluteManifestPath(entry.configPath, `Install manifest ${harness} configPath`, pathApi)
 }
 
+export function validateOmpExtensionConfigPath(
+  value: unknown,
+  pathApi: PathApi = path,
+): PathValidation {
+  if (typeof value === "string" && (value.endsWith("/") || value.endsWith("\\"))) {
+    return { ok: false, warning: `Install manifest omp configPath must identify index.ts, not a directory: ${value}` }
+  }
+  const validated = validateAbsoluteManifestPath(value, "Install manifest omp configPath", pathApi)
+  if (!validated.ok) return validated
+  const extensionDir = pathApi.dirname(validated.value)
+  const extensionsDir = pathApi.dirname(extensionDir)
+  if (
+    pathApi.basename(validated.value) !== "index.ts"
+    || pathApi.basename(extensionDir) !== "memory-lane"
+    || pathApi.basename(extensionsDir) !== "extensions"
+  ) {
+    return { ok: false, warning: `Refusing to manage an unexpected OMP extension path: ${validated.value}` }
+  }
+  return validated
+}
+
 export function ompDiagnosticTarget(
   result: InstallManifestReadResult,
   env: NodeJS.ProcessEnv | Record<string, string | undefined>,

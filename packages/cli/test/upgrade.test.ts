@@ -221,6 +221,39 @@ describe("upgrade", () => {
     assert.equal(fs.existsSync(environmentBinaryPath), false)
   })
 
+  it("does not write unsafe manifest-recorded OMP config paths during reapply", () => {
+    const home = tempDir()
+    const dataDir = path.join(home, ".memory-lane")
+    const binaryPath = path.join(home, ".local", "bin", "memory-lane")
+    const unsafePath = path.join(home, "arbitrary", "index.ts")
+    fs.mkdirSync(dataDir, { recursive: true })
+
+    const result = reapplyInstallManifest(
+      {
+        binaryPath,
+        dataDir,
+        projectMode: false,
+        yes: true,
+        homeDir: home,
+      },
+      {
+        version: "0.1.0",
+        installedAt: "2026-01-01T00:00:00.000Z",
+        binaryPath: path.join(home, ".local", "bin", "old-memory-lane"),
+        dataDir,
+        integrations: [{ harness: "omp", configPath: unsafePath }],
+      },
+    )
+
+    assert.equal(result.configuredCount, 0)
+    assert.equal(fs.existsSync(unsafePath), false)
+    assert.match(result.results[0].message ?? "", /Refusing to manage an unexpected OMP extension path/u)
+    const next = readInstallManifest(dataDir)
+    assert.equal(next.status, "valid")
+    if (next.status !== "valid") return
+    assert.deepEqual(next.manifest.integrations, [{ harness: "omp", configPath: unsafePath }])
+  })
+
   it("uses the platform default only when the manifest is missing", () => {
     const home = tempDir()
     const missing = readInstallManifest(path.join(home, ".memory-lane"))

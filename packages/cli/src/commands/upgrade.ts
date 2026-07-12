@@ -4,11 +4,11 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { installHarness, installOmp } from "../installer/config.js"
 import {
-  integrationConfigPath,
   integrationHarness,
   mergeManifestIntegrations,
   readInstallManifest,
   validateAbsoluteManifestPath,
+  validateOmpExtensionConfigPath,
   writeInstallManifest,
 } from "../installer/manifest.js"
 import type { InstallManifest, InstallManifestEntry, InstallManifestReadResult, PathApi } from "../installer/manifest.js"
@@ -151,7 +151,7 @@ function installPreviouslyConfigured(
     try {
       const result = harness === "omp"
         ? (() => {
-            const validated = integrationConfigPath(integration)
+            const validated = validateOmpExtensionConfigPath(integration.configPath)
             if (!validated.ok) throw new Error(validated.warning)
             return installOmp(options, validated.value)
           })()

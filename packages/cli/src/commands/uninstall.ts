@@ -8,9 +8,10 @@ import {
   integrationHarness,
   readInstallManifest,
   validateAbsoluteManifestPath,
+  validateOmpExtensionConfigPath,
   writeInstallManifest,
 } from "../installer/manifest.js"
-import type { InstallManifest, InstallManifestEntry, PathApi, PathValidation } from "../installer/manifest.js"
+import type { InstallManifest, InstallManifestEntry } from "../installer/manifest.js"
 
 async function prompt(question: string, defaultValue: string = ""): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
@@ -135,27 +136,6 @@ function removePiExtension(piPath: string): boolean {
   return true
 }
 
-export function validateOmpExtensionConfigPath(
-  value: unknown,
-  pathApi: PathApi = path,
-): PathValidation {
-  if (typeof value === "string" && (value.endsWith("/") || value.endsWith("\\"))) {
-    return { ok: false, warning: `Install manifest omp configPath must identify index.ts, not a directory: ${value}` }
-  }
-  const validated = validateAbsoluteManifestPath(value, "Install manifest omp configPath", pathApi)
-  if (!validated.ok) return validated
-  const extensionDir = pathApi.dirname(validated.value)
-  const extensionsDir = pathApi.dirname(extensionDir)
-  if (
-    pathApi.basename(validated.value) !== "index.ts"
-    || pathApi.basename(extensionDir) !== "memory-lane"
-    || pathApi.basename(extensionsDir) !== "extensions"
-  ) {
-    return { ok: false, warning: `Refusing to remove an unexpected OMP extension path: ${validated.value}` }
-  }
-  return validated
-}
-
 function removeOmpExtension(configPath: string): boolean {
   const validated = validateOmpExtensionConfigPath(configPath)
   if (!validated.ok) throw new Error(validated.warning)
@@ -241,11 +221,15 @@ async function uninstallOnlyOmp(
     return
   }
 
-  let removed = 0
-  for (const entry of ompEntries) {
+  const configPaths = ompEntries.map((entry) => {
     const config = validateOmpExtensionConfigPath(entry.configPath)
     if (!config.ok) throw new Error(config.warning)
-    if (removeOmpExtension(config.value)) {
+    return config.value
+  })
+
+  let removed = 0
+  for (const configPath of configPaths) {
+    if (removeOmpExtension(configPath)) {
       console.log("  ✓ Removed omp configuration")
       removed++
     } else {
