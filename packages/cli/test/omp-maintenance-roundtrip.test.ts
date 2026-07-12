@@ -107,3 +107,33 @@ test("doctor uses the resolver before install and reports malformed manifests wi
   assert.match(malformedDoctor.data.integrations.ompExtension.warnings.join("\n"), /Invalid JSON in install manifest/u)
   assert.equal(fs.readFileSync(path.join(dataDir, "install.json"), "utf8"), "{")
 })
+
+test("doctor rejects unsafe manifest OMP paths without inspecting the target", () => {
+  const home = tempDir()
+  const dataDir = path.join(home, ".memory-lane")
+  const unsafeTarget = path.join(home, "arbitrary", "file.ts")
+  fs.mkdirSync(path.dirname(unsafeTarget), { recursive: true })
+  fs.writeFileSync(unsafeTarget, "export default async function memoryLaneExtension() {}", "utf8")
+  fs.mkdirSync(dataDir, { recursive: true })
+  fs.writeFileSync(path.join(dataDir, "install.json"), JSON.stringify({
+    version: "0.1.0",
+    installedAt: "2026-01-01T00:00:00.000Z",
+    binaryPath: path.join(home, "bin", "memory-lane"),
+    dataDir,
+    integrations: [{ harness: "omp", configPath: unsafeTarget }],
+  }), "utf8")
+
+  const env = {
+    HOME: home,
+    MEMORY_LANE_FILE: path.join(dataDir, "memory.jsonl"),
+    MEMORY_LANE_EMBEDDINGS_FILE: path.join(dataDir, "embeddings.jsonl"),
+    MEMORY_LANE_CONFIG: path.join(dataDir, "config.json"),
+  }
+  const doctor = JSON.parse(run(["doctor", "--json"], env).stdout) as {
+    data: { integrations: { ompExtension: { checkedPath: string | null; exists: boolean; detected: boolean; warnings: string[] } } }
+  }
+  assert.equal(doctor.data.integrations.ompExtension.checkedPath, null)
+  assert.equal(doctor.data.integrations.ompExtension.exists, false)
+  assert.equal(doctor.data.integrations.ompExtension.detected, false)
+  assert.match(doctor.data.integrations.ompExtension.warnings.join("\n"), /Refusing to manage an unexpected OMP extension path/u)
+})

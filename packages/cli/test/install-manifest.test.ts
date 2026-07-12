@@ -109,5 +109,16 @@ describe("install manifest", () => {
     const unusable = ompDiagnosticTarget(readInstallManifest(dataDir), {}, home)
     assert.equal(unusable.path, null)
     assert.match(unusable.warnings.join("\n"), /must be an absolute path/u)
+
+    writeInstallManifest(dataDir, {
+      version: "0.1.0",
+      installedAt: "2026-01-01T00:00:00.000Z",
+      binaryPath: path.join(home, "bin", "memory-lane"),
+      dataDir,
+      integrations: [{ harness: "omp", configPath: path.join(home, "arbitrary", "file.ts") }],
+    })
+    const unsafe = ompDiagnosticTarget(readInstallManifest(dataDir), {}, home)
+    assert.equal(unsafe.path, null)
+    assert.match(unsafe.warnings.join("\n"), /Refusing to manage an unexpected OMP extension path/u)
   })
 })

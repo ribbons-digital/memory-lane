@@ -184,7 +184,7 @@ export function ompDiagnosticTarget(
 
   const ompEntries = result.manifest.integrations.filter((entry) => integrationHarness(entry) === "omp")
   if (ompEntries.length === 0) return { path: defaultPath, warnings: [...result.warnings] }
-  const validated = integrationConfigPath(ompEntries[0])
+  const validated = validateOmpExtensionConfigPath(ompEntries[0].configPath)
   if (!validated.ok) {
     return { path: null, warnings: [...result.warnings, validated.warning] }
   }
