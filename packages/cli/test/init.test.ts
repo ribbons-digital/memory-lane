@@ -720,6 +720,40 @@ esac
     assert.deepEqual(config.mcpServers["memory-lane"].args, ["mcp"])
   })
 
+  it("repairs Node-based desktop MCP commands to the managed release binary", () => {
+    const managedBinary = process.platform === "win32"
+      ? path.join(home, "bin", "memory-lane.exe")
+      : path.join(home, ".local", "bin", "memory-lane")
+    fs.mkdirSync(path.dirname(managedBinary), { recursive: true })
+    fs.writeFileSync(managedBinary, "")
+    fs.chmodSync(managedBinary, 0o755)
+
+    const claudeConfigPath = process.platform === "darwin"
+      ? path.join(home, "Library/Application Support/Claude/claude_desktop_config.json")
+      : path.join(home, ".config/Claude/claude_desktop_config.json")
+    const codexConfigPath = path.join(home, ".codex/config.toml")
+    fs.writeFileSync(claudeConfigPath, JSON.stringify({
+      mcpServers: {
+        "memory-lane": { command: process.execPath, args: ["mcp"] },
+      },
+    }))
+    fs.writeFileSync(codexConfigPath, `[mcp_servers.memory-lane]\nenabled = true\ncommand = "${process.execPath}"\nargs = ["mcp"]\n`)
+
+    run(["init", "--yes"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: undefined,
+    })
+
+    const claudeConfig = JSON.parse(fs.readFileSync(claudeConfigPath, "utf8"))
+    assert.equal(claudeConfig.mcpServers["memory-lane"].command, managedBinary)
+    assert.deepEqual(claudeConfig.mcpServers["memory-lane"].args, ["mcp"])
+    const codexConfig = fs.readFileSync(codexConfigPath, "utf8")
+    assert.ok(codexConfig.includes(`command = "${managedBinary}"`))
+    assert.match(codexConfig, /args = \["mcp"\]/u)
+    const manifest = JSON.parse(fs.readFileSync(path.join(home, ".memory-lane/install.json"), "utf8"))
+    assert.equal(manifest.binaryPath, managedBinary)
+  })
+
   it("lists selectable integrations without configuring them", () => {
     const output = run(["init", "--list"], {
       HOME: home,

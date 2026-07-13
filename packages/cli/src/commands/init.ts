@@ -97,10 +97,30 @@ async function confirm(question: string, defaultValue: boolean = true): Promise<
   return answer.toLowerCase().startsWith("y")
 }
 
-function resolveBinaryPath(): string {
+function isExecutableFile(candidate: string): boolean {
+  try {
+    fs.accessSync(candidate, fs.constants.X_OK)
+    return fs.statSync(candidate).isFile()
+  } catch {
+    return false
+  }
+}
+
+function resolveBinaryPath(homeDir: string): string {
   if (process.env.MEMORY_LANE_INSTALL_BINARY) return path.resolve(process.env.MEMORY_LANE_INSTALL_BINARY)
-  // When compiled, process.execPath is the binary itself.
-  return process.execPath
+
+  const executableName = process.platform === "win32" ? "memory-lane.exe" : "memory-lane"
+  if (path.basename(process.execPath).toLowerCase() === executableName) return process.execPath
+
+  const installedBinary = process.platform === "win32"
+    ? path.join(homeDir, "bin", executableName)
+    : path.join(homeDir, ".local", "bin", executableName)
+  if (isExecutableFile(installedBinary)) return installedBinary
+
+  const launcher = process.argv[1] ? path.resolve(process.argv[1]) : ""
+  if (launcher && isExecutableFile(launcher)) return launcher
+
+  throw new Error("Could not resolve an executable Memory Lane command. Install the release binary or set MEMORY_LANE_INSTALL_BINARY.")
 }
 
 function resolveHomeDir(): string {
@@ -234,8 +254,8 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
   const projectPathFlag = argv[argv.indexOf("--project") + 1]
   const projectPath = projectMode && projectPathFlag && !projectPathFlag.startsWith("-") ? projectPathFlag : process.cwd()
 
-  const binaryPath = resolveBinaryPath()
   const homeDir = resolveHomeDir()
+  const binaryPath = resolveBinaryPath(homeDir)
   const dataDir = path.join(homeDir, ".memory-lane")
   ensureDataDir(dataDir)
 
