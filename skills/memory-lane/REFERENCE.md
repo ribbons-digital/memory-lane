@@ -471,7 +471,7 @@ Upgrade preserves a valid manifest-recorded release binary path and refuses malf
 Uninstall also refuses malformed or unsafe manifest paths instead of falling back to the current environment.
 
 In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save/read explicitly, `memory_continuity` is the canonical broad-continuity tool, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates in both the repo-local adapter and release-style generated bridge.
-The pinned OMP `16.4.5` contract verifies all five lifecycle events across both production forms with `overallPass: true`, and the real discovery smoke verifies default-root and `PI_CODING_AGENT_DIR` installation without `--extension`.
+The pinned OMP `16.4.8` contract verifies all five lifecycle events across both production forms with `overallPass: true`, and the real discovery smoke verifies default-root and `PI_CODING_AGENT_DIR` installation without `--extension`.
 `turn_end` may queue pending project-scoped checkpoints, explicit workflow corrections, or high-confidence debugging-postmortem learning candidates when bounded context includes a concrete symptom, cause, prevention, and verification/recovery signal.
 `tool_result` may queue conservative procedure candidates from safe failed-command recovery evidence.
 These lifecycle suggestions remain pending review; they are not durable operating agreements until approved.
