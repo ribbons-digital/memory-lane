@@ -30,6 +30,7 @@ test("OMP override install upgrade doctor and uninstall keep the recorded path",
   const defaultPath = path.join(home, ".omp", "agent", "extensions", "memory-lane", "index.ts")
   fs.mkdirSync(path.dirname(binaryPath), { recursive: true })
   fs.writeFileSync(binaryPath, "installed binary sentinel", "utf8")
+  fs.chmodSync(binaryPath, 0o755)
   fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true })
 
   const baseEnv = {

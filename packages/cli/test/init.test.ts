@@ -149,6 +149,7 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
     home = tempDir()
     fakeBinDir = createFakeBinDir()
     binaryPath = path.resolve(__dirname, "../dist/index.js")
+    fs.chmodSync(binaryPath, 0o755)
     fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true })
     fs.mkdirSync(path.join(home, ".claude"), { recursive: true })
     fs.mkdirSync(path.join(home, ".codex"), { recursive: true })
