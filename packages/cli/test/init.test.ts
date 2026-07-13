@@ -6,6 +6,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
+import { isRunnableLauncher } from "../src/commands/init.js"
 import { VERSION } from "../src/version.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -179,6 +180,7 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
     const nativeBinary = path.join(home, ".local/bin/memory-lane")
     fs.mkdirSync(path.dirname(nativeBinary), { recursive: true })
     fs.writeFileSync(nativeBinary, "\u0000Mach-O fake binary", "utf8")
+    fs.chmodSync(nativeBinary, 0o755)
 
     run(["init", "--yes", "--only", "pi"], {
       HOME: home,
@@ -728,6 +730,9 @@ esac
     fs.writeFileSync(managedBinary, "")
     fs.chmodSync(managedBinary, 0o755)
 
+    const invalidOverride = path.join(home, "invalid-memory-lane-binary")
+    fs.mkdirSync(invalidOverride)
+
     const claudeConfigPath = process.platform === "darwin"
       ? path.join(home, "Library/Application Support/Claude/claude_desktop_config.json")
       : path.join(home, ".config/Claude/claude_desktop_config.json")
@@ -741,7 +746,7 @@ esac
 
     run(["init", "--yes"], {
       HOME: home,
-      MEMORY_LANE_INSTALL_BINARY: undefined,
+      MEMORY_LANE_INSTALL_BINARY: invalidOverride,
     })
 
     const claudeConfig = JSON.parse(fs.readFileSync(claudeConfigPath, "utf8"))
@@ -752,6 +757,19 @@ esac
     assert.match(codexConfig, /args = \["mcp"\]/u)
     const manifest = JSON.parse(fs.readFileSync(path.join(home, ".memory-lane/install.json"), "utf8"))
     assert.equal(manifest.binaryPath, managedBinary)
+  })
+
+  it("rejects non-binary Windows launcher fallbacks", () => {
+    const scriptLauncher = path.join(home, "memory-lane.js")
+    const binaryLauncher = path.join(home, "memory-lane.exe")
+    for (const launcher of [scriptLauncher, binaryLauncher]) {
+      fs.writeFileSync(launcher, "")
+      fs.chmodSync(launcher, 0o755)
+    }
+
+    assert.equal(isRunnableLauncher(scriptLauncher, "win32"), false)
+    assert.equal(isRunnableLauncher(binaryLauncher, "win32"), true)
+    assert.equal(isRunnableLauncher(scriptLauncher, "darwin"), true)
   })
 
   it("lists selectable integrations without configuring them", () => {

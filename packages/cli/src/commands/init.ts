@@ -106,8 +106,16 @@ function isExecutableFile(candidate: string): boolean {
   }
 }
 
+export function isRunnableLauncher(candidate: string, platform: NodeJS.Platform = process.platform): boolean {
+  if (platform === "win32" && path.extname(candidate).toLowerCase() !== ".exe") return false
+  return isExecutableFile(candidate)
+}
+
 function resolveBinaryPath(homeDir: string): string {
-  if (process.env.MEMORY_LANE_INSTALL_BINARY) return path.resolve(process.env.MEMORY_LANE_INSTALL_BINARY)
+  const binaryOverride = process.env.MEMORY_LANE_INSTALL_BINARY
+    ? path.resolve(process.env.MEMORY_LANE_INSTALL_BINARY)
+    : ""
+  if (binaryOverride && isExecutableFile(binaryOverride)) return binaryOverride
 
   const executableName = process.platform === "win32" ? "memory-lane.exe" : "memory-lane"
   if (path.basename(process.execPath).toLowerCase() === executableName) return process.execPath
@@ -118,7 +126,7 @@ function resolveBinaryPath(homeDir: string): string {
   if (isExecutableFile(installedBinary)) return installedBinary
 
   const launcher = process.argv[1] ? path.resolve(process.argv[1]) : ""
-  if (launcher && isExecutableFile(launcher)) return launcher
+  if (launcher && isRunnableLauncher(launcher)) return launcher
 
   throw new Error("Could not resolve an executable Memory Lane command. Install the release binary or set MEMORY_LANE_INSTALL_BINARY.")
 }
