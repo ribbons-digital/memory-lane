@@ -26,9 +26,11 @@ Keep it safe to read wholesale in fresh sessions.
 
 ## Current status
 
-Latest known release: `v0.2.47` from main commit `28e5961`, after PR #132 fixed compiled binary and install-manifest version metadata.
-Release verification passed `pnpm build`, `pnpm test`, `git diff --check`, `MEMORY_LANE_VERSION=v0.2.47 pnpm build:binary`, `pnpm smoke:binary`, GitHub Actions release run `28768281598`, and a downloaded release-asset `status --json` version check.
+Latest known release: `v0.3.1` from main commit `508c8b8`, containing the OMP `16.4.8` compatibility certification from PR #202 and the MCP/install executable-resolution repair from PR #203.
+Release verification passed `pnpm build`, `pnpm test`, `MEMORY_LANE_VERSION=v0.3.1 pnpm build:binary`, `pnpm smoke:binary`, GitHub Actions release run `29223550237`, and a downloaded release-asset checksum and `--version` check.
 
+PR #203 fixed Node-launched init so generated MCP, hook, Pi/OMP bridge, and install-manifest commands resolve a runnable Memory Lane executable rather than the host Node binary.
+PR #202 certified real OMP `16.4.8` discovery and all five lifecycle events across the native adapter and generated release bridge with `overallPass: true`.
 PR #192 shipped issue #175 Slice C on main commit `415af0b`, adding durable local outcome events and the deterministic capture-outcome dataset exporter.
 Slice C records opt-in, content-free local learning events for suggestion and operating-agreement outcomes, keeps them under existing consent, exclusion, retention, status, and purge surfaces, and adds a maintainer-only capture-outcome dataset exporter.
 PR #174 shipped issue #169 Slice B as a maintainer-only lifecycle runner that converts opt-in Slice A trace files into a deterministic `schemaVersion: 1` LongMemEval-compatible smoke dataset for explicit core adapter use.

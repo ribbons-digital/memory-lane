@@ -2,6 +2,8 @@
 
 ## Current state
 
+- PR #203 merged as main commit `508c8b8`, fixing Node-launched `init` so Claude Desktop, Codex Desktop, hooks, generated bridges, and the install manifest resolve a runnable Memory Lane executable instead of recording the host Node binary.
+- PR #202 merged as main commit `f2d715e`, certifying OMP `16.4.8` discovery and all five lifecycle events across the native adapter and generated release bridge with `overallPass: true`.
 - PR #200 merged issue #185 Slice 3 as main commit `17f2893`, documenting the real OMP `16.4.5` rebuild-and-restart development loop and intentionally unused OMP-only APIs while adding fixture-locked doctor contract metadata.
 - PR #198 merged issue #185 Slice 2 as main commit `a880293`, adding first-class OMP detection, init, manifest, doctor, upgrade, selective uninstall, strict recorded-path maintenance, issue #147 custom binary-path handling, and real installed-path discovery without `--extension`.
 - PR #192 merged issue #175 Slice C as main commit `415af0b`, adding durable local outcome events, bounded retention, and a deterministic maintainer capture-outcome dataset exporter.
@@ -11,7 +13,7 @@
 - PR #188 merged issue #178 as main commits `b2093df`, `4870a2f`, and `9d5422a`, isolating fallback MCP request scopes while preserving bundled per-path engine behavior.
 - PR #186 merged issue #177 as main commit `a7745af`, adding explicit `--all` maintenance mode to Pi review and delete while preserving scoped defaults.
 - PR #183 merged issue #145 as main commit `9b16939`, increasing new memory IDs to 128 random bits while preserving legacy short IDs and duplicate-ID folding semantics.
-- Current repo status: main is synced through PR #200, and issue #185 is closed after all three OMP integration slices shipped.
+- Current repo status: main is synced through PR #203 at `508c8b8`, and release `v0.3.1` contains the OMP `16.4.8` certification plus the MCP/install binary-path repair.
 - The strict OMP `16.4.8` lifecycle fixture remains at `overallPass: true`; doctor reports its tested version, `2026-07-13` test date, and aggregate pass status.
 - PR #182 scoped revision maintenance mutations to the current project and documented the revision command options.
 - PR #180 documented scoped review maintenance after PR #179 scoped review mutations to the current project.
@@ -37,7 +39,9 @@
 
 ## Current decision / next work
 
-Main is synced through PR #200 at commit `17f2893`, which completed issue #185 Slice 3 and closed the issue.
+Main is synced through PR #203 at commit `508c8b8`.
+PR #203 fixes release-style init when invoked through Node by resolving and validating the running native binary, managed release binary, or safe executable launcher before writing integrations or the install manifest.
+PR #202 certifies OMP `16.4.8` discovery and complete interactive lifecycle compatibility for both production source forms.
 The verified OMP `16.4.8` local workflow remains rebuild, exit, and restart or `omp --continue`; real-runtime evidence showed that `ctx.reload()` and `/reload-plugins` do not load rebuilt adapter source behind the active extension entrypoint.
 The documentation records why `session_stop`, `before_provider_request`, message-stream events, tool execution/approval/control events, and `ctx.memory` remain intentionally unused while the five verified shared lifecycle events continue through one policy implementation.
 Doctor now exposes fixture-locked OMP contract metadata for tested version `16.4.8`, test date `2026-07-13`, and `overallPass: true` without changing extension detection or warning semantics.
@@ -56,9 +60,9 @@ PR #167 fixed issue #141 so interactive Codex Desktop init no longer parses norm
 Failed selected init integrations now print a partial-error banner and exit non-zero, while user-declined overwrite skips remain non-fatal through a structured skip flag.
 PR #167 used Fable 5 for implementation review and Blaze quickfix mode.
 no-mistakes was not run for PR #167 because quickfix mode skips it by default.
-The latest release remains `v0.2.47`.
-The release workflow for tag `v0.2.47` passed as GitHub Actions run `28768281598`.
-Released asset `memory-lane-darwin-arm64.tar.gz` was downloaded from GitHub Releases, extracted, and verified with `status --json` reporting `meta.version: "0.2.47"`.
+The latest release is `v0.3.1`.
+The release workflow for tag `v0.3.1` passed as GitHub Actions run `29223550237`.
+Released asset `memory-lane-darwin-arm64.tar.gz` was downloaded, its SHA-256 digest matched `8d25f04281b627d0eb1984b6089206d19ad0a158274047987d39386e94b741ab`, and the extracted binary reported version `0.3.1`.
 
 Issue #115 is closed with comment `Closed by PR #130, main commit 950a71e.`
 The issue #115 adapter added `pnpm --filter @memory-lane/core eval:long-memory-smoke -- --dataset <path>`.
@@ -132,6 +136,6 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 - User-facing plugin documentation: `docs/plugins/README.md`
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
 - User-facing package documentation: `README.md`
-- Latest release reference: `v0.2.47` / commit `28e5961`.
-- Current main status: PR #200 merged issue #185 Slice 3 as commit `17f2893`, completing and closing the first-class OMP integration issue while preserving the strict pinned lifecycle contract.
+- Latest release reference: `v0.3.1` / commit `508c8b8`.
+- Current main status: PR #203 repaired MCP and install-manifest binary resolution after PR #202 certified OMP `16.4.8` with a complete passing real-runtime contract.
 - Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, PR #127, PR #130, PR #174, PR #192, PR #196, PR #198, and PR #200.
