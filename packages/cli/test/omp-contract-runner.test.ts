@@ -21,7 +21,7 @@ import {
   type SourceForm,
 } from "./omp-contract-runner.js"
 
-const fixturePath = fileURLToPath(new URL("fixtures/omp-contract-16.4.5.json", import.meta.url))
+const fixturePath = fileURLToPath(new URL("fixtures/omp-contract-16.4.8.json", import.meta.url))
 
 type FixtureEvent = { status: string; evidence: string[] }
 type FixtureSourceForm = {
@@ -103,7 +103,7 @@ describe("OMP contract runner", () => {
       host: "omp",
       expectedVersion: PINNED_OMP_VERSION,
       actualVersion: `omp/${PINNED_OMP_VERSION}`,
-      testedAt: "2026-07-12",
+      testedAt: "2026-07-13",
       execution: {
         realRuntime: true,
         mode: "rpc",

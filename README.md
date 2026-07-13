@@ -233,15 +233,15 @@ For OMP compatibility work, run both real-runtime gates against the repository-p
 pnpm --filter @memory-lane/pi-adapter build
 pnpm --filter @memory-lane/cli build
 pnpm --filter @memory-lane/cli eval:omp-discovery
-pnpm --filter @memory-lane/cli eval:omp-contract -- --as-of YYYY-MM-DD --manual-input --out test/fixtures/omp-contract-16.4.5.json
+pnpm --filter @memory-lane/cli eval:omp-contract -- --as-of YYYY-MM-DD --manual-input --out test/fixtures/omp-contract-16.4.8.json
 ```
 
-Both gates require OMP `16.4.5`; the lifecycle contract additionally requires a genuine interactive terminal for the two prompted `input` submissions.
+Both gates require OMP `16.4.8`; the lifecycle contract additionally requires a genuine interactive terminal for the two prompted `input` submissions.
 The discovery gate installs both production source forms into isolated default and `PI_CODING_AGENT_DIR` roots, launches real OMP without `--extension`, and verifies expected commands and tools through OMP's normal loader.
 The lifecycle gate uses a credential-free loopback provider for deterministic tool execution, loads both production extension forms through real `omp --extension` scratch profiles, records sanitized per-event evidence, and exits non-zero when any expected registration is missing, any lifecycle event remains unverified, or any lifecycle event fails.
 Neither gate needs a network-dependent model call or touches the real user profile or memory store.
-The tested lifecycle version and date live in `packages/cli/test/fixtures/omp-contract-16.4.5.json`.
-The current committed lifecycle contract was tested against OMP `16.4.5` on `2026-07-12` and reports `overallPass: true`.
+The tested lifecycle version and date live in `packages/cli/test/fixtures/omp-contract-16.4.8.json`.
+The current committed lifecycle contract was tested against OMP `16.4.8` on `2026-07-13` and reports `overallPass: true`.
 The committed report must keep `overallPass: true`.
 
 #### Optional local evals
@@ -317,7 +317,7 @@ The release-style generated pi extension is intentionally a self-contained CLI b
 
 #### OMP: load and restart the local adapter
 
-OMP `16.4.5` does not provide an in-session command that reloads an already loaded extension module from source.
+OMP `16.4.8` does not provide an in-session command that reloads an already loaded extension module from source.
 An isolated real-OMP smoke confirmed that `ctx.reload()` and `/reload-plugins` preserve existing registrations but do not pick up a rebuilt adapter behind an unchanged extension entrypoint.
 The reliable OMP development loop is therefore rebuild, exit OMP, and start or resume OMP again.
 

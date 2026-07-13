@@ -12,7 +12,7 @@
 - PR #186 merged issue #177 as main commit `a7745af`, adding explicit `--all` maintenance mode to Pi review and delete while preserving scoped defaults.
 - PR #183 merged issue #145 as main commit `9b16939`, increasing new memory IDs to 128 random bits while preserving legacy short IDs and duplicate-ID folding semantics.
 - Current repo status: main is synced through PR #200, and issue #185 is closed after all three OMP integration slices shipped.
-- The strict OMP `16.4.5` lifecycle fixture remains at `overallPass: true`; doctor reports its tested version, `2026-07-12` test date, and aggregate pass status.
+- The strict OMP `16.4.8` lifecycle fixture remains at `overallPass: true`; doctor reports its tested version, `2026-07-13` test date, and aggregate pass status.
 - PR #182 scoped revision maintenance mutations to the current project and documented the revision command options.
 - PR #180 documented scoped review maintenance after PR #179 scoped review mutations to the current project.
 - PR #174 shipped issue #169 Slice B trace dataset conversion as a maintainer-only local runner for opt-in Slice A trace files.
@@ -38,9 +38,9 @@
 ## Current decision / next work
 
 Main is synced through PR #200 at commit `17f2893`, which completed issue #185 Slice 3 and closed the issue.
-Slice 3 documents the verified OMP `16.4.5` local workflow as rebuild, exit, and restart or `omp --continue`; real-runtime evidence showed that `ctx.reload()` and `/reload-plugins` do not load rebuilt adapter source behind the active extension entrypoint.
+The verified OMP `16.4.8` local workflow remains rebuild, exit, and restart or `omp --continue`; real-runtime evidence showed that `ctx.reload()` and `/reload-plugins` do not load rebuilt adapter source behind the active extension entrypoint.
 The documentation records why `session_stop`, `before_provider_request`, message-stream events, tool execution/approval/control events, and `ctx.memory` remain intentionally unused while the five verified shared lifecycle events continue through one policy implementation.
-Doctor now exposes fixture-locked OMP contract metadata for tested version `16.4.5`, test date `2026-07-12`, and `overallPass: true` without changing extension detection or warning semantics.
+Doctor now exposes fixture-locked OMP contract metadata for tested version `16.4.8`, test date `2026-07-13`, and `overallPass: true` without changing extension detection or warning semantics.
 Issue #185 is closed; no further OMP integration slice is active.
 PR #200 post-merge cleanup synced main and deleted the merged branch.
 Issue #175 Slice C records versioned, content-free local learning events for suggestion creation, review exposure, approval, rejection, deletion, replacement, supersession, reactivation, agreement recommendation exposure, and agreement recommendation acceptance when `learning.capture` is enabled.

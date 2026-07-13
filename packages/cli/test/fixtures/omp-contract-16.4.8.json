@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "host": "omp",
-  "expectedVersion": "16.4.5",
-  "actualVersion": "omp/16.4.5",
-  "testedAt": "2026-07-12",
+  "expectedVersion": "16.4.8",
+  "actualVersion": "omp/16.4.8",
+  "testedAt": "2026-07-13",
   "execution": {
     "realRuntime": true,
     "mode": "rpc",
@@ -16,8 +16,8 @@
     "modelMechanism": "loopback OpenAI-compatible deterministic contract provider"
   },
   "hostNotes": [
-    "OMP 16.4.5 does not load an explicit --extension when --no-extensions is also present despite its help text, so discovery isolation uses an empty scratch PI_CODING_AGENT_DIR instead.",
-    "OMP 16.4.5 interactive input is emitted only by the TUI editor submission path; noninteractive execution cannot mark input as passing."
+    "OMP 16.4.8 does not load an explicit --extension when --no-extensions is also present despite its help text, so discovery isolation uses an empty scratch PI_CODING_AGENT_DIR instead.",
+    "OMP 16.4.8 interactive input is emitted only by the TUI editor submission path; noninteractive execution cannot mark input as passing."
   ],
   "sourceForms": [
     {

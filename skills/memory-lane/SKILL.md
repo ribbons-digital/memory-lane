@@ -183,7 +183,7 @@ Pi:
 - Repo-local Pi `/memory review` and `/memory delete <id>` stay scoped by default; use `--all` only for explicit cross-project maintenance.
 - Broad Pi continuity prompts should route to canonical continuity before recall in both repo-local adapter and generated native-binary bridge.
 - Repo-local Pi and release-style generated Pi lifecycle writes share the low-noise CLI policy: explicit memory requests on `input`, higher-signal stop/tool candidates on `turn_end`/`tool_result`, secret filtering, deduplication, project routing, and pending review.
-- The pinned OMP `16.4.5` contract verifies all five lifecycle events across both production forms, and the real discovery smoke verifies default-root and `PI_CODING_AGENT_DIR` installation without `--extension`.
+- The pinned OMP `16.4.8` contract verifies all five lifecycle events across both production forms, and the real discovery smoke verifies default-root and `PI_CODING_AGENT_DIR` installation without `--extension`.
   OMP task sessions suppress automatic lifecycle capture only when nested session-file ownership and the delegated-worker system role are both observed.
   OMP installer maintenance preserves manifest-recorded binary and extension paths; malformed or unsafe manifest paths should be treated as stop-the-line upgrade/uninstall failures.
 - Do not assume automatic pi `agent_end` or `session_shutdown` summaries.

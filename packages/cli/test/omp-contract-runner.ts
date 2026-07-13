@@ -6,7 +6,7 @@ import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:chil
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { piAdapterImportSource, piCliBridgeSource } from "../src/installer/config.js"
 
-export const PINNED_OMP_VERSION = "16.4.5"
+export const PINNED_OMP_VERSION = "16.4.8"
 export const REQUIRED_FLAGS = ["--extension", "--profile", "--mode", "--config", "--cwd", "--session-dir", "--no-skills", "--no-rules", "--tools", "--append-system-prompt", "--auto-approve", "--max-time"] as const
 export const CONTRACT_EVENTS = ["input", "before_agent_start", "turn_end", "tool_result", "session_before_compact"] as const
 export type ContractEvent = typeof CONTRACT_EVENTS[number]
@@ -964,7 +964,7 @@ async function main(): Promise<void> {
       },
       hostNotes: [
         `OMP ${PINNED_OMP_VERSION} does not load an explicit --extension when --no-extensions is also present despite its help text, so discovery isolation uses an empty scratch PI_CODING_AGENT_DIR instead.`,
-        "OMP 16.4.5 interactive input is emitted only by the TUI editor submission path; noninteractive execution cannot mark input as passing.",
+        `OMP ${PINNED_OMP_VERSION} interactive input is emitted only by the TUI editor submission path; noninteractive execution cannot mark input as passing.`,
       ],
       sourceForms,
       harnessArtifacts,
