@@ -2,6 +2,8 @@
 
 Memory Lane's MCP server is a local stdio server for explicit memory tool access.
 
+If you installed the release binary, `memory-lane init` configures Claude Desktop and Codex Desktop automatically to run `memory-lane mcp`; the manual configuration below is for source checkouts or clients init does not manage.
+
 ## Build
 
 From the Memory Lane repo:
@@ -21,13 +23,15 @@ When stdin closes, the server waits briefly for background embedding writes and 
 
 ## Claude Desktop
 
-Add a local stdio server entry in Claude Desktop's MCP configuration. Use absolute paths:
+Add a local stdio server entry in Claude Desktop's MCP configuration.
+Use absolute paths for both the command and the entrypoint; desktop clients usually launch MCP servers without your shell PATH.
+Print your real Node.js executable path (this also resolves version-manager shims) with `node -p 'process.execPath'`:
 
 ```json
 {
   "mcpServers": {
     "memory-lane": {
-      "command": "node",
+      "command": "/absolute/path/to/node",
       "args": ["/absolute/path/to/memory-lane/packages/mcp-server/dist/index.js"]
     }
   }
@@ -44,7 +48,7 @@ Use Cursor's MCP server configuration with the same local stdio command:
 {
   "mcpServers": {
     "memory-lane": {
-      "command": "node",
+      "command": "/absolute/path/to/node",
       "args": ["/absolute/path/to/memory-lane/packages/mcp-server/dist/index.js"]
     }
   }

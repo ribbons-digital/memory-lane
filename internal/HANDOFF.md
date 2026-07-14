@@ -76,9 +76,9 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 ## Load-bearing constraints
 
 - For broad prior-work, project-status, or next-work questions, call Memory Lane continuity first and verify against compact repo state when available.
-- At phase, slice, release, merge, or next-work boundaries, sync `ROADMAP.md` and `HANDOFF.md` before calling work complete.
-- Keep `docs/plugins/README.md` tracked because it is user-facing and linked from `README.md`.
-- Keep internal feature notes out of tracked `docs/` unless a future user decision explicitly reintroduces them.
+- At phase, slice, release, merge, or next-work boundaries, sync `internal/ROADMAP.md` and `internal/HANDOFF.md` before calling work complete.
+- Keep tracked `docs/` user-facing: reference documentation split out of `README.md` plus `docs/plugins/README.md`.
+- Keep internal feature notes out of tracked `docs/`; maintainer-only notes belong under `internal/`.
 - Use Fable 5 for explicit Fable 5 follow-up planning and code review with `claude --model claude-fable-5 -p '<review prompt>'`.
 - Use Opus 4.8 with `claude --model claude-opus-4-8 -p '<review prompt>'` for ordinary Memory Lane design/spec and pre-PR implementation reviews unless Fable 5 is mentioned or specified.
 - PR-protected workflow applies: feature branch or worktree, PR, wait for user merge, sync main, delete feature branch, recommend next item.
@@ -132,10 +132,10 @@ Each eval slice should state whether it ran deterministic fixtures, live Memory 
 
 ## Key references
 
-- Active roadmap/current direction: `ROADMAP.md`
+- Active roadmap/current direction: `internal/ROADMAP.md`
+- User-facing documentation: `README.md` and `docs/`
 - User-facing plugin documentation: `docs/plugins/README.md`
 - Memory Lane skill guidance: `skills/memory-lane/SKILL.md`
-- User-facing package documentation: `README.md`
 - Latest release reference: `v0.3.1` / commit `508c8b8`.
 - Current main status: PR #203 repaired MCP and install-manifest binary resolution after PR #202 certified OMP `16.4.8` with a complete passing real-runtime contract.
 - Latest deterministic eval baselines: PR #102, PR #103, PR #105, PR #116, PR #118, PR #120, PR #123, PR #125, PR #127, PR #130, PR #174, PR #192, PR #196, PR #198, and PR #200.

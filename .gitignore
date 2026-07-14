@@ -5,6 +5,7 @@ node_modules/
 .memory-lane/
 .memory-lane-scope
 .pi-subagents/artifacts/
-docs/*
-!docs/plugins/
-!docs/plugins/README.md
+.pi/
+.fallow/
+.fallowrc.jsonc
+docs/superpowers/

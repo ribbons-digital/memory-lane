@@ -15,14 +15,14 @@ Default posture:
 
 ## Roadmap maintenance and context budget
 
-Root `ROADMAP.md` is the active planning index.
+`internal/ROADMAP.md` is the active planning index.
 Keep it safe to read wholesale in fresh sessions.
 
-- Current and next work belongs in root while it guides immediate decisions.
-- Completed historical detail should be summarized in root once, then represented by PR, commit, release, or memory references.
+- Current and next work belongs in this file while it guides immediate decisions.
+- Completed historical detail should be summarized here once, then represented by PR, commit, release, or memory references.
 - Internal feature specs, validation notes, and handoff archives under `docs/` were removed from repository tracking in PR #104 because they only described implemented work.
-- The only tracked `docs/` content going forward is user-facing plugin documentation under `docs/plugins/README.md`.
-- Do not reintroduce internal planning or validation docs under `docs/` without an explicit new decision.
+- Tracked `docs/` now carries user-facing reference documentation split out of `README.md` for issue #156, plus plugin documentation under `docs/plugins/README.md`.
+- Do not reintroduce internal planning or validation docs under tracked `docs/`; maintainer-only notes belong under `internal/`.
 
 ## Current status
 
