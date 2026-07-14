@@ -48,7 +48,7 @@ test("detects Claude Desktop MCP config", () => {
   fs.mkdirSync(path.dirname(claudeConfig), { recursive: true })
   fs.writeFileSync(claudeConfig, JSON.stringify({
     mcpServers: {
-      "memory-lane": { command: "node", args: ["/repo/packages/mcp-server/dist/index.js"] },
+      "memory-lane": { command: "/home/user/.local/bin/memory-lane", args: ["mcp"] },
     },
   }), "utf8")
 
