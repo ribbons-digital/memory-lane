@@ -45,7 +45,10 @@ reviews:
     description_keyword: ''
     auto_incremental_review: true
     auto_pause_after_reviewed_commits: 5
-    ignore_title_keywords: []
+    # PRs whose titles contain this marker opt out of automated review;
+    # every other PR keeps the normal auto-review policy.
+    ignore_title_keywords:
+      - '[no-bot-review]'
     labels: []
     drafts: false
     base_branches:

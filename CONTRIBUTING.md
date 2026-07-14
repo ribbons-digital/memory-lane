@@ -32,5 +32,5 @@ The repository uses GitHub CODEOWNERS and a `main` ruleset:
 - Keep changes non-breaking unless the roadmap explicitly calls for a breaking change.
 - Keep memory behavior low-noise and review-first by default.
 - Do not commit secrets, raw transcripts, private memory stores, or generated local memory data.
-- Keep `ROADMAP.md` and `HANDOFF.md` synced when changing project direction, release state, or implementation priorities.
+- Update the relevant user-facing docs (`README.md` and `docs/`) when changing user-visible commands, configuration, or behavior.
 - Use `pnpm` for package management.

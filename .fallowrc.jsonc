@@ -1,7 +1,0 @@
-{
-  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
-  // Fallow 2.79 currently reports this workspace dependency as unused even
-  // though the CLI and pi adapter import it directly. Keep it declared so
-  // packaged workspace builds and external consumers resolve correctly.
-  "ignoreDependencies": ["@memory-lane/core"]
-}

@@ -20,10 +20,8 @@ Use this bounded path for prompts like “what were we working on?”, “where 
    Treat `latestApproved.project` as a legacy compatibility slot that may contain corrections/procedures.
    If continuity renders `Action required before applying continuity guidance` or warning-level `suggestedActions`, inspect those commands before treating overlapping workflow guidance as authoritative.
 3. Verify against compact repo state with bounded reads:
-   - `HANDOFF.md` → status card: current state, next work, constraints.
-   - `ROADMAP.md` → active index: current status and next track first.
-   - `docs/superpowers/archive/*` → history only; skip unless asked.
-   - `README.md` → user-facing command/setup changes only.
+   - local untracked maintainer notes (`internal/`) when present → status card and active roadmap first.
+   - `README.md` and `docs/` → user-facing command/setup changes only.
    - this skill → workflow/Memory Lane command guidance only.
 4. Use targeted `memory_recall` / `memory-lane recall` only as a follow-up for a specific topic, not as the first stop for broad continuity. Recall keeps lexical relevance primary; currentness-like exact ties between project checkpoints prefer newer `updatedAt`.
 5. For Memory Lane design/spec or pre-PR implementation reviews, invoke Opus 4.8 directly with Claude CLI:
@@ -43,7 +41,7 @@ Use this bounded path for prompts like “what were we working on?”, “where 
 
 ## Project docs sync rule
 
-For the Memory Lane repository itself, do not call a phase/slice/merge/release complete or recommend next work until status docs are synced. Use continuity first, then compact current docs. Skip archived roadmap/history and long references unless required. At minimum check whether `HANDOFF.md`, root `ROADMAP.md`, `README.md`, and this skill need updates when status, commands, workflow guidance, or release state changed. Memory checkpoints help but are not sufficient; root docs stay authoritative for new sessions.
+For the Memory Lane repository itself, do not call a phase/slice/merge/release complete or recommend next work until status docs are synced. Use continuity first, then compact current docs. Sync local untracked maintainer notes (`internal/`) when present, and check whether `README.md`, user-facing `docs/`, and this skill need updates when status, commands, workflow guidance, or release state changed. Memory checkpoints help but are not sufficient; repository docs stay authoritative for new sessions.
 
 ## Core commands
 

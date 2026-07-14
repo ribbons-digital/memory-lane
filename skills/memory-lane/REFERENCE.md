@@ -16,7 +16,7 @@ Local-first persistent memory system with semantic retrieval for coding agents.
 
 ## Project Docs Sync Rule
 
-For the Memory Lane repository itself, do not call a phase/slice/merge/release complete and do not recommend next work until project status docs are checked and synced. At minimum verify `HANDOFF.md`, `ROADMAP.md`, `README.md`, and this skill (`skills/memory-lane/SKILL.md`) when status, commands, workflow guidance, or release state changed. Memory checkpoints are helpful but not sufficient; repository docs must remain authoritative for new sessions.
+For the Memory Lane repository itself, do not call a phase/slice/merge/release complete and do not recommend next work until project status docs are checked and synced. Sync local untracked maintainer notes (`internal/`) when present, and at minimum verify `README.md`, user-facing `docs/`, and this skill (`skills/memory-lane/SKILL.md`) when status, commands, workflow guidance, or release state changed. Memory checkpoints are helpful but not sufficient; repository docs must remain authoritative for new sessions.
 
 ## CLI Commands
 
