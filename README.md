@@ -153,7 +153,6 @@ Promotion of wiki-derived facts into Memory Lane remains explicit through the ex
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for the contribution workflow and review requirements.
-Maintainer-only planning and agent-workflow notes live under [`internal/`](./internal/README.md) and are not required reading for users or contributors.
 
 ## License
 
