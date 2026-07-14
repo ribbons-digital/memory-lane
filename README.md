@@ -97,7 +97,7 @@ Run `memory-lane init` to auto-detect and configure supported harnesses, or see 
 - [OpenAI Codex CLI](./examples/harness-integrations/codex-cli.md)
 - [Cursor](./examples/harness-integrations/cursor.md)
 - [Windsurf](./examples/harness-integrations/windsurf.md)
-- pi
+- [pi](./examples/harness-integrations/pi.md)
 - [OMP (Oh My Pi)](./examples/harness-integrations/omp.md)
 
 Hooks and adapters provide automatic, low-noise lifecycle behavior: bounded context injection at session start and prompt time, plus review-first capture of durable statements, corrections, procedures, and checkpoints.

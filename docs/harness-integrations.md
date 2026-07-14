@@ -6,7 +6,7 @@ Run `memory-lane init` to auto-detect and configure supported harnesses, or see 
 - [OpenAI Codex CLI](../examples/harness-integrations/codex-cli.md)
 - [Cursor](../examples/harness-integrations/cursor.md)
 - [Windsurf](../examples/harness-integrations/windsurf.md)
-- pi
+- [pi](../examples/harness-integrations/pi.md)
 - [OMP (Oh My Pi)](../examples/harness-integrations/omp.md)
 
 Lifecycle autosave intentionally filters transient reviewer, subagent, and task prompts such as commit review requests, “do not modify files” review tasks, and delegated status-report instructions.
