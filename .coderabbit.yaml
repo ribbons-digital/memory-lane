@@ -41,7 +41,10 @@ reviews:
   slop_detection:
     enabled: true
   auto_review:
-    enabled: true
+    # Temporarily disabled on this branch per issue #156 session instruction:
+    # no automated model review for PR #205. Restore to true before/after merge
+    # if CodeRabbit auto-review should resume for future PRs.
+    enabled: false
     description_keyword: ''
     auto_incremental_review: true
     auto_pause_after_reviewed_commits: 5
