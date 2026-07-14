@@ -38,7 +38,10 @@ MCP does not replace lifecycle hooks.
 Hooks provide automatic recall/save behavior for supported harnesses; MCP gives the model explicit tool access when the client asks for it.
 JSONL remains the source of truth, and Obsidian support remains optional.
 
-Example local stdio command after building this workspace:
+Manual client configuration always uses the same shape `memory-lane init` writes: the absolute installed `memory-lane` binary path as the command with `args: ["mcp"]`.
+See `examples/harness-integrations/mcp.md` for per-client examples.
+
+To run the built server source directly in a terminal for testing (not as a client setting):
 
 ```bash
 pnpm --filter @memory-lane/mcp-server build
@@ -50,4 +53,3 @@ MCP stdio reserves stdout for JSON-RPC protocol messages.
 
 When stdin closes, the server waits briefly for background embedding writes from all project-scoped engines, then cancels outstanding embedding work after a bounded timeout so shutdown does not hang.
 
-See `examples/harness-integrations/mcp.md` for client configuration examples.

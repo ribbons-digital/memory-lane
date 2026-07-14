@@ -2,7 +2,7 @@
 
 Memory Lane's MCP server is a local stdio server for explicit memory tool access.
 
-If you installed the release binary, `memory-lane init` configures Claude Desktop and Codex Desktop automatically to run `memory-lane mcp`; the manual configuration below is for source checkouts or clients init does not manage.
+If you installed the release binary, `memory-lane init` configures Claude Desktop and Codex Desktop automatically to run `memory-lane mcp`; the manual configuration below is for clients init does not manage, and it uses the same installed binary.
 
 ## Build
 
@@ -12,33 +12,49 @@ From the Memory Lane repo:
 pnpm --filter @memory-lane/mcp-server build
 ```
 
-The package exposes the `memory-lane-mcp` bin, and the direct stdio entrypoint is:
+The package exposes the `memory-lane-mcp` bin.
+For source-checkout development configuration, see [MCP clients: point at the local server](../../docs/development.md#mcp-clients-point-at-the-local-server).
 
-```bash
-node /absolute/path/to/memory-lane/packages/mcp-server/dist/index.js
-```
+Do not use a wrapper that prints to stdout.
+Stdio MCP servers use stdout for JSON-RPC messages.
 
-Do not use a wrapper that prints to stdout. Stdio MCP servers use stdout for JSON-RPC messages.
 When stdin closes, the server waits briefly for background embedding writes and then cancels outstanding embedding work after a bounded shutdown timeout.
+
+## Command shape for every MCP client
+
+All MCP client configurations use the same stdio server command: the installed Memory Lane binary with `args: ["mcp"]` - the same shape `memory-lane init` writes.
+Use an absolute path, not `~` and not a bare `memory-lane`; desktop clients usually launch MCP servers without your shell PATH, and config fields do not shell-expand `~`.
+The installer places the binary at `~/.local/bin/memory-lane` by default (`%USERPROFILE%\bin\memory-lane.exe` on Windows); print the exact path with `command -v memory-lane`.
 
 ## Claude Desktop
 
-Add a local stdio server entry in Claude Desktop's MCP configuration.
-Use absolute paths for both the command and the entrypoint; desktop clients usually launch MCP servers without your shell PATH.
-Print your real Node.js executable path (this also resolves version-manager shims) with `node -p 'process.execPath'`:
+Add a local stdio server entry in Claude Desktop's MCP configuration:
 
 ```json
 {
   "mcpServers": {
     "memory-lane": {
-      "command": "/absolute/path/to/node",
-      "args": ["/absolute/path/to/memory-lane/packages/mcp-server/dist/index.js"]
+      "command": "/Users/you/.local/bin/memory-lane",
+      "args": ["mcp"]
     }
   }
 }
 ```
 
 Restart Claude Desktop after editing the configuration.
+
+## Codex Desktop
+
+Codex Desktop uses TOML in `~/.codex/config.toml` with the same command and args:
+
+```toml
+[mcp_servers.memory-lane]
+enabled = true
+command = "/Users/you/.local/bin/memory-lane"
+args = ["mcp"]
+```
+
+Restart Codex Desktop after editing the configuration; Codex Desktop snapshots MCP tool availability per session.
 
 ## Cursor
 
@@ -48,14 +64,18 @@ Use Cursor's MCP server configuration with the same local stdio command:
 {
   "mcpServers": {
     "memory-lane": {
-      "command": "/absolute/path/to/node",
-      "args": ["/absolute/path/to/memory-lane/packages/mcp-server/dist/index.js"]
+      "command": "/Users/you/.local/bin/memory-lane",
+      "args": ["mcp"]
     }
   }
 }
 ```
 
 Client configuration UI and file locations may vary by Cursor version; keep the command and args shape the same.
+
+## Other MCP clients
+
+Any client that can launch a local stdio MCP server uses the same configuration: absolute installed-binary path as the command, `["mcp"]` as the args.
 
 ## Claude Code and Codex
 

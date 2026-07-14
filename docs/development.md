@@ -372,20 +372,20 @@ Codex `Stop` can produce a session summary only when the latest user message exp
 
 ### MCP clients: point at the local server
 
-For Claude Desktop, Codex Desktop, and other MCP clients, point the MCP server at your built checkout with absolute paths.
-Do not use `~` in client config fields that expect paths.
-Desktop clients usually launch MCP servers without your shell PATH, so use an absolute Node.js path.
-Print the real executable path of your active Node.js (this also resolves version-manager shims such as asdf, mise, or Volta) with:
+MCP client settings always use the same shape `memory-lane init` writes: an absolute `memory-lane` command plus `args: ["mcp"]`.
+Do not use `~` in client config fields that expect paths, and do not point client settings at a Node executable; desktop clients usually launch MCP servers without your shell PATH.
+
+For a source checkout, build and link the CLI, then resolve the linked absolute path:
 
 ```bash
-node -p 'process.execPath'
+pnpm build
+cd packages/cli && pnpm link --global
+command -v memory-lane
 ```
 
-Use that output (for example `/opt/homebrew/bin/node`) as the command, with argument:
-
-```text
-/absolute/path/to/memory-lane/packages/mcp-server/dist/index.js
-```
+Use that output as the client `command` with `args: ["mcp"]`.
+The linked CLI is a Node script, so a GUI-launched client must still be able to resolve `node` through the script's `#!/usr/bin/env node` shebang outside your shell environment; if that fails, install the release binary for client configs and keep the linked CLI for terminal work.
+To run or test the built server source directly in a terminal (not as a client setting), use `node packages/mcp-server/dist/index.js`.
 
 Set the working directory to the project you want Memory Lane to use as the startup project scope, for example `/absolute/path/to/your/project`.
 Explicit MCP `projectPath` calls are scoped only to that request and do not change the startup scope used by later omitted-path calls.
