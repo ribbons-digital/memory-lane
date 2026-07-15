@@ -99,6 +99,9 @@ Retention and purge use the same local learning data root as trace capture.
 }
 ```
 
+`semantic.retrieval.topK` is the default recall result bound.
+Use `memory-lane recall --top-k <n>` or the programmatic `engine.recall(query, { topK })` option when one call needs a positive temporary override without mutating config.
+
 After configuring, run `memory-lane reindex` to embed approved memories that do not already have a current vector for the active profile, model, and content hash.
 Use `memory-lane reindex --force` to recompute embeddings even when current vectors already exist.
 Embedding provider calls honor optional per-profile `timeoutMs` and default to 30000 ms.

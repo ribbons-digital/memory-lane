@@ -106,6 +106,7 @@ engine.cancelPendingEmbeddings()
 
 // Recall (semantic or lexical)
 const result = await engine.recall("package manager")
+const limitedResult = await engine.recall("package manager", { topK: 3 })
 
 // Search (lexical, returns approved only in current project scope)
 const memories = engine.search("pnpm")
