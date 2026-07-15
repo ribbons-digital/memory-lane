@@ -658,6 +658,26 @@ function groupMemoriesForContext(memories: MemoryRecord[], options?: MemoryBlock
     .filter((group) => group.memories.length > 0)
 }
 
+function escapeMemoryContextText(value: string): string {
+  return value
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+}
+
+function renderQuotedMemoryBody(text: string): string[] {
+  return escapeMemoryContextText(text)
+    .split(/\r\n?|\n/gu)
+    .map((line) => `  >${line ? ` ${line}` : ""}`)
+}
+
+function renderFullBodyMemory(memory: MemoryRecord): string[] {
+  return [
+    `- **${readableMemoryKind(memory)}**`,
+    ...renderQuotedMemoryBody(memory.text),
+  ]
+}
+
 export function renderMemoryBlock(memories: MemoryRecord[], options?: MemoryBlockRenderOptions): string {
   if (!memories.length) return ""
 
@@ -670,7 +690,7 @@ export function renderMemoryBlock(memories: MemoryRecord[], options?: MemoryBloc
   for (const group of groupMemoriesForContext(memories, options)) {
     lines.push("", `### ${group.title}`, "")
     for (const memory of group.memories) {
-      lines.push(`- **${readableMemoryKind(memory)}**`, `  ${memory.text}`)
+      lines.push(...renderFullBodyMemory(memory))
     }
   }
 
@@ -737,7 +757,7 @@ function usesGeneratedDescriptorFallback(memory: MemoryRecord): boolean {
 function descriptorLine(memory: MemoryRecord): string | undefined {
   const preview = structuredDescriptorText(memory) ?? descriptorPreview(memory)
   if (!preview) return undefined
-  return `- [${memory.id}] ${readableMemoryKind(memory)} — ${preview}`
+  return `- [${escapeMemoryContextText(memory.id)}] ${escapeMemoryContextText(readableMemoryKind(memory))} — ${escapeMemoryContextText(preview)}`
 }
 
 interface DescriptorSelectionState {
@@ -824,7 +844,7 @@ export function renderSessionStartMemoryContext(input: {
     )
     for (const group of groupMemoriesForContext(input.fullBodyMemories, { projectScope: input.projectScope, latestHandoffIds: input.latestHandoffIds })) {
       lines.push("", `### ${group.title}`, "")
-      for (const memory of group.memories) lines.push(`- **${readableMemoryKind(memory)}**`, `  ${memory.text}`)
+      for (const memory of group.memories) lines.push(...renderFullBodyMemory(memory))
     }
   }
 
