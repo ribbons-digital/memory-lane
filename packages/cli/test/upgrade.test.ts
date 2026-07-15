@@ -222,6 +222,59 @@ describe("upgrade", () => {
     assert.equal(fs.existsSync(environmentBinaryPath), false)
   })
 
+  it("returns non-zero when no required manifest integration can be reapplied", () => {
+    const home = tempDir()
+    const dataDir = path.join(home, ".memory-lane")
+    const binaryPath = path.join(home, ".local", "bin", "memory-lane")
+    fs.mkdirSync(dataDir, { recursive: true })
+    fs.mkdirSync(path.dirname(binaryPath), { recursive: true })
+    fs.writeFileSync(binaryPath, "binary sentinel", "utf8")
+    writeInstallManifest(dataDir, {
+      version: "0.1.0",
+      installedAt: "2026-01-01T00:00:00.000Z",
+      binaryPath,
+      dataDir,
+      integrations: [{ harness: "unknown-required", configPath: path.join(home, "unknown.json") }],
+    })
+
+    const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist/index.js")
+    const result = spawnSync(process.execPath, [cli, "upgrade", "--reapply-install-manifest", "--yes"], {
+      encoding: "utf8",
+      env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: undefined },
+    })
+
+    assert.equal(result.status, 1)
+    assert.match(result.stdout, /No previous harness configs were reapplied/u)
+  })
+
+  it("returns non-zero when any required manifest integration fails", () => {
+    const home = tempDir()
+    const dataDir = path.join(home, ".memory-lane")
+    const binaryPath = path.join(home, ".local", "bin", "memory-lane")
+    fs.mkdirSync(dataDir, { recursive: true })
+    fs.mkdirSync(path.dirname(binaryPath), { recursive: true })
+    fs.writeFileSync(binaryPath, "binary sentinel", "utf8")
+    writeInstallManifest(dataDir, {
+      version: "0.1.0",
+      installedAt: "2026-01-01T00:00:00.000Z",
+      binaryPath,
+      dataDir,
+      integrations: [
+        { harness: "pi", configPath: path.join(home, ".pi", "agent", "extensions", "memory-lane", "index.ts") },
+        { harness: "unknown-required", configPath: path.join(home, "unknown.json") },
+      ],
+    })
+
+    const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist/index.js")
+    const result = spawnSync(process.execPath, [cli, "upgrade", "--reapply-install-manifest", "--yes"], {
+      encoding: "utf8",
+      env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: undefined },
+    })
+
+    assert.equal(result.status, 1)
+    assert.match(result.stdout, /Failed to reapply 1 required harness configuration/u)
+  })
+
   it("rejects unsafe manifest-recorded OMP config paths before reapply writes", () => {
     const home = tempDir()
     const dataDir = path.join(home, ".memory-lane")

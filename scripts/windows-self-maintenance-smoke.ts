@@ -59,6 +59,8 @@ async function main(): Promise<void> {
   const home = path.join(root, "home")
   const installDir = path.join(home, "bin")
   const installPath = path.join(installDir, "memory-lane.exe")
+  const dataDir = path.join(home, ".memory-lane")
+  const claudeConfigPath = path.join(home, ".claude", "settings.json")
   const replacementPath = path.join(root, "replacement", "memory-lane.exe")
   const invalidReplacementPath = path.join(root, "replacement", "invalid-memory-lane.exe")
   const holderSource = path.join(root, "running-holder.ts")
@@ -141,6 +143,23 @@ async function main(): Promise<void> {
     assert.match(smoke.stdout, /memory-lane ok/u)
     assert.equal(runningOldBinary.exitCode, null, "old executable must still be running when replacement succeeds")
 
+    fs.mkdirSync(path.dirname(claudeConfigPath), { recursive: true })
+    fs.mkdirSync(dataDir, { recursive: true })
+    fs.writeFileSync(claudeConfigPath, "{bad json", "utf8")
+    fs.writeFileSync(path.join(dataDir, "install.json"), JSON.stringify({
+      version: "0.0.0-old",
+      installedAt: new Date().toISOString(),
+      binaryPath: installPath,
+      dataDir,
+      integrations: [{ harness: "claude-code-cli", configPath: claudeConfigPath }],
+    }, null, 2), "utf8")
+    const failedReapply = spawnSync(installPath, ["upgrade", "--reapply-install-manifest", "--yes"], {
+      env: installerEnv,
+      encoding: "utf8",
+    })
+    assert.notEqual(failedReapply.status, 0, "failed post-install reapply must return non-zero")
+    assert.match(failedReapply.stdout, /Failed to reapply 1 required harness configuration/u)
+
     run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
       cwd: repo,
       env: installerEnv,
@@ -152,11 +171,18 @@ async function main(): Promise<void> {
     assert.match(restored.stdout, /old binary/u)
     assert.equal(runningOldBinary.exitCode, null, "post-install rollback must leave the old process running")
 
+    fs.writeFileSync(claudeConfigPath, "{}", "utf8")
     run("powershell.exe", installerArgs, {
       cwd: repo,
       env: installerEnv,
     })
     assert.equal(fs.existsSync(backupPath), true, "successful replacement must remain rollbackable before commit")
+    const successfulReapply = spawnSync(installPath, ["upgrade", "--reapply-install-manifest", "--yes"], {
+      env: installerEnv,
+      encoding: "utf8",
+    })
+    assert.equal(successfulReapply.status, 0, successfulReapply.stdout)
+    assert.match(successfulReapply.stdout, /Reapplied 1 harness configuration/u)
     run("powershell.exe", [...installerArgs, "-UpgradeAction", "Commit"], {
       cwd: repo,
       env: installerEnv,
@@ -173,7 +199,6 @@ async function main(): Promise<void> {
       "upgrade backup cleanup",
     )
 
-    const dataDir = path.join(home, ".memory-lane")
     fs.mkdirSync(dataDir, { recursive: true })
     fs.writeFileSync(path.join(dataDir, "memory.jsonl"), "{\"text\":\"preserve me\"}\n", "utf8")
     fs.writeFileSync(path.join(dataDir, "install.json"), JSON.stringify({

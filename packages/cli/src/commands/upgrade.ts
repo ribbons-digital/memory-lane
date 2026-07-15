@@ -234,12 +234,15 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
       homeDir,
       env: process.env,
     }
-    const { configuredCount } = reapplyInstallManifest(options, manifest)
+    const { results, configuredCount } = reapplyInstallManifest(options, manifest)
+    const failedIntegrations = results.filter((result) => !result.configured)
     if (configuredCount === 0) {
-      console.log("No previous harness configs were reapplied. Run `memory-lane init` to inspect integrations.")
-    } else {
-      console.log(`Reapplied ${configuredCount} harness configuration(s).`)
+      throw new Error("No previous harness configs were reapplied. Run `memory-lane init` to inspect integrations.")
     }
+    if (failedIntegrations.length > 0) {
+      throw new Error(`Failed to reapply ${failedIntegrations.length} required harness configuration(s).`)
+    }
+    console.log(`Reapplied ${configuredCount} harness configuration(s).`)
     return
   }
 
