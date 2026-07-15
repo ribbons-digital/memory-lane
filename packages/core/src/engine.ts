@@ -642,10 +642,14 @@ export class MemoryEngine {
   // ── Phase 2: Semantic Retrieval ────────────────────────────
 
   async recall(query: string, options?: RecallOptions): Promise<RecallResult> {
+    const topK = options?.topK
+    if (topK !== undefined && (!Number.isInteger(topK) || topK < 1)) {
+      throw new Error("Recall topK must be a positive integer")
+    }
     const semanticConfig = this.config.semantic
-    const config = options?.topK === undefined
+    const config = topK === undefined
       ? semanticConfig
-      : { ...semanticConfig, retrieval: { ...semanticConfig.retrieval, topK: options.topK } }
+      : { ...semanticConfig, retrieval: { ...semanticConfig.retrieval, topK } }
     const scope = options?.projectScope ?? this.scope
     const projectKey = scope?.key ?? ""
 

@@ -2767,6 +2767,17 @@ You are continuing the same subagent session. Before this run can be accepted, c
     )
   })
 
+  it("recall rejects invalid per-call topK overrides", async () => {
+    const e = engine()
+
+    for (const topK of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      await assert.rejects(
+        () => e.recall("pnpm", { topK }),
+        /Recall topK must be a positive integer/u,
+      )
+    }
+  })
+
   it("save mirrors approved memory when obsidian mirror is configured", () => {
     const vault = path.join(dir, "vault")
     fs.mkdirSync(path.join(vault, ".obsidian"), { recursive: true })
