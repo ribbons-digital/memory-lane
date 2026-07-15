@@ -709,6 +709,7 @@ function renderFullBodyMemory(memory: MemoryRecord): string[] {
   ]
 }
 
+// Dynamic memory body text is escaped and nested as Markdown blockquotes at the renderer boundary so stored records cannot close the surrounding guard or introduce top-level prompt structure.
 export function renderMemoryBlock(memories: MemoryRecord[], options?: MemoryBlockRenderOptions): string {
   if (!memories.length) return ""
 
@@ -867,6 +868,7 @@ function appendLayeredDescriptors(state: DescriptorSelectionState, limits: { max
   }
 }
 
+// Session-start full bodies use the same escaped blockquote rendering as prompt-time blocks, while descriptor lines are compacted and escaped before insertion.
 export function renderSessionStartMemoryContext(input: {
   fullBodyMemories: MemoryRecord[]
   descriptorMemories: MemoryRecord[]

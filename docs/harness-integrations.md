@@ -78,19 +78,22 @@ Modes:
 
 When `selective` mode injects memory bodies, the `Relevant Memory` block is grouped for readability.
 Current-project memories are separated from global preferences/workflow rules and other visible project memories, and each memory shows a plain-language type label such as `Project checkpoint`, `Workflow rule`, `Preference`, or `Project fact`.
-These labels explain applicability only; they do not change recall ranking or memory status.
+Each memory body is XML-escaped and rendered as nested Markdown blockquote lines, including blank lines, so memory text cannot close the guarded `<memory-context>` wrapper or create top-level Markdown headings, lists, or code fences.
+These labels and quoting rules affect only rendered lifecycle context; they do not change recall ranking, memory status, stored memory text, or explicit CLI/MCP inspection output.
 
 Prompt-time automatic injection skips low-signal greetings and acknowledgements such as `hi`, `hello`, `ok`, and `thanks`, while preserving meaningful technical prompts such as `pnpm`, `docker`, `wrangler`, `how do I run tests`, and continuity prompts.
 Broad project-position/next-work continuity prompts receive inspection-first continuity guidance without ordinary recall bodies; topic-specific continuity prompts can still use bounded recall.
 The internal `memory-lane route --prompt <text> --json` command exposes the shared deterministic routing decision used by generated bridge adapters.
-Release-style generated pi bridges also cap automatic prompt recall context using `contextPolicyPromptMaxItems` as a `memory-lane recall --top-k <n>` bound and `contextPolicyPromptMaxChars` with safe fallbacks, while explicit recall/get tools remain full-fidelity for deliberate inspection.
+Release-style generated pi bridges also cap automatic prompt recall context using `contextPolicyPromptMaxItems` as a `memory-lane recall --top-k <n>` bound and `contextPolicyPromptMaxChars` against the escaped blockquote rendering with safe fallbacks, while explicit recall/get tools remain full-fidelity for deliberate inspection.
 
 Global preferences (`category: "preference"`, `kind: "preference"`, or `kind: "workflow_rule"` with `scope: "global"`) are selected in a bounded preference layer so user-wide guidance can travel across projects without crowding out current-project facts, checkpoints, or decisions.
 Project-scoped preferences render before global preferences for the same project, which lets narrower project guidance take precedence in context without creating an automatic supersede, cleanup, or override relationship.
 
 For `SessionStart`, baseline memory selection is layered when a project scope is available: current-project preferences, then current-project content, then bounded global preferences, then other global memory and other visible project memory if budget remains.
 In `selective` mode, SessionStart renders tiny always-on preference/workflow-rule bodies first, then fills remaining budget with `Memory Index` descriptor cards that point to exact `memory-lane show|get <id>` inspection.
+Those tiny full bodies use the same escaped nested-blockquote rendering as prompt-time memory bodies, and their budget is counted after escaping and quoting.
 Descriptor cards prefer structured `description` and `fetchHint` metadata when present, otherwise they use generated text previews.
+Descriptor ids, type labels, descriptions, fetch hints, and generated previews are compacted to one line and XML-escaped before rendering.
 If `memory.handoffMode` is `automatic`, one latest approved current-project handoff pointer can be prioritized before generic baseline layers while still consuming the same `sessionStart` character budget; expired or superseded handoff pointers are omitted.
 Prompt-time `UserPromptSubmit` recall remains relevance-based; global preferences are not injected merely because they are global, but relevant global preferences can appear within the `preferenceMaxItems` and `preferenceMaxChars` caps.
 
@@ -163,6 +166,7 @@ memory-lane claude pre-compact
 
 `SessionStart` injects a compact session-opening context when allowed by `memory.contextPolicy.mode`: tiny always-on bodies plus `Memory Index` descriptor cards in `selective` mode, and guidance without memory bodies in `policy-only` mode.
 `UserPromptSubmit` follows the same context policy: `off` suppresses injection, `policy-only` emits guidance without memory bodies, and `selective` injects a small relevant-memory block for ordinary or topic-specific prompts while suppressing ordinary recall bodies for broad `project-position` and `next-work` continuity prompts.
+When memory bodies are injected, they use the escaped nested-blockquote renderer described above.
 `Stop`, `PreCompact`, and `PostToolUse` save useful memories externally and remain quiet when nothing pending was suggested.
 When a write hook saves pending memories, Memory Lane may emit a compact count-only system message such as `Memory Lane: suggested 1 pending memory for review.
 Run memory-lane review to approve or reject it.` The notice does not include memory text, prompts, transcripts, or tool output.
@@ -192,6 +196,7 @@ memory-lane codex pre-compact
 
 `SessionStart` baseline injection is available for compact session-opening context when allowed by `memory.contextPolicy.mode`: tiny always-on bodies plus `Memory Index` descriptor cards in `selective` mode, and guidance without memory bodies in `policy-only` mode.
 `UserPromptSubmit` follows the same context policy: `off` suppresses injection, `policy-only` emits guidance without memory bodies, and `selective` injects a small relevant-memory block for ordinary or topic-specific prompts while suppressing ordinary recall bodies for broad `project-position` and `next-work` continuity prompts.
+When memory bodies are injected, they use the escaped nested-blockquote renderer described above.
 `Stop`, `PreCompact`, and `PostToolUse` save useful memories externally and remain quiet when nothing pending was suggested.
 When a write hook saves pending memories, Memory Lane may emit a compact count-only system message such as `Memory Lane: suggested 1 pending memory for review.
 Run memory-lane review to approve or reject it.` The notice does not include memory text, prompts, transcripts, or tool output.

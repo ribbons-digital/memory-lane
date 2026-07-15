@@ -90,8 +90,8 @@ engine.suggest(
   { description: "Package manager convention for this project." },
 )
 
-// Descriptor strings are trimmed and bounded; keywords are lowercased and
-// deduplicated before enforcing the 12-keyword limit. Secret-looking
+// Descriptor strings are compacted, trimmed, and bounded; keywords are lowercased
+// and deduplicated before enforcing the 12-keyword limit. Secret-looking
 // descriptor fields are rejected. Use memoryDescriptorPreview() when rendering
 // bounded continuity-style previews that should prefer safe descriptor text.
 const firstMemory = engine.list()[0]
