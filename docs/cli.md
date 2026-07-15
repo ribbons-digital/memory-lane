@@ -145,7 +145,7 @@ memory-lane replace <old-id> --text "cross-project successor" --all --dry-run
 `replace` creates a new successor memory.
 `supersede` links an existing approved successor to approved older memories.
 Superseded memories remain approved historical records; Memory Lane does not delete them automatically.
-Active continuity slots and workstream discovery omit superseded records, while list/show/recall and continuity hints can still expose them for explicit inspection.
+Active continuity slots, workstream discovery, and recall omit superseded records, while list/show and continuity hints can still expose them for explicit inspection.
 
 Use `--dry-run` to preview any revision command.
 Multi-old `replace` and `supersede` require `--yes` unless `--dry-run` is used.

@@ -92,7 +92,7 @@ In clients such as Claude Desktop and Codex Desktop, the model may try the `memo
 
 - `memory_save`
 - `memory_suggest`
-- `memory_recall` for specific topic or fact queries
+- `memory_recall` for specific topic or fact queries; an omitted or empty query returns newest visible approved memories first
 - `memory_continuity` for broad prior-work, next-action, project-status, resume, and handoff-style prompts
 - `memory_status`
 - `memory_list`

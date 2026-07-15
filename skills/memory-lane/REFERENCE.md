@@ -63,16 +63,19 @@ Use `--dry-run` to preview revision commands before writing scope or relationshi
 Use `--yes` for multi-old `replace` or `supersede`.
 Revision commands use global plus current-project visibility by default, use global-only visibility when no project scope is active, and require `--all` for cross-project maintenance.
 Denied scoped lookups use not-found behavior without exposing hidden memory text or appending new records.
-Active continuity slots and workstream discovery omit superseded records, but list/show/recall can still expose them for explicit inspection.
+Active continuity slots, workstream discovery, and recall omit superseded records, but list/show can still expose them for explicit inspection.
 MCP mutation tools are not available for these revision operations yet.
 
 ### Recall (semantic + lexical search of approved memories)
 
 Use recall for targeted approved facts, preferences, and project memories, not as the canonical first stop for broad handoff/continuity questions.
+Non-empty recall uses semantic or lexical relevance ranking.
+Empty recall, including an omitted or whitespace-only query, returns newest visible approved memories first before applying the configured topK limit and does not invoke semantic search.
 
 ```bash
 memory-lane recall "package manager"
 memory-lane recall "preferred release workflow"
+memory-lane recall --json
 ```
 
 ### Continuity (canonical broad workstream state)
@@ -490,4 +493,4 @@ Repo-local slash commands include `/memory review [--all]` and `/memory delete <
 | `memory_save` | Save an approved persistent memory (bypasses review) |
 | `memory_suggest` | Queue a memory suggestion for user review |
 | `memory_continuity` | Read canonical broad prior-work, next-action, or project-status continuity |
-| `memory_recall` | Recall approved memories via semantic + lexical search for topic-specific follow-up |
+| `memory_recall` | Recall approved memories via semantic + lexical search for topic-specific follow-up; an empty query returns newest visible approved memories first |
