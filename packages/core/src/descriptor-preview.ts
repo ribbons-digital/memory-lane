@@ -28,13 +28,19 @@ export function hasSecretDescriptorMetadata(memory: MemoryRecord): boolean {
     .some((value) => containsLikelySecret(value))
 }
 
+function compactDescriptorLine(text: string): string {
+  return text.replace(/\s+/gu, " ").trim()
+}
+
 export function structuredDescriptorText(memory: MemoryRecord): string | undefined {
   const descriptor = memory.descriptor
-  if (!descriptor?.description) return undefined
+  const description = descriptor?.description ? compactDescriptorLine(descriptor.description) : undefined
+  if (!description) return undefined
   if (hasSecretDescriptorMetadata(memory)) return undefined
-  return descriptor.fetchHint
-    ? `${descriptor.description} Fetch when: ${descriptor.fetchHint}`
-    : descriptor.description
+  const fetchHint = descriptor?.fetchHint ? compactDescriptorLine(descriptor.fetchHint) : undefined
+  return fetchHint
+    ? `${description} Fetch when: ${fetchHint}`
+    : description
 }
 
 export function memoryDescriptorPreview(memory: MemoryRecord, maxChars: number): DescriptorPreviewResult | undefined {

@@ -775,18 +775,29 @@ export function selectAlwaysOnMemories(memories: MemoryRecord[], options?: Memor
   return state.selected
 }
 
+function normalizeDescriptorPreview(value: string): string {
+  return value.trim().replace(/\s+/gu, " ")
+}
+
 function descriptorPreview(memory: MemoryRecord, maxChars = SESSION_START_DESCRIPTOR_PREVIEW_CHARS): string | undefined {
   if (containsLikelySecret(memory.text)) return undefined
-  const normalized = memory.text.trim().replace(/\s+/gu, " ")
+  const normalized = normalizeDescriptorPreview(memory.text)
   return truncateAtBoundary(normalized, maxChars) ?? normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd() + "…"
 }
 
+function structuredDescriptorPreview(memory: MemoryRecord): string | undefined {
+  const preview = structuredDescriptorText(memory)
+  if (!preview) return undefined
+  const normalized = normalizeDescriptorPreview(preview)
+  return normalized || undefined
+}
+
 function usesGeneratedDescriptorFallback(memory: MemoryRecord): boolean {
-  return structuredDescriptorText(memory) === undefined
+  return structuredDescriptorPreview(memory) === undefined
 }
 
 function descriptorLine(memory: MemoryRecord): string | undefined {
-  const preview = structuredDescriptorText(memory) ?? descriptorPreview(memory)
+  const preview = structuredDescriptorPreview(memory) ?? descriptorPreview(memory)
   if (!preview) return undefined
   return `- [${escapeMemoryContextText(memory.id)}] ${escapeMemoryContextText(readableMemoryKind(memory))} — ${escapeMemoryContextText(preview)}`
 }
