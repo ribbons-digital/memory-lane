@@ -696,6 +696,10 @@ function escapeMemoryContextText(value: string): string {
     .replace(/>/gu, "&gt;")
 }
 
+function normalizeMemoryContextId(value: string): string {
+  return value.trim().replace(/\s+/gu, " ")
+}
+
 function renderQuotedMemoryBody(text: string): string[] {
   return escapeMemoryContextText(text)
     .split(/\r\n?|\n/gu)
@@ -800,7 +804,7 @@ function usesGeneratedDescriptorFallback(memory: MemoryRecord): boolean {
 function descriptorLine(memory: MemoryRecord): string | undefined {
   const preview = structuredDescriptorPreview(memory) ?? descriptorPreview(memory)
   if (!preview) return undefined
-  return `- [${escapeMemoryContextText(memory.id)}] ${escapeMemoryContextText(readableMemoryKind(memory))} — ${escapeMemoryContextText(preview)}`
+  return `- [${escapeMemoryContextText(normalizeMemoryContextId(memory.id))}] ${escapeMemoryContextText(readableMemoryKind(memory))} — ${escapeMemoryContextText(preview)}`
 }
 
 interface DescriptorSelectionState {

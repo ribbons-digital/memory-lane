@@ -862,6 +862,26 @@ test("session-start structured descriptors render as one escaped line", () => {
   assert.equal((rendered.match(/structured-adversarial/gu) ?? []).length, 1)
 })
 
+test("session-start descriptors render newline-bearing ids as one escaped line", () => {
+  const descriptor = {
+    ...projectMemory("descriptor\n# Raw heading\n- Raw bullet", "repo", "Descriptor body", "project_checkpoint"),
+    descriptor: {
+      description: "Current checkpoint",
+      fetchHint: "handling newline ids",
+      keywords: ["rendering"],
+    },
+  }
+  const rendered = renderSessionStartMemoryContext({
+    fullBodyMemories: [],
+    descriptorMemories: [descriptor],
+    policy: { mode: "selective" },
+    projectScope: "repo",
+  })
+
+  assert.match(rendered, /\[descriptor # Raw heading - Raw bullet\] Project checkpoint/u)
+  assert.doesNotMatch(rendered, /\n# Raw heading|\n- Raw bullet/u)
+})
+
 test("session-start descriptors prefer structured descriptor metadata with fetch hints", () => {
   const structured = {
     ...projectMemoryWithUpdatedAt("structured", "repo", "Original body text should not be used in descriptor line when structured metadata exists.", "2026-06-20T00:00:00.000Z"),
