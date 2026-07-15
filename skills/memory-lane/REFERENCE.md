@@ -70,11 +70,13 @@ MCP mutation tools are not available for these revision operations yet.
 
 Use recall for targeted approved facts, preferences, and project memories, not as the canonical first stop for broad handoff/continuity questions.
 Non-empty recall uses semantic or lexical relevance ranking.
-Empty recall, including an omitted or whitespace-only query, returns newest visible approved memories first before applying the configured topK limit and does not invoke semantic search.
+Empty recall, including an omitted or whitespace-only query, returns newest visible approved memories first before applying the configured topK limit, or a positive `memory-lane recall --top-k <n>` per-command override.
+It does not invoke semantic search.
+The CLI override is temporary and does not mutate config.
 
 ```bash
 memory-lane recall "package manager"
-memory-lane recall "preferred release workflow"
+memory-lane recall "preferred release workflow" --top-k 3
 memory-lane recall --json
 ```
 

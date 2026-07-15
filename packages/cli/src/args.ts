@@ -24,6 +24,7 @@ export const VALUE_FLAGS: Record<string, true> = {
   "stale-after-days": true,
   "status": true,
   "text": true,
+  "top-k": true,
   "vault": true,
   "write-plan": true,
 }

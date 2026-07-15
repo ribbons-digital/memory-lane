@@ -104,8 +104,9 @@ await engine.settle()
 // On shutdown timeouts, cancel outstanding embedding work before exiting.
 engine.cancelPendingEmbeddings()
 
-// Recall (semantic or lexical)
+// Recall (semantic or lexical). topK is a positive per-call limit override.
 const result = await engine.recall("package manager")
+const limitedResult = await engine.recall("package manager", { topK: 3 })
 
 // Search (lexical, returns approved only in current project scope)
 const memories = engine.search("pnpm")

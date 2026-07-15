@@ -588,6 +588,7 @@ export interface ReplaceResult extends SupersedeResult {
 }
 
 export interface RecallOptions {
+  /** Positive per-call result bound that overrides semantic.retrieval.topK without mutating config. */
   topK?: number
   projectScope?: ProjectScope
 }

@@ -6,7 +6,7 @@ Full command list and command-behavior reference for the `memory-lane` CLI.
 memory-lane save <text> [--kind <kind>]
                                   Save an approved memory with optional explicit kind
 memory-lane suggest <text>        Queue a pending suggestion for review
-memory-lane recall [query]        Recall memories (semantic or lexical)
+memory-lane recall [query] [--top-k <n>] Recall memories (semantic or lexical) with an optional positive per-command result limit
 memory-lane show|get <id> [--all] Show one memory by exact id, including descriptor metadata when present
 memory-lane list [--status ...]   List memories
 memory-lane search <query>        Lexical text search
@@ -66,9 +66,12 @@ All commands support `--json` for machine-readable output and `--project <path>`
 ## Recall ordering
 
 When `memory-lane recall` receives no query, or a query that trims to an empty string, it returns approved memories visible to the current project scope in newest-`updatedAt`-first order.
-Results are bounded by `semantic.retrieval.topK`, with equal `updatedAt` values ordered by newest `createdAt` and then by memory ID.
+Results are bounded by the positive per-command `--top-k <n>` override when provided; otherwise they use `semantic.retrieval.topK`.
+The override is per invocation only and does not mutate config.
+`--top-k` requires a positive integer value; missing, empty, zero, negative, fractional, and nonnumeric values are rejected before recall runs.
+For equal `updatedAt` values, results are ordered by newest `createdAt` and then by memory ID.
 This empty-query path does not invoke semantic search and reports `semantic.used: false`.
-Non-empty queries continue to use semantic or lexical relevance ranking.
+Non-empty queries continue to use semantic or lexical relevance ranking, with the same optional `--top-k <n>` result bound.
 Use `memory-lane continuity` instead when answering broad prior-work, next-action, project-status, resume, or handoff questions.
 
 ## Freshness metadata

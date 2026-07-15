@@ -989,7 +989,7 @@ export function usage(pluginCommands: PluginUsageCommand[] = []): string {
 Commands:
   save <text> [--scope global|project] [--category preference|personal|project] [--kind preference|personal_context|project_fact|project_checkpoint|workflow_rule|decision|correction|procedure|session_summary|misc] [--status approved|pending]
   suggest <text> [--scope global|project] [--category preference|personal|project]
-  recall [query] [--top-k 8]
+  recall [query] [--top-k <n>]
   show|get <id> [--all]
                   Show one memory by exact id
   list [--status approved|pending|rejected|deleted] [--all]

@@ -69,8 +69,15 @@ function optionalNonNegativeInteger(argv: string[], name: string): number | unde
   return parsed
 }
 
-function optionalPositiveInteger(argv: string[], name: string): number | undefined {
+function optionalPositiveInteger(argv: string[], name: string, requireValueWhenPresent = false): number | undefined {
   const value = flag(argv, name)
+  if (value === undefined) return undefined
+  if (requireValueWhenPresent && value === "true") {
+    throw new Error(`Missing value for --${name}. Expected a positive integer.`)
+  }
+  if (requireValueWhenPresent && value === "") {
+    throw new Error(`Invalid --${name}: empty value. Expected a positive integer.`)
+  }
   if (!value) return undefined
   const parsed = Number(value)
   if (!Number.isInteger(parsed) || parsed < 1) {
@@ -236,7 +243,8 @@ async function handleRecall(ctx: CliContext): Promise<void> {
     console.log(formatError("Unsupported recall flag: --id. Recall is query search; use `memory-lane show <id>` for exact-id lookup.", ctx.json))
     process.exit(1)
   }
-  const result = await ctx.engine.recall(ctx.rest.join(" "))
+  const topK = optionalPositiveInteger(ctx.argv, "top-k", true)
+  const result = await ctx.engine.recall(ctx.rest.join(" "), { topK })
   console.log(formatRecall(result, ctx.json))
 }
 

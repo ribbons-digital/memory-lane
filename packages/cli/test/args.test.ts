@@ -27,6 +27,7 @@ describe("positionals", () => {
     const cases = [
       { name: "value flag with value before positional", argv: ["--scope", "project", "text"], expected: ["text"] },
       { name: "hyphenated value flag with value", argv: ["--stale-after-days", "30", "text"], expected: ["text"] },
+      { name: "recall top-k value stays out of the query", argv: ["recall", "pnpm", "--top-k", "6", "--json"], expected: ["recall", "pnpm"] },
       { name: "value flag at end of argv", argv: ["text", "--scope"], expected: ["text"] },
       { name: "value flag followed by another flag", argv: ["--scope", "--json", "text"], expected: ["text"] },
       { name: "empty-string value is consumed, not left as a positional", argv: ["--scope", "", "text"], expected: ["text"] },

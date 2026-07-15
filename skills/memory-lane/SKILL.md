@@ -23,7 +23,9 @@ Use this bounded path for prompts like “what were we working on?”, “where 
    - local untracked maintainer notes (`internal/`) when present → status card and active roadmap first.
    - `README.md` and `docs/` → user-facing command/setup changes only.
    - this skill → workflow/Memory Lane command guidance only.
-4. Use targeted `memory_recall` / `memory-lane recall` only as a follow-up for a specific topic, not as the first stop for broad continuity. Recall keeps lexical relevance primary for non-empty queries; currentness-like exact ties between project checkpoints prefer newer `updatedAt`. Empty recall returns newest visible approved memories first before the configured topK limit.
+4. Use targeted `memory_recall` / `memory-lane recall` only as a follow-up for a specific topic, not as the first stop for broad continuity.
+   Recall keeps lexical relevance primary for non-empty queries; currentness-like exact ties between project checkpoints prefer newer `updatedAt`.
+   Empty recall returns newest visible approved memories first before the configured topK limit, or the positive `memory-lane recall --top-k <n>` limit for that CLI invocation.
 5. For Memory Lane design/spec or pre-PR implementation reviews, invoke Opus 4.8 directly with Claude CLI:
    ```bash
    claude --model claude-opus-4-8 -p '<review prompt>'
@@ -58,6 +60,7 @@ memory-lane suggest "User prefers pnpm" --category preference --status approved
 memory-lane continuity --json
 memory-lane continuity --query "resume building package manager" --json
 memory-lane recall "package manager"
+memory-lane recall "package manager" --top-k 3
 memory-lane show <id>
 memory-lane get <id>
 
