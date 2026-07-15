@@ -2750,6 +2750,23 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(result.semantic.used, false)
   })
 
+  it("recall applies a per-call topK override without mutating the configured default", async () => {
+    const e = engine()
+    e.save({ text: "pnpm override memory one", status: "approved" })
+    e.save({ text: "pnpm override memory two", status: "approved" })
+    e.save({ text: "pnpm override memory three", status: "approved" })
+
+    const limited = await e.recall("pnpm override", { topK: 1 })
+    const defaulted = await e.recall("pnpm override")
+
+    assert.equal(limited.memories.length, 1)
+    assert.equal(defaulted.memories.length, 3)
+    assert.deepEqual(
+      limited.memories.map((memory) => memory.id),
+      defaulted.memories.slice(0, 1).map((memory) => memory.id),
+    )
+  })
+
   it("save mirrors approved memory when obsidian mirror is configured", () => {
     const vault = path.join(dir, "vault")
     fs.mkdirSync(path.join(vault, ".obsidian"), { recursive: true })

@@ -670,7 +670,7 @@ esac
 
   it("generated pi CLI bridge caps automatic recall context and keeps explicit recall full fidelity", () => {
     const longText = "Relevant pnpm memory. " + "extra details. ".repeat(600)
-    const { nativeBinary } = writeNativeMemoryLaneStub("recall-cap-calls.jsonl", `if (args[0] === "status") {
+    const { nativeBinary, logPath } = writeNativeMemoryLaneStub("recall-cap-calls.jsonl", `if (args[0] === "status") {
   console.log(JSON.stringify({ data: { contextPolicyMode: "selective", contextPolicyPromptMaxItems: 2 } }));
 } else if (args[0] === "recall") {
   console.log(JSON.stringify({ data: { memories: [{ id: "long1234", text: ${JSON.stringify(longText)} }] } }));
@@ -692,6 +692,13 @@ esac
       const explicit = await tools.memory_recall.execute("tool-1", { query: "pnpm" }, undefined, undefined, { cwd: process.cwd() });
       if (explicit.content[0].text.length <= autoResult.message.content.length) throw new Error("explicit recall should remain fuller than automatic context");
     `)
+
+    const calls = readJsonlCalls(logPath)
+    const automaticRecall = calls.find((args) => args[0] === "recall" && args[1] === "pnpm package manager")
+    assert.deepEqual(
+      automaticRecall?.slice(0, 5),
+      ["recall", "pnpm package manager", "--json", "--top-k", "2"],
+    )
   })
 
   it("writes install manifest", () => {

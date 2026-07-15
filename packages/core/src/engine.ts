@@ -642,7 +642,10 @@ export class MemoryEngine {
   // ── Phase 2: Semantic Retrieval ────────────────────────────
 
   async recall(query: string, options?: RecallOptions): Promise<RecallResult> {
-    const config = this.config.semantic
+    const semanticConfig = this.config.semantic
+    const config = options?.topK === undefined
+      ? semanticConfig
+      : { ...semanticConfig, retrieval: { ...semanticConfig.retrieval, topK: options.topK } }
     const scope = options?.projectScope ?? this.scope
     const projectKey = scope?.key ?? ""
 

@@ -431,7 +431,7 @@ describe("CLI integration", () => {
     assert.ok(list.includes("use pnpm"))
   })
 
-  it("recall without a query returns newest visible memories before applying topK", () => {
+  it("recall without a query applies configured and per-call topK after newest-first ordering", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,
       MEMORY_LANE_EMBEDDINGS_FILE: embFile,
@@ -479,12 +479,45 @@ describe("CLI integration", () => {
       },
     ])
 
-    const payload = JSON.parse(run(["recall", "--json"], env))
+    const configured = JSON.parse(run(["recall", "--json"], env))
+    const limited = JSON.parse(run(["recall", "--top-k", "1", "--json"], env))
+    const expanded = JSON.parse(run(["recall", "--top-k", "3", "--json"], env))
 
     assert.deepEqual(
-      (payload.data.memories as MemoryRecord[]).map((memory) => memory.id),
+      (configured.data.memories as MemoryRecord[]).map((memory) => memory.id),
       ["newest", "middle"],
     )
+    assert.deepEqual(
+      (limited.data.memories as MemoryRecord[]).map((memory) => memory.id),
+      ["newest"],
+    )
+    assert.deepEqual(
+      (expanded.data.memories as MemoryRecord[]).map((memory) => memory.id),
+      ["newest", "middle", "oldest"],
+    )
+  })
+
+  it("recall --top-k rejects invalid and missing values", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    for (const value of ["0", "-1", "1.5", "abc"]) {
+      const result = runProcess(["recall", "--top-k", value, "--json"], { env })
+      assert.equal(result.status, 1, `--top-k ${value} unexpectedly succeeded`)
+      assert.match(result.stdout + result.stderr, new RegExp(`Invalid --top-k: ${escapeRegExp(value)}\\. Expected a positive integer\\.`, "u"))
+    }
+
+    const empty = runProcess(["recall", "--top-k", "", "--json"], { env })
+    assert.equal(empty.status, 1)
+    assert.match(empty.stdout + empty.stderr, /Invalid --top-k: empty value\. Expected a positive integer\./u)
+
+    const missing = runProcess(["recall", "--top-k", "--json"], { env })
+    assert.equal(missing.status, 1)
+    assert.match(missing.stdout + missing.stderr, /Missing value for --top-k\. Expected a positive integer\./u)
+    assert.doesNotMatch(missing.stdout + missing.stderr, /top-k: true/u)
   })
 
   it("save --kind project_checkpoint persists and reports the explicit kind in JSON", () => {
