@@ -599,6 +599,26 @@ test("renderMemoryContext quotes multiline memory and escapes XML delimiters", (
   assert.doesNotMatch(rendered, /\n# Untrusted heading|\n- Untrusted bullet|\n```text/u)
 })
 
+test("selectMemoriesForInjection budgets escaped multiline rendering", () => {
+  const pathologicalText = Array.from({ length: 80 }, () => "<>&").join("\n")
+  const selected = selectMemoriesForInjection("render pathological memory", recall([
+    projectMemory("pathological", "repo", pathologicalText, "project_fact"),
+  ], true), {
+    projectScope: "repo",
+    maxItems: 1,
+    targetChars: 120,
+    hardMaxChars: 120,
+    absoluteMaxChars: 120,
+  })
+
+  assert.equal(selected.length, 1)
+  assert.match(selected[0].text, /…$/u)
+  const renderedMemory = renderMemoryBlock(selected, { projectScope: "repo" })
+  const renderedBody = renderedMemory.split("\n").filter((line) => line.startsWith("  >")).join("\n")
+  assert.ok(renderedBody.length <= 120, `rendered body length ${renderedBody.length} exceeded budget`)
+  assert.doesNotMatch(renderedBody, /(?:&lt;&gt;&amp;\n){10}/u)
+})
+
 test("renderMemoryContext policy-only injects guidance without memory bodies", () => {
   const rendered = renderMemoryContext({
     event: "sessionStart",

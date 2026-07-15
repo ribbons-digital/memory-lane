@@ -250,11 +250,41 @@ function truncateAtBoundary(text: string, maxChars: number): string | undefined 
   return `${slice}…`
 }
 
+function renderedMemoryBodyLength(memory: MemoryRecord): number {
+  return renderQuotedMemoryBody(memory.text).join("\n").length
+}
+
+function truncateMemoryTextForRenderedBudget(memory: MemoryRecord, remainingChars: number): string | undefined {
+  const ellipsisOnly = { ...memory, text: "…" }
+  if (renderedMemoryBodyLength(ellipsisOnly) > remainingChars) return undefined
+
+  let low = 0
+  let high = memory.text.length
+  let best = ""
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2)
+    const candidate = memory.text.slice(0, mid).trimEnd()
+    const truncated = candidate ? `${candidate}…` : "…"
+    if (renderedMemoryBodyLength({ ...memory, text: truncated }) <= remainingChars) {
+      best = truncated
+      low = mid + 1
+    } else {
+      high = mid - 1
+    }
+  }
+
+  const boundaryTruncated = truncateAtBoundary(memory.text, Math.max(0, best.length))
+  if (boundaryTruncated && renderedMemoryBodyLength({ ...memory, text: boundaryTruncated }) <= remainingChars) {
+    return boundaryTruncated
+  }
+  return best
+}
+
 function fitMemoryWithinBudget(memory: MemoryRecord, remainingChars: number): MemoryRecord | undefined {
   if (remainingChars <= 0) return undefined
-  if (memory.text.length <= remainingChars) return memory
+  if (renderedMemoryBodyLength(memory) <= remainingChars) return memory
 
-  const truncated = truncateAtBoundary(memory.text, remainingChars)
+  const truncated = truncateMemoryTextForRenderedBudget(memory, remainingChars)
   if (!truncated) return undefined
   return { ...memory, text: truncated }
 }
@@ -304,10 +334,11 @@ function appendLayeredMemory(memory: MemoryRecord, limits: MemoryInjectionLimits
   state.selected.push(fitted)
   state.seen.add(key)
   state.seenIds.add(memory.id)
-  state.chars += fitted.text.length
+  const renderedChars = renderedMemoryBodyLength(fitted)
+  state.chars += renderedChars
   if (isPreference) {
     state.preferenceCount += 1
-    state.preferenceChars += fitted.text.length
+    state.preferenceChars += renderedChars
   }
 }
 
