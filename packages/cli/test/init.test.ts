@@ -653,6 +653,7 @@ esac
     assert.ok(content.includes("function renderQuotedMemoryBody"))
     assert.ok(content.includes("function renderAutomaticMemoryContext"))
     assert.ok(content.includes('<memory-context mode="selective" event="prompt">'))
+    assert.ok(content.includes("const separatorChars = selected.length ? 1 : 0"))
     assert.equal(content.includes('content: "Relevant Memory Lane memories:\\n" + memories.map(memoryText).join("\\n")'), false)
   })
 
@@ -722,6 +723,43 @@ esac
       const content = result?.message?.content ?? "";
       if (!content.includes("expand")) throw new Error("expected fitted memory");
       if (content.length > 700) throw new Error("automatic context exceeded rendered budget envelope: " + content.length);
+    `)
+  })
+
+  it("generated pi CLI bridge counts inter-memory separators in the rendered budget", () => {
+    const firstText = "alpha"
+    const secondText = "beta"
+    const firstRendered = `- [first] Memory\n  > ${firstText}`
+    const secondRendered = `- [second] Memory\n  > ${secondText}`
+    const maxChars = firstRendered.length + secondRendered.length
+    const { nativeBinary } = writeNativeMemoryLaneStub("rendered-separator-budget-calls.jsonl", `if (args[0] === "status") {
+  console.log(JSON.stringify({ data: { contextPolicyMode: "selective", contextPolicyPromptMaxItems: 2, contextPolicyPromptMaxChars: ${maxChars} } }));
+} else if (args[0] === "recall") {
+  console.log(JSON.stringify({ data: { memories: [
+    { id: "first", text: ${JSON.stringify(firstText)} },
+    { id: "second", text: ${JSON.stringify(secondText)} }
+  ] } }));
+} else {
+  console.log(JSON.stringify({ data: {} }));
+}`)
+
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
+      // This smoke test imports a runtime-generated bridge path that a static import cannot know.
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const result = await handlers.before_agent_start({ prompt: "separator rendered budget" }, { cwd: process.cwd() });
+      const content = result?.message?.content ?? "";
+      const memoryPrefix = "Memory Lane selected these approved memories for this turn. They may include current-project memories and global preferences or workflow rules.\\n\\n";
+      const memoryStart = content.indexOf(memoryPrefix);
+      const memoryEnd = content.lastIndexOf("\\n</memory-context>");
+      if (memoryStart < 0 || memoryEnd < 0) throw new Error("expected guarded memory section");
+      const renderedMemories = content.slice(memoryStart + memoryPrefix.length, memoryEnd);
+      if (!renderedMemories.includes("[first]") || !renderedMemories.includes("[second]")) throw new Error("expected both fitted memories");
+      if (renderedMemories.length > ${maxChars}) throw new Error("memory separators exceeded rendered budget: " + renderedMemories.length);
     `)
   })
 

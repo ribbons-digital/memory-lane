@@ -344,7 +344,7 @@ function localPiAdapterPath(binaryPath: string): string | undefined {
 
 export function piAdapterImportSource(adapterPath: string): string {
   const adapterUrl = pathToFileURL(adapterPath).href
-  return `export default async function memoryLaneExtension(pi: any) {\n  const mod = await import(${JSON.stringify(`${adapterUrl}?reload=`)} + Date.now());\n  return mod.default(pi);\n}\n`
+  return `export default async function memoryLaneExtension(pi: any) {\n  // The installed adapter path and reload query are selected at runtime, so static import cannot resolve them.\n  const mod = await import(${JSON.stringify(`${adapterUrl}?reload=`)} + Date.now());\n  return mod.default(pi);\n}\n`
 }
 
 function piCliBridgeBaseSource(binaryPath: string): string {
@@ -353,13 +353,36 @@ function piCliBridgeBaseSource(binaryPath: string): string {
 
 export function piCliBridgeSource(binaryPath: string): string {
   let taskGuardCount = 0
-  const base = piCliBridgeBaseSource(binaryPath).replace(
-    /(  pi\.on\("(?:session_before_compact|before_agent_start)", async \(event: [^\n]+\n)/gu,
-    (signature) => {
-      taskGuardCount += 1
-      return `${signature}    if (bridgeTaskSession(ctx)) return undefined\n`
-    },
-  )
+  const base = piCliBridgeBaseSource(binaryPath)
+    .replace(
+      /(  pi\.on\("(?:session_before_compact|before_agent_start)", async \(event: [^\n]+\n)/gu,
+      (signature) => {
+        taskGuardCount += 1
+        return `${signature}    if (bridgeTaskSession(ctx)) return undefined\n`
+      },
+    )
+    .replace(
+      [
+        "    const remaining = charLimit - chars",
+        "    if (remaining <= 0) break",
+        "    const fitted = fitMemoryWithinBudget(memory, remaining)",
+        "    if (!fitted) continue",
+        "    selected.push(fitted)",
+        "    chars += renderedAutomaticMemoryLength(fitted)",
+      ].join("\n"),
+      [
+        "    const separatorChars = selected.length ? 1 : 0",
+        "    const remaining = charLimit - chars - separatorChars",
+        "    if (remaining <= 0) break",
+        "    const fitted = fitMemoryWithinBudget(memory, remaining)",
+        "    if (!fitted) continue",
+        "    selected.push(fitted)",
+        "    chars += separatorChars + renderedAutomaticMemoryLength(fitted)",
+      ].join("\n"),
+    )
+  if (!base.includes("    const separatorChars = selected.length ? 1 : 0\n")) {
+    throw new Error("Generated Pi CLI bridge is missing rendered memory separator budgeting")
+  }
   if (taskGuardCount !== 2) throw new Error(`Generated Pi CLI bridge expected 2 task guards; inserted ${taskGuardCount}`)
   const closing = base.lastIndexOf("}\n")
   if (closing < 0) throw new Error("Generated Pi CLI bridge is missing its factory closing brace")
