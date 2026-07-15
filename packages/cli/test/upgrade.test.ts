@@ -10,6 +10,7 @@ import {
   installerEnvironment,
   reapplyInstallManifest,
   reapplyManifestWithInstalledBinary,
+  resolveInstallerDirectory,
   resolveUpgradeBinaryPath,
 } from "../src/commands/upgrade.js"
 import type { InstallManifest } from "../src/commands/upgrade.js"
@@ -179,6 +180,20 @@ describe("upgrade", () => {
       MEMORY_LANE_UPGRADE_PID: "1234",
     })
     assert.deepEqual(installerEnvironment({ KEEP_ME: "yes" }), { KEEP_ME: "yes" })
+  })
+
+  it("uses the HOME-based Windows binary directory when the manifest is missing", () => {
+    const binaryPath = defaultInstalledBinaryPath("C:\\Homes\\Ryan", true, path.win32)
+    const installDir = resolveInstallerDirectory(binaryPath, true, false, path.win32)
+
+    assert.equal(installDir, "C:\\Homes\\Ryan\\bin")
+    assert.equal(installerEnvironment({ USERPROFILE: "C:\\Users\\Ryan" }, installDir).INSTALL_DIR, installDir)
+  })
+
+  it("preserves the non-Windows installer default when the manifest is missing", () => {
+    const binaryPath = defaultInstalledBinaryPath("/home/ryan", false, path.posix)
+
+    assert.equal(resolveInstallerDirectory(binaryPath, false, false, path.posix), undefined)
   })
 
   it("uses a manifest binary path and recorded OMP config path during reapply", () => {

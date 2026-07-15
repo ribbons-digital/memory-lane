@@ -116,6 +116,15 @@ function manifestError(result: Extract<InstallManifestReadResult, { status: "mal
   return new Error(result.warnings.join(" "))
 }
 
+export function resolveInstallerDirectory(
+  binaryPath: string,
+  isWindows: boolean,
+  hasManifest: boolean,
+  pathApi: PathApi = isWindows ? path.win32 : path,
+): string | undefined {
+  return isWindows || hasManifest ? pathApi.dirname(binaryPath) : undefined
+}
+
 export function resolveUpgradeBinaryPath(
   result: InstallManifestReadResult,
   homeDir: string,
@@ -267,7 +276,7 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
     }
 
     console.log("Running installer...")
-    installDir = manifest ? path.dirname(binaryPath) : undefined
+    installDir = resolveInstallerDirectory(binaryPath, isWindows, manifest !== undefined)
     if (!runInstaller(scriptPath, installDir, isWindows ? process.pid : undefined)) {
       if (isWindows && !finalizeWindowsUpgrade(scriptPath, "Rollback", installDir)) {
         console.error("Failed to restore the previous Windows executable.")
