@@ -19,8 +19,8 @@ function rec(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
     category: overrides.category ?? "project",
     scope: overrides.scope ?? { type: "global" },
     source: overrides.source ?? "manual",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z",
+    createdAt: overrides.createdAt ?? "2026-01-01T00:00:00.000Z",
+    updatedAt: overrides.updatedAt ?? "2026-01-01T00:00:00.000Z",
     kind: overrides.kind,
   }
 }
@@ -45,11 +45,18 @@ describe("retrieveSemanticMemories", () => {
     assert.equal(r.semantic.used, false)
   })
 
-  it("returns all visible for empty query", async () => {
-    const memories = [rec({ id: "a" }), rec({ id: "b" })]
-    const r = await retrieveSemanticMemories(memories, [], [], "", "", BASE_CONFIG)
-    assert.equal(r.memories.length, 2)
-    assert.equal(r.semantic.used, false)
+  it("returns newest visible memories before applying topK for an empty query", async () => {
+    const memories = [
+      rec({ id: "oldest", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }),
+      rec({ id: "middle", createdAt: "2026-02-01T00:00:00.000Z", updatedAt: "2026-02-01T00:00:00.000Z" }),
+      rec({ id: "newest", createdAt: "2026-03-01T00:00:00.000Z", updatedAt: "2026-03-01T00:00:00.000Z" }),
+    ]
+    const config = { ...BASE_CONFIG, retrieval: { ...BASE_CONFIG.retrieval, topK: 2 } }
+
+    const result = await retrieveSemanticMemories(memories, [], [], "", "", config)
+
+    assert.deepEqual(result.memories.map((memory) => memory.id), ["newest", "middle"])
+    assert.equal(result.semantic.used, false)
   })
 
   it("falls back to lexical when no provider", async () => {

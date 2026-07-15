@@ -23,7 +23,7 @@ Use this bounded path for prompts like “what were we working on?”, “where 
    - local untracked maintainer notes (`internal/`) when present → status card and active roadmap first.
    - `README.md` and `docs/` → user-facing command/setup changes only.
    - this skill → workflow/Memory Lane command guidance only.
-4. Use targeted `memory_recall` / `memory-lane recall` only as a follow-up for a specific topic, not as the first stop for broad continuity. Recall keeps lexical relevance primary; currentness-like exact ties between project checkpoints prefer newer `updatedAt`.
+4. Use targeted `memory_recall` / `memory-lane recall` only as a follow-up for a specific topic, not as the first stop for broad continuity. Recall keeps lexical relevance primary for non-empty queries; currentness-like exact ties between project checkpoints prefer newer `updatedAt`. Empty recall returns newest visible approved memories first before the configured topK limit.
 5. For Memory Lane design/spec or pre-PR implementation reviews, invoke Opus 4.8 directly with Claude CLI:
    ```bash
    claude --model claude-opus-4-8 -p '<review prompt>'
@@ -114,7 +114,7 @@ memory-lane supersede <new-id> <old-id...> --reason "newer version" --yes [--all
 Use `--dry-run` where available before changing scope or relationships.
 Revision commands use global plus current-project visibility by default, use global-only visibility when no project scope is active, and require `--all` for cross-project maintenance.
 Denied scoped lookups use not-found behavior without exposing hidden memory text or appending new records.
-Active continuity slots and workstream discovery omit superseded records, but list/show/recall can still expose them for explicit inspection.
+Active continuity slots, workstream discovery, and recall omit superseded records, but list/show can still expose them for explicit inspection.
 Avoid silent deletion/rejection/cleanup without explicit user approval.
 
 ## Continuity and operating agreements
