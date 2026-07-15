@@ -298,7 +298,7 @@ memory-lane codex pre-compact
 Tiny memory bodies are XML-escaped and rendered as nested Markdown blockquotes; descriptor cards use stored `description` and `fetchHint` metadata when present, otherwise generated previews, and descriptor fields are compacted to one escaped line.
 `user-prompt-submit` recalls relevant approved memories for ordinary/topic-specific prompts in `selective` mode, while broad project-position/next-work continuity prompts receive inspection-first continuity guidance without ordinary recall bodies.
 `stop`, `pre-compact`, and `post-tool-use` save useful memories externally and are silent by default.
-`pre-compact` can queue pending summaries before compaction only when `memory.sessionEndSummary.requireConfirmation` is `false` and `memory.preCompactSummary.enabled` is omitted or not `false`; set `memory.preCompactSummary.enabled` to `false` to opt out.
+`pre-compact` can queue pending summaries before compaction only when `memory.sessionEndSummary.enabled` is enabled, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or not `false`; set `memory.preCompactSummary.enabled` to `false` to opt out.
 Hook commands fail safe: if storage/config/plugin initialization fails, Claude/Codex hook invocations return `{}` and exit successfully so the host session is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr.
 Current Codex CLI hooks do not expose a `SessionEnd` event; use manual `memory-lane session-end --confirm`, Codex `PreCompact`, or the Codex `Stop` explicit-intent path for session summaries.
 
