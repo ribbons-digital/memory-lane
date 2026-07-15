@@ -24,7 +24,9 @@ export async function retrieveSemanticMemories(
   const q = query.trim()
   if (!q) {
     return {
-      memories: visible.slice(0, config.retrieval.topK),
+      memories: [...visible]
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id))
+        .slice(0, config.retrieval.topK),
       semantic: { enabled: config.enabled, used: false },
     }
   }

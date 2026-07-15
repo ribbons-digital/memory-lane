@@ -431,6 +431,62 @@ describe("CLI integration", () => {
     assert.ok(list.includes("use pnpm"))
   })
 
+  it("recall without a query returns newest visible memories before applying topK", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    fs.writeFileSync(cfgFile, JSON.stringify({
+      semantic: {
+        enabled: false,
+        retrieval: { topK: 2 },
+      },
+    }, null, 2) + "\n")
+    writeMemoryRecords(memFile, [
+      {
+        id: "oldest",
+        status: "approved",
+        text: "oldest memory",
+        category: "project",
+        scope: { type: "global" },
+        source: "manual",
+        kind: "project_fact",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "middle",
+        status: "approved",
+        text: "middle memory",
+        category: "project",
+        scope: { type: "global" },
+        source: "manual",
+        kind: "project_fact",
+        createdAt: "2026-02-01T00:00:00.000Z",
+        updatedAt: "2026-02-01T00:00:00.000Z",
+      },
+      {
+        id: "newest",
+        status: "approved",
+        text: "newest memory",
+        category: "project",
+        scope: { type: "global" },
+        source: "manual",
+        kind: "project_fact",
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-01T00:00:00.000Z",
+      },
+    ])
+
+    const payload = JSON.parse(run(["recall", "--json"], env))
+
+    assert.deepEqual(
+      (payload.data.memories as MemoryRecord[]).map((memory) => memory.id),
+      ["newest", "middle"],
+    )
+  })
+
   it("save --kind project_checkpoint persists and reports the explicit kind in JSON", () => {
     const env = {
       MEMORY_LANE_FILE: memFile,

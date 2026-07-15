@@ -63,6 +63,14 @@ memory-lane mcp                   Run the bundled stdio MCP server (used by inst
 All commands support `--json` for machine-readable output and `--project <path>` to set the project scope.
 `memory-lane save` accepts `--kind` to override text-based kind inference; valid values are `preference`, `personal_context`, `project_fact`, `project_checkpoint`, `workflow_rule`, `decision`, `correction`, `procedure`, `session_summary`, and `misc`.
 
+## Recall ordering
+
+When `memory-lane recall` receives no query, or a query that trims to an empty string, it returns approved memories visible to the current project scope in newest-`updatedAt`-first order.
+Results are bounded by `semantic.retrieval.topK`, with equal `updatedAt` values ordered by newest `createdAt` and then by memory ID.
+This empty-query path does not invoke semantic search and reports `semantic.used: false`.
+Non-empty queries continue to use semantic or lexical relevance ranking.
+Use `memory-lane continuity` instead when answering broad prior-work, next-action, project-status, resume, or handoff questions.
+
 ## Freshness metadata
 
 `memory-lane save` and `memory-lane suggest` accept optional time-awareness metadata:

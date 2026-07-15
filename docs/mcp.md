@@ -26,6 +26,9 @@ Explicit `all: true` bypasses this boundary for administrative workflows; a refu
 Use `memory_continuity({ projectPath })` from MCP clients before answering continuity questions such as project resumption, last-worked-on, accomplished, next-action, or project-status prompts.
 Use `memory_continuity({ projectPath, query: "resume building X" })` when the user asks for a specific workstream.
 Prefer it over `memory_recall` for continuity; `memory_recall` is a topic-specific follow-up after continuity inspection, not an authority by itself.
+When `memory_recall` omits `query`, or provides a query that trims to an empty string, it returns approved memories visible to that call's scope in newest-`updatedAt`-first order.
+Results are bounded by `semantic.retrieval.topK`, with equal `updatedAt` values ordered by newest `createdAt` and then by memory ID.
+This empty-query path does not invoke semantic search and reports `semantic.used: false`.
 
 Use `memory_status` from MCP clients when you want the same kind of read-only setup/status overview that `memory-lane doctor` provides in a terminal.
 It reports counts and diagnostics only; it does not return raw memory text or run lifecycle hooks, except that legacy project-memory diagnostics may include bounded sample previews when legacy candidates exist.
