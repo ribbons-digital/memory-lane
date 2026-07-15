@@ -134,9 +134,15 @@ For isolated testing, prefer absolute temp paths in hook commands, for example `
 
 ## What each hook does
 
-`SessionStart` injects compact session-opening context when a new Claude Code session begins. In `selective` mode, it can include tiny always-on memory bodies plus `Memory Index` descriptor cards that point to exact `memory-lane show|get <id>` inspection; descriptor cards use stored metadata when present and generated previews otherwise. It uses a stricter budget than `UserPromptSubmit` and does not dump the full project history. It is safe to leave enabled alongside `UserPromptSubmit`.
+`SessionStart` injects compact session-opening context when a new Claude Code session begins.
+In `selective` mode, it can include tiny always-on memory bodies plus `Memory Index` descriptor cards that point to exact `memory-lane show|get <id>` inspection; descriptor cards use stored metadata when present and generated previews otherwise.
+Tiny memory bodies are XML-escaped and rendered as nested Markdown blockquotes, and descriptor fields are compacted to one escaped line.
+It uses a stricter rendered-context budget than `UserPromptSubmit` and does not dump the full project history.
+It is safe to leave enabled alongside `UserPromptSubmit`.
 
-`UserPromptSubmit` uses the shared prompt route decision before Claude processes the prompt. Low-signal prompts inject nothing, memory-management prompts get list/status/review guidance, broad project-position or next-work prompts get continuity guidance without ordinary recall bodies, and eligible ordinary or topic-specific prompts can receive relevant approved memories via `hookSpecificOutput.additionalContext`.
+`UserPromptSubmit` uses the shared prompt route decision before Claude processes the prompt.
+Low-signal prompts inject nothing, memory-management prompts get list/status/review guidance, broad project-position or next-work prompts get continuity guidance without ordinary recall bodies, and eligible ordinary or topic-specific prompts can receive relevant approved memories via `hookSpecificOutput.additionalContext`.
+Injected memory bodies are XML-escaped and rendered as nested Markdown blockquotes so stored memory text cannot close the guarded context wrapper or create top-level Markdown structure.
 
 `Stop` does not inject context. It can save durable turn-level memories after Claude finishes responding.
 

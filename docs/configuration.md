@@ -114,7 +114,7 @@ If coverage is low, doctor prints a semantic warning such as “Run `memory-lane
 These fields help confirm where `~/.memory-lane/hooks-log.jsonl` is, whether it exists, and its size/mtime.
 Doctor only stats the path; it does not create, read, rotate, truncate, or modify hook debug logs.
 
-`memory-lane doctor` / `memory_status` also report the active context policy knobs: `contextPolicyMode`, prompt/session-start item and character budgets, `contextPolicyIncludePending`, and `contextPolicyFallbackToSearch`.
+`memory-lane doctor` / `memory_status` also report the active context policy knobs: `contextPolicyMode`, prompt/session-start item and rendered-character budgets, `contextPolicyIncludePending`, and `contextPolicyFallbackToSearch`.
 
 When `MEMORY_LANE_HOOK_DEBUG=1`, Claude/Codex hook debug records include privacy-safe context decision metadata for injection events: `contextPolicyMode`, `contextEvent`, `contextSelected`, `contextOmitted`, `contextMaxItems`, `contextMaxChars`, and `contextOmittedReasons`.
 They never include raw prompts, transcripts, tool output, memory text, or injected context text.

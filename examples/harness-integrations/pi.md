@@ -30,7 +30,8 @@ Manual tools and commands:
 Automatic lifecycle behavior through shared CLI lifecycle policy:
 
 - `input` saves explicit memory requests only ("Remember that ..."); ordinary prompt submissions are not auto-saved.
-- `before_agent_start` injects bounded read-only context: broad continuity prompts route to canonical Memory Lane continuity, memory-management prompts route to list/status/review guidance, and other relevant approved memories may be injected as hidden context within the configured prompt item and character budgets.
+- `before_agent_start` injects bounded read-only context: broad continuity prompts route to canonical Memory Lane continuity, memory-management prompts route to list/status/review guidance, and other relevant approved memories may be injected as hidden context within the configured prompt item and rendered-character budgets.
+  Injected memory bodies are XML-escaped and rendered as nested Markdown blockquotes so stored memory text cannot close the guarded context wrapper or create top-level Markdown structure.
 - `turn_end` evaluates the last user and assistant messages for memory-worthy candidates and strong completed-progress checkpoint evidence.
 - `tool_result` captures successful shell workflow commands (such as `pnpm test`, `pnpm build`, `pnpm install`) as project workflow rules and may queue pending checkpoint candidates from release/merge commands.
 - `session_before_compact` can save a pending pre-compact `session_summary` when `memory.sessionEndSummary.enabled` is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or not `false`.

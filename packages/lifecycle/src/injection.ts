@@ -250,11 +250,41 @@ function truncateAtBoundary(text: string, maxChars: number): string | undefined 
   return `${slice}…`
 }
 
+function renderedMemoryBodyLength(memory: MemoryRecord): number {
+  return renderQuotedMemoryBody(memory.text).join("\n").length
+}
+
+function truncateMemoryTextForRenderedBudget(memory: MemoryRecord, remainingChars: number): string | undefined {
+  const ellipsisOnly = { ...memory, text: "…" }
+  if (renderedMemoryBodyLength(ellipsisOnly) > remainingChars) return undefined
+
+  let low = 0
+  let high = memory.text.length
+  let best = ""
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2)
+    const candidate = memory.text.slice(0, mid).trimEnd()
+    const truncated = candidate ? `${candidate}…` : "…"
+    if (renderedMemoryBodyLength({ ...memory, text: truncated }) <= remainingChars) {
+      best = truncated
+      low = mid + 1
+    } else {
+      high = mid - 1
+    }
+  }
+
+  const boundaryTruncated = truncateAtBoundary(memory.text, Math.max(0, best.length))
+  if (boundaryTruncated && renderedMemoryBodyLength({ ...memory, text: boundaryTruncated }) <= remainingChars) {
+    return boundaryTruncated
+  }
+  return best
+}
+
 function fitMemoryWithinBudget(memory: MemoryRecord, remainingChars: number): MemoryRecord | undefined {
   if (remainingChars <= 0) return undefined
-  if (memory.text.length <= remainingChars) return memory
+  if (renderedMemoryBodyLength(memory) <= remainingChars) return memory
 
-  const truncated = truncateAtBoundary(memory.text, remainingChars)
+  const truncated = truncateMemoryTextForRenderedBudget(memory, remainingChars)
   if (!truncated) return undefined
   return { ...memory, text: truncated }
 }
@@ -304,10 +334,11 @@ function appendLayeredMemory(memory: MemoryRecord, limits: MemoryInjectionLimits
   state.selected.push(fitted)
   state.seen.add(key)
   state.seenIds.add(memory.id)
-  state.chars += fitted.text.length
+  const renderedChars = renderedMemoryBodyLength(fitted)
+  state.chars += renderedChars
   if (isPreference) {
     state.preferenceCount += 1
-    state.preferenceChars += fitted.text.length
+    state.preferenceChars += renderedChars
   }
 }
 
@@ -658,6 +689,31 @@ function groupMemoriesForContext(memories: MemoryRecord[], options?: MemoryBlock
     .filter((group) => group.memories.length > 0)
 }
 
+function escapeMemoryContextText(value: string): string {
+  return value
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+}
+
+function normalizeMemoryContextId(value: string): string {
+  return value.trim().replace(/\s+/gu, " ")
+}
+
+function renderQuotedMemoryBody(text: string): string[] {
+  return escapeMemoryContextText(text)
+    .split(/\r\n?|\n/gu)
+    .map((line) => `  >${line ? ` ${line}` : ""}`)
+}
+
+function renderFullBodyMemory(memory: MemoryRecord): string[] {
+  return [
+    `- **${readableMemoryKind(memory)}**`,
+    ...renderQuotedMemoryBody(memory.text),
+  ]
+}
+
+// Dynamic memory body text is escaped and nested as Markdown blockquotes at the renderer boundary so stored records cannot close the surrounding guard or introduce top-level prompt structure.
 export function renderMemoryBlock(memories: MemoryRecord[], options?: MemoryBlockRenderOptions): string {
   if (!memories.length) return ""
 
@@ -670,7 +726,7 @@ export function renderMemoryBlock(memories: MemoryRecord[], options?: MemoryBloc
   for (const group of groupMemoriesForContext(memories, options)) {
     lines.push("", `### ${group.title}`, "")
     for (const memory of group.memories) {
-      lines.push(`- **${readableMemoryKind(memory)}**`, `  ${memory.text}`)
+      lines.push(...renderFullBodyMemory(memory))
     }
   }
 
@@ -724,20 +780,31 @@ export function selectAlwaysOnMemories(memories: MemoryRecord[], options?: Memor
   return state.selected
 }
 
+function normalizeDescriptorPreview(value: string): string {
+  return value.trim().replace(/\s+/gu, " ")
+}
+
 function descriptorPreview(memory: MemoryRecord, maxChars = SESSION_START_DESCRIPTOR_PREVIEW_CHARS): string | undefined {
   if (containsLikelySecret(memory.text)) return undefined
-  const normalized = memory.text.trim().replace(/\s+/gu, " ")
+  const normalized = normalizeDescriptorPreview(memory.text)
   return truncateAtBoundary(normalized, maxChars) ?? normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd() + "…"
 }
 
+function structuredDescriptorPreview(memory: MemoryRecord): string | undefined {
+  const preview = structuredDescriptorText(memory)
+  if (!preview) return undefined
+  const normalized = normalizeDescriptorPreview(preview)
+  return normalized || undefined
+}
+
 function usesGeneratedDescriptorFallback(memory: MemoryRecord): boolean {
-  return structuredDescriptorText(memory) === undefined
+  return structuredDescriptorPreview(memory) === undefined
 }
 
 function descriptorLine(memory: MemoryRecord): string | undefined {
-  const preview = structuredDescriptorText(memory) ?? descriptorPreview(memory)
+  const preview = structuredDescriptorPreview(memory) ?? descriptorPreview(memory)
   if (!preview) return undefined
-  return `- [${memory.id}] ${readableMemoryKind(memory)} — ${preview}`
+  return `- [${escapeMemoryContextText(normalizeMemoryContextId(memory.id))}] ${escapeMemoryContextText(readableMemoryKind(memory))} — ${escapeMemoryContextText(preview)}`
 }
 
 interface DescriptorSelectionState {
@@ -805,6 +872,7 @@ function appendLayeredDescriptors(state: DescriptorSelectionState, limits: { max
   }
 }
 
+// Session-start full bodies use the same escaped blockquote rendering as prompt-time blocks, while descriptor lines are compacted and escaped before insertion.
 export function renderSessionStartMemoryContext(input: {
   fullBodyMemories: MemoryRecord[]
   descriptorMemories: MemoryRecord[]
@@ -824,7 +892,7 @@ export function renderSessionStartMemoryContext(input: {
     )
     for (const group of groupMemoriesForContext(input.fullBodyMemories, { projectScope: input.projectScope, latestHandoffIds: input.latestHandoffIds })) {
       lines.push("", `### ${group.title}`, "")
-      for (const memory of group.memories) lines.push(`- **${readableMemoryKind(memory)}**`, `  ${memory.text}`)
+      for (const memory of group.memories) lines.push(...renderFullBodyMemory(memory))
     }
   }
 

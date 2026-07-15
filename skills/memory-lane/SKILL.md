@@ -137,6 +137,7 @@ Avoid silent deletion/rejection/cleanup without explicit user approval.
 Automatic lifecycle context is controlled by `memory.contextPolicy`:
 
 - `selective` injects bounded selected approved memories for eligible ordinary/topic-specific prompts.
+  Injected memory bodies are XML-escaped and rendered as nested Markdown blockquotes, and rendered budgets count the escaped blockquote text.
 - `policy-only` injects guidance to use Memory Lane tools without memory bodies.
 - `off` disables automatic lifecycle context while preserving explicit CLI/MCP tools and save hooks.
 
@@ -145,7 +146,10 @@ It is a cue to inspect continuity/status/dashboard/roadmap before answering from
 Broad project-position/next-work prompts should receive guidance without ordinary recall bodies; topic-specific prompts can still include bounded relevant memory.
 Generated Pi bridges use the shared `memory-lane route --prompt <text> --json` CLI decision so they stay in parity with repo-local adapters, including deduped continuity rendering and promoted warning inspection actions.
 
-At `SessionStart`, Memory Lane may inject a compact `Continuity notice` in `policy-only` or `selective` modes. In `selective` mode, it can also render tiny always-on memories plus a `Memory Index` of descriptor cards; structured descriptors use stored `description` and `fetchHint` metadata when present, otherwise generated previews. The notice shares the existing SessionStart budget and omits memory ids, memory text, transcripts, and tool outputs.
+At `SessionStart`, Memory Lane may inject a compact `Continuity notice` in `policy-only` or `selective` modes.
+In `selective` mode, it can also render tiny always-on memories plus a `Memory Index` of descriptor cards; tiny full bodies use escaped nested blockquotes, and structured descriptors use stored `description` and `fetchHint` metadata when present, otherwise generated previews.
+Descriptor fields are compacted to one escaped line.
+The notice shares the existing SessionStart budget and omits memory ids, memory text, transcripts, and tool outputs.
 
 ## Hook adapters and harness boundaries
 

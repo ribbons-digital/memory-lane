@@ -92,11 +92,17 @@ Start with project-level `.codex/hooks.json` while testing Memory Lane in one re
 
 Codex tool matcher names can vary by version. If `PostToolUse` does not fire, adjust the matcher to the shell tool name shown by your Codex installation.
 
-`SessionStart` injects compact session-opening context when a new Codex session begins. In `selective` mode, it can include tiny always-on memory bodies plus `Memory Index` descriptor cards that point to exact `memory-lane show|get <id>` inspection; descriptor cards use stored metadata when present and generated previews otherwise. It uses a stricter budget than `UserPromptSubmit` and does not dump the full project history. It is safe to leave enabled alongside `UserPromptSubmit`.
+`SessionStart` injects compact session-opening context when a new Codex session begins.
+In `selective` mode, it can include tiny always-on memory bodies plus `Memory Index` descriptor cards that point to exact `memory-lane show|get <id>` inspection; descriptor cards use stored metadata when present and generated previews otherwise.
+Tiny memory bodies are XML-escaped and rendered as nested Markdown blockquotes, and descriptor fields are compacted to one escaped line.
+It uses a stricter rendered-context budget than `UserPromptSubmit` and does not dump the full project history.
+It is safe to leave enabled alongside `UserPromptSubmit`.
 
 ## Context budget
 
-`UserPromptSubmit` uses the shared prompt route decision before Codex processes the prompt. Low-signal prompts such as `ok` or `thanks` inject nothing, memory-management prompts get list/status/review guidance, broad project-position or next-work prompts get continuity guidance without ordinary recall bodies, and eligible ordinary or topic-specific prompts can receive relevant approved memories within strict item and character limits.
+`UserPromptSubmit` uses the shared prompt route decision before Codex processes the prompt.
+Low-signal prompts such as `ok` or `thanks` inject nothing, memory-management prompts get list/status/review guidance, broad project-position or next-work prompts get continuity guidance without ordinary recall bodies, and eligible ordinary or topic-specific prompts can receive relevant approved memories within strict item and rendered-character limits.
+Injected memory bodies are XML-escaped and rendered as nested Markdown blockquotes so stored memory text cannot close the guarded context wrapper or create top-level Markdown structure.
 
 `Stop`, `PreCompact`, and `PostToolUse` do not inject context. They save concise memories externally and are silent by default. `PreCompact` can save a pending session summary immediately before Codex compacts context when `memory.sessionEndSummary.enabled` is configured, `memory.sessionEndSummary.requireConfirmation` is `false`, and `memory.preCompactSummary.enabled` is omitted or not `false`; set `memory.preCompactSummary.enabled` to `false` to opt out. `Stop` only runs session-summary automation when the latest user message explicitly asks for it, such as "remember this session", "save a session summary", or "summarize this session to memory". If hook initialization fails because storage, config, or plugins cannot be loaded, Memory Lane returns `{}` and exits successfully so Codex is not blocked; set `MEMORY_LANE_HOOK_DEBUG=1` to also print the initialization failure on stderr.
 
