@@ -15,20 +15,46 @@ function Err($message) {
     exit 1
 }
 
+function Start-Deferred-Removal($path, $processId) {
+    if ("$processId" -notmatch "^\d+$") {
+        Err "invalid upgrade process id"
+    }
+    $escapedPath = $path.Replace("'", "''")
+    $command = "Wait-Process -Id $processId -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '$escapedPath' -Force -ErrorAction SilentlyContinue"
+    $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+    Start-Process -FilePath "powershell.exe" `
+        -ArgumentList @("-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", $encodedCommand) `
+        -WindowStyle Hidden | Out-Null
+}
+
 function Restore-Backup {
+    if ($script:backupRestored) {
+        return
+    }
     if ($script:backupPath -and (Test-Path $script:backupPath)) {
+        if ($script:installPath -and (Test-Path $script:installPath)) {
+            Remove-Item $script:installPath -Force
+        }
         Move-Item $script:backupPath $script:installPath -Force
         Say "restored previous binary"
     } elseif ($script:installPath -and (Test-Path $script:installPath)) {
         Remove-Item $script:installPath -Force
     }
+    $script:backupRestored = $true
 }
 
 function Backup-Existing-Binary {
     $script:backupPath = $null
+    $script:backupWasRenamed = $false
+    $script:backupRestored = $false
     if (Test-Path $script:installPath) {
         $script:backupPath = "$script:installPath.backup.$PID"
-        Copy-Item $script:installPath $script:backupPath -Force
+        if ($env:MEMORY_LANE_UPGRADE_PID) {
+            Move-Item $script:installPath $script:backupPath -Force
+            $script:backupWasRenamed = $true
+        } else {
+            Copy-Item $script:installPath $script:backupPath -Force
+        }
     }
 }
 
@@ -39,7 +65,17 @@ function Verify-Installed-Binary {
         Err "installed binary failed smoke test; previous installation was restored"
     }
     if ($script:backupPath -and (Test-Path $script:backupPath)) {
-        Remove-Item $script:backupPath -Force
+        if ($script:backupWasRenamed) {
+            try {
+                Start-Deferred-Removal $script:backupPath $env:MEMORY_LANE_UPGRADE_PID
+                Say "scheduled previous binary cleanup"
+            } catch {
+                Restore-Backup
+                Err "could not schedule previous binary cleanup; previous installation was restored"
+            }
+        } else {
+            Remove-Item $script:backupPath -Force
+        }
     }
 }
 
@@ -54,8 +90,13 @@ if ($env:MEMORY_LANE_INSTALL_BINARY) {
     $script:installPath = "$installDir\memory-lane.exe"
     New-Item -ItemType Directory -Force -Path $installDir | Out-Null
     Backup-Existing-Binary
-    Copy-Item $binaryPath $script:installPath -Force
-    Verify-Installed-Binary
+    try {
+        Copy-Item $binaryPath $script:installPath -Force
+        Verify-Installed-Binary
+    } catch {
+        Restore-Backup
+        throw
+    }
 } else {
     if ($Version -eq "latest") {
         $url = "https://github.com/$Repo/releases/latest/download/$asset"
@@ -86,8 +127,13 @@ if ($env:MEMORY_LANE_INSTALL_BINARY) {
     $script:installPath = "$installDir\memory-lane.exe"
     New-Item -ItemType Directory -Force -Path $installDir | Out-Null
     Backup-Existing-Binary
-    Move-Item "$tmp\memory-lane-$suffix.exe" $script:installPath -Force
-    Verify-Installed-Binary
+    try {
+        Move-Item "$tmp\memory-lane-$suffix.exe" $script:installPath -Force
+        Verify-Installed-Binary
+    } catch {
+        Restore-Backup
+        throw
+    }
 }
 
 $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")

@@ -32,13 +32,16 @@ export interface ReapplyInstallManifestResult {
 export function installerEnvironment(
   baseEnv: NodeJS.ProcessEnv,
   installDir?: string,
+  upgradePid?: number,
 ): NodeJS.ProcessEnv {
-  return installDir ? { ...baseEnv, INSTALL_DIR: installDir } : { ...baseEnv }
+  const env: NodeJS.ProcessEnv = installDir ? { ...baseEnv, INSTALL_DIR: installDir } : { ...baseEnv }
+  if (upgradePid !== undefined) env.MEMORY_LANE_UPGRADE_PID = String(upgradePid)
+  return env
 }
 
-function runInstaller(scriptPath: string, installDir?: string): boolean {
+function runInstaller(scriptPath: string, installDir?: string, upgradePid?: number): boolean {
   const isWindows = os.platform() === "win32"
-  const env = installerEnvironment(process.env, installDir)
+  const env = installerEnvironment(process.env, installDir, upgradePid)
   const result = isWindows
     ? spawnSync("powershell", ["-ExecutionPolicy", "Bypass", "-File", scriptPath], { stdio: "inherit", env })
     : spawnSync("sh", [scriptPath], { stdio: "inherit", env })
@@ -240,31 +243,13 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
 
     console.log("Running installer...")
     const installDir = manifest ? path.dirname(binaryPath) : undefined
-    if (!runInstaller(scriptPath, installDir)) {
+    if (!runInstaller(scriptPath, installDir, isWindows ? process.pid : undefined)) {
       console.error("Installer failed. Please check the output above.")
       process.exit(1)
     }
 
     if (manifest && manifest.integrations.length > 0) {
       console.log("\nRe-configuring previously installed harnesses...")
-      if (isWindows) {
-        const options: InitOptions = {
-          binaryPath,
-          dataDir,
-          projectMode: false,
-          yes: true,
-          homeDir,
-          env: process.env,
-        }
-        const { configuredCount } = reapplyInstallManifest(options, manifest)
-        if (configuredCount === 0) {
-          console.log("\nNo previous harness configs were reapplied. Run `memory-lane init` to inspect integrations.")
-        } else {
-          console.log(`\nReapplied ${configuredCount} harness configuration(s).`)
-        }
-        console.log("Upgrade complete.")
-        return
-      }
 
       if (!reapplyManifestWithInstalledBinary(binaryPath, yes)) {
         console.error("Reconfiguring harnesses with the newly installed binary failed. Please run manually:")
@@ -277,12 +262,6 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
 
     if (manifest) {
       console.log("\nThe install manifest is valid but contains no integrations. Upgrade complete.")
-      return
-    }
-    if (isWindows) {
-      console.log("\nUpgrade script downloaded the new binary.")
-      console.log("Because Windows locks the running executable, please close this terminal and run:")
-      console.log("  memory-lane init --yes")
       return
     }
 

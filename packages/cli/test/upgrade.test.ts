@@ -172,10 +172,11 @@ describe("upgrade", () => {
     assert.ok(fs.readFileSync(path.join(home, ".pi/agent/extensions/memory-lane/index.ts"), "utf8").includes(binaryPath))
   })
 
-  it("passes the recorded binary directory to the release installer", () => {
-    assert.deepEqual(installerEnvironment({ KEEP_ME: "yes" }, "/custom/bin"), {
+  it("passes the recorded binary directory and Windows parent PID to the release installer", () => {
+    assert.deepEqual(installerEnvironment({ KEEP_ME: "yes" }, "/custom/bin", 1234), {
       KEEP_ME: "yes",
       INSTALL_DIR: "/custom/bin",
+      MEMORY_LANE_UPGRADE_PID: "1234",
     })
     assert.deepEqual(installerEnvironment({ KEEP_ME: "yes" }), { KEEP_ME: "yes" })
   })

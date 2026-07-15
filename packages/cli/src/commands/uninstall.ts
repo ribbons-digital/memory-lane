@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process"
+import type { ChildProcess, SpawnOptions } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -225,6 +227,57 @@ function removeIntegration(entry: InstallManifestEntry, homeDir: string): boolea
   return false
 }
 
+export interface BinaryRemovalSpawner {
+  (command: string, args: readonly string[], options: SpawnOptions): ChildProcess
+}
+
+export async function removeInstalledBinary(
+  binaryPath: string,
+  platform: NodeJS.Platform = process.platform,
+  parentPid: number = process.pid,
+  spawnProcess: BinaryRemovalSpawner = spawn,
+): Promise<"removed" | "scheduled"> {
+  if (platform !== "win32") {
+    fs.unlinkSync(binaryPath)
+    return "removed"
+  }
+
+  const pendingPath = `${binaryPath}.uninstall.${parentPid}.${Date.now()}`
+  fs.renameSync(binaryPath, pendingPath)
+  const helperCommand = [
+    "Wait-Process -Id $env:MEMORY_LANE_UNINSTALL_PARENT_PID -ErrorAction SilentlyContinue",
+    "Remove-Item -LiteralPath $env:MEMORY_LANE_UNINSTALL_PENDING_PATH -Force -ErrorAction SilentlyContinue",
+  ].join("; ")
+  const encodedCommand = Buffer.from(helperCommand, "utf16le").toString("base64")
+
+  try {
+    const child = spawnProcess(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", encodedCommand],
+      {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+        env: {
+          ...process.env,
+          MEMORY_LANE_UNINSTALL_PARENT_PID: String(parentPid),
+          MEMORY_LANE_UNINSTALL_PENDING_PATH: pendingPath,
+        },
+      },
+    )
+    await new Promise<void>((resolve, reject) => {
+      child.once("spawn", resolve)
+      child.once("error", reject)
+    })
+    child.unref()
+    return "scheduled"
+  } catch (error) {
+    fs.renameSync(pendingPath, binaryPath)
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Could not schedule Windows binary removal: ${message}`)
+  }
+}
+
 async function uninstallOnlyOmp(
   manifest: InstallManifest,
   dataDir: string,
@@ -300,8 +353,10 @@ export async function handleUninstall(argv: string[]): Promise<void> {
 
   if (removeIntegrations) {
     if (fs.existsSync(binaryPath)) {
-      fs.unlinkSync(binaryPath)
-      console.log(`  ✓ Removed binary: ${binaryPath}`)
+      const binaryRemoval = await removeInstalledBinary(binaryPath)
+      console.log(binaryRemoval === "scheduled"
+        ? `  ✓ Scheduled binary removal after exit: ${binaryPath}`
+        : `  ✓ Removed binary: ${binaryPath}`)
     }
     fs.rmSync(read.path, { force: true })
   }
