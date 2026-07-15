@@ -48,6 +48,19 @@ function runInstaller(scriptPath: string, installDir?: string, upgradePid?: numb
   return result.status === 0
 }
 
+function finalizeWindowsUpgrade(
+  scriptPath: string,
+  action: "Commit" | "Rollback",
+  installDir?: string,
+): boolean {
+  const env = installerEnvironment(process.env, installDir, process.pid)
+  return spawnSync(
+    "powershell",
+    ["-ExecutionPolicy", "Bypass", "-File", scriptPath, "-UpgradeAction", action],
+    { stdio: "inherit", env },
+  ).status === 0
+}
+
 function downloadWithCurl(url: string, dest: string): boolean {
   const result = spawnSync("curl", ["-fsSL", url, "-o", dest], { stdio: "inherit" })
   return result.status === 0
@@ -232,6 +245,15 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-upgrade-"))
   const scriptPath = path.join(tmpDir, isWindows ? "install.ps1" : "install.sh")
+  let pendingWindowsUpgrade = false
+  let installDir: string | undefined
+  const commitWindowsUpgrade = (): void => {
+    if (!pendingWindowsUpgrade) return
+    if (!finalizeWindowsUpgrade(scriptPath, "Commit", installDir)) {
+      throw new Error("Could not finalize the Windows upgrade.")
+    }
+    pendingWindowsUpgrade = false
+  }
   try {
     console.log("Downloading latest installer...")
     if (!download(url, scriptPath)) {
@@ -242,36 +264,46 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
     }
 
     console.log("Running installer...")
-    const installDir = manifest ? path.dirname(binaryPath) : undefined
+    installDir = manifest ? path.dirname(binaryPath) : undefined
     if (!runInstaller(scriptPath, installDir, isWindows ? process.pid : undefined)) {
-      console.error("Installer failed. Please check the output above.")
-      process.exit(1)
+      if (isWindows && !finalizeWindowsUpgrade(scriptPath, "Rollback", installDir)) {
+        console.error("Failed to restore the previous Windows executable.")
+      }
+      throw new Error("Installer failed. Please check the output above.")
     }
+    pendingWindowsUpgrade = isWindows
 
     if (manifest && manifest.integrations.length > 0) {
       console.log("\nRe-configuring previously installed harnesses...")
 
       if (!reapplyManifestWithInstalledBinary(binaryPath, yes)) {
-        console.error("Reconfiguring harnesses with the newly installed binary failed. Please run manually:")
-        console.error(`  ${binaryPath} upgrade ${REAPPLY_INSTALL_MANIFEST_FLAG}${yes ? " --yes" : ""}`)
-        process.exit(1)
+        throw new Error("Reconfiguring harnesses with the newly installed binary failed.")
       }
+      commitWindowsUpgrade()
       console.log("Upgrade complete.")
       return
     }
 
     if (manifest) {
+      commitWindowsUpgrade()
       console.log("\nThe install manifest is valid but contains no integrations. Upgrade complete.")
       return
     }
 
     console.log("\nNo previous install manifest found. Running first-time setup...")
     if (!runInit(binaryPath, yes)) {
-      console.error("Init failed after upgrade. Please run manually:")
-      console.error(`  memory-lane init${yes ? " --yes" : ""}`)
-      process.exit(1)
+      throw new Error("Init failed after upgrade.")
     }
+    commitWindowsUpgrade()
     console.log("\nUpgrade complete.")
+  } catch (error) {
+    if (pendingWindowsUpgrade) {
+      if (!finalizeWindowsUpgrade(scriptPath, "Rollback", installDir)) {
+        console.error("Failed to restore the previous Windows executable.")
+      }
+      pendingWindowsUpgrade = false
+    }
+    throw error
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true })
   }

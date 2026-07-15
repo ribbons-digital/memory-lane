@@ -55,7 +55,7 @@ async function main(): Promise<void> {
   if (process.platform !== "win32") throw new Error("Windows self-maintenance smoke must run on Windows")
 
   const repo = process.cwd()
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-windows-maintenance-"))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-[paths]-"))
   const home = path.join(root, "home")
   const installDir = path.join(home, "bin")
   const installPath = path.join(installDir, "memory-lane.exe")
@@ -65,7 +65,7 @@ async function main(): Promise<void> {
   const failingReplacementSource = path.join(root, "failing-replacement.ts")
   fs.mkdirSync(path.dirname(replacementPath), { recursive: true })
   fs.mkdirSync(installDir, { recursive: true })
-  fs.writeFileSync(holderSource, "setInterval(() => {}, 1_000)\n", "utf8")
+  fs.writeFileSync(holderSource, "if (process.argv.includes(\"--identity\")) { console.log(\"old binary\"); process.exit(0) }\nsetInterval(() => {}, 1_000)\n", "utf8")
   fs.writeFileSync(failingReplacementSource, "if (process.argv.includes(\"--smoke-test\")) process.exit(7)\nsetInterval(() => {}, 1_000)\n", "utf8")
 
   let runningOldBinary: ChildProcess | undefined
@@ -121,16 +121,48 @@ async function main(): Promise<void> {
       false,
       "failed replacement must not strand a backup",
     )
+    assert.equal(
+      fs.readdirSync(installDir).some((name) => name.startsWith("memory-lane.exe.upgrade.")),
+      false,
+      "failed replacement must not strand a transaction",
+    )
 
+    const backupPath = `${installPath}.backup.${runningOldBinary.pid}`
+    const transactionPath = `${installPath}.upgrade.${runningOldBinary.pid}`
     run("powershell.exe", installerArgs, {
       cwd: repo,
       env: installerEnv,
     })
+    assert.equal(fs.existsSync(backupPath), true, "installer must retain the backup until post-install work succeeds")
+    assert.equal(fs.existsSync(transactionPath), true, "installer must retain the transaction until post-install work succeeds")
 
     const smoke = spawnSync(installPath, ["--smoke-test"], { encoding: "utf8" })
     assert.equal(smoke.status, 0, smoke.stderr)
     assert.match(smoke.stdout, /memory-lane ok/u)
     assert.equal(runningOldBinary.exitCode, null, "old executable must still be running when replacement succeeds")
+
+    run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
+      cwd: repo,
+      env: installerEnv,
+    })
+    assert.equal(fs.existsSync(backupPath), false, "post-install failure rollback must consume the backup")
+    assert.equal(fs.existsSync(transactionPath), false, "post-install failure rollback must close the transaction")
+    const restored = spawnSync(installPath, ["--identity"], { encoding: "utf8" })
+    assert.equal(restored.status, 0, restored.stderr)
+    assert.match(restored.stdout, /old binary/u)
+    assert.equal(runningOldBinary.exitCode, null, "post-install rollback must leave the old process running")
+
+    run("powershell.exe", installerArgs, {
+      cwd: repo,
+      env: installerEnv,
+    })
+    assert.equal(fs.existsSync(backupPath), true, "successful replacement must remain rollbackable before commit")
+    run("powershell.exe", [...installerArgs, "-UpgradeAction", "Commit"], {
+      cwd: repo,
+      env: installerEnv,
+    })
+    assert.equal(fs.existsSync(backupPath), true, "committed backup must remain while the parent is running")
+    assert.equal(fs.existsSync(transactionPath), false, "successful post-install work must commit the transaction")
 
     const oldBinaryExit = waitForExit(runningOldBinary)
     runningOldBinary.kill()
