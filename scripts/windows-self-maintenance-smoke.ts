@@ -269,7 +269,7 @@ async function main(): Promise<void> {
     assert.equal(recoveryOwner.phase, "recovery", "installer success must wait for durable recovery lease handoff")
     assert.equal(recoveryOwner.token, installerEnv.MEMORY_LANE_UPGRADE_LOCK_OWNER)
     assert.match(recoveryOwner.processStartedAt, /^\d+$/u)
-    assert.equal(recoveryOwner.parentPid, runningOldBinary.pid)
+    assert.equal(recoveryOwner.parentPid, String(runningOldBinary.pid))
     assert.equal(recoveryOwner.parentProcessStartedAt, parentStartedAt)
     assert.equal(recoveryOwner.recoveryPid, recoveryOwner.pid)
     assert.equal(recoveryOwner.recoveryProcessStartedAt, recoveryOwner.processStartedAt)
