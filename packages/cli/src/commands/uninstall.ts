@@ -399,7 +399,12 @@ export async function removeInstalledBinary(
     "  Remove-Item -LiteralPath $env:MEMORY_LANE_UNINSTALL_RECOVERY_PATH -Force -ErrorAction SilentlyContinue",
     "}",
   ].join("\n")
-  const encodedCommand = Buffer.from(helperCommand, "utf16le").toString("base64")
+  const encodedHelperCommand = Buffer.from(helperCommand, "utf16le").toString("base64")
+  const launcherCommand = [
+    "$arguments = @('-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', $env:MEMORY_LANE_UNINSTALL_HELPER_COMMAND)",
+    "Start-Process -FilePath 'powershell.exe' -ArgumentList $arguments -WindowStyle Hidden -ErrorAction Stop | Out-Null",
+  ].join("\n")
+  const encodedLauncherCommand = Buffer.from(launcherCommand, "utf16le").toString("base64")
 
   try {
     if (recoveryPath) {
@@ -416,15 +421,15 @@ export async function removeInstalledBinary(
     }
     fs.renameSync(binaryPath, pendingPath)
     renamed = true
-    const child = spawnProcess(
+    const launcher = spawnProcess(
       "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", encodedCommand],
+      ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", encodedLauncherCommand],
       {
-        detached: true,
         stdio: "ignore",
         windowsHide: true,
         env: {
           ...process.env,
+          MEMORY_LANE_UNINSTALL_HELPER_COMMAND: encodedHelperCommand,
           MEMORY_LANE_UNINSTALL_PARENT_PID: String(parentPid),
           MEMORY_LANE_UNINSTALL_PARENT_STARTED_AT: parentStartedAt,
           MEMORY_LANE_UNINSTALL_PENDING_PATH: pendingPath,
@@ -433,10 +438,12 @@ export async function removeInstalledBinary(
       },
     )
     await new Promise<void>((resolve, reject) => {
-      child.once("spawn", resolve)
-      child.once("error", reject)
+      launcher.once("error", reject)
+      launcher.once("close", (code) => {
+        if (code === 0) resolve()
+        else reject(new Error(`cleanup helper launcher exited with code ${code ?? "unknown"}`))
+      })
     })
-    child.unref()
     return "scheduled"
   } catch (error) {
     if (renamed && fs.existsSync(pendingPath) && !fs.existsSync(binaryPath)) fs.renameSync(pendingPath, binaryPath)

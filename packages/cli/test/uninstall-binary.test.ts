@@ -9,10 +9,12 @@ import { tempDir } from "../../core/test/helpers.js"
 import { removeInstalledBinary, sweepPendingBinaryRemoval } from "../src/commands/uninstall.js"
 import type { BinaryRemovalSpawner, ProcessIdentityInspector } from "../src/commands/uninstall.js"
 
-function childThat(event: "spawn" | "error"): ChildProcess {
+function childThat(event: "close" | "error", exitCode: number = 0): ChildProcess {
   const child = new EventEmitter() as ChildProcess
-  child.unref = () => child
-  queueMicrotask(() => child.emit(event, event === "error" ? new Error("helper unavailable") : undefined))
+  queueMicrotask(() => {
+    if (event === "error") child.emit("error", new Error("helper unavailable"))
+    else child.emit("close", exitCode, null)
+  })
   return child
 }
 
@@ -33,7 +35,7 @@ describe("installed binary removal", () => {
     let invocation: { command: string; args: readonly string[]; options: SpawnOptions } | undefined
     const spawnStub: BinaryRemovalSpawner = (command, args, options) => {
       invocation = { command, args, options }
-      return childThat("spawn")
+      return childThat("close")
     }
 
     const recoveryPath = path.join(dir, "pending-uninstall.json")
@@ -45,15 +47,20 @@ describe("installed binary removal", () => {
     const pending = fs.readdirSync(dir).filter((name) => name.startsWith("memory-lane.exe.uninstall."))
     assert.deepEqual(pending, ["memory-lane.exe.uninstall.4321.638500000000000000"])
     assert.equal(invocation?.command, "powershell.exe")
-    assert.equal(invocation?.options.detached, true)
+    assert.equal(invocation?.options.detached, undefined)
     assert.equal(invocation?.options.env?.MEMORY_LANE_UNINSTALL_PARENT_PID, "4321")
     assert.equal(invocation?.options.env?.MEMORY_LANE_UNINSTALL_PARENT_STARTED_AT, "638500000000000000")
     assert.equal(invocation?.options.env?.MEMORY_LANE_UNINSTALL_PENDING_PATH, path.join(dir, pending[0]))
     assert.equal(invocation?.options.env?.MEMORY_LANE_UNINSTALL_RECOVERY_PATH, recoveryPath)
     assert.equal(fs.existsSync(recoveryPath), true)
-    const encodedCommand = invocation?.args.at(-1)
-    assert.equal(typeof encodedCommand, "string")
-    const helperCommand = Buffer.from(encodedCommand ?? "", "base64").toString("utf16le")
+    const encodedLauncherCommand = invocation?.args.at(-1)
+    assert.equal(typeof encodedLauncherCommand, "string")
+    const launcherCommand = Buffer.from(encodedLauncherCommand ?? "", "base64").toString("utf16le")
+    assert.match(launcherCommand, /Start-Process -FilePath 'powershell\.exe'/u)
+    assert.match(launcherCommand, /MEMORY_LANE_UNINSTALL_HELPER_COMMAND/u)
+    const encodedHelperCommand = invocation?.options.env?.MEMORY_LANE_UNINSTALL_HELPER_COMMAND
+    assert.equal(typeof encodedHelperCommand, "string")
+    const helperCommand = Buffer.from(encodedHelperCommand ?? "", "base64").toString("utf16le")
     assert.match(helperCommand, /StartTime\.ToUniversalTime\(\)\.Ticks/u)
     assert.match(helperCommand, /\$identity = 'unknown'/u)
     assert.match(helperCommand, /NoProcessFoundForGivenId/u)
@@ -117,7 +124,7 @@ describe("installed binary removal", () => {
     let invocation: { args: readonly string[]; options: SpawnOptions } | undefined
     const spawnStub: BinaryRemovalSpawner = (_command, args, options) => {
       invocation = { args, options }
-      return childThat("spawn")
+      return childThat("close")
     }
     await removeInstalledBinary(binaryPath, "win32", process.pid, spawnStub, () => "1")
 
@@ -166,7 +173,10 @@ describe("installed binary removal", () => {
     const transientPath = path.join(dir, "transient.exe")
     const attemptsPath = path.join(dir, "inspection-attempts.txt")
     fs.writeFileSync(transientPath, "pending", "utf8")
-    const helperCommand = Buffer.from(String(invocation?.args.at(-1)), "base64").toString("utf16le")
+    const helperCommand = Buffer.from(
+      String(invocation?.options.env?.MEMORY_LANE_UNINSTALL_HELPER_COMMAND),
+      "base64",
+    ).toString("utf16le")
     const transientCommand = [
       "$script:inspectionAttempts = 0",
       "function Get-Process {",
@@ -222,6 +232,21 @@ describe("installed binary removal", () => {
     await assert.rejects(
       removeInstalledBinary(binaryPath, "win32", 9876, spawnStub, () => "638500000000000000", recoveryPath),
       /Could not schedule Windows binary removal: helper unavailable/u,
+    )
+    assert.equal(fs.readFileSync(binaryPath, "utf8"), "binary")
+    assert.deepEqual(fs.readdirSync(dir), ["memory-lane.exe"])
+  })
+
+  it("restores the Windows binary when the durable helper launcher fails", async () => {
+    const dir = tempDir()
+    const binaryPath = path.join(dir, "memory-lane.exe")
+    fs.writeFileSync(binaryPath, "binary", "utf8")
+    const recoveryPath = path.join(dir, "pending-uninstall.json")
+    const spawnStub: BinaryRemovalSpawner = () => childThat("close", 1)
+
+    await assert.rejects(
+      removeInstalledBinary(binaryPath, "win32", 9876, spawnStub, () => "638500000000000000", recoveryPath),
+      /Could not schedule Windows binary removal: cleanup helper launcher exited with code 1/u,
     )
     assert.equal(fs.readFileSync(binaryPath, "utf8"), "binary")
     assert.deepEqual(fs.readdirSync(dir), ["memory-lane.exe"])
