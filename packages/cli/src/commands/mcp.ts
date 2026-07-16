@@ -1,12 +1,16 @@
-import { getDefaultConfigPath, loadConfig } from "@memory-lane/core"
+import { loadConfig } from "@memory-lane/core"
 import { main as runMcpServer } from "@memory-lane/mcp-server"
+import * as os from "node:os"
+import * as path from "node:path"
 import type { BundledPluginModule } from "@memory-lane/plugin-api"
 import { resolveBundledPlugin } from "../plugins.js"
 import { formatError } from "../formatters.js"
 import type { CliCommandContext } from "@memory-lane/plugin-api"
 
 export function resolveMcpConfigPath(): string {
-  return getDefaultConfigPath()
+  if (process.env.MEMORY_LANE_CONFIG) return process.env.MEMORY_LANE_CONFIG
+  const homeDir = process.env.HOME || os.homedir()
+  return path.join(homeDir, ".memory-lane", "config.json")
 }
 
 export async function handleMcp(ctx?: CliCommandContext): Promise<void> {

@@ -172,6 +172,63 @@ function Restore-Backup {
     try { Cleanup-Upgrade-Transaction } catch {}
 }
 
+function Update-Upgrade-Lock-Lease {
+    $transaction = Read-Upgrade-Transaction
+    if (-not $transaction) {
+        return $false
+    }
+    if (-not $transaction.LockPath) {
+        return $true
+    }
+    if (-not (Test-Path -LiteralPath $transaction.LockPath)) {
+        return $false
+    }
+    $ownerPath = Join-Path $transaction.LockPath "owner"
+    if (-not (Test-Path -LiteralPath $ownerPath)) {
+        return $false
+    }
+    $lockOwner = (Get-Content -LiteralPath $ownerPath -Raw) | ConvertFrom-Json
+    if ($lockOwner.Token -ne $transaction.LockOwner) {
+        return $false
+    }
+    $temporaryOwnerPath = Join-Path $transaction.LockPath "owner.$PID.tmp"
+    try {
+        $owner = [PSCustomObject]@{
+            pid = $PID
+            token = $transaction.LockOwner
+            createdAt = $lockOwner.createdAt
+            heartbeatAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            phase = "recovery"
+        }
+        $json = $owner | ConvertTo-Json -Compress
+        [IO.File]::WriteAllText($temporaryOwnerPath, $json, [Text.UTF8Encoding]::new($false))
+        [IO.File]::Replace($temporaryOwnerPath, $ownerPath, $null)
+        return $true
+    } finally {
+        if (Test-Path -LiteralPath $temporaryOwnerPath) {
+            Remove-Item -LiteralPath $temporaryOwnerPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Wait-For-Upgrade-Process($processId) {
+    while (Get-Process -Id $processId -ErrorAction SilentlyContinue) {
+        if (-not (Update-Upgrade-Lock-Lease)) {
+            return $false
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    return $true
+}
+
+function Cleanup-Committed-Upgrade-After-Lost-Lease {
+    $script:transaction = $null
+    $transaction = Read-Upgrade-Transaction
+    if ($transaction -and $transaction.State -eq "committed") {
+        Cleanup-Upgrade-Transaction
+    }
+}
+
 function Start-Upgrade-Recovery {
     $escapedScriptPath = $PSCommandPath.Replace("'", "''")
     $command = "& '$escapedScriptPath' -UpgradeAction Recover"
@@ -235,9 +292,21 @@ if ($UpgradeAction) {
     $script:transaction = $null
     if ($UpgradeAction -eq "Recover") {
         $pendingTransaction = Read-Upgrade-Transaction
-        Wait-Process -Id $env:MEMORY_LANE_UPGRADE_PID -ErrorAction SilentlyContinue
-        if ($pendingTransaction) {
-            Wait-Process -Id $pendingTransaction.InstallerPid -ErrorAction SilentlyContinue
+        if (-not (Update-Upgrade-Lock-Lease)) {
+            Cleanup-Committed-Upgrade-After-Lost-Lease
+            exit 0
+        }
+        if (-not (Wait-For-Upgrade-Process $env:MEMORY_LANE_UPGRADE_PID)) {
+            Cleanup-Committed-Upgrade-After-Lost-Lease
+            exit 0
+        }
+        if ($pendingTransaction -and -not (Wait-For-Upgrade-Process $pendingTransaction.InstallerPid)) {
+            Cleanup-Committed-Upgrade-After-Lost-Lease
+            exit 0
+        }
+        if (-not (Update-Upgrade-Lock-Lease)) {
+            Cleanup-Committed-Upgrade-After-Lost-Lease
+            exit 0
         }
         $script:transaction = $null
     }

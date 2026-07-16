@@ -240,10 +240,18 @@ describe("upgrade", () => {
     assert.equal(owner.pid, process.pid)
     assert.equal(owner.token, lock.owner)
     assert.equal(typeof owner.createdAt, "number")
+    assert.equal(owner.heartbeatAt, owner.createdAt)
+    assert.equal(owner.phase, "starting")
     assert.throws(() => acquireUpgradeLock(installDir, process.pid), /already in progress/u)
     fs.writeFileSync(
       path.join(lock.path, "owner"),
-      JSON.stringify({ pid: process.pid, token: "different-owner", createdAt: Date.now() }),
+      JSON.stringify({
+        pid: process.pid,
+        token: "different-owner",
+        createdAt: Date.now(),
+        heartbeatAt: Date.now(),
+        phase: "starting",
+      }),
       "utf8",
     )
     releaseUpgradeLock(lock)
@@ -288,21 +296,47 @@ describe("upgrade", () => {
     assert.equal(fs.existsSync(lockPath), false)
   })
 
-  it("reclaims an old lock even when its PID has been reused", () => {
+  it("preserves a fresh recovery lease after the parent exits", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const now = 2_000_000
+    const recoveryOwner = {
+      pid: 9876,
+      token: "recovery-owner",
+      createdAt: now - 10_000,
+      heartbeatAt: now,
+      phase: "recovery",
+    }
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify(recoveryOwner), "utf8")
+
+    assert.throws(
+      () => acquireUpgradeLock(installDir, process.pid, { now: () => now, staleAfterMs: 1_000 }),
+      /already in progress/u,
+    )
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(lockPath, "owner"), "utf8")), recoveryOwner)
+  })
+
+  it("reclaims a recovery lease only after its heartbeat expires", () => {
     const installDir = tempDir()
     const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
     const now = 2_000_000
     fs.mkdirSync(lockPath)
     fs.writeFileSync(
       path.join(lockPath, "owner"),
-      JSON.stringify({ pid: process.pid, token: "stale-owner", createdAt: now - 1_001 }),
+      JSON.stringify({
+        pid: process.pid,
+        token: "stale-owner",
+        createdAt: now - 10_000,
+        heartbeatAt: now - 1_001,
+        phase: "recovery",
+      }),
       "utf8",
     )
 
     const lock = acquireUpgradeLock(installDir, process.pid, {
       now: () => now,
       createToken: () => "replacement-owner",
-      isProcessAlive: () => true,
       staleAfterMs: 1_000,
     })
 
@@ -310,30 +344,17 @@ describe("upgrade", () => {
     releaseUpgradeLock(lock)
   })
 
-  it("does not reclaim a fresh lock whose owner token changes during inspection", () => {
+  it("does not let the parent release a recovery-owned lock", () => {
     const installDir = tempDir()
-    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    const ownerPath = path.join(lockPath, "owner")
-    const now = 2_000_000
-    const replacement = { pid: process.pid, token: "replacement-owner", createdAt: now }
-    let checks = 0
-    fs.mkdirSync(lockPath)
-    fs.writeFileSync(ownerPath, JSON.stringify({ pid: process.pid, token: "observed-owner", createdAt: now }), "utf8")
+    const lock = acquireUpgradeLock(installDir, process.pid)
+    const ownerPath = path.join(lock.path, "owner")
+    const owner = JSON.parse(fs.readFileSync(ownerPath, "utf8"))
+    fs.writeFileSync(ownerPath, JSON.stringify({ ...owner, pid: 9876, phase: "recovery" }), "utf8")
 
-    assert.throws(
-      () => acquireUpgradeLock(installDir, process.pid, {
-        now: () => now,
-        createToken: () => "new-owner",
-        isProcessAlive: () => {
-          checks += 1
-          if (checks === 1) fs.writeFileSync(ownerPath, JSON.stringify(replacement), "utf8")
-          return true
-        },
-        staleAfterMs: 1_000,
-      }),
-      /already in progress/u,
-    )
-    assert.deepEqual(JSON.parse(fs.readFileSync(ownerPath, "utf8")), replacement)
+    releaseUpgradeLock(lock)
+
+    assert.equal(fs.existsSync(lock.path), true)
+    fs.rmSync(lock.path, { recursive: true, force: true })
   })
 
   it("uses the HOME-based Windows binary directory when the manifest is missing", () => {
