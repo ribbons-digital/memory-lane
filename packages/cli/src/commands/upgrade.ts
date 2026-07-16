@@ -30,19 +30,104 @@ export interface ReapplyInstallManifestResult {
   manifest: InstallManifest
 }
 
+export interface ManifestTransaction {
+  path: string
+  backupPath: string
+  existed: boolean
+}
+
+export interface UpgradeLock {
+  path: string
+  owner: string
+}
+
+export function acquireUpgradeLock(installDir: string, upgradePid: number): UpgradeLock {
+  const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+  const ownerPath = path.join(lockPath, "owner")
+  const owner = String(upgradePid)
+  fs.mkdirSync(installDir, { recursive: true })
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      fs.mkdirSync(lockPath)
+      try {
+        fs.writeFileSync(ownerPath, owner, "utf8")
+      } catch (error) {
+        fs.rmSync(lockPath, { recursive: true, force: true })
+        throw error
+      }
+      return { path: lockPath, owner }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
+      let existingOwner = ""
+      try {
+        existingOwner = fs.readFileSync(ownerPath, "utf8").trim()
+      } catch (readError) {
+        if ((readError as NodeJS.ErrnoException).code !== "ENOENT") throw readError
+      }
+      const existingPid = Number(existingOwner)
+      try {
+        if (!Number.isInteger(existingPid) || existingPid <= 0) throw new Error("unknown owner")
+        process.kill(existingPid, 0)
+        throw new Error(`Another Memory Lane upgrade is already in progress (PID ${existingOwner}).`)
+      } catch (ownerError) {
+        if ((ownerError as NodeJS.ErrnoException).code !== "ESRCH") throw ownerError
+        const quarantinePath = `${lockPath}.stale.${process.pid}.${Date.now()}.${attempt}`
+        try {
+          fs.renameSync(lockPath, quarantinePath)
+          fs.rmSync(quarantinePath, { recursive: true, force: true })
+        } catch (renameError) {
+          if ((renameError as NodeJS.ErrnoException).code !== "ENOENT") throw renameError
+        }
+      }
+    }
+  }
+  throw new Error("Could not acquire the Memory Lane upgrade lock.")
+}
+
+export function releaseUpgradeLock(lock: UpgradeLock | undefined): void {
+  if (!lock || !fs.existsSync(lock.path)) return
+  const ownerPath = path.join(lock.path, "owner")
+  if (fs.readFileSync(ownerPath, "utf8").trim() === lock.owner) {
+    fs.rmSync(lock.path, { recursive: true, force: true })
+  }
+}
+
+export function snapshotInstallManifest(dataDir: string, upgradePid: number): ManifestTransaction {
+  const manifestPath = installManifestPath(dataDir)
+  const backupPath = `${manifestPath}.upgrade.${upgradePid}`
+  const existed = fs.existsSync(manifestPath)
+  if (existed) fs.copyFileSync(manifestPath, backupPath)
+  return { path: manifestPath, backupPath, existed }
+}
+
 export function installerEnvironment(
   baseEnv: NodeJS.ProcessEnv,
   installDir?: string,
   upgradePid?: number,
+  manifestTransaction?: ManifestTransaction,
+  upgradeLock?: UpgradeLock,
 ): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = installDir ? { ...baseEnv, INSTALL_DIR: installDir } : { ...baseEnv }
   if (upgradePid !== undefined) env.MEMORY_LANE_UPGRADE_PID = String(upgradePid)
+  if (manifestTransaction) {
+    env.MEMORY_LANE_UPGRADE_MANIFEST_PATH = manifestTransaction.path
+    env.MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH = manifestTransaction.backupPath
+    env.MEMORY_LANE_UPGRADE_MANIFEST_EXISTED = String(manifestTransaction.existed)
+  }
+  if (upgradeLock) env.MEMORY_LANE_UPGRADE_LOCK_PATH = upgradeLock.path
   return env
 }
 
-function runInstaller(scriptPath: string, installDir?: string, upgradePid?: number): boolean {
+function runInstaller(
+  scriptPath: string,
+  installDir?: string,
+  upgradePid?: number,
+  manifestTransaction?: ManifestTransaction,
+  upgradeLock?: UpgradeLock,
+): boolean {
   const isWindows = os.platform() === "win32"
-  const env = installerEnvironment(process.env, installDir, upgradePid)
+  const env = installerEnvironment(process.env, installDir, upgradePid, manifestTransaction, upgradeLock)
   const result = isWindows
     ? spawnSync("powershell", ["-ExecutionPolicy", "Bypass", "-File", scriptPath], { stdio: "inherit", env })
     : spawnSync("sh", [scriptPath], { stdio: "inherit", env })
@@ -53,8 +138,10 @@ function finalizeWindowsUpgrade(
   scriptPath: string,
   action: "Commit" | "Rollback",
   installDir?: string,
+  manifestTransaction?: ManifestTransaction,
+  upgradeLock?: UpgradeLock,
 ): boolean {
-  const env = installerEnvironment(process.env, installDir, process.pid)
+  const env = installerEnvironment(process.env, installDir, process.pid, manifestTransaction, upgradeLock)
   return spawnSync(
     "powershell",
     ["-ExecutionPolicy", "Bypass", "-File", scriptPath, "-UpgradeAction", action],
@@ -196,10 +283,6 @@ function installPreviouslyConfigured(
   return { results, replacements }
 }
 
-export function rollbackFirstInitManifest(dataDir: string): void {
-  fs.rmSync(installManifestPath(dataDir), { force: true })
-}
-
 export function reapplyInstallManifest(options: InitOptions, manifest: InstallManifest): ReapplyInstallManifestResult {
   validateManifestOmpConfigPaths(manifest)
   const { results, replacements } = installPreviouslyConfigured(options, manifest)
@@ -265,15 +348,16 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-upgrade-"))
   const scriptPath = path.join(tmpDir, isWindows ? "install.ps1" : "install.sh")
   let pendingWindowsUpgrade = false
-  let pendingFirstInitManifestRollback = false
   let installDir: string | undefined
+  let manifestTransaction: ManifestTransaction | undefined
+  let upgradeLock: UpgradeLock | undefined
+  let preserveUpgradeLock = false
   const commitWindowsUpgrade = (): void => {
     if (!pendingWindowsUpgrade) return
-    if (!finalizeWindowsUpgrade(scriptPath, "Commit", installDir)) {
+    if (!finalizeWindowsUpgrade(scriptPath, "Commit", installDir, manifestTransaction, upgradeLock)) {
       throw new Error("Could not finalize the Windows upgrade.")
     }
     pendingWindowsUpgrade = false
-    pendingFirstInitManifestRollback = false
   }
   try {
     console.log("Downloading latest installer...")
@@ -286,9 +370,17 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
 
     console.log("Running installer...")
     installDir = resolveInstallerDirectory(binaryPath, isWindows, manifest !== undefined)
-    if (!runInstaller(scriptPath, installDir, isWindows ? process.pid : undefined)) {
-      if (isWindows && !finalizeWindowsUpgrade(scriptPath, "Rollback", installDir)) {
-        console.error("Failed to restore the previous Windows executable.")
+    upgradeLock = isWindows ? acquireUpgradeLock(installDir!, process.pid) : undefined
+    manifestTransaction = isWindows ? snapshotInstallManifest(dataDir, process.pid) : undefined
+    if (!runInstaller(scriptPath, installDir, isWindows ? process.pid : undefined, manifestTransaction, upgradeLock)) {
+      if (isWindows) {
+        const restored = finalizeWindowsUpgrade(scriptPath, "Rollback", installDir, manifestTransaction, upgradeLock)
+        if (!restored) {
+          preserveUpgradeLock = true
+          console.error("Failed to restore the previous Windows executable.")
+        } else if (manifestTransaction) {
+          fs.rmSync(manifestTransaction.backupPath, { force: true })
+        }
       }
       throw new Error("Installer failed. Please check the output above.")
     }
@@ -312,7 +404,6 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
     }
 
     console.log("\nNo previous install manifest found. Running first-time setup...")
-    pendingFirstInitManifestRollback = isWindows
     if (!runInit(binaryPath, yes)) {
       throw new Error("Init failed after upgrade.")
     }
@@ -320,17 +411,15 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
     console.log("\nUpgrade complete.")
   } catch (error) {
     if (pendingWindowsUpgrade) {
-      if (!finalizeWindowsUpgrade(scriptPath, "Rollback", installDir)) {
+      if (!finalizeWindowsUpgrade(scriptPath, "Rollback", installDir, manifestTransaction, upgradeLock)) {
+        preserveUpgradeLock = true
         console.error("Failed to restore the previous Windows executable.")
       }
       pendingWindowsUpgrade = false
     }
-    if (pendingFirstInitManifestRollback) {
-      rollbackFirstInitManifest(dataDir)
-      pendingFirstInitManifestRollback = false
-    }
     throw error
   } finally {
+    if (!preserveUpgradeLock) releaseUpgradeLock(upgradeLock)
     fs.rmSync(tmpDir, { recursive: true, force: true })
   }
 }

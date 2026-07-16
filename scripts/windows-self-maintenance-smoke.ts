@@ -101,6 +101,8 @@ async function main(): Promise<void> {
     })
     assert.ok(runningOldBinary.pid, "running fixture must expose its process id")
 
+    const manifestPath = path.join(dataDir, "install.json")
+    const manifestBackupPath = `${manifestPath}.upgrade.${runningOldBinary.pid}`
     const installerEnv: NodeJS.ProcessEnv = {
       ...process.env,
       HOME: home,
@@ -108,6 +110,9 @@ async function main(): Promise<void> {
       INSTALL_DIR: installDir,
       MEMORY_LANE_INSTALL_BINARY: replacementPath,
       MEMORY_LANE_UPGRADE_PID: String(runningOldBinary.pid),
+      MEMORY_LANE_UPGRADE_MANIFEST_PATH: manifestPath,
+      MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH: manifestBackupPath,
+      MEMORY_LANE_UPGRADE_MANIFEST_EXISTED: "false",
     }
     const installerArgs = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(repo, "install.ps1")]
     const backupPath = `${installPath}.backup.${runningOldBinary.pid}`
@@ -124,10 +129,12 @@ async function main(): Promise<void> {
     assert.equal(fs.existsSync(installPath), true, "marker cleanup failure must preserve the restored executable path")
     assert.equal(fs.existsSync(backupPath), false, "marker write failure must not strand a backup")
     assert.equal(fs.existsSync(transactionPath), true, "blocked marker cleanup must remain best effort")
-    run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
+    const blockedMarkerRetry = spawnSync("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
       cwd: repo,
       env: installerEnv,
+      encoding: "utf8",
     })
+    assert.notEqual(blockedMarkerRetry.status, 0, "unreadable transaction residue must not report a known rollback")
     assert.equal(fs.existsSync(installPath), true, "cross-process rollback retry must preserve the restored executable")
     const restoredAfterCleanupFailure = spawnSync(installPath, ["--identity"], { encoding: "utf8" })
     assert.equal(restoredAfterCleanupFailure.status, 0, restoredAfterCleanupFailure.stderr)
@@ -153,6 +160,20 @@ async function main(): Promise<void> {
       "failed replacement must not strand a transaction",
     )
 
+    fs.mkdirSync(path.dirname(claudeConfigPath), { recursive: true })
+    fs.mkdirSync(dataDir, { recursive: true })
+    fs.writeFileSync(claudeConfigPath, "{bad json", "utf8")
+    const originalManifest = JSON.stringify({
+      version: "0.0.0-old",
+      installedAt: new Date().toISOString(),
+      binaryPath: installPath,
+      dataDir,
+      integrations: [{ harness: "claude-code-cli", configPath: claudeConfigPath }],
+    }, null, 2)
+    fs.writeFileSync(manifestPath, originalManifest, "utf8")
+    fs.copyFileSync(manifestPath, manifestBackupPath)
+    installerEnv.MEMORY_LANE_UPGRADE_MANIFEST_EXISTED = "true"
+
     run("powershell.exe", installerArgs, {
       cwd: repo,
       env: installerEnv,
@@ -164,17 +185,6 @@ async function main(): Promise<void> {
     assert.equal(smoke.status, 0, smoke.stderr)
     assert.match(smoke.stdout, /memory-lane ok/u)
     assert.equal(runningOldBinary.exitCode, null, "old executable must still be running when replacement succeeds")
-
-    fs.mkdirSync(path.dirname(claudeConfigPath), { recursive: true })
-    fs.mkdirSync(dataDir, { recursive: true })
-    fs.writeFileSync(claudeConfigPath, "{bad json", "utf8")
-    fs.writeFileSync(path.join(dataDir, "install.json"), JSON.stringify({
-      version: "0.0.0-old",
-      installedAt: new Date().toISOString(),
-      binaryPath: installPath,
-      dataDir,
-      integrations: [{ harness: "claude-code-cli", configPath: claudeConfigPath }],
-    }, null, 2), "utf8")
     const failedReapply = spawnSync(installPath, ["upgrade", "--reapply-install-manifest", "--yes"], {
       env: installerEnv,
       encoding: "utf8",
@@ -188,12 +198,14 @@ async function main(): Promise<void> {
     })
     assert.equal(fs.existsSync(backupPath), false, "post-install failure rollback must consume the backup")
     assert.equal(fs.existsSync(transactionPath), false, "post-install failure rollback must close the transaction")
+    assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest, "rollback must restore the original manifest")
     const restored = spawnSync(installPath, ["--identity"], { encoding: "utf8" })
     assert.equal(restored.status, 0, restored.stderr)
     assert.match(restored.stdout, /old binary/u)
     assert.equal(runningOldBinary.exitCode, null, "post-install rollback must leave the old process running")
 
     fs.writeFileSync(claudeConfigPath, "{}", "utf8")
+    fs.copyFileSync(manifestPath, manifestBackupPath)
     run("powershell.exe", installerArgs, {
       cwd: repo,
       env: installerEnv,
@@ -210,7 +222,7 @@ async function main(): Promise<void> {
       env: installerEnv,
     })
     assert.equal(fs.existsSync(backupPath), true, "committed backup must remain while the parent is running")
-    assert.equal(fs.existsSync(transactionPath), false, "successful post-install work must commit the transaction")
+    assert.equal(fs.existsSync(transactionPath), true, "committed transaction must remain recoverable until parent exit")
 
     const oldBinaryExit = waitForExit(runningOldBinary)
     runningOldBinary.kill()
@@ -220,6 +232,8 @@ async function main(): Promise<void> {
       () => !fs.readdirSync(installDir).some((name) => name.startsWith("memory-lane.exe.backup.")),
       "upgrade backup cleanup",
     )
+    await waitUntil(() => !fs.existsSync(transactionPath), "committed transaction cleanup")
+    await waitUntil(() => !fs.existsSync(manifestBackupPath), "manifest snapshot cleanup")
 
     fs.mkdirSync(dataDir, { recursive: true })
     fs.writeFileSync(path.join(dataDir, "memory.jsonl"), "{\"text\":\"preserve me\"}\n", "utf8")

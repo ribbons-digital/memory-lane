@@ -6,13 +6,15 @@ import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
 import {
+  acquireUpgradeLock,
   defaultInstalledBinaryPath,
   installerEnvironment,
   reapplyInstallManifest,
   reapplyManifestWithInstalledBinary,
-  rollbackFirstInitManifest,
+  releaseUpgradeLock,
   resolveInstallerDirectory,
   resolveUpgradeBinaryPath,
+  snapshotInstallManifest,
 } from "../src/commands/upgrade.js"
 import type { InstallManifest } from "../src/commands/upgrade.js"
 import { readInstallManifest, writeInstallManifest } from "../src/installer/manifest.js"
@@ -175,13 +177,34 @@ describe("upgrade", () => {
     assert.equal(readInstallManifest(dataDir).status, "missing")
   })
 
-  it("passes the recorded binary directory and Windows parent PID to the release installer", () => {
-    assert.deepEqual(installerEnvironment({ KEEP_ME: "yes" }, "/custom/bin", 1234), {
+  it("passes the Windows executable and manifest transaction to the release installer", () => {
+    const manifestTransaction = {
+      path: "C:\\Homes\\Ryan\\.memory-lane\\install.json",
+      backupPath: "C:\\Homes\\Ryan\\.memory-lane\\install.json.upgrade.1234",
+      existed: true,
+    }
+    const upgradeLock = { path: "C:\\custom\\bin\\.memory-lane-upgrade.lock", owner: "1234" }
+    assert.deepEqual(installerEnvironment({ KEEP_ME: "yes" }, "C:\\custom\\bin", 1234, manifestTransaction, upgradeLock), {
       KEEP_ME: "yes",
-      INSTALL_DIR: "/custom/bin",
+      INSTALL_DIR: "C:\\custom\\bin",
       MEMORY_LANE_UPGRADE_PID: "1234",
+      MEMORY_LANE_UPGRADE_MANIFEST_PATH: manifestTransaction.path,
+      MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH: manifestTransaction.backupPath,
+      MEMORY_LANE_UPGRADE_MANIFEST_EXISTED: "true",
+      MEMORY_LANE_UPGRADE_LOCK_PATH: upgradeLock.path,
     })
     assert.deepEqual(installerEnvironment({ KEEP_ME: "yes" }), { KEEP_ME: "yes" })
+  })
+
+  it("serializes Windows upgrades with an owner-checked lock", () => {
+    const installDir = tempDir()
+    const lock = acquireUpgradeLock(installDir, process.pid)
+
+    assert.throws(() => acquireUpgradeLock(installDir, process.pid), /already in progress/u)
+    fs.writeFileSync(path.join(lock.path, "owner"), "different-owner", "utf8")
+    releaseUpgradeLock(lock)
+    assert.equal(fs.existsSync(lock.path), true)
+    fs.rmSync(lock.path, { recursive: true, force: true })
   })
 
   it("uses the HOME-based Windows binary directory when the manifest is missing", () => {
@@ -198,22 +221,20 @@ describe("upgrade", () => {
     assert.equal(resolveInstallerDirectory(binaryPath, false, false, path.posix), undefined)
   })
 
-  it("rolls back a first-init manifest without removing user data or integration files", () => {
-    const home = tempDir()
-    const dataDir = path.join(home, ".memory-lane")
-    const memoryPath = path.join(dataDir, "memory.jsonl")
-    const integrationPath = path.join(home, ".pi", "agent", "extensions", "memory-lane", "index.ts")
-    fs.mkdirSync(path.dirname(integrationPath), { recursive: true })
-    fs.mkdirSync(dataDir, { recursive: true })
-    fs.writeFileSync(path.join(dataDir, "install.json"), "new manifest", "utf8")
-    fs.writeFileSync(memoryPath, "preserve memory", "utf8")
-    fs.writeFileSync(integrationPath, "preserve integration", "utf8")
+  it("snapshots existing and absent manifests for the Windows upgrade transaction", () => {
+    const existingDataDir = tempDir()
+    const existingManifestPath = path.join(existingDataDir, "install.json")
+    fs.writeFileSync(existingManifestPath, "original manifest", "utf8")
 
-    rollbackFirstInitManifest(dataDir)
+    const existing = snapshotInstallManifest(existingDataDir, 1234)
+    assert.equal(existing.existed, true)
+    assert.equal(existing.path, existingManifestPath)
+    assert.equal(fs.readFileSync(existing.backupPath, "utf8"), "original manifest")
 
-    assert.equal(readInstallManifest(dataDir).status, "missing")
-    assert.equal(fs.readFileSync(memoryPath, "utf8"), "preserve memory")
-    assert.equal(fs.readFileSync(integrationPath, "utf8"), "preserve integration")
+    const missingDataDir = tempDir()
+    const missing = snapshotInstallManifest(missingDataDir, 5678)
+    assert.equal(missing.existed, false)
+    assert.equal(fs.existsSync(missing.backupPath), false)
   })
 
   it("uses a manifest binary path and recorded OMP config path during reapply", () => {

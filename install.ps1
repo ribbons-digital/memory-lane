@@ -2,7 +2,7 @@
 # Usage: irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/install.ps1 | iex
 
 param(
-    [ValidateSet("Commit", "Rollback")]
+    [ValidateSet("Commit", "Rollback", "Recover")]
     [string]$UpgradeAction
 )
 
@@ -20,18 +20,6 @@ function Err($message) {
     exit 1
 }
 
-function Start-Deferred-Removal($path, $processId) {
-    if ("$processId" -notmatch "^\d+$") {
-        Err "invalid upgrade process id"
-    }
-    $escapedPath = $path.Replace("'", "''")
-    $command = "Wait-Process -Id $processId -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '$escapedPath' -Force -ErrorAction SilentlyContinue"
-    $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
-    Start-Process -FilePath "powershell.exe" `
-        -ArgumentList @("-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", $encodedCommand) `
-        -WindowStyle Hidden | Out-Null
-}
-
 function Get-Upgrade-Backup-Path {
     if ("$env:MEMORY_LANE_UPGRADE_PID" -notmatch "^\d+$") {
         Err "invalid upgrade process id"
@@ -46,42 +34,142 @@ function Get-Upgrade-Transaction-Path {
     return "$script:installPath.upgrade.$env:MEMORY_LANE_UPGRADE_PID"
 }
 
+function Read-Upgrade-Transaction {
+    if ($script:transaction) {
+        return $script:transaction
+    }
+    if (-not $script:transactionPath -or -not (Test-Path -LiteralPath $script:transactionPath)) {
+        return $null
+    }
+    $transaction = (Get-Content -LiteralPath $script:transactionPath -Raw) | ConvertFrom-Json
+    $validStates = @("pending", "committed", "restored")
+    $validBackupStates = @("not-backed-up", "backed-up", "no-backup", "restored")
+    $validManifestStates = @("existing", "missing", "restored")
+    if ($validStates -notcontains $transaction.State `
+        -or $validBackupStates -notcontains $transaction.BackupState `
+        -or $validManifestStates -notcontains $transaction.ManifestState `
+        -or $null -eq $transaction.ManifestPath `
+        -or $null -eq $transaction.ManifestBackupPath `
+        -or $null -eq $transaction.LockPath `
+        -or "$($transaction.InstallerPid)" -notmatch "^\d+$") {
+        throw "invalid upgrade transaction state"
+    }
+    $script:transaction = $transaction
+    return $script:transaction
+}
+
+function Save-Upgrade-Transaction {
+    $temporaryPath = "$script:transactionPath.tmp.$PID"
+    try {
+        $json = $script:transaction | ConvertTo-Json -Compress
+        [IO.File]::WriteAllText($temporaryPath, $json, [Text.UTF8Encoding]::new($false))
+        if (Test-Path -LiteralPath $script:transactionPath) {
+            [IO.File]::Replace($temporaryPath, $script:transactionPath, $null)
+        } else {
+            [IO.File]::Move($temporaryPath, $script:transactionPath)
+        }
+    } finally {
+        if (Test-Path -LiteralPath $temporaryPath) {
+            Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Remove-Transaction-Artifact($path) {
+    if ($path -and (Test-Path -LiteralPath $path)) {
+        Remove-Item -LiteralPath $path -Force
+    }
+}
+
+function Cleanup-Upgrade-Transaction {
+    $transaction = Read-Upgrade-Transaction
+    if ($transaction) {
+        Remove-Transaction-Artifact $script:backupPath
+        Remove-Transaction-Artifact $transaction.ManifestBackupPath
+        if ($transaction.LockPath -and (Test-Path -LiteralPath $transaction.LockPath)) {
+            Remove-Item -LiteralPath $transaction.LockPath -Recurse -Force
+        }
+    }
+    Remove-Transaction-Artifact $script:transactionPath
+}
+
 function Restore-Backup {
     if ($script:backupRestored) {
         return
     }
-    if ($script:transactionPath `
-        -and -not (Test-Path -LiteralPath $script:transactionPath) `
-        -and -not ($script:backupPath -and (Test-Path -LiteralPath $script:backupPath))) {
+    $transaction = Read-Upgrade-Transaction
+    if (-not $transaction) {
+        if ($script:backupPath -and (Test-Path -LiteralPath $script:backupPath)) {
+            if ($script:installPath -and (Test-Path -LiteralPath $script:installPath)) {
+                Remove-Item -LiteralPath $script:installPath -Force
+            }
+            Move-Item -LiteralPath $script:backupPath -Destination $script:installPath -Force
+            $script:backupRestored = $true
+            Say "restored previous binary"
+        }
         return
     }
-    $transactionState = $null
-    if ($script:transactionPath -and (Test-Path -LiteralPath $script:transactionPath)) {
-        try {
-            $transactionState = (Get-Content -LiteralPath $script:transactionPath -Raw).Trim()
-        } catch {}
+    if ($transaction.State -eq "restored") {
+        $script:backupRestored = $true
+        try { Cleanup-Upgrade-Transaction } catch {}
+        return
     }
-    if ($script:backupPath -and (Test-Path -LiteralPath $script:backupPath)) {
-        if ($script:installPath -and (Test-Path -LiteralPath $script:installPath)) {
+
+    if ($transaction.BackupState -eq "not-backed-up") {
+        if (Test-Path -LiteralPath $script:backupPath) {
+            $transaction.BackupState = "backed-up"
+            Save-Upgrade-Transaction
+        } else {
+            $transaction.BackupState = "restored"
+            Save-Upgrade-Transaction
+        }
+    }
+
+    if ($transaction.BackupState -eq "backed-up") {
+        if (-not (Test-Path -LiteralPath $script:backupPath)) {
+            throw "previous binary backup is missing"
+        }
+        if (Test-Path -LiteralPath $script:installPath) {
             Remove-Item -LiteralPath $script:installPath -Force
         }
         Move-Item -LiteralPath $script:backupPath -Destination $script:installPath -Force
-        $script:backupRestored = $true
+        $transaction.BackupState = "restored"
+        Save-Upgrade-Transaction
         Say "restored previous binary"
-    } elseif ($transactionState -eq "no-backup" -and $script:installPath -and (Test-Path -LiteralPath $script:installPath)) {
-        Remove-Item -LiteralPath $script:installPath -Force
-        $script:backupRestored = $true
-    } else {
-        $script:backupRestored = $true
+    } elseif ($transaction.BackupState -eq "no-backup") {
+        if (Test-Path -LiteralPath $script:installPath) {
+            Remove-Item -LiteralPath $script:installPath -Force
+        }
+        $transaction.BackupState = "restored"
+        Save-Upgrade-Transaction
     }
-    if ($script:transactionPath -and (Test-Path -LiteralPath $script:transactionPath)) {
-        try {
-            Set-Content -LiteralPath $script:transactionPath -Value "restored" -NoNewline
-        } catch {}
-        try {
-            Remove-Item -LiteralPath $script:transactionPath -Force
-        } catch {}
+
+    if ($transaction.ManifestState -eq "existing") {
+        if (-not (Test-Path -LiteralPath $transaction.ManifestBackupPath)) {
+            throw "install manifest backup is missing"
+        }
+        Copy-Item -LiteralPath $transaction.ManifestBackupPath -Destination $transaction.ManifestPath -Force
+        $transaction.ManifestState = "restored"
+        Save-Upgrade-Transaction
+    } elseif ($transaction.ManifestState -eq "missing") {
+        Remove-Transaction-Artifact $transaction.ManifestPath
+        $transaction.ManifestState = "restored"
+        Save-Upgrade-Transaction
     }
+
+    $transaction.State = "restored"
+    Save-Upgrade-Transaction
+    $script:backupRestored = $true
+    try { Cleanup-Upgrade-Transaction } catch {}
+}
+
+function Start-Upgrade-Recovery {
+    $escapedScriptPath = $PSCommandPath.Replace("'", "''")
+    $command = "& '$escapedScriptPath' -UpgradeAction Recover"
+    $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+    Start-Process -FilePath "powershell.exe" `
+        -ArgumentList @("-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", $encodedCommand) `
+        -WindowStyle Hidden | Out-Null
 }
 
 function Backup-Existing-Binary {
@@ -89,15 +177,28 @@ function Backup-Existing-Binary {
     $script:backupWasRenamed = $false
     $script:backupRestored = $false
     $script:transactionPath = $null
+    $script:transaction = $null
     if ($env:MEMORY_LANE_UPGRADE_PID) {
         $script:backupPath = Get-Upgrade-Backup-Path
         $script:transactionPath = Get-Upgrade-Transaction-Path
-        if (Test-Path -LiteralPath $script:installPath) {
+        $existingBinary = Test-Path -LiteralPath $script:installPath
+        $script:transaction = [PSCustomObject]@{
+            State = "pending"
+            BackupState = if ($existingBinary) { "not-backed-up" } else { "no-backup" }
+            ManifestState = if ($env:MEMORY_LANE_UPGRADE_MANIFEST_EXISTED -eq "true") { "existing" } else { "missing" }
+            ManifestPath = "$env:MEMORY_LANE_UPGRADE_MANIFEST_PATH"
+            ManifestBackupPath = "$env:MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH"
+            LockPath = "$env:MEMORY_LANE_UPGRADE_LOCK_PATH"
+            InstallerPid = $PID
+        }
+        Save-Upgrade-Transaction
+        Start-Upgrade-Recovery
+        if ($existingBinary) {
             Move-Item -LiteralPath $script:installPath -Destination $script:backupPath -Force
             $script:backupWasRenamed = $true
+            $script:transaction.BackupState = "backed-up"
+            Save-Upgrade-Transaction
         }
-        $transactionState = if ($script:backupWasRenamed) { "backed-up" } else { "no-backup" }
-        Set-Content -LiteralPath $script:transactionPath -Value $transactionState -NoNewline
     } elseif (Test-Path -LiteralPath $script:installPath) {
         $script:backupPath = "$script:installPath.backup.$PID"
         Copy-Item -LiteralPath $script:installPath -Destination $script:backupPath -Force
@@ -121,24 +222,34 @@ if ($UpgradeAction) {
     $script:backupPath = Get-Upgrade-Backup-Path
     $script:transactionPath = Get-Upgrade-Transaction-Path
     $script:backupRestored = $false
+    $script:transaction = $null
+    if ($UpgradeAction -eq "Recover") {
+        $pendingTransaction = Read-Upgrade-Transaction
+        Wait-Process -Id $env:MEMORY_LANE_UPGRADE_PID -ErrorAction SilentlyContinue
+        if ($pendingTransaction) {
+            Wait-Process -Id $pendingTransaction.InstallerPid -ErrorAction SilentlyContinue
+        }
+        $script:transaction = $null
+    }
     if (-not (Test-Path -LiteralPath $script:transactionPath) `
         -and -not (Test-Path -LiteralPath $script:backupPath)) {
         exit 0
     }
-    if ($UpgradeAction -eq "Rollback") {
-        Restore-Backup
+    $transaction = Read-Upgrade-Transaction
+    if ($UpgradeAction -eq "Commit") {
+        if (-not $transaction) {
+            Err "upgrade transaction is missing"
+        }
+        $transaction.State = "committed"
+        Save-Upgrade-Transaction
+        Say "committed Windows upgrade"
         exit 0
     }
-    if (Test-Path -LiteralPath $script:backupPath) {
-        try {
-            Start-Deferred-Removal $script:backupPath $env:MEMORY_LANE_UPGRADE_PID
-            Say "scheduled previous binary cleanup"
-        } catch {
-            Restore-Backup
-            Err "could not schedule previous binary cleanup; previous installation was restored"
-        }
+    if ($UpgradeAction -eq "Recover" -and $transaction -and $transaction.State -eq "committed") {
+        Cleanup-Upgrade-Transaction
+        exit 0
     }
-    Remove-Item -LiteralPath $script:transactionPath -Force
+    Restore-Backup
     exit 0
 }
 
