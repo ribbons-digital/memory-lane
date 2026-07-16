@@ -773,6 +773,12 @@ export function reapplyInstallManifest(
   manifest: InstallManifest,
   transactional = false,
 ): ReapplyInstallManifestResult {
+  if (transactional) {
+    const malformedIndex = manifest.integrations.findIndex((integration) => !integrationHarness(integration))
+    if (malformedIndex !== -1) {
+      throw new Error(`Install manifest integration ${malformedIndex + 1} has no usable harness during transactional reapply.`)
+    }
+  }
   validateManifestOmpConfigPaths(manifest)
   const { results, replacements } = installPreviouslyConfigured(options, manifest)
   const configuredCount = results.filter((result) => result.configured).length

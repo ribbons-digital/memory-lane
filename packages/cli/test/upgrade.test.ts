@@ -259,6 +259,46 @@ describe("upgrade", () => {
     assert.deepEqual(persisted.manifest.integrations.map((integration) => integration.harness), ["legacy-harness", "pi"])
   })
 
+  it("rejects malformed integrations before transactional Windows reconfiguration", () => {
+    const home = tempDir()
+    const dataDir = path.join(home, ".memory-lane")
+    const binaryPath = path.join(home, ".local/bin/memory-lane")
+    const piConfigPath = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
+    fs.mkdirSync(dataDir, { recursive: true })
+
+    const manifest = {
+      version: "0.1.0",
+      installedAt: "2026-01-01T00:00:00.000Z",
+      binaryPath: path.join(home, ".local/bin/old-memory-lane"),
+      dataDir,
+      integrations: [
+        { harness: "pi", configPath: piConfigPath },
+        { configPath: path.join(home, "malformed.json") },
+      ],
+    } as InstallManifest
+    writeInstallManifest(dataDir, manifest)
+    const manifestPath = path.join(dataDir, "install.json")
+    const originalManifest = fs.readFileSync(manifestPath, "utf8")
+
+    assert.throws(
+      () => reapplyInstallManifest(
+        {
+          binaryPath,
+          dataDir,
+          projectMode: false,
+          yes: true,
+          homeDir: home,
+        },
+        manifest,
+        true,
+      ),
+      /integration 2 has no usable harness during transactional reapply/u,
+    )
+
+    assert.equal(fs.existsSync(piConfigPath), false)
+    assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest)
+  })
+
   it("suppresses partial manifest persistence for transactional Windows reconfiguration", () => {
     const home = tempDir()
     const dataDir = path.join(home, ".memory-lane")
