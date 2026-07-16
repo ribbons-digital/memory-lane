@@ -139,11 +139,21 @@ describe("installed binary removal", () => {
     }).stdout.trim()
     assert.match(identity, /^\d+$/u)
 
+    const helperCommand = Buffer.from(
+      String(invocation?.options.env?.MEMORY_LANE_UNINSTALL_HELPER_COMMAND),
+      "base64",
+    ).toString("utf16le")
+    const helperArgs = [
+      "-NoProfile",
+      "-NonInteractive",
+      "-EncodedCommand",
+      Buffer.from(helperCommand, "utf16le").toString("base64"),
+    ]
+
     const matchingPath = path.join(dir, "matching.exe")
     fs.writeFileSync(matchingPath, "pending", "utf8")
-    const matching = spawn("powershell.exe", invocation?.args ?? [], {
-      ...invocation?.options,
-      detached: false,
+    const matching = spawn("powershell.exe", helperArgs, {
+      windowsHide: true,
       stdio: "ignore",
       env: {
         ...invocation?.options.env,
@@ -154,12 +164,17 @@ describe("installed binary removal", () => {
     })
     await new Promise((resolve) => setTimeout(resolve, 250))
     assert.equal(fs.existsSync(matchingPath), true)
-    matching.kill()
+    await new Promise<void>((resolve, reject) => {
+      matching.once("close", () => resolve())
+      matching.once("error", reject)
+      if (!matching.kill()) reject(new Error("could not stop matching-identity helper"))
+    })
 
     const reusedPath = path.join(dir, "reused.exe")
     fs.writeFileSync(reusedPath, "pending", "utf8")
-    const reused = spawnSync("powershell.exe", invocation?.args ?? [], {
+    const reused = spawnSync("powershell.exe", helperArgs, {
       encoding: "utf8",
+      windowsHide: true,
       env: {
         ...invocation?.options.env,
         MEMORY_LANE_UNINSTALL_PARENT_PID: String(process.pid),
@@ -173,10 +188,6 @@ describe("installed binary removal", () => {
     const transientPath = path.join(dir, "transient.exe")
     const attemptsPath = path.join(dir, "inspection-attempts.txt")
     fs.writeFileSync(transientPath, "pending", "utf8")
-    const helperCommand = Buffer.from(
-      String(invocation?.options.env?.MEMORY_LANE_UNINSTALL_HELPER_COMMAND),
-      "base64",
-    ).toString("utf16le")
     const transientCommand = [
       "$script:inspectionAttempts = 0",
       "function Get-Process {",
