@@ -55,6 +55,8 @@ interface UpgradeLockOwner extends UpgradeLockProcessIdentity {
   phase: "starting" | "recovery"
   parentPid: number
   parentProcessStartedAt: string
+  installerPid?: number
+  installerProcessStartedAt?: string
   recoveryPid?: number
   recoveryProcessStartedAt?: string
 }
@@ -62,6 +64,11 @@ interface UpgradeLockOwner extends UpgradeLockProcessIdentity {
 interface UpgradeLockActor extends UpgradeLockProcessIdentity {
   token: string
   action: "Commit" | "Rollback" | "Recover"
+}
+
+interface UpgradeLockClaim extends UpgradeLockProcessIdentity {
+  token: string
+  createdAt: number
 }
 
 export type ProcessStartTimeInspection =
@@ -74,6 +81,7 @@ export interface UpgradeLockOptions {
   createToken?: () => string
   staleAfterMs?: number
   inspectProcessStartTime?: (processId: number) => ProcessStartTimeInspection
+  onReclaimClaimed?: (claimPath: string) => void
 }
 
 const DEFAULT_UPGRADE_LOCK_STALE_AFTER_MS = 60 * 60 * 1000
@@ -115,10 +123,13 @@ function isProcessIdentity(pid: unknown, processStartedAt: unknown): boolean {
 function readUpgradeLockOwner(ownerPath: string): UpgradeLockOwner | undefined {
   try {
     const value = JSON.parse(fs.readFileSync(ownerPath, "utf8")) as Partial<UpgradeLockOwner>
+    const validInstaller = value.installerPid === undefined && value.installerProcessStartedAt === undefined
+      || isProcessIdentity(value.installerPid, value.installerProcessStartedAt)
     const validRecovery = value.phase !== "recovery"
       || isProcessIdentity(value.recoveryPid, value.recoveryProcessStartedAt)
     return isProcessIdentity(value.pid, value.processStartedAt)
       && isProcessIdentity(value.parentPid, value.parentProcessStartedAt)
+      && validInstaller
       && validRecovery
       && typeof value.token === "string" && value.token.length > 0
       && typeof value.createdAt === "number" && Number.isFinite(value.createdAt) && value.createdAt > 0
@@ -133,12 +144,37 @@ function readUpgradeLockOwner(ownerPath: string): UpgradeLockOwner | undefined {
           phase: value.phase,
           parentPid: Number(value.parentPid),
           parentProcessStartedAt: value.parentProcessStartedAt!,
+          ...(value.installerPid !== undefined
+            ? {
+                installerPid: Number(value.installerPid),
+                installerProcessStartedAt: value.installerProcessStartedAt!,
+              }
+            : {}),
           ...(value.phase === "recovery"
             ? {
                 recoveryPid: Number(value.recoveryPid),
                 recoveryProcessStartedAt: value.recoveryProcessStartedAt!,
               }
             : {}),
+        }
+      : undefined
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" || error instanceof SyntaxError) return undefined
+    throw error
+  }
+}
+
+function readUpgradeLockClaim(claimPath: string): UpgradeLockClaim | undefined {
+  try {
+    const value = JSON.parse(fs.readFileSync(claimPath, "utf8")) as Partial<UpgradeLockClaim>
+    return isProcessIdentity(value.pid, value.processStartedAt)
+      && typeof value.token === "string" && value.token.length > 0
+      && typeof value.createdAt === "number" && Number.isFinite(value.createdAt) && value.createdAt > 0
+      ? {
+          pid: Number(value.pid),
+          processStartedAt: value.processStartedAt!,
+          token: value.token,
+          createdAt: value.createdAt,
         }
       : undefined
   } catch (error) {
@@ -175,6 +211,8 @@ function sameUpgradeLockOwner(left: UpgradeLockOwner | undefined, right: Upgrade
     && left.phase === right.phase
     && left.parentPid === right.parentPid
     && left.parentProcessStartedAt === right.parentProcessStartedAt
+    && left.installerPid === right.installerPid
+    && left.installerProcessStartedAt === right.installerProcessStartedAt
     && left.recoveryPid === right.recoveryPid
     && left.recoveryProcessStartedAt === right.recoveryProcessStartedAt
 }
@@ -248,6 +286,9 @@ export function acquireUpgradeLock(
     const identities = existingOwner
       ? [
           { pid: existingOwner.parentPid, processStartedAt: existingOwner.parentProcessStartedAt },
+          ...(existingOwner.installerPid !== undefined
+            ? [{ pid: existingOwner.installerPid, processStartedAt: existingOwner.installerProcessStartedAt! }]
+            : []),
           ...(existingOwner.phase === "recovery"
             ? [{ pid: existingOwner.recoveryPid!, processStartedAt: existingOwner.recoveryProcessStartedAt! }]
             : []),
@@ -292,19 +333,30 @@ export function acquireUpgradeLock(
       if (code === "ENOENT") continue
       if (code !== "EEXIST") throw error
 
-      const existingClaim = readUpgradeLockOwner(reclaimPath)
+      const existingClaim = readUpgradeLockClaim(reclaimPath)
       const claimSnapshot = readLockSnapshot(reclaimPath)
-      if (claimSnapshot && now() - (existingClaim?.createdAt ?? claimSnapshot.modifiedAt) >= staleAfterMs) {
+      const claimIdentity = existingClaim
+        ? inspectProcessStartTime(existingClaim.pid)
+        : undefined
+      const claimInactive = claimIdentity?.status === "missing"
+        || (claimIdentity?.status === "found" && claimIdentity.startedAt !== existingClaim?.processStartedAt)
+      const malformedAndStale = !existingClaim && claimSnapshot
+        && now() - claimSnapshot.modifiedAt >= staleAfterMs
+      if (claimSnapshot && (claimInactive || malformedAndStale)) {
+        const currentClaim = readUpgradeLockClaim(reclaimPath)
         const currentClaimSnapshot = readLockSnapshot(reclaimPath)
         const claimStillMatches = existingClaim
-          ? sameUpgradeLockOwner(readUpgradeLockOwner(reclaimPath), existingClaim)
-          : readUpgradeLockOwner(reclaimPath) === undefined
-            && currentClaimSnapshot?.identity === claimSnapshot.identity
+          ? currentClaim?.pid === existingClaim.pid
+            && currentClaim.processStartedAt === existingClaim.processStartedAt
+            && currentClaim.token === existingClaim.token
+            && currentClaim.createdAt === existingClaim.createdAt
+          : currentClaim === undefined && currentClaimSnapshot?.identity === claimSnapshot.identity
         if (claimStillMatches) fs.rmSync(reclaimPath, { force: true })
       }
       continue
     }
 
+    options.onReclaimClaimed?.(reclaimPath)
     const currentSnapshot = readLockSnapshot(lockPath)
     const ownerStillMatches = existingOwner
       ? sameUpgradeLockOwner(readUpgradeLockOwner(ownerPath), existingOwner)

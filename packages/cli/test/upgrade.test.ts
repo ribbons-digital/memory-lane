@@ -306,6 +306,75 @@ describe("upgrade", () => {
     assert.equal(fs.existsSync(lockPath), true)
   })
 
+  it("preserves a starting lock while its registered installer remains active", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const now = 2_000_000
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
+      pid: 9876,
+      processStartedAt: "111111111",
+      token: "starting-owner",
+      createdAt: now,
+      heartbeatAt: now,
+      phase: "starting",
+      parentPid: 9876,
+      parentProcessStartedAt: "111111111",
+      installerPid: 8765,
+      installerProcessStartedAt: "222222222",
+    }), "utf8")
+
+    assert.throws(
+      () => acquireUpgradeLock(installDir, process.pid, {
+        now: () => now,
+        inspectProcessStartTime: (processId) => processId === 8765
+          ? { status: "found", startedAt: "222222222" }
+          : processId === process.pid
+            ? { status: "found", startedAt: "333333333" }
+            : { status: "missing" },
+      }),
+      /already in progress/u,
+    )
+    assert.equal(fs.existsSync(lockPath), true)
+  })
+
+  it("excludes recovery handoff while quarantining a stale starting lock", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const now = 2_000_000
+    let handoffWasExcluded = false
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
+      pid: 9876,
+      processStartedAt: "111111111",
+      token: "stale-owner",
+      createdAt: now,
+      heartbeatAt: now,
+      phase: "starting",
+      parentPid: 9876,
+      parentProcessStartedAt: "111111111",
+    }), "utf8")
+
+    const lock = acquireUpgradeLock(installDir, process.pid, {
+      now: () => now,
+      createToken: () => "replacement-owner",
+      inspectProcessStartTime: (processId) => processId === process.pid
+        ? { status: "found", startedAt: "333333333" }
+        : { status: "missing" },
+      onReclaimClaimed: (claimPath) => {
+        assert.throws(
+          () => fs.writeFileSync(claimPath, "recovery handoff", { flag: "wx" }),
+          (error: NodeJS.ErrnoException) => error.code === "EEXIST",
+        )
+        handoffWasExcluded = true
+      },
+    })
+
+    assert.equal(handoffWasExcluded, true)
+    assert.equal(lock.owner, "replacement-owner")
+    releaseUpgradeLock(lock)
+  })
+
   it("reclaims a starting lock after its PID is reused", () => {
     const installDir = tempDir()
     const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")

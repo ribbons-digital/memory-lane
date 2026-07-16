@@ -219,6 +219,95 @@ function Write-Upgrade-Lock-Owner($temporaryOwnerPath, $ownerPath, $json) {
     [IO.File]::Replace($temporaryOwnerPath, $ownerPath, $null)
 }
 
+function Acquire-Upgrade-Lock-Owner-Gate($lockPath, $ownerToken) {
+    $ownerPath = Join-Path $lockPath "owner"
+    $gatePath = Join-Path $lockPath ".reclaim"
+    $startedAt = Get-Process-Start-Time-Ticks $PID
+    $claim = [PSCustomObject]@{
+        pid = $PID
+        processStartedAt = $startedAt
+        token = $ownerToken
+        createdAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    }
+    $claimJson = $claim | ConvertTo-Json -Compress
+    while ($true) {
+        $createdGate = $false
+        try {
+            $stream = [IO.File]::Open($gatePath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            $createdGate = $true
+            try {
+                $bytes = [Text.UTF8Encoding]::new($false).GetBytes($claimJson)
+                $stream.Write($bytes, 0, $bytes.Length)
+                $stream.Flush($true)
+            } finally {
+                $stream.Dispose()
+            }
+            return $claim
+        } catch {
+            if ($createdGate) {
+                Remove-Item -LiteralPath $gatePath -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Milliseconds 100
+                continue
+            }
+            if (-not (Test-Path -LiteralPath $lockPath) -or -not (Test-Path -LiteralPath $ownerPath)) {
+                return $null
+            }
+            try {
+                $owner = ([IO.File]::ReadAllText($ownerPath)) | ConvertFrom-Json
+                if ($owner.token -ne $ownerToken) {
+                    return $null
+                }
+                $existingJson = [IO.File]::ReadAllText($gatePath)
+                $existing = $existingJson | ConvertFrom-Json
+                $identity = Test-Upgrade-Process-Identity $existing.pid $existing.processStartedAt
+                if ($identity -eq "inactive" -and [IO.File]::ReadAllText($gatePath) -eq $existingJson) {
+                    Remove-Item -LiteralPath $gatePath -Force -ErrorAction SilentlyContinue
+                }
+            } catch {}
+            Start-Sleep -Milliseconds 100
+        }
+    }
+}
+
+function Release-Upgrade-Lock-Owner-Gate($lockPath, $claim) {
+    if (-not $claim) {
+        return
+    }
+    $gatePath = Join-Path $lockPath ".reclaim"
+    try {
+        $existing = ([IO.File]::ReadAllText($gatePath)) | ConvertFrom-Json
+        if ($existing.token -eq $claim.token `
+            -and "$($existing.pid)" -eq "$($claim.pid)" `
+            -and "$($existing.processStartedAt)" -eq "$($claim.processStartedAt)" `
+            -and "$($existing.createdAt)" -eq "$($claim.createdAt)") {
+            Remove-Item -LiteralPath $gatePath -Force
+        }
+    } catch {}
+}
+
+function Register-Upgrade-Installer($lockPath, $ownerToken, $installerStartedAt) {
+    $claim = Acquire-Upgrade-Lock-Owner-Gate $lockPath $ownerToken
+    if (-not $claim) {
+        return $false
+    }
+    try {
+        $ownerPath = Join-Path $lockPath "owner"
+        $temporaryOwnerPath = Join-Path $lockPath "owner.$PID.tmp"
+        $owner = ([IO.File]::ReadAllText($ownerPath)) | ConvertFrom-Json
+        if ($owner.token -ne $ownerToken) {
+            return $false
+        }
+        $owner | Add-Member -NotePropertyName installerPid -NotePropertyValue $PID -Force
+        $owner | Add-Member -NotePropertyName installerProcessStartedAt -NotePropertyValue "$installerStartedAt" -Force
+        $owner.heartbeatAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        Write-Upgrade-Lock-Owner $temporaryOwnerPath $ownerPath ($owner | ConvertTo-Json -Compress)
+        return $true
+    } finally {
+        Remove-Item -LiteralPath (Join-Path $lockPath "owner.$PID.tmp") -Force -ErrorAction SilentlyContinue
+        Release-Upgrade-Lock-Owner-Gate $lockPath $claim
+    }
+}
+
 function Update-Upgrade-Lock-Lease {
     $transaction = Read-Upgrade-Transaction
     if (-not $transaction) {
@@ -232,6 +321,7 @@ function Update-Upgrade-Lock-Lease {
     $missingCount = 0
     $mismatchCount = 0
     while ($true) {
+        $claim = $null
         try {
             if (-not (Test-Path -LiteralPath $transaction.LockPath) `
                 -or -not (Test-Path -LiteralPath $ownerPath)) {
@@ -254,6 +344,14 @@ function Update-Upgrade-Lock-Lease {
                 continue
             }
             $mismatchCount = 0
+            $claim = Acquire-Upgrade-Lock-Owner-Gate $transaction.LockPath $transaction.LockOwner
+            if (-not $claim) {
+                continue
+            }
+            $lockOwner = (Get-Content -LiteralPath $ownerPath -Raw) | ConvertFrom-Json
+            if ($lockOwner.Token -ne $transaction.LockOwner) {
+                continue
+            }
             $recoveryStartedAt = Get-Process-Start-Time-Ticks $PID
             $owner = [PSCustomObject]@{
                 pid = $PID
@@ -264,6 +362,8 @@ function Update-Upgrade-Lock-Lease {
                 phase = "recovery"
                 parentPid = $transaction.ParentPid
                 parentProcessStartedAt = $transaction.ParentStartedAt
+                installerPid = $transaction.InstallerPid
+                installerProcessStartedAt = $transaction.InstallerStartedAt
                 recoveryPid = $PID
                 recoveryProcessStartedAt = $recoveryStartedAt
             }
@@ -274,6 +374,7 @@ function Update-Upgrade-Lock-Lease {
             Start-Sleep -Milliseconds 100
         } finally {
             Remove-Item -LiteralPath $temporaryOwnerPath -Force -ErrorAction SilentlyContinue
+            Release-Upgrade-Lock-Owner-Gate $transaction.LockPath $claim
         }
     }
 }
@@ -432,6 +533,9 @@ function Backup-Existing-Binary {
         $existingBinary = Test-Path -LiteralPath $script:installPath
         $parentStartedAt = Get-Process-Start-Time-Ticks $env:MEMORY_LANE_UPGRADE_PID
         $installerStartedAt = Get-Process-Start-Time-Ticks $PID
+        if (-not (Register-Upgrade-Installer $env:MEMORY_LANE_UPGRADE_LOCK_PATH $env:MEMORY_LANE_UPGRADE_LOCK_OWNER $installerStartedAt)) {
+            throw "could not register the Windows upgrade installer"
+        }
         $script:transaction = [PSCustomObject]@{
             State = "pending"
             BackupState = if ($existingBinary) { "not-backed-up" } else { "no-backup" }

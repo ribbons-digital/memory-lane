@@ -63,7 +63,7 @@ async function main(): Promise<void> {
       "$tokens = $null",
       "$errors = $null",
       "$ast = [Management.Automation.Language.Parser]::ParseFile($env:MEMORY_LANE_INSTALLER_PATH, [ref]$tokens, [ref]$errors)",
-      "$functions = $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and @('Get-Process-Start-Time-Ticks', 'Test-Upgrade-Process-Identity', 'Read-Upgrade-Transaction', 'Read-Upgrade-Transaction-After-Actor', 'Release-Upgrade-Actor', 'Write-Upgrade-Lock-Owner', 'Update-Upgrade-Lock-Lease', 'Wait-For-Upgrade-Process', 'Wait-For-Upgrade-Recovery-Lease') -contains $node.Name }, $true)",
+      "$functions = $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and @('Get-Process-Start-Time-Ticks', 'Test-Upgrade-Process-Identity', 'Read-Upgrade-Transaction', 'Read-Upgrade-Transaction-After-Actor', 'Release-Upgrade-Actor', 'Write-Upgrade-Lock-Owner', 'Acquire-Upgrade-Lock-Owner-Gate', 'Release-Upgrade-Lock-Owner-Gate', 'Update-Upgrade-Lock-Lease', 'Wait-For-Upgrade-Process', 'Wait-For-Upgrade-Recovery-Lease') -contains $node.Name }, $true)",
       "$definitions = $functions | ForEach-Object { $_.Extent.Text }",
       "Invoke-Expression ($definitions -join [Environment]::NewLine)",
       "$startedAt = Get-Process-Start-Time-Ticks $PID",
