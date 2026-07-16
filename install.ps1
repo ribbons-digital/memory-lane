@@ -137,8 +137,8 @@ if ($env:MEMORY_LANE_INSTALL_BINARY) {
     $installDir = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { "$env:USERPROFILE\bin" }
     $script:installPath = "$installDir\memory-lane.exe"
     New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-    Backup-Existing-Binary
     try {
+        Backup-Existing-Binary
         Copy-Item -LiteralPath $binaryPath -Destination $script:installPath -Force
         Verify-Installed-Binary
     } catch {
@@ -174,8 +174,8 @@ if ($env:MEMORY_LANE_INSTALL_BINARY) {
     $installDir = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { "$env:USERPROFILE\bin" }
     $script:installPath = "$installDir\memory-lane.exe"
     New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-    Backup-Existing-Binary
     try {
+        Backup-Existing-Binary
         Move-Item -LiteralPath "$tmp\memory-lane-$suffix.exe" -Destination $script:installPath -Force
         Verify-Installed-Binary
     } catch {

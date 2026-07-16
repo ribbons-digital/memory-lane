@@ -110,6 +110,20 @@ async function main(): Promise<void> {
       MEMORY_LANE_UPGRADE_PID: String(runningOldBinary.pid),
     }
     const installerArgs = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(repo, "install.ps1")]
+    const backupPath = `${installPath}.backup.${runningOldBinary.pid}`
+    const transactionPath = `${installPath}.upgrade.${runningOldBinary.pid}`
+
+    fs.mkdirSync(transactionPath)
+    const failedMarkerWrite = spawnSync("powershell.exe", installerArgs, {
+      cwd: repo,
+      env: installerEnv,
+      encoding: "utf8",
+    })
+    assert.notEqual(failedMarkerWrite.status, 0, "transaction marker write failure must fail installation")
+    assert.equal(fs.existsSync(installPath), true, "marker write failure must restore the original executable path")
+    assert.equal(fs.existsSync(backupPath), false, "marker write failure must not strand a backup")
+    assert.equal(fs.existsSync(transactionPath), false, "marker write failure must not strand a transaction")
+
     const failedInstall = spawnSync("powershell.exe", installerArgs, {
       cwd: repo,
       env: { ...installerEnv, MEMORY_LANE_INSTALL_BINARY: invalidReplacementPath },
@@ -129,8 +143,6 @@ async function main(): Promise<void> {
       "failed replacement must not strand a transaction",
     )
 
-    const backupPath = `${installPath}.backup.${runningOldBinary.pid}`
-    const transactionPath = `${installPath}.upgrade.${runningOldBinary.pid}`
     run("powershell.exe", installerArgs, {
       cwd: repo,
       env: installerEnv,
