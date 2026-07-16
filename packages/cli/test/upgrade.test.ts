@@ -1,6 +1,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { spawnSync } from "node:child_process"
+import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -30,6 +31,53 @@ function createFakeMemoryLaneSourceRoot(): { root: string; skillDir: string; ski
   fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "memory-lane" }), "utf8")
   fs.writeFileSync(skillPath, sentinel, "utf8")
   return { root, skillDir, skillPath, sentinel }
+}
+
+function createStaleUpgradeTransaction(state: "pending" | "committed" | "restored" = "pending") {
+  const installDir = tempDir()
+  const dataDir = tempDir()
+  const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+  const installPath = path.join(installDir, "memory-lane.exe")
+  const backupPath = `${installPath}.backup.9876`
+  const transactionPath = `${installPath}.upgrade.9876`
+  const manifestPath = path.join(dataDir, "install.json")
+  const manifestBackupPath = `${manifestPath}.upgrade.9876`
+  const originalBinary = "original binary"
+  fs.mkdirSync(lockPath)
+  fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
+    pid: 7654,
+    processStartedAt: "333333333",
+    token: "stale-owner",
+    createdAt: 1_000_000,
+    heartbeatAt: 1_000_000,
+    phase: "recovery",
+    parentPid: 9876,
+    parentProcessStartedAt: "111111111",
+    installerPid: 8765,
+    installerProcessStartedAt: "222222222",
+    recoveryPid: 7654,
+    recoveryProcessStartedAt: "333333333",
+  }), "utf8")
+  fs.writeFileSync(installPath, "replacement binary", "utf8")
+  fs.writeFileSync(backupPath, originalBinary, "utf8")
+  fs.writeFileSync(manifestPath, "replacement manifest", "utf8")
+  fs.writeFileSync(manifestBackupPath, "original manifest", "utf8")
+  if (state === "restored") fs.writeFileSync(installPath, originalBinary, "utf8")
+  fs.writeFileSync(transactionPath, JSON.stringify({
+    State: state,
+    BackupState: state === "restored" ? "restored" : "backed-up",
+    ManifestState: state === "restored" ? "restored" : "existing",
+    ManifestPath: manifestPath,
+    ManifestBackupPath: manifestBackupPath,
+    LockPath: lockPath,
+    LockOwner: "stale-owner",
+    ParentPid: "9876",
+    ParentStartedAt: "111111111",
+    InstallerPid: "8765",
+    InstallerStartedAt: "222222222",
+    OriginalBinaryHash: createHash("sha256").update(originalBinary).digest("hex"),
+  }), "utf8")
+  return { installDir, lockPath, installPath, backupPath, transactionPath, manifestPath, manifestBackupPath }
 }
 
 describe("upgrade", () => {
@@ -656,6 +704,65 @@ describe("upgrade", () => {
       /already in progress/u,
     )
     assert.equal(fs.existsSync(lockPath), true)
+  })
+
+  it("rolls back a pending transaction before reclaiming a crashed recovery lock", () => {
+    const fixture = createStaleUpgradeTransaction()
+
+    const lock = acquireUpgradeLock(fixture.installDir, process.pid, {
+      createToken: () => "replacement-owner",
+      inspectProcessStartTime: (processId) => processId === process.pid
+        ? { status: "found", startedAt: "444444444" }
+        : { status: "missing" },
+    })
+
+    assert.equal(fs.readFileSync(fixture.installPath, "utf8"), "original binary")
+    assert.equal(fs.readFileSync(fixture.manifestPath, "utf8"), "original manifest")
+    assert.equal(fs.existsSync(fixture.backupPath), false)
+    assert.equal(fs.existsSync(fixture.manifestBackupPath), false)
+    assert.equal(fs.existsSync(fixture.transactionPath), false)
+    releaseUpgradeLock(lock)
+  })
+
+  for (const state of ["committed", "restored"] as const) {
+    it(`finishes ${state} transaction cleanup before reclaiming a crashed recovery lock`, () => {
+      const fixture = createStaleUpgradeTransaction(state)
+
+      const lock = acquireUpgradeLock(fixture.installDir, process.pid, {
+        createToken: () => "replacement-owner",
+        inspectProcessStartTime: (processId) => processId === process.pid
+          ? { status: "found", startedAt: "444444444" }
+          : { status: "missing" },
+      })
+
+      assert.equal(
+        fs.readFileSync(fixture.installPath, "utf8"),
+        state === "committed" ? "replacement binary" : "original binary",
+      )
+      assert.equal(fs.readFileSync(fixture.manifestPath, "utf8"), "replacement manifest")
+      assert.equal(fs.existsSync(fixture.backupPath), false)
+      assert.equal(fs.existsSync(fixture.manifestBackupPath), false)
+      assert.equal(fs.existsSync(fixture.transactionPath), false)
+      releaseUpgradeLock(lock)
+    })
+  }
+
+  it("refuses to reclaim a crashed recovery lock with malformed transaction state", () => {
+    const fixture = createStaleUpgradeTransaction()
+    fs.writeFileSync(fixture.transactionPath, "{", "utf8")
+
+    assert.throws(
+      () => acquireUpgradeLock(fixture.installDir, process.pid, {
+        createToken: () => "replacement-owner",
+        inspectProcessStartTime: (processId) => processId === process.pid
+          ? { status: "found", startedAt: "444444444" }
+          : { status: "missing" },
+      }),
+      /cannot safely reclaim.+malformed/iu,
+    )
+    assert.equal(fs.existsSync(fixture.lockPath), true)
+    assert.equal(fs.existsSync(path.join(fixture.lockPath, ".reclaim")), false)
+    assert.equal(fs.existsSync(fixture.backupPath), true)
   })
 
   it("reclaims a recovery lock only after confirmed process identity mismatch", () => {

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process"
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -244,6 +244,179 @@ function publishUpgradeLockClaim(claimPath: string, owner: string, claim: Upgrad
   }
 }
 
+interface DurableUpgradeTransaction {
+  State: "pending" | "committed" | "restored"
+  BackupState: "not-backed-up" | "backed-up" | "no-backup" | "restored" | "no-original-restored"
+  ManifestState: "existing" | "missing" | "restored"
+  ManifestPath: string
+  ManifestBackupPath: string
+  LockPath: string
+  LockOwner: string
+  ParentPid: string
+  ParentStartedAt: string
+  InstallerPid: string
+  InstallerStartedAt: string
+  OriginalBinaryHash: string
+}
+
+function sameFilesystemPath(left: string, right: string): boolean {
+  const normalizedLeft = path.resolve(left)
+  const normalizedRight = path.resolve(right)
+  return process.platform === "win32"
+    ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+    : normalizedLeft === normalizedRight
+}
+
+function fileSha256(filePath: string): string {
+  return createHash("sha256").update(fs.readFileSync(filePath)).digest("hex")
+}
+
+function saveDurableUpgradeTransaction(transactionPath: string, transaction: DurableUpgradeTransaction): void {
+  const temporaryPath = `${transactionPath}.reconcile.${process.pid}.tmp`
+  try {
+    fs.writeFileSync(temporaryPath, JSON.stringify(transaction), { encoding: "utf8", flag: "wx" })
+    fs.renameSync(temporaryPath, transactionPath)
+  } finally {
+    fs.rmSync(temporaryPath, { force: true })
+  }
+}
+
+function readDurableUpgradeTransaction(
+  transactionPath: string,
+  installPath: string,
+  lockPath: string,
+  owner: UpgradeLockOwner,
+): DurableUpgradeTransaction | undefined {
+  if (!fs.existsSync(transactionPath)) return undefined
+
+  let value: Partial<DurableUpgradeTransaction>
+  try {
+    value = JSON.parse(fs.readFileSync(transactionPath, "utf8")) as Partial<DurableUpgradeTransaction>
+  } catch {
+    throw new Error(`Cannot safely reclaim the Windows upgrade lock because ${transactionPath} is malformed.`)
+  }
+
+  const validStates = ["pending", "committed", "restored"]
+  const validBackupStates = ["not-backed-up", "backed-up", "no-backup", "restored", "no-original-restored"]
+  const validManifestStates = ["existing", "missing", "restored"]
+  const noOriginal = value.BackupState === "no-backup" || value.BackupState === "no-original-restored"
+  const hashValid = noOriginal
+    ? value.OriginalBinaryHash === ""
+    : typeof value.OriginalBinaryHash === "string" && /^[a-f\d]{64}$/iu.test(value.OriginalBinaryHash)
+  const manifestPathsValid = typeof value.ManifestPath === "string" && path.isAbsolute(value.ManifestPath)
+    && typeof value.ManifestBackupPath === "string"
+    && sameFilesystemPath(value.ManifestBackupPath, `${value.ManifestPath}.upgrade.${owner.parentPid}`)
+  const terminalRestoreValid = value.State !== "restored"
+    || ((value.BackupState === "restored" || value.BackupState === "no-original-restored")
+      && value.ManifestState === "restored")
+  const valid = validStates.includes(value.State ?? "")
+    && validBackupStates.includes(value.BackupState ?? "")
+    && validManifestStates.includes(value.ManifestState ?? "")
+    && manifestPathsValid
+    && typeof value.LockPath === "string" && sameFilesystemPath(value.LockPath, lockPath)
+    && value.LockOwner === owner.token
+    && value.ParentPid === String(owner.parentPid)
+    && value.ParentStartedAt === owner.parentProcessStartedAt
+    && typeof value.InstallerPid === "string" && /^\d+$/u.test(value.InstallerPid)
+    && typeof value.InstallerStartedAt === "string" && /^\d+$/u.test(value.InstallerStartedAt)
+    && hashValid
+    && terminalRestoreValid
+    && sameFilesystemPath(transactionPath, `${installPath}.upgrade.${owner.parentPid}`)
+  if (!valid) {
+    throw new Error(`Cannot safely reclaim the Windows upgrade lock because ${transactionPath} is malformed.`)
+  }
+  return value as DurableUpgradeTransaction
+}
+
+function cleanupDurableUpgradeTransaction(
+  transactionPath: string,
+  backupPath: string,
+  transaction: DurableUpgradeTransaction,
+): void {
+  fs.rmSync(backupPath, { force: true })
+  fs.rmSync(transaction.ManifestBackupPath, { force: true })
+  fs.rmSync(transactionPath, { force: true })
+}
+
+function reconcileDurableUpgradeTransaction(installDir: string, lockPath: string, owner: UpgradeLockOwner): void {
+  const installPath = path.join(installDir, "memory-lane.exe")
+  const backupPath = `${installPath}.backup.${owner.parentPid}`
+  const transactionPath = `${installPath}.upgrade.${owner.parentPid}`
+  const transaction = readDurableUpgradeTransaction(transactionPath, installPath, lockPath, owner)
+  if (!transaction) {
+    const transactionPrefix = `${path.basename(transactionPath)}.`
+    const temporaryTransactions = fs.readdirSync(installDir).some((entry) => entry.startsWith(transactionPrefix))
+    if (fs.existsSync(backupPath) || temporaryTransactions) {
+      throw new Error(`Cannot safely reclaim the Windows upgrade lock because transaction residue remains for owner ${owner.token}.`)
+    }
+    return
+  }
+
+  if (transaction.State === "committed") {
+    cleanupDurableUpgradeTransaction(transactionPath, backupPath, transaction)
+    return
+  }
+  if (transaction.State === "restored") {
+    const executableRestored = transaction.BackupState === "restored"
+      ? fs.existsSync(installPath)
+        && fileSha256(installPath).toLowerCase() === transaction.OriginalBinaryHash.toLowerCase()
+      : !fs.existsSync(installPath)
+    if (!executableRestored) {
+      throw new Error("Cannot safely finish Windows upgrade cleanup because the restored executable cannot be verified.")
+    }
+    cleanupDurableUpgradeTransaction(transactionPath, backupPath, transaction)
+    return
+  }
+
+  if (transaction.BackupState === "not-backed-up") {
+    if (fs.existsSync(backupPath)) {
+      transaction.BackupState = "backed-up"
+    } else if (fs.existsSync(installPath)
+      && fileSha256(installPath).toLowerCase() === transaction.OriginalBinaryHash.toLowerCase()) {
+      transaction.BackupState = "restored"
+    } else {
+      throw new Error("Cannot safely restore the previous Windows executable because its backup is missing.")
+    }
+    saveDurableUpgradeTransaction(transactionPath, transaction)
+  }
+
+  if (transaction.BackupState === "backed-up") {
+    if (fs.existsSync(backupPath)) {
+      if (fileSha256(backupPath).toLowerCase() !== transaction.OriginalBinaryHash.toLowerCase()) {
+        throw new Error("Cannot safely restore the previous Windows executable because its backup does not match.")
+      }
+      fs.rmSync(installPath, { force: true })
+      fs.renameSync(backupPath, installPath)
+    } else if (!fs.existsSync(installPath)
+      || fileSha256(installPath).toLowerCase() !== transaction.OriginalBinaryHash.toLowerCase()) {
+      throw new Error("Cannot safely restore the previous Windows executable because its backup is missing.")
+    }
+    transaction.BackupState = "restored"
+    saveDurableUpgradeTransaction(transactionPath, transaction)
+  } else if (transaction.BackupState === "no-backup") {
+    fs.rmSync(installPath, { force: true })
+    transaction.BackupState = "no-original-restored"
+    saveDurableUpgradeTransaction(transactionPath, transaction)
+  }
+
+  if (transaction.ManifestState === "existing") {
+    if (!fs.existsSync(transaction.ManifestBackupPath)) {
+      throw new Error("Cannot safely restore the install manifest because its backup is missing.")
+    }
+    fs.copyFileSync(transaction.ManifestBackupPath, transaction.ManifestPath)
+    transaction.ManifestState = "restored"
+    saveDurableUpgradeTransaction(transactionPath, transaction)
+  } else if (transaction.ManifestState === "missing") {
+    fs.rmSync(transaction.ManifestPath, { force: true })
+    transaction.ManifestState = "restored"
+    saveDurableUpgradeTransaction(transactionPath, transaction)
+  }
+
+  transaction.State = "restored"
+  saveDurableUpgradeTransaction(transactionPath, transaction)
+  cleanupDurableUpgradeTransaction(transactionPath, backupPath, transaction)
+}
+
 export function acquireUpgradeLock(
   installDir: string,
   upgradePid: number,
@@ -318,7 +491,7 @@ export function acquireUpgradeLock(
       || (state.status === "found" && state.startedAt !== identities[index].processStartedAt))
     const reclaimable = existingOwner
       ? (!actorExists || activeActor?.token === existingOwner.token) && allIdentitiesInactive
-      : stale
+      : stale && !fs.existsSync(ownerPath)
     if (!reclaimable) {
       if (!existingOwner) {
         throw new Error("Another Memory Lane upgrade is starting; lock owner metadata is not yet available.")
@@ -366,6 +539,12 @@ export function acquireUpgradeLock(
     }
 
     options.onReclaimClaimed?.(reclaimPath)
+    try {
+      if (existingOwner) reconcileDurableUpgradeTransaction(installDir, lockPath, existingOwner)
+    } catch (error) {
+      fs.rmSync(reclaimPath, { force: true })
+      throw error
+    }
     const currentSnapshot = readLockSnapshot(lockPath)
     const ownerStillMatches = existingOwner
       ? sameUpgradeLockOwner(readUpgradeLockOwner(ownerPath), existingOwner)
