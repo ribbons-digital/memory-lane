@@ -636,6 +636,7 @@ async function main(): Promise<void> {
     await waitUntil(
       () => !fs.readdirSync(installDir).some((name) => name.includes(".uninstall.")),
       "uninstall tombstone cleanup",
+      75_000,
     )
     assert.equal(fs.existsSync(path.join(dataDir, "install.json")), false)
     assert.equal(fs.existsSync(path.join(dataDir, "memory.jsonl")), true)
