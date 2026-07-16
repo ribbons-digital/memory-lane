@@ -34,6 +34,20 @@ function Get-Upgrade-Transaction-Path {
     return "$script:installPath.upgrade.$env:MEMORY_LANE_UPGRADE_PID"
 }
 
+function Get-Sha256-Hash($path) {
+    $stream = [IO.File]::OpenRead($path)
+    try {
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        try {
+            return ([BitConverter]::ToString($sha256.ComputeHash($stream))).Replace("-", "")
+        } finally {
+            $sha256.Dispose()
+        }
+    } finally {
+        $stream.Dispose()
+    }
+}
+
 function Get-Process-Start-Time-Ticks($processId) {
     $process = Get-Process -Id $processId -ErrorAction Stop
     return "$($process.StartTime.ToUniversalTime().Ticks)"
@@ -170,13 +184,13 @@ function Restore-Backup {
     if ($transaction.BackupState -eq "backed-up") {
         if (-not (Test-Path -LiteralPath $script:backupPath)) {
             if (-not (Test-Path -LiteralPath $script:installPath) `
-                -or (Get-FileHash -LiteralPath $script:installPath -Algorithm SHA256).Hash -ne $transaction.OriginalBinaryHash) {
+                -or (Get-Sha256-Hash $script:installPath) -ne $transaction.OriginalBinaryHash) {
                 throw "previous binary backup is missing"
             }
             $transaction.BackupState = "restored"
             Save-Upgrade-Transaction
         } else {
-            if ((Get-FileHash -LiteralPath $script:backupPath -Algorithm SHA256).Hash -ne $transaction.OriginalBinaryHash) {
+            if ((Get-Sha256-Hash $script:backupPath) -ne $transaction.OriginalBinaryHash) {
                 throw "previous binary backup does not match the upgrade transaction"
             }
             if (Test-Path -LiteralPath $script:installPath) {
@@ -544,7 +558,7 @@ function Backup-Existing-Binary {
             ParentStartedAt = $parentStartedAt
             InstallerPid = "$PID"
             InstallerStartedAt = $installerStartedAt
-            OriginalBinaryHash = if ($existingBinary) { (Get-FileHash -LiteralPath $script:installPath -Algorithm SHA256).Hash } else { "" }
+            OriginalBinaryHash = if ($existingBinary) { Get-Sha256-Hash $script:installPath } else { "" }
         }
         Save-Upgrade-Transaction
         Start-Upgrade-Recovery
@@ -670,7 +684,7 @@ if ($env:MEMORY_LANE_INSTALL_BINARY) {
     Say "verifying checksum"
     Invoke-WebRequest -Uri $checksumUrl -OutFile "$tmp\SHA256SUMS"
     $expected = (Get-Content "$tmp\SHA256SUMS" | Where-Object { $_ -match "$asset$" }).Split("  ")[0]
-    $actual = (Get-FileHash $archivePath -Algorithm SHA256).Hash.ToLower()
+    $actual = (Get-Sha256-Hash $archivePath).ToLower()
     if ($expected -ne $actual) {
         Err "checksum verification failed"
     }
