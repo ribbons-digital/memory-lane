@@ -254,13 +254,18 @@ function Update-Upgrade-Lock-Lease {
                 continue
             }
             $mismatchCount = 0
+            $recoveryStartedAt = Get-Process-Start-Time-Ticks $PID
             $owner = [PSCustomObject]@{
                 pid = $PID
-                processStartedAt = (Get-Process-Start-Time-Ticks $PID)
+                processStartedAt = $recoveryStartedAt
                 token = $transaction.LockOwner
                 createdAt = $lockOwner.createdAt
                 heartbeatAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
                 phase = "recovery"
+                parentPid = $transaction.ParentPid
+                parentProcessStartedAt = $transaction.ParentStartedAt
+                recoveryPid = $PID
+                recoveryProcessStartedAt = $recoveryStartedAt
             }
             $json = $owner | ConvertTo-Json -Compress
             Write-Upgrade-Lock-Owner $temporaryOwnerPath $ownerPath $json
@@ -284,6 +289,78 @@ function Wait-For-Upgrade-Process($processId, $startedAt) {
         }
         Start-Sleep -Milliseconds 500
     }
+}
+
+function Acquire-Upgrade-Actor($action) {
+    $transaction = Read-Upgrade-Transaction
+    if (-not $transaction -or -not $transaction.LockPath) {
+        return $null
+    }
+    $actorPath = Join-Path $transaction.LockPath "active-actor"
+    $temporaryActorPath = Join-Path $transaction.LockPath "active-actor.$PID.tmp"
+    $startedAt = Get-Process-Start-Time-Ticks $PID
+    $actor = [PSCustomObject]@{
+        pid = $PID
+        processStartedAt = $startedAt
+        token = $transaction.LockOwner
+        action = $action
+    }
+    $json = $actor | ConvertTo-Json -Compress
+    while ($true) {
+        try {
+            $stream = [IO.File]::Open($temporaryActorPath, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            try {
+                $bytes = [Text.UTF8Encoding]::new($false).GetBytes($json)
+                $stream.Write($bytes, 0, $bytes.Length)
+                $stream.Flush($true)
+            } finally {
+                $stream.Dispose()
+            }
+            [IO.File]::Move($temporaryActorPath, $actorPath)
+            return $actor
+        } catch {
+            if (-not (Test-Path -LiteralPath $transaction.LockPath) `
+                -or -not (Test-Path -LiteralPath $script:transactionPath)) {
+                return $null
+            }
+            if (-not (Test-Path -LiteralPath $actorPath)) {
+                throw
+            }
+            try {
+                $existingJson = [IO.File]::ReadAllText($actorPath)
+                $existing = $existingJson | ConvertFrom-Json
+                if ($existing.token -ne $transaction.LockOwner) {
+                    return $null
+                }
+                $identity = Test-Upgrade-Process-Identity $existing.pid $existing.processStartedAt
+                if ($identity -eq "inactive" -and [IO.File]::ReadAllText($actorPath) -eq $existingJson) {
+                    Remove-Item -LiteralPath $actorPath -Force -ErrorAction SilentlyContinue
+                }
+            } catch {}
+            Start-Sleep -Milliseconds 100
+        } finally {
+            Remove-Item -LiteralPath $temporaryActorPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Release-Upgrade-Actor($actor) {
+    if (-not $actor) {
+        return
+    }
+    $transaction = Read-Upgrade-Transaction
+    if (-not $transaction -or -not $transaction.LockPath) {
+        return
+    }
+    $actorPath = Join-Path $transaction.LockPath "active-actor"
+    try {
+        $existing = ([IO.File]::ReadAllText($actorPath)) | ConvertFrom-Json
+        if ($existing.token -eq $actor.token `
+            -and "$($existing.pid)" -eq "$($actor.pid)" `
+            -and "$($existing.processStartedAt)" -eq "$($actor.processStartedAt)") {
+            Remove-Item -LiteralPath $actorPath -Force
+        }
+    } catch {}
 }
 
 function Cleanup-Committed-Upgrade-After-Lost-Lease {
@@ -413,27 +490,35 @@ if ($UpgradeAction) {
         }
         $script:transaction = $null
     }
-    if ($UpgradeAction -eq "Commit") {
-        $transaction = Read-Upgrade-Transaction
-        if (-not $transaction) {
-            Err "upgrade transaction is missing"
-        }
-        $transaction.State = "committed"
-        Save-Upgrade-Transaction
-        Say "committed Windows upgrade"
-        exit 0
-    }
     if (-not (Test-Path -LiteralPath $script:transactionPath) `
         -and -not (Test-Path -LiteralPath $script:backupPath)) {
         exit 0
     }
-    $transaction = Read-Upgrade-Transaction
-    if ($UpgradeAction -eq "Recover" -and $transaction -and $transaction.State -eq "committed") {
-        Cleanup-Upgrade-Transaction
-        exit 0
+    $actor = Acquire-Upgrade-Actor $UpgradeAction
+    if (-not $actor) {
+        Err "could not acquire the Windows upgrade transaction actor"
     }
-    Restore-Backup
-    exit 0
+    try {
+        if ($UpgradeAction -eq "Commit") {
+            $transaction = Read-Upgrade-Transaction
+            if (-not $transaction) {
+                Err "upgrade transaction is missing"
+            }
+            $transaction.State = "committed"
+            Save-Upgrade-Transaction
+            Say "committed Windows upgrade"
+            exit 0
+        }
+        $transaction = Read-Upgrade-Transaction
+        if ($UpgradeAction -eq "Recover" -and $transaction -and $transaction.State -eq "committed") {
+            Cleanup-Upgrade-Transaction
+            exit 0
+        }
+        Restore-Backup
+        exit 0
+    } finally {
+        Release-Upgrade-Actor $actor
+    }
 }
 
 $arch = if ([System.Environment]::Is64BitOperatingSystem) { "x64" } else { Err "x64 Windows required" }

@@ -191,6 +191,8 @@ async function main(): Promise<void> {
         createdAt: now,
         heartbeatAt: now,
         phase: "starting",
+        parentPid: runningOldBinary?.pid,
+        parentProcessStartedAt: parentStartedAt,
       }), "utf8")
     }
     const installerArgs = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(repo, "install.ps1")]
@@ -266,6 +268,10 @@ async function main(): Promise<void> {
     assert.equal(recoveryOwner.phase, "recovery", "installer success must wait for durable recovery lease handoff")
     assert.equal(recoveryOwner.token, installerEnv.MEMORY_LANE_UPGRADE_LOCK_OWNER)
     assert.match(recoveryOwner.processStartedAt, /^\d+$/u)
+    assert.equal(recoveryOwner.parentPid, runningOldBinary.pid)
+    assert.equal(recoveryOwner.parentProcessStartedAt, parentStartedAt)
+    assert.equal(recoveryOwner.recoveryPid, recoveryOwner.pid)
+    assert.equal(recoveryOwner.recoveryProcessStartedAt, recoveryOwner.processStartedAt)
 
     const smoke = spawnSync(installPath, ["--smoke-test"], { encoding: "utf8" })
     assert.equal(smoke.status, 0, smoke.stderr)

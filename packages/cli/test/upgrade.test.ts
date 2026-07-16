@@ -243,6 +243,8 @@ describe("upgrade", () => {
     assert.equal(typeof owner.createdAt, "number")
     assert.equal(owner.heartbeatAt, owner.createdAt)
     assert.equal(owner.phase, "starting")
+    assert.equal(owner.parentPid, process.pid)
+    assert.equal(owner.parentProcessStartedAt, owner.processStartedAt)
     assert.throws(() => acquireUpgradeLock(installDir, process.pid), /already in progress/u)
     fs.writeFileSync(
       path.join(lock.path, "owner"),
@@ -278,6 +280,8 @@ describe("upgrade", () => {
         createdAt: now - 5_000_000,
         heartbeatAt: now - 5_000_000,
         phase: "starting",
+        parentPid: 9876,
+        parentProcessStartedAt: "123456789",
       }),
       "utf8",
     )
@@ -309,6 +313,8 @@ describe("upgrade", () => {
         createdAt: now,
         heartbeatAt: now,
         phase: "starting",
+        parentPid: 9876,
+        parentProcessStartedAt: "123456789",
       }),
       "utf8",
     )
@@ -370,6 +376,10 @@ describe("upgrade", () => {
       createdAt: now - 10_000,
       heartbeatAt: now - 5_000,
       phase: "recovery",
+      parentPid: 8765,
+      parentProcessStartedAt: "222222222",
+      recoveryPid: 9876,
+      recoveryProcessStartedAt: "123456789",
     }
     fs.mkdirSync(lockPath)
     fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify(recoveryOwner), "utf8")
@@ -380,11 +390,94 @@ describe("upgrade", () => {
         staleAfterMs: 1_000,
         inspectProcessStartTime: (processId) => processId === 9876
           ? { status: "found", startedAt: "123456789" }
-          : { status: "found", startedAt: "987654321" },
+          : processId === 8765
+            ? { status: "missing" }
+            : { status: "found", startedAt: "987654321" },
       }),
       /already in progress/u,
     )
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(lockPath, "owner"), "utf8")), recoveryOwner)
+  })
+
+  it("preserves a recovery lock while its original parent remains active", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const now = 2_000_000
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
+      pid: 9876,
+      processStartedAt: "111111111",
+      token: "recovery-owner",
+      createdAt: now - 10_000,
+      heartbeatAt: now - 5_000,
+      phase: "recovery",
+      parentPid: 8765,
+      parentProcessStartedAt: "222222222",
+      recoveryPid: 9876,
+      recoveryProcessStartedAt: "111111111",
+    }), "utf8")
+
+    assert.throws(
+      () => acquireUpgradeLock(installDir, process.pid, {
+        now: () => now,
+        inspectProcessStartTime: (processId) => processId === 8765
+          ? { status: "found", startedAt: "222222222" }
+          : processId === 9876
+            ? { status: "missing" }
+            : { status: "found", startedAt: "333333333" },
+      }),
+      /already in progress/u,
+    )
+    assert.equal(fs.existsSync(lockPath), true)
+  })
+
+  it("preserves a lock while a registered finalizer remains active", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const now = 2_000_000
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
+      pid: 9876,
+      processStartedAt: "111111111",
+      token: "recovery-owner",
+      createdAt: now - 10_000,
+      heartbeatAt: now - 5_000,
+      phase: "recovery",
+      parentPid: 8765,
+      parentProcessStartedAt: "222222222",
+      recoveryPid: 9876,
+      recoveryProcessStartedAt: "111111111",
+    }), "utf8")
+    fs.writeFileSync(path.join(lockPath, "active-actor"), JSON.stringify({
+      pid: 7654,
+      processStartedAt: "444444444",
+      token: "recovery-owner",
+      action: "Commit",
+    }), "utf8")
+
+    assert.throws(
+      () => acquireUpgradeLock(installDir, process.pid, {
+        now: () => now,
+        inspectProcessStartTime: (processId) => processId === 7654
+          ? { status: "found", startedAt: "444444444" }
+          : processId === process.pid
+            ? { status: "found", startedAt: "333333333" }
+            : { status: "missing" },
+      }),
+      /already in progress/u,
+    )
+    assert.equal(fs.existsSync(lockPath), true)
+
+    const replacement = acquireUpgradeLock(installDir, process.pid, {
+      now: () => now,
+      createToken: () => "replacement-owner",
+      inspectProcessStartTime: (processId) => processId === process.pid
+        ? { status: "found", startedAt: "333333333" }
+        : { status: "missing" },
+    })
+    assert.equal(replacement.owner, "replacement-owner")
+    releaseUpgradeLock(replacement)
+    assert.equal(fs.existsSync(lockPath), false)
   })
 
   it("preserves a starting lock when process inspection is unavailable", () => {
@@ -401,6 +494,8 @@ describe("upgrade", () => {
         createdAt: now - 10_000,
         heartbeatAt: now - 5_000,
         phase: "starting",
+        parentPid: 9876,
+        parentProcessStartedAt: "123456789",
       }),
       "utf8",
     )
@@ -432,6 +527,10 @@ describe("upgrade", () => {
         createdAt: now - 10_000,
         heartbeatAt: now,
         phase: "recovery",
+        parentPid: 8765,
+        parentProcessStartedAt: "222222222",
+        recoveryPid: 9876,
+        recoveryProcessStartedAt: "123456789",
       }),
       "utf8",
     )
@@ -441,7 +540,9 @@ describe("upgrade", () => {
       createToken: () => "replacement-owner",
       inspectProcessStartTime: (processId) => processId === 9876
         ? { status: "found", startedAt: "999999999" }
-        : { status: "found", startedAt: "987654321" },
+        : processId === 8765
+          ? { status: "missing" }
+          : { status: "found", startedAt: "987654321" },
     })
 
     assert.equal(lock.owner, "replacement-owner")
@@ -453,7 +554,14 @@ describe("upgrade", () => {
     const lock = acquireUpgradeLock(installDir, process.pid)
     const ownerPath = path.join(lock.path, "owner")
     const owner = JSON.parse(fs.readFileSync(ownerPath, "utf8"))
-    fs.writeFileSync(ownerPath, JSON.stringify({ ...owner, pid: 9876, phase: "recovery" }), "utf8")
+    fs.writeFileSync(ownerPath, JSON.stringify({
+      ...owner,
+      pid: 9876,
+      processStartedAt: "123456789",
+      phase: "recovery",
+      recoveryPid: 9876,
+      recoveryProcessStartedAt: "123456789",
+    }), "utf8")
 
     releaseUpgradeLock(lock)
 

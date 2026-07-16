@@ -42,13 +42,25 @@ export interface UpgradeLock {
   owner: string
 }
 
-interface UpgradeLockOwner {
+interface UpgradeLockProcessIdentity {
   pid: number
   processStartedAt: string
+}
+
+interface UpgradeLockOwner extends UpgradeLockProcessIdentity {
   token: string
   createdAt: number
   heartbeatAt: number
   phase: "starting" | "recovery"
+  parentPid: number
+  parentProcessStartedAt: string
+  recoveryPid?: number
+  recoveryProcessStartedAt?: string
+}
+
+interface UpgradeLockActor extends UpgradeLockProcessIdentity {
+  token: string
+  action: "Commit" | "Rollback" | "Recover"
 }
 
 export type ProcessStartTimeInspection =
@@ -94,22 +106,57 @@ function inspectWindowsProcessStartTime(processId: number): ProcessStartTimeInsp
     : { status: "unknown" }
 }
 
+function isProcessIdentity(pid: unknown, processStartedAt: unknown): boolean {
+  return Number.isInteger(pid) && Number(pid) > 0
+    && typeof processStartedAt === "string" && /^\d+$/u.test(processStartedAt)
+}
+
 function readUpgradeLockOwner(ownerPath: string): UpgradeLockOwner | undefined {
   try {
     const value = JSON.parse(fs.readFileSync(ownerPath, "utf8")) as Partial<UpgradeLockOwner>
-    return Number.isInteger(value.pid) && Number(value.pid) > 0
+    const validRecovery = value.phase !== "recovery"
+      || isProcessIdentity(value.recoveryPid, value.recoveryProcessStartedAt)
+    return isProcessIdentity(value.pid, value.processStartedAt)
+      && isProcessIdentity(value.parentPid, value.parentProcessStartedAt)
+      && validRecovery
       && typeof value.token === "string" && value.token.length > 0
       && typeof value.createdAt === "number" && Number.isFinite(value.createdAt) && value.createdAt > 0
       && typeof value.heartbeatAt === "number" && Number.isFinite(value.heartbeatAt) && value.heartbeatAt > 0
-      && typeof value.processStartedAt === "string" && /^\d+$/u.test(value.processStartedAt)
       && (value.phase === "recovery" || value.phase === "starting")
       ? {
           pid: Number(value.pid),
-          processStartedAt: value.processStartedAt,
+          processStartedAt: value.processStartedAt!,
           token: value.token,
           createdAt: value.createdAt,
           heartbeatAt: value.heartbeatAt,
           phase: value.phase,
+          parentPid: Number(value.parentPid),
+          parentProcessStartedAt: value.parentProcessStartedAt!,
+          ...(value.phase === "recovery"
+            ? {
+                recoveryPid: Number(value.recoveryPid),
+                recoveryProcessStartedAt: value.recoveryProcessStartedAt!,
+              }
+            : {}),
+        }
+      : undefined
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" || error instanceof SyntaxError) return undefined
+    throw error
+  }
+}
+
+function readUpgradeLockActor(actorPath: string): UpgradeLockActor | undefined {
+  try {
+    const value = JSON.parse(fs.readFileSync(actorPath, "utf8")) as Partial<UpgradeLockActor>
+    return isProcessIdentity(value.pid, value.processStartedAt)
+      && typeof value.token === "string" && value.token.length > 0
+      && (value.action === "Commit" || value.action === "Rollback" || value.action === "Recover")
+      ? {
+          pid: Number(value.pid),
+          processStartedAt: value.processStartedAt!,
+          token: value.token,
+          action: value.action,
         }
       : undefined
   } catch (error) {
@@ -125,6 +172,10 @@ function sameUpgradeLockOwner(left: UpgradeLockOwner | undefined, right: Upgrade
     && left.createdAt === right.createdAt
     && left.heartbeatAt === right.heartbeatAt
     && left.phase === right.phase
+    && left.parentPid === right.parentPid
+    && left.parentProcessStartedAt === right.parentProcessStartedAt
+    && left.recoveryPid === right.recoveryPid
+    && left.recoveryProcessStartedAt === right.recoveryProcessStartedAt
 }
 
 function readLockSnapshot(lockPath: string): { identity: string; modifiedAt: number } | undefined {
@@ -163,7 +214,16 @@ export function acquireUpgradeLock(
         const createdAt = now()
         fs.writeFileSync(
           temporaryOwnerPath,
-          JSON.stringify({ pid: upgradePid, processStartedAt, token: owner, createdAt, heartbeatAt: createdAt, phase: "starting" }),
+          JSON.stringify({
+            pid: upgradePid,
+            processStartedAt,
+            token: owner,
+            createdAt,
+            heartbeatAt: createdAt,
+            phase: "starting",
+            parentPid: upgradePid,
+            parentProcessStartedAt: processStartedAt,
+          }),
           { encoding: "utf8", flag: "wx" },
         )
         fs.renameSync(temporaryOwnerPath, ownerPath)
@@ -181,10 +241,24 @@ export function acquireUpgradeLock(
     if (!snapshot) continue
     const leaseUpdatedAt = existingOwner?.heartbeatAt ?? snapshot.modifiedAt
     const stale = now() - leaseUpdatedAt >= staleAfterMs
-    const ownerProcess = existingOwner ? inspectProcessStartTime(existingOwner.pid) : undefined
+    const actorPath = path.join(lockPath, "active-actor")
+    const actorExists = fs.existsSync(actorPath)
+    const activeActor = readUpgradeLockActor(actorPath)
+    const identities = existingOwner
+      ? [
+          { pid: existingOwner.parentPid, processStartedAt: existingOwner.parentProcessStartedAt },
+          ...(existingOwner.phase === "recovery"
+            ? [{ pid: existingOwner.recoveryPid!, processStartedAt: existingOwner.recoveryProcessStartedAt! }]
+            : []),
+          ...(activeActor?.token === existingOwner.token ? [activeActor] : []),
+        ]
+      : []
+    const identityStates = identities.map((identity) => inspectProcessStartTime(identity.pid))
+    const allIdentitiesInactive = identityStates.length > 0 && identityStates.every((state, index) =>
+      state.status === "missing"
+      || (state.status === "found" && state.startedAt !== identities[index].processStartedAt))
     const reclaimable = existingOwner
-      ? ownerProcess?.status === "missing"
-        || (ownerProcess?.status === "found" && ownerProcess.startedAt !== existingOwner.processStartedAt)
+      ? (!actorExists || activeActor?.token === existingOwner.token) && allIdentitiesInactive
       : stale
     if (!reclaimable) {
       if (!existingOwner) {
@@ -200,7 +274,16 @@ export function acquireUpgradeLock(
     try {
       fs.writeFileSync(
         reclaimPath,
-        JSON.stringify({ pid: upgradePid, processStartedAt, token: owner, createdAt: now(), heartbeatAt: now(), phase: "starting" }),
+        JSON.stringify({
+          pid: upgradePid,
+          processStartedAt,
+          token: owner,
+          createdAt: now(),
+          heartbeatAt: now(),
+          phase: "starting",
+          parentPid: upgradePid,
+          parentProcessStartedAt: processStartedAt,
+        }),
         { encoding: "utf8", flag: "wx" },
       )
     } catch (error) {
