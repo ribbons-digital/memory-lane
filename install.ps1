@@ -70,7 +70,8 @@ function Read-Upgrade-Transaction {
     }
     $transaction = (Get-Content -LiteralPath $script:transactionPath -Raw) | ConvertFrom-Json
     $validStates = @("pending", "committed", "restored")
-    $validBackupStates = @("not-backed-up", "backed-up", "no-backup", "restored")
+    $validBackupStates = @("not-backed-up", "backed-up", "no-backup", "restored", "no-original-restored")
+    $noOriginalBackupStates = @("no-backup", "no-original-restored")
     $validManifestStates = @("existing", "missing", "restored")
     if ($validStates -notcontains $transaction.State `
         -or $validBackupStates -notcontains $transaction.BackupState `
@@ -83,7 +84,8 @@ function Read-Upgrade-Transaction {
         -or "$($transaction.ParentStartedAt)" -notmatch "^\d+$" `
         -or "$($transaction.InstallerPid)" -notmatch "^\d+$" `
         -or "$($transaction.InstallerStartedAt)" -notmatch "^\d+$" `
-        -or ($transaction.BackupState -ne "no-backup" -and "$($transaction.OriginalBinaryHash)" -notmatch "^[a-fA-F0-9]{64}$")) {
+        -or ($noOriginalBackupStates -contains $transaction.BackupState -and -not [string]::IsNullOrWhiteSpace("$($transaction.OriginalBinaryHash)")) `
+        -or ($noOriginalBackupStates -notcontains $transaction.BackupState -and "$($transaction.OriginalBinaryHash)" -notmatch "^[a-fA-F0-9]{64}$")) {
         throw "invalid upgrade transaction state"
     }
     $script:transaction = $transaction
@@ -189,7 +191,7 @@ function Restore-Backup {
         if (Test-Path -LiteralPath $script:installPath) {
             Remove-Item -LiteralPath $script:installPath -Force
         }
-        $transaction.BackupState = "restored"
+        $transaction.BackupState = "no-original-restored"
         Save-Upgrade-Transaction
     }
 

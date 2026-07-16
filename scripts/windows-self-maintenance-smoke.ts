@@ -342,6 +342,50 @@ async function main(): Promise<void> {
     await waitUntil(() => !fs.existsSync(manifestBackupPath), "manifest snapshot cleanup")
     await waitUntil(() => !fs.existsSync(upgradeLockPath), "upgrade lock cleanup")
 
+    const noOriginalInstallDir = path.join(root, "no-original-bin")
+    const noOriginalInstallPath = path.join(noOriginalInstallDir, "memory-lane.exe")
+    const noOriginalManifestPath = path.join(root, "no-original-data", "install.json")
+    const noOriginalManifestBackupPath = `${noOriginalManifestPath}.upgrade-backup.${exitedUpgradePid}`
+    const noOriginalTransactionPath = `${noOriginalInstallPath}.upgrade.${exitedUpgradePid}`
+    const noOriginalLockPath = path.join(noOriginalInstallDir, ".memory-lane-upgrade.lock")
+    const noOriginalLockOwner = "no-original-owner"
+    fs.mkdirSync(noOriginalLockPath, { recursive: true })
+    fs.mkdirSync(path.dirname(noOriginalManifestPath), { recursive: true })
+    fs.writeFileSync(
+      path.join(noOriginalLockPath, "owner"),
+      JSON.stringify({ pid: process.pid, token: noOriginalLockOwner }),
+      "utf8",
+    )
+    fs.writeFileSync(noOriginalManifestPath, "new manifest must be removed", "utf8")
+    fs.writeFileSync(noOriginalTransactionPath, JSON.stringify({
+      State: "pending",
+      BackupState: "no-original-restored",
+      ManifestState: "missing",
+      ManifestPath: noOriginalManifestPath,
+      ManifestBackupPath: noOriginalManifestBackupPath,
+      LockPath: noOriginalLockPath,
+      LockOwner: noOriginalLockOwner,
+      ParentPid: exitedUpgradePid,
+      ParentStartedAt: "1",
+      InstallerPid: exitedUpgradePid,
+      InstallerStartedAt: "1",
+      OriginalBinaryHash: "",
+    }), "utf8")
+    run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
+      cwd: repo,
+      env: {
+        ...installerEnv,
+        INSTALL_DIR: noOriginalInstallDir,
+        MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
+        MEMORY_LANE_UPGRADE_LOCK_PATH: noOriginalLockPath,
+        MEMORY_LANE_UPGRADE_LOCK_OWNER: noOriginalLockOwner,
+      },
+    })
+    assert.equal(fs.existsSync(noOriginalInstallPath), false, "no-original retry must preserve the absent binary")
+    assert.equal(fs.existsSync(noOriginalManifestPath), false, "no-original retry must restore the absent manifest")
+    assert.equal(fs.existsSync(noOriginalTransactionPath), false, "no-original retry must close the transaction")
+    assert.equal(fs.existsSync(noOriginalLockPath), false, "no-original retry must release its upgrade lock")
+
     const ownerRaceLockPath = path.join(installDir, ".memory-lane-upgrade.lock")
     const staleOwner = "finished-upgrade-owner"
     const replacementOwner = "later-upgrade-owner"
