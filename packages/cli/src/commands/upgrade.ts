@@ -4,6 +4,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { installHarness, installOmp } from "../installer/config.js"
+import { pendingBinaryRemovalPath, sweepPendingBinaryRemoval } from "./uninstall.js"
 import {
   installManifestPath,
   integrationHarness,
@@ -835,6 +836,7 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
   const url = isWindows ? WINDOWS_INSTALLER_URL : INSTALLER_URL
   const homeDir = process.env.HOME || os.homedir()
   const dataDir = path.join(homeDir, ".memory-lane")
+  if (isWindows) sweepPendingBinaryRemoval(pendingBinaryRemovalPath(homeDir))
   const manifestResult = readInstallManifest(dataDir)
   const binaryPath = resolveUpgradeBinaryPath(manifestResult, homeDir, isWindows)
   const manifest = manifestResult.status === "valid" ? manifestResult.manifest : undefined
@@ -863,11 +865,11 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
     }
     const { results, configuredCount } = reapplyInstallManifest(options, manifest, transactionalWindowsReapply)
     const failedIntegrations = results.filter((result) => !result.configured)
-    if (transactionalWindowsReapply && configuredCount === 0) {
-      throw new Error("No previous harness configs were reapplied. Run `memory-lane init` to inspect integrations.")
-    }
     if (transactionalWindowsReapply && failedIntegrations.length > 0) {
       throw new Error(`Failed to reapply ${failedIntegrations.length} required harness configuration(s).`)
+    }
+    if (transactionalWindowsReapply && configuredCount === 0) {
+      throw new Error("No previous harness configs were reapplied. Run `memory-lane init` to inspect integrations.")
     }
     if (configuredCount === 0) {
       console.log("No previous harness configs were reapplied. Run `memory-lane init` to inspect integrations.")

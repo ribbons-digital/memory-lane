@@ -6,8 +6,8 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import type { ChildProcess, SpawnOptions } from "node:child_process"
 import { tempDir } from "../../core/test/helpers.js"
-import { removeInstalledBinary } from "../src/commands/uninstall.js"
-import type { BinaryRemovalSpawner } from "../src/commands/uninstall.js"
+import { removeInstalledBinary, sweepPendingBinaryRemoval } from "../src/commands/uninstall.js"
+import type { BinaryRemovalSpawner, ProcessIdentityInspector } from "../src/commands/uninstall.js"
 
 function childThat(event: "spawn" | "error"): ChildProcess {
   const child = new EventEmitter() as ChildProcess
@@ -36,22 +36,30 @@ describe("installed binary removal", () => {
       return childThat("spawn")
     }
 
-    assert.equal(await removeInstalledBinary(binaryPath, "win32", 4321, spawnStub, () => "638500000000000000"), "scheduled")
+    const recoveryPath = path.join(dir, "pending-uninstall.json")
+    assert.equal(
+      await removeInstalledBinary(binaryPath, "win32", 4321, spawnStub, () => "638500000000000000", recoveryPath),
+      "scheduled",
+    )
     assert.equal(fs.existsSync(binaryPath), false)
-    const pending = fs.readdirSync(dir).filter((name) => name.startsWith("memory-lane.exe.uninstall.4321."))
-    assert.equal(pending.length, 1)
+    const pending = fs.readdirSync(dir).filter((name) => name.startsWith("memory-lane.exe.uninstall."))
+    assert.deepEqual(pending, ["memory-lane.exe.uninstall.4321.638500000000000000"])
     assert.equal(invocation?.command, "powershell.exe")
     assert.equal(invocation?.options.detached, true)
     assert.equal(invocation?.options.env?.MEMORY_LANE_UNINSTALL_PARENT_PID, "4321")
     assert.equal(invocation?.options.env?.MEMORY_LANE_UNINSTALL_PARENT_STARTED_AT, "638500000000000000")
     assert.equal(invocation?.options.env?.MEMORY_LANE_UNINSTALL_PENDING_PATH, path.join(dir, pending[0]))
+    assert.equal(invocation?.options.env?.MEMORY_LANE_UNINSTALL_RECOVERY_PATH, recoveryPath)
+    assert.equal(fs.existsSync(recoveryPath), true)
     const encodedCommand = invocation?.args.at(-1)
     assert.equal(typeof encodedCommand, "string")
     const helperCommand = Buffer.from(encodedCommand ?? "", "base64").toString("utf16le")
     assert.match(helperCommand, /StartTime\.ToUniversalTime\(\)\.Ticks/u)
     assert.match(helperCommand, /\$identity = 'unknown'/u)
     assert.match(helperCommand, /NoProcessFoundForGivenId/u)
-    assert.match(helperCommand, /if \(\$identity -eq 'inactive'\) \{ break \}/u)
+    assert.match(helperCommand, /if \(\$identity -eq 'inactive'\) \{ \$inactive = \$true; break \}/u)
+    assert.match(helperCommand, /\$identityDeadline = \[DateTime\]::UtcNow\.AddSeconds\(30\)/u)
+    assert.match(helperCommand, /if \(-not \$inactive\) \{ exit 0 \}/u)
     const retryDelays = helperCommand.match(/\$retryDelays = @\(([^)]+)\)/u)?.[1]
       .split(",")
       .map((delay) => Number(delay.trim()))
@@ -62,6 +70,44 @@ describe("installed binary removal", () => {
     assert.match(helperCommand, /System\.IO\.IOException/u)
     assert.match(helperCommand, /System\.UnauthorizedAccessException/u)
     assert.match(helperCommand, /if \(-not \$retryable -or \$attempt -ge \$retryDelays\.Count\) \{ exit 1 \}/u)
+  })
+
+  it("safely sweeps a durable Windows uninstall recovery record", () => {
+    const dir = tempDir()
+    const binaryPath = path.join(dir, "memory-lane.exe")
+    const recoveryPath = path.join(dir, "pending-uninstall.json")
+    const parentPid = 4321
+    const parentStartedAt = "638500000000000000"
+    const pendingPath = `${binaryPath}.uninstall.${parentPid}.${parentStartedAt}`
+    const writeRecovery = (): void => {
+      fs.writeFileSync(pendingPath, "pending", "utf8")
+      fs.writeFileSync(recoveryPath, JSON.stringify({ binaryPath, pendingPath, parentPid, parentStartedAt }), "utf8")
+    }
+
+    writeRecovery()
+    const inactive: ProcessIdentityInspector = () => "inactive"
+    assert.equal(sweepPendingBinaryRemoval(recoveryPath, "win32", inactive), "removed")
+    assert.equal(fs.existsSync(pendingPath), false)
+    assert.equal(fs.existsSync(recoveryPath), false)
+
+    writeRecovery()
+    const active: ProcessIdentityInspector = () => "active"
+    assert.equal(sweepPendingBinaryRemoval(recoveryPath, "win32", active), "retained")
+    assert.equal(fs.existsSync(pendingPath), true)
+    assert.equal(fs.existsSync(recoveryPath), true)
+
+    const unknown: ProcessIdentityInspector = () => "unknown"
+    assert.equal(sweepPendingBinaryRemoval(recoveryPath, "win32", unknown), "retained")
+    assert.equal(fs.existsSync(pendingPath), true)
+    assert.equal(fs.existsSync(recoveryPath), true)
+
+    fs.rmSync(pendingPath)
+    assert.equal(sweepPendingBinaryRemoval(recoveryPath, "win32", unknown), "removed")
+    assert.equal(fs.existsSync(recoveryPath), false)
+
+    fs.writeFileSync(recoveryPath, "{}", "utf8")
+    assert.equal(sweepPendingBinaryRemoval(recoveryPath, "win32", inactive), "retained")
+    assert.equal(fs.existsSync(recoveryPath), true)
   })
 
   it("distinguishes matching and reused Windows process identities", { skip: process.platform !== "win32" }, async () => {
@@ -170,10 +216,11 @@ describe("installed binary removal", () => {
     const dir = tempDir()
     const binaryPath = path.join(dir, "memory-lane.exe")
     fs.writeFileSync(binaryPath, "binary", "utf8")
+    const recoveryPath = path.join(dir, "pending-uninstall.json")
     const spawnStub: BinaryRemovalSpawner = () => childThat("error")
 
     await assert.rejects(
-      removeInstalledBinary(binaryPath, "win32", 9876, spawnStub, () => "638500000000000000"),
+      removeInstalledBinary(binaryPath, "win32", 9876, spawnStub, () => "638500000000000000", recoveryPath),
       /Could not schedule Windows binary removal: helper unavailable/u,
     )
     assert.equal(fs.readFileSync(binaryPath, "utf8"), "binary")

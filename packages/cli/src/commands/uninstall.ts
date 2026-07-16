@@ -235,6 +235,19 @@ export interface ProcessStartTimeReader {
   (processId: number): string
 }
 
+export type ProcessIdentityInspection = "active" | "inactive" | "unknown"
+
+export interface ProcessIdentityInspector {
+  (processId: number, startedAt: string): ProcessIdentityInspection
+}
+
+interface PendingBinaryRemoval {
+  binaryPath: string
+  pendingPath: string
+  parentPid: number
+  parentStartedAt: string
+}
+
 function readWindowsProcessStartTime(processId: number): string {
   const command = [
     "$processId = [int]$env:MEMORY_LANE_UNINSTALL_PARENT_PID",
@@ -258,25 +271,100 @@ function readWindowsProcessStartTime(processId: number): string {
   return startedAt
 }
 
+function inspectWindowsProcessIdentity(processId: number, startedAt: string): ProcessIdentityInspection {
+  const command = [
+    "$process = $null",
+    "try {",
+    "  $process = Get-Process -Id ([int]$env:MEMORY_LANE_UNINSTALL_PARENT_PID) -ErrorAction Stop",
+    "} catch {",
+    "  if (\"$($_.FullyQualifiedErrorId)\" -like 'NoProcessFoundForGivenId*') { [Console]::Out.Write('inactive') } else { [Console]::Out.Write('unknown') }",
+    "  exit 0",
+    "}",
+    "try {",
+    "  if (\"$($process.StartTime.ToUniversalTime().Ticks)\" -eq $env:MEMORY_LANE_UNINSTALL_PARENT_STARTED_AT) { [Console]::Out.Write('active') } else { [Console]::Out.Write('inactive') }",
+    "} catch { [Console]::Out.Write('unknown') }",
+  ].join("; ")
+  const result = spawnSync(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(command, "utf16le").toString("base64")],
+    {
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 10_000,
+      env: {
+        ...process.env,
+        MEMORY_LANE_UNINSTALL_PARENT_PID: String(processId),
+        MEMORY_LANE_UNINSTALL_PARENT_STARTED_AT: startedAt,
+      },
+    },
+  )
+  const identity = typeof result.stdout === "string" ? result.stdout.trim() : ""
+  return result.status === 0 && (identity === "active" || identity === "inactive") ? identity : "unknown"
+}
+
+export function pendingBinaryRemovalPath(homeDir: string): string {
+  return path.join(homeDir, ".memory-lane-uninstall.json")
+}
+
+export function sweepPendingBinaryRemoval(
+  recoveryPath: string,
+  platform: NodeJS.Platform = process.platform,
+  inspectProcessIdentity: ProcessIdentityInspector = inspectWindowsProcessIdentity,
+): "none" | "removed" | "retained" {
+  if (platform !== "win32" || !fs.existsSync(recoveryPath)) return "none"
+  let pending: PendingBinaryRemoval
+  try {
+    pending = JSON.parse(fs.readFileSync(recoveryPath, "utf8")) as PendingBinaryRemoval
+  } catch {
+    return "retained"
+  }
+  if (typeof pending.binaryPath !== "string"
+    || !path.isAbsolute(pending.binaryPath)
+    || typeof pending.pendingPath !== "string"
+    || !Number.isInteger(pending.parentPid)
+    || pending.parentPid <= 0
+    || typeof pending.parentStartedAt !== "string"
+    || !/^\d+$/u.test(pending.parentStartedAt)
+    || pending.pendingPath !== `${pending.binaryPath}.uninstall.${pending.parentPid}.${pending.parentStartedAt}`) {
+    return "retained"
+  }
+  if (!fs.existsSync(pending.pendingPath)) {
+    fs.rmSync(recoveryPath, { force: true })
+    return "removed"
+  }
+  if (inspectProcessIdentity(pending.parentPid, pending.parentStartedAt) !== "inactive") return "retained"
+  fs.rmSync(pending.pendingPath, { force: true })
+  fs.rmSync(recoveryPath, { force: true })
+  return "removed"
+}
+
 export async function removeInstalledBinary(
   binaryPath: string,
   platform: NodeJS.Platform = process.platform,
   parentPid: number = process.pid,
   spawnProcess: BinaryRemovalSpawner = spawn,
   readProcessStartTime: ProcessStartTimeReader = readWindowsProcessStartTime,
+  recoveryPath?: string,
 ): Promise<"removed" | "scheduled"> {
   if (platform !== "win32") {
     fs.unlinkSync(binaryPath)
     return "removed"
   }
 
+  if (recoveryPath && fs.existsSync(recoveryPath)
+    && sweepPendingBinaryRemoval(recoveryPath, platform) === "retained") {
+    throw new Error(`A prior Windows binary removal still requires cleanup: ${recoveryPath}`)
+  }
   const parentStartedAt = readProcessStartTime(parentPid)
-  const pendingPath = `${binaryPath}.uninstall.${parentPid}.${Date.now()}`
-  fs.renameSync(binaryPath, pendingPath)
+  const pendingPath = `${binaryPath}.uninstall.${parentPid}.${parentStartedAt}`
+  let recoveryWritten = false
+  let renamed = false
   const helperCommand = [
     "$parentPid = $env:MEMORY_LANE_UNINSTALL_PARENT_PID",
     "$parentStartedAt = $env:MEMORY_LANE_UNINSTALL_PARENT_STARTED_AT",
-    "while ($parentPid -match '^\\d+$' -and $parentStartedAt -match '^\\d+$') {",
+    "$identityDeadline = [DateTime]::UtcNow.AddSeconds(30)",
+    "$inactive = $false",
+    "while ($parentPid -match '^\\d+$' -and $parentStartedAt -match '^\\d+$' -and [DateTime]::UtcNow -lt $identityDeadline) {",
     "  $identity = 'unknown'",
     "  try {",
     "    $parent = Get-Process -Id ([int]$parentPid) -ErrorAction Stop",
@@ -286,9 +374,10 @@ export async function removeInstalledBinary(
     "  } catch {",
     "    if (\"$($_.FullyQualifiedErrorId)\" -like 'NoProcessFoundForGivenId*') { $identity = 'inactive' }",
     "  }",
-    "  if ($identity -eq 'inactive') { break }",
+    "  if ($identity -eq 'inactive') { $inactive = $true; break }",
     "  Start-Sleep -Milliseconds 100",
     "}",
+    "if (-not $inactive) { exit 0 }",
     "$retryDelays = @(100, 200, 400, 800, 1600, 3200, 5000, 5000, 5000, 5000, 5000)",
     "$removed = $false",
     "for ($attempt = 0; $attempt -le $retryDelays.Count; $attempt++) {",
@@ -306,10 +395,27 @@ export async function removeInstalledBinary(
     "  }",
     "}",
     "if (-not $removed) { exit 1 }",
+    "if ($env:MEMORY_LANE_UNINSTALL_RECOVERY_PATH) {",
+    "  Remove-Item -LiteralPath $env:MEMORY_LANE_UNINSTALL_RECOVERY_PATH -Force -ErrorAction SilentlyContinue",
+    "}",
   ].join("\n")
   const encodedCommand = Buffer.from(helperCommand, "utf16le").toString("base64")
 
   try {
+    if (recoveryPath) {
+      fs.mkdirSync(path.dirname(recoveryPath), { recursive: true })
+      const temporaryRecoveryPath = `${recoveryPath}.${process.pid}.tmp`
+      try {
+        const recovery: PendingBinaryRemoval = { binaryPath, pendingPath, parentPid, parentStartedAt }
+        fs.writeFileSync(temporaryRecoveryPath, JSON.stringify(recovery), { encoding: "utf8", flag: "wx" })
+        fs.renameSync(temporaryRecoveryPath, recoveryPath)
+        recoveryWritten = true
+      } finally {
+        fs.rmSync(temporaryRecoveryPath, { force: true })
+      }
+    }
+    fs.renameSync(binaryPath, pendingPath)
+    renamed = true
     const child = spawnProcess(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", encodedCommand],
@@ -322,6 +428,7 @@ export async function removeInstalledBinary(
           MEMORY_LANE_UNINSTALL_PARENT_PID: String(parentPid),
           MEMORY_LANE_UNINSTALL_PARENT_STARTED_AT: parentStartedAt,
           MEMORY_LANE_UNINSTALL_PENDING_PATH: pendingPath,
+          MEMORY_LANE_UNINSTALL_RECOVERY_PATH: recoveryPath,
         },
       },
     )
@@ -332,7 +439,8 @@ export async function removeInstalledBinary(
     child.unref()
     return "scheduled"
   } catch (error) {
-    fs.renameSync(pendingPath, binaryPath)
+    if (renamed && fs.existsSync(pendingPath) && !fs.existsSync(binaryPath)) fs.renameSync(pendingPath, binaryPath)
+    if (recoveryWritten && recoveryPath) fs.rmSync(recoveryPath, { force: true })
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`Could not schedule Windows binary removal: ${message}`)
   }
@@ -379,6 +487,8 @@ export async function handleUninstall(argv: string[]): Promise<void> {
 
   const homeDir = resolveHomeDir()
   const dataDir = path.join(homeDir, ".memory-lane")
+  const removalRecoveryPath = pendingBinaryRemovalPath(homeDir)
+  sweepPendingBinaryRemoval(removalRecoveryPath)
   const read = readInstallManifest(dataDir)
   if (read.status === "missing") {
     console.log("No Memory Lane install manifest found. Nothing to uninstall.")
@@ -413,7 +523,14 @@ export async function handleUninstall(argv: string[]): Promise<void> {
 
   if (removeIntegrations) {
     if (fs.existsSync(binaryPath)) {
-      const binaryRemoval = await removeInstalledBinary(binaryPath)
+      const binaryRemoval = await removeInstalledBinary(
+        binaryPath,
+        process.platform,
+        process.pid,
+        spawn,
+        readWindowsProcessStartTime,
+        removalRecoveryPath,
+      )
       console.log(binaryRemoval === "scheduled"
         ? `  ✓ Scheduled binary removal after exit: ${binaryPath}`
         : `  ✓ Removed binary: ${binaryPath}`)
