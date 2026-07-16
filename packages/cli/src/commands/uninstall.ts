@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import type { ChildProcess, SpawnOptions } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
@@ -231,23 +231,57 @@ export interface BinaryRemovalSpawner {
   (command: string, args: readonly string[], options: SpawnOptions): ChildProcess
 }
 
+export interface ProcessStartTimeReader {
+  (processId: number): string
+}
+
+function readWindowsProcessStartTime(processId: number): string {
+  const command = [
+    "$processId = [int]$env:MEMORY_LANE_UNINSTALL_PARENT_PID",
+    "$process = Get-Process -Id $processId -ErrorAction Stop",
+    "[Console]::Out.Write($process.StartTime.ToUniversalTime().Ticks)",
+  ].join("; ")
+  const result = spawnSync(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(command, "utf16le").toString("base64")],
+    {
+      encoding: "utf8",
+      windowsHide: true,
+      env: { ...process.env, MEMORY_LANE_UNINSTALL_PARENT_PID: String(processId) },
+    },
+  )
+  const startedAt = typeof result.stdout === "string" ? result.stdout.trim() : ""
+  if (result.status !== 0 || !/^\d+$/u.test(startedAt)) {
+    throw new Error("Could not identify the running uninstall process")
+  }
+  return startedAt
+}
+
 export async function removeInstalledBinary(
   binaryPath: string,
   platform: NodeJS.Platform = process.platform,
   parentPid: number = process.pid,
   spawnProcess: BinaryRemovalSpawner = spawn,
+  readProcessStartTime: ProcessStartTimeReader = readWindowsProcessStartTime,
 ): Promise<"removed" | "scheduled"> {
   if (platform !== "win32") {
     fs.unlinkSync(binaryPath)
     return "removed"
   }
 
+  const parentStartedAt = readProcessStartTime(parentPid)
   const pendingPath = `${binaryPath}.uninstall.${parentPid}.${Date.now()}`
   fs.renameSync(binaryPath, pendingPath)
   const helperCommand = [
-    "Wait-Process -Id $env:MEMORY_LANE_UNINSTALL_PARENT_PID -ErrorAction SilentlyContinue",
+    "$parentPid = $env:MEMORY_LANE_UNINSTALL_PARENT_PID",
+    "$parentStartedAt = $env:MEMORY_LANE_UNINSTALL_PARENT_STARTED_AT",
+    "while ($parentPid -match '^\\d+$' -and $parentStartedAt -match '^\\d+$') {",
+    "  try { $parent = Get-Process -Id ([int]$parentPid) -ErrorAction Stop } catch { break }",
+    "  if (\"$($parent.StartTime.ToUniversalTime().Ticks)\" -ne $parentStartedAt) { break }",
+    "  Start-Sleep -Milliseconds 100",
+    "}",
     "Remove-Item -LiteralPath $env:MEMORY_LANE_UNINSTALL_PENDING_PATH -Force -ErrorAction SilentlyContinue",
-  ].join("; ")
+  ].join("\n")
   const encodedCommand = Buffer.from(helperCommand, "utf16le").toString("base64")
 
   try {
@@ -261,6 +295,7 @@ export async function removeInstalledBinary(
         env: {
           ...process.env,
           MEMORY_LANE_UNINSTALL_PARENT_PID: String(parentPid),
+          MEMORY_LANE_UNINSTALL_PARENT_STARTED_AT: parentStartedAt,
           MEMORY_LANE_UNINSTALL_PENDING_PATH: pendingPath,
         },
       },

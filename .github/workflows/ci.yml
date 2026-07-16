@@ -64,5 +64,8 @@ jobs:
       - name: Build packages
         run: pnpm build
 
+      - name: Test deferred uninstall process identity
+        run: node --test --import tsx packages/cli/test/uninstall-binary.test.ts
+
       - name: Exercise running executable replacement and removal
         run: node --import tsx scripts/windows-self-maintenance-smoke.ts
