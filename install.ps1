@@ -219,10 +219,9 @@ function Restore-Backup {
             Say "restored previous binary"
         }
     } elseif ($transaction.BackupState -eq "no-backup") {
-        if (-not (Test-Path -LiteralPath $script:installPath)) {
-            throw "new executable is missing before restoring the absent original"
+        if (Test-Path -LiteralPath $script:installPath) {
+            Remove-Item -LiteralPath $script:installPath -Force
         }
-        Remove-Item -LiteralPath $script:installPath -Force
         $transaction.BackupState = "no-original-restored"
         Save-Upgrade-Transaction
     }

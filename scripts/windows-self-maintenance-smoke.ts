@@ -372,7 +372,7 @@ async function main(): Promise<void> {
     fs.writeFileSync(noOriginalManifestPath, "new manifest must be removed", "utf8")
     fs.writeFileSync(noOriginalTransactionPath, JSON.stringify({
       State: "pending",
-      BackupState: "no-original-restored",
+      BackupState: "no-backup",
       ManifestState: "missing",
       ManifestPath: noOriginalManifestPath,
       ManifestBackupPath: noOriginalManifestBackupPath,

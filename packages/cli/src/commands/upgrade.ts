@@ -444,9 +444,6 @@ function reconcileDurableUpgradeTransaction(installDir: string, lockPath: string
     transaction.BackupState = "restored"
     saveDurableUpgradeTransaction(transactionPath, transaction)
   } else if (transaction.BackupState === "no-backup") {
-    if (!fs.existsSync(installPath)) {
-      throw new Error("Cannot safely restore the absent original Windows executable because the new executable is missing.")
-    }
     fs.rmSync(installPath, { force: true })
     transaction.BackupState = "no-original-restored"
     saveDurableUpgradeTransaction(transactionPath, transaction)

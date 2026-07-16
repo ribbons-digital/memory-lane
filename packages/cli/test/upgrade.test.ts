@@ -993,7 +993,7 @@ describe("upgrade", () => {
     })
   }
 
-  it("retains a pending no-backup transaction when the new executable is missing", () => {
+  it("finishes a no-backup rollback after the executable was already removed", () => {
     const fixture = createStaleUpgradeTransaction()
     const transaction = JSON.parse(fs.readFileSync(fixture.transactionPath, "utf8"))
     transaction.BackupState = "no-backup"
@@ -1002,18 +1002,19 @@ describe("upgrade", () => {
     fs.rmSync(fixture.installPath)
     fs.rmSync(fixture.backupPath)
 
-    assert.throws(
-      () => acquireUpgradeLock(fixture.installDir, process.pid, {
-        createToken: () => "replacement-owner",
-        inspectProcessStartTime: (processId) => processId === process.pid
-          ? { status: "found", startedAt: "444444444" }
-          : { status: "missing" },
-      }),
-      /new executable is missing/u,
-    )
-    assert.equal(fs.existsSync(fixture.transactionPath), true)
-    assert.equal(fs.existsSync(fixture.manifestBackupPath), true)
-    assert.equal(fs.existsSync(fixture.lockPath), true)
+    const lock = acquireUpgradeLock(fixture.installDir, process.pid, {
+      createToken: () => "replacement-owner",
+      inspectProcessStartTime: (processId) => processId === process.pid
+        ? { status: "found", startedAt: "444444444" }
+        : { status: "missing" },
+    })
+
+    assert.equal(lock.owner, "replacement-owner")
+    assert.equal(fs.existsSync(fixture.installPath), false)
+    assert.equal(fs.readFileSync(fixture.manifestPath, "utf8"), "original manifest")
+    assert.equal(fs.existsSync(fixture.transactionPath), false)
+    assert.equal(fs.existsSync(fixture.manifestBackupPath), false)
+    releaseUpgradeLock(lock)
   })
 
   for (const executableState of ["missing", "tampered"] as const) {

@@ -109,7 +109,11 @@ describe("installed binary removal", () => {
     assert.equal(fs.existsSync(recoveryPath), true)
 
     fs.rmSync(pendingPath)
-    assert.equal(sweepPendingBinaryRemoval(recoveryPath, "win32", unknown), "removed")
+    assert.equal(sweepPendingBinaryRemoval(recoveryPath, "win32", unknown), "retained")
+    assert.equal(fs.existsSync(recoveryPath), true)
+    assert.equal(sweepPendingBinaryRemoval(recoveryPath, "win32", active), "retained")
+    assert.equal(fs.existsSync(recoveryPath), true)
+    assert.equal(sweepPendingBinaryRemoval(recoveryPath, "win32", inactive), "removed")
     assert.equal(fs.existsSync(recoveryPath), false)
 
     fs.writeFileSync(recoveryPath, "{}", "utf8")

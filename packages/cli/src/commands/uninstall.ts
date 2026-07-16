@@ -328,11 +328,13 @@ export function sweepPendingBinaryRemoval(
     || pending.pendingPath !== `${pending.binaryPath}.uninstall.${pending.parentPid}.${pending.parentStartedAt}`) {
     return "retained"
   }
+  const parentIdentity = inspectProcessIdentity(pending.parentPid, pending.parentStartedAt)
   if (!fs.existsSync(pending.pendingPath)) {
+    if (parentIdentity !== "inactive") return "retained"
     fs.rmSync(recoveryPath, { force: true })
     return "removed"
   }
-  if (inspectProcessIdentity(pending.parentPid, pending.parentStartedAt) !== "inactive") return "retained"
+  if (parentIdentity !== "inactive") return "retained"
   fs.rmSync(pending.pendingPath, { force: true })
   fs.rmSync(recoveryPath, { force: true })
   return "removed"
