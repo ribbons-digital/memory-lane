@@ -238,6 +238,7 @@ describe("upgrade", () => {
     const owner = JSON.parse(fs.readFileSync(path.join(lock.path, "owner"), "utf8"))
 
     assert.equal(owner.pid, process.pid)
+    assert.match(owner.processStartedAt, /^\d+$/u)
     assert.equal(owner.token, lock.owner)
     assert.equal(typeof owner.createdAt, "number")
     assert.equal(owner.heartbeatAt, owner.createdAt)
@@ -261,6 +262,64 @@ describe("upgrade", () => {
     const releasable = acquireUpgradeLock(installDir, process.pid)
     releaseUpgradeLock(releasable)
     assert.equal(fs.existsSync(releasable.path), false)
+  })
+
+  it("preserves a long-running starting lock while its process identity matches", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const now = 10_000_000
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(
+      path.join(lockPath, "owner"),
+      JSON.stringify({
+        pid: 9876,
+        processStartedAt: "123456789",
+        token: "active-owner",
+        createdAt: now - 5_000_000,
+        heartbeatAt: now - 5_000_000,
+        phase: "starting",
+      }),
+      "utf8",
+    )
+
+    assert.throws(
+      () => acquireUpgradeLock(installDir, process.pid, {
+        now: () => now,
+        staleAfterMs: 1_000,
+        readProcessStartTime: (processId) => processId === 9876 ? "123456789" : "987654321",
+      }),
+      /already in progress/u,
+    )
+    assert.equal(fs.existsSync(lockPath), true)
+  })
+
+  it("reclaims a starting lock after its PID is reused", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const now = 2_000_000
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(
+      path.join(lockPath, "owner"),
+      JSON.stringify({
+        pid: 9876,
+        processStartedAt: "123456789",
+        token: "old-owner",
+        createdAt: now,
+        heartbeatAt: now,
+        phase: "starting",
+      }),
+      "utf8",
+    )
+
+    const lock = acquireUpgradeLock(installDir, process.pid, {
+      now: () => now,
+      createToken: () => "replacement-owner",
+      readProcessStartTime: (processId) => processId === 9876 ? "999999999" : "987654321",
+    })
+
+    assert.equal(lock.owner, "replacement-owner")
+    releaseUpgradeLock(lock)
+    assert.equal(fs.existsSync(lockPath), false)
   })
 
   it("preserves a fresh lock with malformed owner metadata", () => {

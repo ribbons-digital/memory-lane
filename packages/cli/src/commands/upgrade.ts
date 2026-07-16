@@ -44,6 +44,7 @@ export interface UpgradeLock {
 
 interface UpgradeLockOwner {
   pid: number
+  processStartedAt?: string
   token: string
   createdAt: number
   heartbeatAt: number
@@ -54,9 +55,31 @@ export interface UpgradeLockOptions {
   now?: () => number
   createToken?: () => string
   staleAfterMs?: number
+  readProcessStartTime?: (processId: number) => string | undefined
 }
 
 const DEFAULT_UPGRADE_LOCK_STALE_AFTER_MS = 60 * 60 * 1000
+const CURRENT_PROCESS_STARTED_AT = String(Math.round(Date.now() - process.uptime() * 1000))
+
+function readWindowsProcessStartTime(processId: number): string | undefined {
+  if (process.platform !== "win32") return processId === process.pid ? CURRENT_PROCESS_STARTED_AT : undefined
+  const command = [
+    "$processId = [int]$env:MEMORY_LANE_UPGRADE_PROCESS_PID",
+    "$process = Get-Process -Id $processId -ErrorAction Stop",
+    "[Console]::Out.Write($process.StartTime.ToUniversalTime().Ticks)",
+  ].join("; ")
+  const result = spawnSync(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(command, "utf16le").toString("base64")],
+    {
+      encoding: "utf8",
+      windowsHide: true,
+      env: { ...process.env, MEMORY_LANE_UPGRADE_PROCESS_PID: String(processId) },
+    },
+  )
+  const startedAt = typeof result.stdout === "string" ? result.stdout.trim() : ""
+  return result.status === 0 && /^\d+$/u.test(startedAt) ? startedAt : undefined
+}
 
 function readUpgradeLockOwner(ownerPath: string): UpgradeLockOwner | undefined {
   try {
@@ -65,9 +88,10 @@ function readUpgradeLockOwner(ownerPath: string): UpgradeLockOwner | undefined {
       && typeof value.token === "string" && value.token.length > 0
       && typeof value.createdAt === "number" && Number.isFinite(value.createdAt) && value.createdAt > 0
       && typeof value.heartbeatAt === "number" && Number.isFinite(value.heartbeatAt) && value.heartbeatAt > 0
-      && (value.phase === "starting" || value.phase === "recovery")
+      && (value.phase === "recovery" || (value.phase === "starting" && typeof value.processStartedAt === "string" && /^\d+$/u.test(value.processStartedAt)))
       ? {
           pid: Number(value.pid),
+          ...(typeof value.processStartedAt === "string" ? { processStartedAt: value.processStartedAt } : {}),
           token: value.token,
           createdAt: value.createdAt,
           heartbeatAt: value.heartbeatAt,
@@ -82,6 +106,7 @@ function readUpgradeLockOwner(ownerPath: string): UpgradeLockOwner | undefined {
 
 function sameUpgradeLockOwner(left: UpgradeLockOwner | undefined, right: UpgradeLockOwner): boolean {
   return left?.pid === right.pid
+    && left.processStartedAt === right.processStartedAt
     && left.token === right.token
     && left.createdAt === right.createdAt
     && left.heartbeatAt === right.heartbeatAt
@@ -107,6 +132,11 @@ export function acquireUpgradeLock(
   const ownerPath = path.join(lockPath, "owner")
   const now = options.now ?? Date.now
   const staleAfterMs = options.staleAfterMs ?? DEFAULT_UPGRADE_LOCK_STALE_AFTER_MS
+  const readProcessStartTime = options.readProcessStartTime ?? readWindowsProcessStartTime
+  const processStartedAt = readProcessStartTime(upgradePid)
+  if (!processStartedAt || !/^\d+$/u.test(processStartedAt)) {
+    throw new Error("Could not identify the running upgrade process.")
+  }
   const owner = (options.createToken ?? randomUUID)()
   fs.mkdirSync(installDir, { recursive: true })
 
@@ -118,7 +148,7 @@ export function acquireUpgradeLock(
         const createdAt = now()
         fs.writeFileSync(
           temporaryOwnerPath,
-          JSON.stringify({ pid: upgradePid, token: owner, createdAt, heartbeatAt: createdAt, phase: "starting" }),
+          JSON.stringify({ pid: upgradePid, processStartedAt, token: owner, createdAt, heartbeatAt: createdAt, phase: "starting" }),
           { encoding: "utf8", flag: "wx" },
         )
         fs.renameSync(temporaryOwnerPath, ownerPath)
@@ -136,7 +166,10 @@ export function acquireUpgradeLock(
     if (!snapshot) continue
     const leaseUpdatedAt = existingOwner?.heartbeatAt ?? snapshot.modifiedAt
     const stale = now() - leaseUpdatedAt >= staleAfterMs
-    if (!stale) {
+    const activeStartingOwner = existingOwner?.phase === "starting"
+      && readProcessStartTime(existingOwner.pid) === existingOwner.processStartedAt
+    const reclaimable = existingOwner?.phase === "starting" ? !activeStartingOwner : stale
+    if (!reclaimable) {
       if (!existingOwner) {
         throw new Error("Another Memory Lane upgrade is starting; lock owner metadata is not yet available.")
       }
@@ -150,7 +183,7 @@ export function acquireUpgradeLock(
     try {
       fs.writeFileSync(
         reclaimPath,
-        JSON.stringify({ pid: upgradePid, token: owner, createdAt: now(), heartbeatAt: now(), phase: "starting" }),
+        JSON.stringify({ pid: upgradePid, processStartedAt, token: owner, createdAt: now(), heartbeatAt: now(), phase: "starting" }),
         { encoding: "utf8", flag: "wx" },
       )
     } catch (error) {
