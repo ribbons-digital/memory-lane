@@ -68,4 +68,5 @@ jobs:
         run: node --test --import tsx packages/cli/test/uninstall-binary.test.ts
 
       - name: Exercise running executable replacement and removal
+        timeout-minutes: 10
         run: node --import tsx scripts/windows-self-maintenance-smoke.ts

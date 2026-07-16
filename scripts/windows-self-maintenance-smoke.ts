@@ -17,16 +17,9 @@ function run(command: string, args: string[], options: { cwd?: string; env?: Nod
   const result = spawnSync(command, args, {
     cwd: options.cwd,
     env: options.env ?? process.env,
-    encoding: "utf8",
-    stdio: "pipe",
+    stdio: "inherit",
   })
-  if (result.status !== 0) {
-    throw new Error([
-      `Command failed: ${command} ${args.join(" ")}`,
-      result.stdout,
-      result.stderr,
-    ].filter(Boolean).join("\n"))
-  }
+  if (result.status !== 0) throw new Error(`Command failed: ${command} ${args.join(" ")}`)
 }
 
 function waitForExit(child: ChildProcess): Promise<ProcessResult> {
