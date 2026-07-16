@@ -114,15 +114,20 @@ async function main(): Promise<void> {
     const transactionPath = `${installPath}.upgrade.${runningOldBinary.pid}`
 
     fs.mkdirSync(transactionPath)
+    fs.writeFileSync(path.join(transactionPath, "cleanup-blocker"), "block marker cleanup", "utf8")
     const failedMarkerWrite = spawnSync("powershell.exe", installerArgs, {
       cwd: repo,
       env: installerEnv,
       encoding: "utf8",
     })
     assert.notEqual(failedMarkerWrite.status, 0, "transaction marker write failure must fail installation")
-    assert.equal(fs.existsSync(installPath), true, "marker write failure must restore the original executable path")
+    assert.equal(fs.existsSync(installPath), true, "marker cleanup failure must preserve the restored executable path")
     assert.equal(fs.existsSync(backupPath), false, "marker write failure must not strand a backup")
-    assert.equal(fs.existsSync(transactionPath), false, "marker write failure must not strand a transaction")
+    assert.equal(fs.existsSync(transactionPath), true, "blocked marker cleanup must remain best effort")
+    const restoredAfterCleanupFailure = spawnSync(installPath, ["--identity"], { encoding: "utf8" })
+    assert.equal(restoredAfterCleanupFailure.status, 0, restoredAfterCleanupFailure.stderr)
+    assert.match(restoredAfterCleanupFailure.stdout, /old binary/u)
+    fs.rmSync(transactionPath, { recursive: true, force: true })
 
     const failedInstall = spawnSync("powershell.exe", installerArgs, {
       cwd: repo,

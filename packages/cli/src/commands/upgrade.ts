@@ -207,7 +207,9 @@ export function reapplyInstallManifest(options: InitOptions, manifest: InstallMa
     dataDir: options.dataDir,
     integrations: mergeManifestIntegrations(manifest.integrations, replacements),
   }
-  writeInstallManifest(options.dataDir, nextManifest)
+  if (configuredCount > 0 && results.every((result) => result.configured)) {
+    writeInstallManifest(options.dataDir, nextManifest)
+  }
   return { results, configuredCount, manifest: nextManifest }
 }
 

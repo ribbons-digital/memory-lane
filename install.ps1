@@ -60,14 +60,19 @@ function Restore-Backup {
             Remove-Item -LiteralPath $script:installPath -Force
         }
         Move-Item -LiteralPath $script:backupPath -Destination $script:installPath -Force
+        $script:backupRestored = $true
         Say "restored previous binary"
     } elseif ($script:installPath -and (Test-Path -LiteralPath $script:installPath)) {
         Remove-Item -LiteralPath $script:installPath -Force
+        $script:backupRestored = $true
+    } else {
+        $script:backupRestored = $true
     }
     if ($script:transactionPath -and (Test-Path -LiteralPath $script:transactionPath)) {
-        Remove-Item -LiteralPath $script:transactionPath -Force
+        try {
+            Remove-Item -LiteralPath $script:transactionPath -Force
+        } catch {}
     }
-    $script:backupRestored = $true
 }
 
 function Backup-Existing-Binary {

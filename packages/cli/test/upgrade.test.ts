@@ -171,6 +171,7 @@ describe("upgrade", () => {
     assert.deepEqual(result.manifest.integrations.map((integration) => integration.harness), ["legacy-harness", "pi"])
     assert.equal(result.results.some((r) => r.configured === false && r.message?.includes("Unknown harness")), true)
     assert.ok(fs.readFileSync(path.join(home, ".pi/agent/extensions/memory-lane/index.ts"), "utf8").includes(binaryPath))
+    assert.equal(readInstallManifest(dataDir).status, "missing")
   })
 
   it("passes the recorded binary directory and Windows parent PID to the release installer", () => {
@@ -251,6 +252,8 @@ describe("upgrade", () => {
       dataDir,
       integrations: [{ harness: "unknown-required", configPath: path.join(home, "unknown.json") }],
     })
+    const manifestPath = path.join(dataDir, "install.json")
+    const originalManifest = fs.readFileSync(manifestPath, "utf8")
 
     const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist/index.js")
     const result = spawnSync(process.execPath, [cli, "upgrade", "--reapply-install-manifest", "--yes"], {
@@ -260,6 +263,7 @@ describe("upgrade", () => {
 
     assert.equal(result.status, 1)
     assert.match(result.stdout, /No previous harness configs were reapplied/u)
+    assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest)
   })
 
   it("returns non-zero when any required manifest integration fails", () => {
@@ -279,6 +283,8 @@ describe("upgrade", () => {
         { harness: "unknown-required", configPath: path.join(home, "unknown.json") },
       ],
     })
+    const manifestPath = path.join(dataDir, "install.json")
+    const originalManifest = fs.readFileSync(manifestPath, "utf8")
 
     const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist/index.js")
     const result = spawnSync(process.execPath, [cli, "upgrade", "--reapply-install-manifest", "--yes"], {
@@ -288,6 +294,7 @@ describe("upgrade", () => {
 
     assert.equal(result.status, 1)
     assert.match(result.stdout, /Failed to reapply 1 required harness configuration/u)
+    assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest)
   })
 
   it("rejects unsafe manifest-recorded OMP config paths before reapply writes", () => {
