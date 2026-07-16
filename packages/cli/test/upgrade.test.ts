@@ -235,9 +235,17 @@ describe("upgrade", () => {
   it("serializes Windows upgrades with an owner-checked lock", () => {
     const installDir = tempDir()
     const lock = acquireUpgradeLock(installDir, process.pid)
+    const owner = JSON.parse(fs.readFileSync(path.join(lock.path, "owner"), "utf8"))
 
+    assert.equal(owner.pid, process.pid)
+    assert.equal(owner.token, lock.owner)
+    assert.equal(typeof owner.createdAt, "number")
     assert.throws(() => acquireUpgradeLock(installDir, process.pid), /already in progress/u)
-    fs.writeFileSync(path.join(lock.path, "owner"), JSON.stringify({ pid: process.pid, token: "different-owner" }), "utf8")
+    fs.writeFileSync(
+      path.join(lock.path, "owner"),
+      JSON.stringify({ pid: process.pid, token: "different-owner", createdAt: Date.now() }),
+      "utf8",
+    )
     releaseUpgradeLock(lock)
     assert.equal(fs.existsSync(lock.path), true)
     fs.rmSync(lock.path, { recursive: true, force: true })
@@ -245,6 +253,87 @@ describe("upgrade", () => {
     const releasable = acquireUpgradeLock(installDir, process.pid)
     releaseUpgradeLock(releasable)
     assert.equal(fs.existsSync(releasable.path), false)
+  })
+
+  it("preserves a fresh lock with malformed owner metadata", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const now = 2_000_000
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(path.join(lockPath, "owner"), "{", "utf8")
+    fs.utimesSync(lockPath, new Date(now), new Date(now))
+
+    assert.throws(
+      () => acquireUpgradeLock(installDir, process.pid, { now: () => now, staleAfterMs: 1_000 }),
+      /metadata is not yet available/u,
+    )
+    assert.equal(fs.existsSync(lockPath), true)
+  })
+
+  it("reclaims a stale lock with missing owner metadata", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const now = 2_000_000
+    fs.mkdirSync(lockPath)
+    fs.utimesSync(lockPath, new Date(now - 1_001), new Date(now - 1_001))
+
+    const lock = acquireUpgradeLock(installDir, process.pid, {
+      now: () => now,
+      createToken: () => "replacement-owner",
+      staleAfterMs: 1_000,
+    })
+
+    assert.equal(lock.owner, "replacement-owner")
+    releaseUpgradeLock(lock)
+    assert.equal(fs.existsSync(lockPath), false)
+  })
+
+  it("reclaims an old lock even when its PID has been reused", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const now = 2_000_000
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(
+      path.join(lockPath, "owner"),
+      JSON.stringify({ pid: process.pid, token: "stale-owner", createdAt: now - 1_001 }),
+      "utf8",
+    )
+
+    const lock = acquireUpgradeLock(installDir, process.pid, {
+      now: () => now,
+      createToken: () => "replacement-owner",
+      isProcessAlive: () => true,
+      staleAfterMs: 1_000,
+    })
+
+    assert.equal(lock.owner, "replacement-owner")
+    releaseUpgradeLock(lock)
+  })
+
+  it("does not reclaim a fresh lock whose owner token changes during inspection", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const ownerPath = path.join(lockPath, "owner")
+    const now = 2_000_000
+    const replacement = { pid: process.pid, token: "replacement-owner", createdAt: now }
+    let checks = 0
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(ownerPath, JSON.stringify({ pid: process.pid, token: "observed-owner", createdAt: now }), "utf8")
+
+    assert.throws(
+      () => acquireUpgradeLock(installDir, process.pid, {
+        now: () => now,
+        createToken: () => "new-owner",
+        isProcessAlive: () => {
+          checks += 1
+          if (checks === 1) fs.writeFileSync(ownerPath, JSON.stringify(replacement), "utf8")
+          return true
+        },
+        staleAfterMs: 1_000,
+      }),
+      /already in progress/u,
+    )
+    assert.deepEqual(JSON.parse(fs.readFileSync(ownerPath, "utf8")), replacement)
   })
 
   it("uses the HOME-based Windows binary directory when the manifest is missing", () => {

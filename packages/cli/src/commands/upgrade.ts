@@ -45,31 +45,78 @@ export interface UpgradeLock {
 interface UpgradeLockOwner {
   pid: number
   token: string
+  createdAt: number
 }
+
+export interface UpgradeLockOptions {
+  now?: () => number
+  createToken?: () => string
+  isProcessAlive?: (pid: number) => boolean
+  staleAfterMs?: number
+}
+
+const DEFAULT_UPGRADE_LOCK_STALE_AFTER_MS = 60 * 60 * 1000
 
 function readUpgradeLockOwner(ownerPath: string): UpgradeLockOwner | undefined {
   try {
     const value = JSON.parse(fs.readFileSync(ownerPath, "utf8")) as Partial<UpgradeLockOwner>
-    return Number.isInteger(value.pid) && Number(value.pid) > 0 && typeof value.token === "string" && value.token
-      ? { pid: Number(value.pid), token: value.token }
+    return Number.isInteger(value.pid) && Number(value.pid) > 0
+      && typeof value.token === "string" && value.token.length > 0
+      && typeof value.createdAt === "number" && Number.isFinite(value.createdAt) && value.createdAt > 0
+      ? { pid: Number(value.pid), token: value.token, createdAt: value.createdAt }
       : undefined
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" || error instanceof SyntaxError) return undefined
+    throw error
+  }
+}
+
+function defaultIsProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === "ESRCH") return false
+    if (code === "EPERM") return true
+    throw error
+  }
+}
+
+function sameUpgradeLockOwner(left: UpgradeLockOwner | undefined, right: UpgradeLockOwner): boolean {
+  return left?.pid === right.pid && left.token === right.token && left.createdAt === right.createdAt
+}
+
+function readLockSnapshot(lockPath: string): { identity: string; modifiedAt: number } | undefined {
+  try {
+    const stat = fs.statSync(lockPath)
+    return { identity: `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`, modifiedAt: stat.mtimeMs }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined
     throw error
   }
 }
 
-export function acquireUpgradeLock(installDir: string, upgradePid: number): UpgradeLock {
+export function acquireUpgradeLock(
+  installDir: string,
+  upgradePid: number,
+  options: UpgradeLockOptions = {},
+): UpgradeLock {
   const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
   const ownerPath = path.join(lockPath, "owner")
-  const owner = randomUUID()
+  const now = options.now ?? Date.now
+  const isProcessAlive = options.isProcessAlive ?? defaultIsProcessAlive
+  const staleAfterMs = options.staleAfterMs ?? DEFAULT_UPGRADE_LOCK_STALE_AFTER_MS
+  const owner = (options.createToken ?? randomUUID)()
   fs.mkdirSync(installDir, { recursive: true })
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       fs.mkdirSync(lockPath)
+      const temporaryOwnerPath = path.join(lockPath, `owner.${owner}.tmp`)
       try {
-        fs.writeFileSync(ownerPath, JSON.stringify({ pid: upgradePid, token: owner }), "utf8")
+        fs.writeFileSync(temporaryOwnerPath, JSON.stringify({ pid: upgradePid, token: owner, createdAt: now() }), { encoding: "utf8", flag: "wx" })
+        fs.renameSync(temporaryOwnerPath, ownerPath)
       } catch (error) {
         fs.rmSync(lockPath, { recursive: true, force: true })
         throw error
@@ -77,21 +124,65 @@ export function acquireUpgradeLock(installDir: string, upgradePid: number): Upgr
       return { path: lockPath, owner }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
-      const existingOwner = readUpgradeLockOwner(ownerPath)
-      try {
-        if (!existingOwner) throw new Error("unknown owner")
-        process.kill(existingOwner.pid, 0)
-        throw new Error(`Another Memory Lane upgrade is already in progress (PID ${existingOwner.pid}).`)
-      } catch (ownerError) {
-        if ((ownerError as NodeJS.ErrnoException).code !== "ESRCH") throw ownerError
-        const quarantinePath = `${lockPath}.stale.${process.pid}.${Date.now()}.${attempt}`
-        try {
-          fs.renameSync(lockPath, quarantinePath)
-          fs.rmSync(quarantinePath, { recursive: true, force: true })
-        } catch (renameError) {
-          if ((renameError as NodeJS.ErrnoException).code !== "ENOENT") throw renameError
-        }
+    }
+
+    const existingOwner = readUpgradeLockOwner(ownerPath)
+    const snapshot = readLockSnapshot(lockPath)
+    if (!snapshot) continue
+    const createdAt = existingOwner?.createdAt ?? snapshot.modifiedAt
+    const stale = now() - createdAt >= staleAfterMs
+    if (!stale) {
+      if (!existingOwner) {
+        throw new Error("Another Memory Lane upgrade is starting; lock owner metadata is not yet available.")
       }
+      if (isProcessAlive(existingOwner.pid)) {
+        if (sameUpgradeLockOwner(readUpgradeLockOwner(ownerPath), existingOwner)) {
+          throw new Error(`Another Memory Lane upgrade is already in progress (PID ${existingOwner.pid}).`)
+        }
+        continue
+      }
+    }
+
+    const reclaimPath = path.join(lockPath, ".reclaim")
+    try {
+      fs.writeFileSync(
+        reclaimPath,
+        JSON.stringify({ pid: upgradePid, token: owner, createdAt: now() }),
+        { encoding: "utf8", flag: "wx" },
+      )
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === "ENOENT") continue
+      if (code !== "EEXIST") throw error
+
+      const existingClaim = readUpgradeLockOwner(reclaimPath)
+      const claimSnapshot = readLockSnapshot(reclaimPath)
+      if (claimSnapshot && now() - (existingClaim?.createdAt ?? claimSnapshot.modifiedAt) >= staleAfterMs) {
+        const currentClaimSnapshot = readLockSnapshot(reclaimPath)
+        const claimStillMatches = existingClaim
+          ? sameUpgradeLockOwner(readUpgradeLockOwner(reclaimPath), existingClaim)
+          : readUpgradeLockOwner(reclaimPath) === undefined
+            && currentClaimSnapshot?.identity === claimSnapshot.identity
+        if (claimStillMatches) fs.rmSync(reclaimPath, { force: true })
+      }
+      continue
+    }
+
+    const currentSnapshot = readLockSnapshot(lockPath)
+    const ownerStillMatches = existingOwner
+      ? sameUpgradeLockOwner(readUpgradeLockOwner(ownerPath), existingOwner)
+      : readUpgradeLockOwner(ownerPath) === undefined && currentSnapshot?.identity === snapshot.identity
+    if (!ownerStillMatches) {
+      fs.rmSync(reclaimPath, { force: true })
+      continue
+    }
+
+    const quarantinePath = `${lockPath}.stale.${process.pid}.${now()}.${attempt}`
+    try {
+      fs.renameSync(lockPath, quarantinePath)
+      fs.rmSync(quarantinePath, { recursive: true, force: true })
+    } catch (renameError) {
+      if ((renameError as NodeJS.ErrnoException).code !== "ENOENT") throw renameError
     }
   }
   throw new Error("Could not acquire the Memory Lane upgrade lock.")
