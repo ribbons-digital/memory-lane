@@ -728,6 +728,23 @@ function validatedManifestDataDir(manifest: InstallManifest, expectedDataDir: st
   return validated.value
 }
 
+function validateTransactionalManifestIntegrations(manifest: InstallManifest): void {
+  const seen = new Set<Harness>()
+  for (const [index, integration] of manifest.integrations.entries()) {
+    const harness = integrationHarness(integration)
+    if (!harness) {
+      throw new Error(`Install manifest integration ${index + 1} has no usable harness during transactional reapply.`)
+    }
+    if (!isKnownHarness(harness)) {
+      throw new Error(`Install manifest integration ${index + 1} has unknown harness ${harness} during transactional reapply.`)
+    }
+    if (seen.has(harness)) {
+      throw new Error(`Install manifest integration ${index + 1} has duplicate harness ${harness} during transactional reapply.`)
+    }
+    seen.add(harness)
+  }
+}
+
 function installPreviouslyConfigured(
   options: InitOptions,
   manifest: InstallManifest,
@@ -773,12 +790,7 @@ export function reapplyInstallManifest(
   manifest: InstallManifest,
   transactional = false,
 ): ReapplyInstallManifestResult {
-  if (transactional) {
-    const malformedIndex = manifest.integrations.findIndex((integration) => !integrationHarness(integration))
-    if (malformedIndex !== -1) {
-      throw new Error(`Install manifest integration ${malformedIndex + 1} has no usable harness during transactional reapply.`)
-    }
-  }
+  if (transactional) validateTransactionalManifestIntegrations(manifest)
   validateManifestOmpConfigPaths(manifest)
   const { results, replacements } = installPreviouslyConfigured(options, manifest)
   const configuredCount = results.filter((result) => result.configured).length

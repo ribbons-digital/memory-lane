@@ -299,34 +299,81 @@ describe("upgrade", () => {
     assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest)
   })
 
-  it("suppresses partial manifest persistence for transactional Windows reconfiguration", () => {
+  it("rejects unknown integrations before transactional Windows reconfiguration", () => {
     const home = tempDir()
     const dataDir = path.join(home, ".memory-lane")
     const binaryPath = path.join(home, ".local/bin/memory-lane")
+    const piConfigPath = path.join(home, ".pi/agent/extensions/memory-lane/index.ts")
     fs.mkdirSync(dataDir, { recursive: true })
 
-    reapplyInstallManifest(
-      {
-        binaryPath,
-        dataDir,
-        projectMode: false,
-        yes: true,
-        homeDir: home,
-      },
-      {
-        version: "0.1.0",
-        installedAt: "2026-01-01T00:00:00.000Z",
-        binaryPath: path.join(home, ".local/bin/old-memory-lane"),
-        dataDir,
-        integrations: [
-          { harness: "pi", configPath: path.join(home, ".pi/agent/extensions/memory-lane/index.ts") },
-          { harness: "legacy-harness", configPath: path.join(home, "legacy.json") },
-        ],
-      } as InstallManifest,
-      true,
+    assert.throws(
+      () => reapplyInstallManifest(
+        {
+          binaryPath,
+          dataDir,
+          projectMode: false,
+          yes: true,
+          homeDir: home,
+        },
+        {
+          version: "0.1.0",
+          installedAt: "2026-01-01T00:00:00.000Z",
+          binaryPath: path.join(home, ".local/bin/old-memory-lane"),
+          dataDir,
+          integrations: [
+            { harness: "pi", configPath: piConfigPath },
+            { harness: "legacy-harness", configPath: path.join(home, "legacy.json") },
+          ],
+        } as InstallManifest,
+        true,
+      ),
+      /integration 2 has unknown harness legacy-harness during transactional reapply/u,
     )
 
+    assert.equal(fs.existsSync(piConfigPath), false)
     assert.equal(readInstallManifest(dataDir).status, "missing")
+  })
+
+  it("rejects duplicate OMP integrations before transactional Windows reconfiguration", () => {
+    const home = tempDir()
+    const dataDir = path.join(home, ".memory-lane")
+    const binaryPath = path.join(home, ".local/bin/memory-lane")
+    const firstConfigPath = path.join(home, "first-agent/extensions/memory-lane/index.ts")
+    const secondConfigPath = path.join(home, "second-agent/extensions/memory-lane/index.ts")
+    fs.mkdirSync(dataDir, { recursive: true })
+
+    const manifest: InstallManifest = {
+      version: "0.1.0",
+      installedAt: "2026-01-01T00:00:00.000Z",
+      binaryPath: path.join(home, ".local/bin/old-memory-lane"),
+      dataDir,
+      integrations: [
+        { harness: "omp", configPath: firstConfigPath },
+        { harness: "omp", configPath: secondConfigPath },
+      ],
+    }
+    writeInstallManifest(dataDir, manifest)
+    const manifestPath = path.join(dataDir, "install.json")
+    const originalManifest = fs.readFileSync(manifestPath, "utf8")
+
+    assert.throws(
+      () => reapplyInstallManifest(
+        {
+          binaryPath,
+          dataDir,
+          projectMode: false,
+          yes: true,
+          homeDir: home,
+        },
+        manifest,
+        true,
+      ),
+      /integration 2 has duplicate harness omp during transactional reapply/u,
+    )
+
+    assert.equal(fs.existsSync(firstConfigPath), false)
+    assert.equal(fs.existsSync(secondConfigPath), false)
+    assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest)
   })
 
   it("passes the Windows executable and manifest transaction to the release installer", () => {
