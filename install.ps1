@@ -41,12 +41,23 @@ function Get-Process-Start-Time-Ticks($processId) {
 
 function Test-Upgrade-Process-Identity($processId, $startedAt) {
     if ("$processId" -notmatch "^\d+$" -or "$startedAt" -notmatch "^\d+$") {
-        return $false
+        return "inactive"
     }
     try {
-        return (Get-Process-Start-Time-Ticks $processId) -eq "$startedAt"
+        $process = Get-Process -Id $processId -ErrorAction Stop
     } catch {
-        return $false
+        if ("$($_.FullyQualifiedErrorId)" -like "NoProcessFoundForGivenId*") {
+            return "inactive"
+        }
+        return "unknown"
+    }
+    try {
+        if ("$($process.StartTime.ToUniversalTime().Ticks)" -eq "$startedAt") {
+            return "active"
+        }
+        return "inactive"
+    } catch {
+        return "unknown"
     }
 }
 
@@ -191,6 +202,11 @@ function Restore-Backup {
     try { Cleanup-Upgrade-Transaction } catch {}
 }
 
+function Write-Upgrade-Lock-Owner($temporaryOwnerPath, $ownerPath, $json) {
+    [IO.File]::WriteAllText($temporaryOwnerPath, $json, [Text.UTF8Encoding]::new($false))
+    [IO.File]::Replace($temporaryOwnerPath, $ownerPath, $null)
+}
+
 function Update-Upgrade-Lock-Lease {
     $transaction = Read-Upgrade-Transaction
     if (-not $transaction) {
@@ -203,20 +219,29 @@ function Update-Upgrade-Lock-Lease {
     $temporaryOwnerPath = Join-Path $transaction.LockPath "owner.$PID.tmp"
     $missingCount = 0
     $mismatchCount = 0
-    for ($attempt = 0; $attempt -lt 3; $attempt++) {
+    while ($true) {
         try {
             if (-not (Test-Path -LiteralPath $transaction.LockPath) `
                 -or -not (Test-Path -LiteralPath $ownerPath)) {
                 $missingCount++
+                $mismatchCount = 0
+                if ($missingCount -ge 3) {
+                    return $false
+                }
                 Start-Sleep -Milliseconds 100
                 continue
             }
             $lockOwner = (Get-Content -LiteralPath $ownerPath -Raw) | ConvertFrom-Json
+            $missingCount = 0
             if ($lockOwner.Token -ne $transaction.LockOwner) {
                 $mismatchCount++
+                if ($mismatchCount -ge 3) {
+                    return $false
+                }
                 Start-Sleep -Milliseconds 100
                 continue
             }
+            $mismatchCount = 0
             $owner = [PSCustomObject]@{
                 pid = $PID
                 processStartedAt = (Get-Process-Start-Time-Ticks $PID)
@@ -226,28 +251,27 @@ function Update-Upgrade-Lock-Lease {
                 phase = "recovery"
             }
             $json = $owner | ConvertTo-Json -Compress
-            [IO.File]::WriteAllText($temporaryOwnerPath, $json, [Text.UTF8Encoding]::new($false))
-            [IO.File]::Replace($temporaryOwnerPath, $ownerPath, $null)
+            Write-Upgrade-Lock-Owner $temporaryOwnerPath $ownerPath $json
             return $true
         } catch {
             Start-Sleep -Milliseconds 100
         } finally {
-            if (Test-Path -LiteralPath $temporaryOwnerPath) {
-                Remove-Item -LiteralPath $temporaryOwnerPath -Force -ErrorAction SilentlyContinue
-            }
+            Remove-Item -LiteralPath $temporaryOwnerPath -Force -ErrorAction SilentlyContinue
         }
     }
-    return $missingCount -lt 3 -and $mismatchCount -lt 3
 }
 
 function Wait-For-Upgrade-Process($processId, $startedAt) {
-    while (Test-Upgrade-Process-Identity $processId $startedAt) {
+    while ($true) {
+        $identity = Test-Upgrade-Process-Identity $processId $startedAt
+        if ($identity -eq "inactive") {
+            return $true
+        }
         if (-not (Update-Upgrade-Lock-Lease)) {
             return $false
         }
         Start-Sleep -Milliseconds 500
     }
-    return $true
 }
 
 function Cleanup-Committed-Upgrade-After-Lost-Lease {
