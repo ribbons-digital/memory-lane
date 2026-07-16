@@ -18,6 +18,7 @@ irm https://github.com/ribbons-digital/memory-lane/releases/latest/download/inst
 ```
 
 The installer downloads a prebuilt binary, verifies its SHA-256 checksum, and places it on your PATH.
+On Windows, it also smoke-tests the installed executable and restores an existing binary if replacement or verification fails.
 After installation, run `memory-lane init` to configure Claude Code, Codex, Claude Desktop, Codex Desktop, pi, and OMP (Oh My Pi).
 Use `memory-lane init --yes` to auto-configure all detected harnesses without prompting, or `memory-lane init --only omp` to configure OMP explicitly.
 
@@ -60,7 +61,11 @@ memory-lane upgrade
 
 Use `memory-lane upgrade --yes` to run non-interactively.
 On macOS and Linux this re-runs the installer and then refreshes your existing configs.
-On Windows, when an install manifest is present, the upgrade downloads the new binary and reapplies the existing harness configs automatically.
+On Windows, upgrade serializes maintenance for the installation, renames the running executable to a backup, installs and smoke-tests its replacement, and then reapplies every manifest-recorded harness configuration with the new binary.
+The replacement and updated install manifest are committed only after every required reconfiguration succeeds.
+Any installer, smoke-test, or reconfiguration failure restores the previous executable and install manifest.
+After a successful commit, a detached recovery helper waits for the original process to exit before removing the backup and transaction artifacts.
+An active upgrade blocks another upgrade from modifying the same installation; abandoned locks are reclaimed only after their recorded process identities are confirmed inactive.
 `memory-lane init --yes` is only the fallback when no manifest exists.
 When existing configs are refreshed, the install manifest version is updated to the version embedded in the new binary.
 Upgrade treats the manifest `binaryPath` and each OMP integration `configPath` as durable installation facts.
@@ -88,4 +93,11 @@ memory-lane uninstall --only omp --yes
 Selective OMP uninstall preserves Pi, other integrations, the Memory Lane binary, memory data, unrelated OMP extensions, and OMP configuration.
 It uses the manifest-recorded OMP path and does not redirect to the current `PI_CODING_AGENT_DIR` or default root.
 Malformed or unsafe manifest paths stop uninstall rather than falling back to a default path.
-The full `memory-lane uninstall --yes` command retains its existing all-integrations behavior.
+
+## Full uninstall
+
+Run `memory-lane uninstall` to choose whether to remove all configured integrations and whether to remove memory data.
+Memory data is preserved by default.
+`memory-lane uninstall --yes` removes all manifest-recorded integrations and the installed binary without prompting, but still preserves memory data in `~/.memory-lane/`.
+On Windows, full uninstall renames the running executable and schedules its deletion after the command exits; if the cleanup helper cannot start, the executable is restored and uninstall fails rather than reporting a removal that was not scheduled.
+If deferred deletion cannot finish, the renamed executable and its recovery record are retained, and a later upgrade or full uninstall retries cleanup only after confirming the original process identity is inactive.

@@ -84,8 +84,10 @@ After installation, run `memory-lane init` to configure Claude Code, Codex, Clau
 Use `memory-lane init --yes` to auto-configure all detected harnesses without prompting.
 
 Upgrade later with `memory-lane upgrade`; your memory data in `~/.memory-lane/` is preserved.
+Windows upgrades safely replace the running executable and roll back the binary and install manifest if installation or reconfiguration fails.
+Full uninstall also preserves memory data by default and defers removal of a running Windows executable until the command exits.
 
-See [Installation and maintenance](./docs/installation.md) for script review, install-manifest semantics, OMP install paths, selective uninstall, and upgrade details.
+See [Installation and maintenance](./docs/installation.md) for script review, install-manifest semantics, OMP install paths, selective uninstall, and transactional Windows maintenance details.
 If you are developing Memory Lane on the same machine, prefer the [development setup](./docs/development.md) so release-style init does not replace local shims.
 
 ## Harness integrations
@@ -140,7 +142,7 @@ Promotion of wiki-derived facts into Memory Lane remains explicit through the ex
 
 ## Documentation
 
-- [Installation and maintenance](./docs/installation.md) - installer, upgrade, selective uninstall, and install-manifest semantics.
+- [Installation and maintenance](./docs/installation.md) - installer, transactional Windows upgrade, uninstall, and install-manifest semantics.
 - [CLI reference](./docs/cli.md) - full command list and command behavior.
 - [Configuration](./docs/configuration.md) - config file options and environment variables.
 - [Storage and project scoping](./docs/storage.md) - storage tiers, project identity, and migration.

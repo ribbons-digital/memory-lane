@@ -2,6 +2,9 @@
 
 Default config path: `~/.memory-lane/config.json`
 
+For `memory-lane mcp`, `~` resolves from `HOME` when it is defined, otherwise from the operating system home directory.
+This keeps the MCP server on the normal Windows user profile when clients start it without `HOME`.
+
 Override via env variable: `MEMORY_LANE_CONFIG=/path/to/config.json`
 
 ## Minimal config (semantic disabled - default)
@@ -128,7 +131,7 @@ MCP provides explicit tools; hooks, pi, and OMP provide automatic lifecycle reca
 
 | Variable | Default | Description |
 |---|---|---|
-| `MEMORY_LANE_CONFIG` | `~/.memory-lane/config.json` | Config file path |
+| `MEMORY_LANE_CONFIG` | `~/.memory-lane/config.json` | Config file path; explicit value wins, and MCP resolves home from `HOME` then the operating system |
 | `MEMORY_LANE_FILE` | `~/.memory-lane/memory.jsonl` | Memory store path |
 | `MEMORY_LANE_EMBEDDINGS_FILE` | `~/.memory-lane/embeddings.jsonl` | Embeddings store path |
 | `MEMORY_LANE_TRACES_DIR` | `~/.memory-lane/traces` | Local learning trace and event data root |

@@ -24,7 +24,9 @@ When stdin closes, the server waits briefly for background embedding writes and 
 
 All MCP client configurations use the same stdio server command: the installed Memory Lane binary with `args: ["mcp"]` - the same shape `memory-lane init` writes.
 Use an absolute path, not `~` and not a bare `memory-lane`; desktop clients usually launch MCP servers without your shell PATH, and config fields do not shell-expand `~`.
-The installer places the binary at `~/.local/bin/memory-lane` by default (`%USERPROFILE%\bin\memory-lane.exe` on Windows); print the exact path with `command -v memory-lane`.
+The installer places the binary at `~/.local/bin/memory-lane` by default (`%USERPROFILE%\bin\memory-lane.exe` on Windows).
+Print the exact path with `command -v memory-lane` on macOS or Linux, or `(Get-Command memory-lane).Source` in PowerShell.
+When an MCP client omits `HOME`, `memory-lane mcp` resolves `.memory-lane/config.json` from the operating system home directory; a non-empty `MEMORY_LANE_CONFIG` remains authoritative.
 
 ## Claude Desktop
 

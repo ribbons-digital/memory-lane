@@ -173,7 +173,7 @@ memory-lane codex pre-compact    # Codex hook: pre-compaction pending summary
 memory-lane pi input|turn-end|post-tool-use|pre-compact # Generated Pi bridge lifecycle commands
 /memory session-summary           # repo-local pi only: explicitly summarize the current pi session after confirmation
 memory-lane upgrade --yes         # upgrade the recorded binary and reapply manifest integrations
-memory-lane uninstall             # remove binary and every integration config
+memory-lane uninstall             # interactively remove integrations/binary and optionally memory data
 memory-lane uninstall --yes       # non-interactive full uninstall
 memory-lane uninstall --only omp --yes # remove OMP while preserving Pi, binary, and memory data
 memory-lane mcp                   # run the bundled MCP server over stdio
@@ -480,6 +480,10 @@ To upgrade to the latest release while preserving existing harness configs and m
 memory-lane upgrade
 ```
 Upgrade preserves a valid manifest-recorded release binary path and refuses malformed, relative, unmanaged, or wrong-data-directory manifest paths instead of silently redirecting to a platform default.
+On Windows, upgrade serializes maintenance per installation, renames the running executable, smoke-tests the replacement, and requires every manifest-recorded integration to reapply successfully before commit.
+Installer, smoke-test, or required reconfiguration failures restore both the previous executable and install manifest; successful backup cleanup waits until the original process exits.
+Full uninstall preserves memory data by default, including with `--yes`, and Windows defers deletion of the renamed running executable until exit.
+A later upgrade or full uninstall retries pending Windows deletion only after confirming the original process identity is inactive.
 Uninstall also refuses malformed or unsafe manifest paths instead of falling back to the current environment.
 
 In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save/read explicitly, `memory_continuity` is the canonical broad-continuity tool, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates in both the repo-local adapter and release-style generated bridge.

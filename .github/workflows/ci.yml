@@ -36,3 +36,37 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+
+  windows-self-maintenance:
+    name: windows self-maintenance smoke
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Test Windows config paths and deferred uninstall identity
+        run: node --test --import tsx packages/cli/test/mcp.test.ts packages/cli/test/uninstall-binary.test.ts
+
+      - name: Exercise running executable replacement and removal
+        timeout-minutes: 10
+        run: node --import tsx scripts/windows-self-maintenance-smoke.ts
