@@ -71,6 +71,7 @@ Successful Windows upgrades defer backup and transaction cleanup until the origi
 
 Full `memory-lane uninstall` preserves memory data unless an interactive user explicitly chooses to remove it; `--yes` removes integrations and the binary while preserving data.
 On Windows, the running executable is renamed and deleted by a detached helper after exit.
+If deferred deletion remains pending, a later upgrade or full uninstall retries cleanup only after confirming the original process identity is inactive.
 Selective `uninstall --only omp` does not remove the binary, Pi, other integrations, or memory data.
 
 ## Recall ordering

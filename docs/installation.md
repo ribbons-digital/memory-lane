@@ -100,3 +100,4 @@ Run `memory-lane uninstall` to choose whether to remove all configured integrati
 Memory data is preserved by default.
 `memory-lane uninstall --yes` removes all manifest-recorded integrations and the installed binary without prompting, but still preserves memory data in `~/.memory-lane/`.
 On Windows, full uninstall renames the running executable and schedules its deletion after the command exits; if the cleanup helper cannot start, the executable is restored and uninstall fails rather than reporting a removal that was not scheduled.
+If deferred deletion cannot finish, the renamed executable and its recovery record are retained, and a later upgrade or full uninstall retries cleanup only after confirming the original process identity is inactive.
