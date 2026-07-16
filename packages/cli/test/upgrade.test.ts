@@ -36,15 +36,22 @@ describe("upgrade", () => {
     const home = tempDir()
     const binaryPath = path.join(home, ".local/bin/memory-lane")
     const calls: Array<{ command: string; args: string[]; options: unknown }> = []
-    const ok = reapplyManifestWithInstalledBinary(binaryPath, true, ((command: string, args: string[], options: unknown) => {
+    const spawn = ((command: string, args: string[], options: unknown) => {
       calls.push({ command, args, options })
       return { status: 0 }
-    }) as any)
+    }) as any
 
-    assert.equal(ok, true)
-    assert.equal(calls.length, 1)
+    assert.equal(reapplyManifestWithInstalledBinary(binaryPath, true, false, spawn), true)
+    assert.equal(reapplyManifestWithInstalledBinary(binaryPath, true, true, spawn), true)
+    assert.equal(calls.length, 2)
     assert.equal(calls[0].command, binaryPath)
     assert.deepEqual(calls[0].args, ["upgrade", "--reapply-install-manifest", "--yes"])
+    assert.deepEqual(calls[1].args, [
+      "upgrade",
+      "--reapply-install-manifest",
+      "--transactional-windows-upgrade",
+      "--yes",
+    ])
   })
 
   it("reapplies unique manifest integrations and migrates old Claude Desktop config paths", () => {
@@ -640,7 +647,7 @@ describe("upgrade", () => {
     assert.equal(fs.existsSync(environmentBinaryPath), false)
   })
 
-  it("returns non-zero when no required manifest integration can be reapplied", () => {
+  it("preserves ordinary reapply success when no manifest integration can be reapplied", () => {
     const home = tempDir()
     const dataDir = path.join(home, ".memory-lane")
     const binaryPath = path.join(home, ".local", "bin", "memory-lane")
@@ -663,12 +670,17 @@ describe("upgrade", () => {
       env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: undefined },
     })
 
-    assert.equal(result.status, 1)
+    assert.equal(result.status, 0, result.stderr)
     assert.match(result.stdout, /No previous harness configs were reapplied/u)
-    assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest)
+    assert.notEqual(fs.readFileSync(manifestPath, "utf8"), originalManifest)
+    const persisted = readInstallManifest(dataDir)
+    assert.equal(persisted.status, "valid")
+    if (persisted.status !== "valid") return
+    assert.equal(persisted.manifest.version, VERSION)
+    assert.equal(persisted.manifest.binaryPath, binaryPath)
   })
 
-  it("returns non-zero when any required manifest integration fails", () => {
+  it("enforces strict failures only for transactional Windows reapply", () => {
     const home = tempDir()
     const dataDir = path.join(home, ".memory-lane")
     const binaryPath = path.join(home, ".local", "bin", "memory-lane")
@@ -689,16 +701,23 @@ describe("upgrade", () => {
     const originalManifest = fs.readFileSync(manifestPath, "utf8")
 
     const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist/index.js")
-    const result = spawnSync(process.execPath, [cli, "upgrade", "--reapply-install-manifest", "--yes"], {
+    const result = spawnSync(process.execPath, [
+      cli,
+      "upgrade",
+      "--reapply-install-manifest",
+      "--transactional-windows-upgrade",
+      "--yes",
+    ], {
       encoding: "utf8",
       env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: undefined },
     })
 
-    assert.equal(result.status, 1)
-    assert.match(result.stdout, /Failed to reapply 1 required harness configuration/u)
+    assert.equal(result.status, process.platform === "win32" ? 1 : 0, result.stderr)
     if (process.platform === "win32") {
+      assert.match(result.stdout, /Failed to reapply 1 required harness configuration/u)
       assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest)
     } else {
+      assert.doesNotMatch(result.stdout, /Failed to reapply 1 required harness configuration/u)
       const persisted = readInstallManifest(dataDir)
       assert.equal(persisted.status, "valid")
       if (persisted.status !== "valid") return
