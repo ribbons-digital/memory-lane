@@ -224,6 +224,7 @@ async function main(): Promise<void> {
     assert.equal(fs.existsSync(backupPath), true, "committed backup must remain while the parent is running")
     assert.equal(fs.existsSync(transactionPath), true, "committed transaction must remain recoverable until parent exit")
 
+    const exitedUpgradePid = runningOldBinary.pid!
     const oldBinaryExit = waitForExit(runningOldBinary)
     runningOldBinary.kill()
     await oldBinaryExit
@@ -234,6 +235,40 @@ async function main(): Promise<void> {
     )
     await waitUntil(() => !fs.existsSync(transactionPath), "committed transaction cleanup")
     await waitUntil(() => !fs.existsSync(manifestBackupPath), "manifest snapshot cleanup")
+
+    const ownerRaceLockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const staleOwner = "finished-upgrade-owner"
+    const replacementOwner = "later-upgrade-owner"
+    fs.mkdirSync(ownerRaceLockPath)
+    fs.writeFileSync(
+      path.join(ownerRaceLockPath, "owner"),
+      JSON.stringify({ pid: process.pid, token: replacementOwner }),
+      "utf8",
+    )
+    fs.writeFileSync(transactionPath, JSON.stringify({
+      State: "committed",
+      BackupState: "no-backup",
+      ManifestState: "restored",
+      ManifestPath: manifestPath,
+      ManifestBackupPath: manifestBackupPath,
+      LockPath: ownerRaceLockPath,
+      LockOwner: staleOwner,
+      InstallerPid: exitedUpgradePid,
+    }), "utf8")
+    const staleRecovery = spawnSync("powershell.exe", [...installerArgs, "-UpgradeAction", "Recover"], {
+      cwd: repo,
+      env: {
+        ...installerEnv,
+        MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
+        MEMORY_LANE_UPGRADE_LOCK_PATH: ownerRaceLockPath,
+        MEMORY_LANE_UPGRADE_LOCK_OWNER: staleOwner,
+      },
+      encoding: "utf8",
+    })
+    assert.equal(staleRecovery.status, 0, staleRecovery.stderr)
+    assert.equal(fs.existsSync(transactionPath), false, "stale recovery must clean its transaction")
+    assert.equal(fs.existsSync(ownerRaceLockPath), true, "stale recovery must preserve a later upgrade lock")
+    fs.rmSync(ownerRaceLockPath, { recursive: true, force: true })
 
     fs.mkdirSync(dataDir, { recursive: true })
     fs.writeFileSync(path.join(dataDir, "memory.jsonl"), "{\"text\":\"preserve me\"}\n", "utf8")

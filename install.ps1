@@ -51,6 +51,7 @@ function Read-Upgrade-Transaction {
         -or $null -eq $transaction.ManifestPath `
         -or $null -eq $transaction.ManifestBackupPath `
         -or $null -eq $transaction.LockPath `
+        -or $null -eq $transaction.LockOwner `
         -or "$($transaction.InstallerPid)" -notmatch "^\d+$") {
         throw "invalid upgrade transaction state"
     }
@@ -87,7 +88,15 @@ function Cleanup-Upgrade-Transaction {
         Remove-Transaction-Artifact $script:backupPath
         Remove-Transaction-Artifact $transaction.ManifestBackupPath
         if ($transaction.LockPath -and (Test-Path -LiteralPath $transaction.LockPath)) {
-            Remove-Item -LiteralPath $transaction.LockPath -Recurse -Force
+            $ownerPath = Join-Path $transaction.LockPath "owner"
+            if (Test-Path -LiteralPath $ownerPath) {
+                try {
+                    $lockOwner = (Get-Content -LiteralPath $ownerPath -Raw) | ConvertFrom-Json
+                    if ($lockOwner.Token -eq $transaction.LockOwner) {
+                        Remove-Item -LiteralPath $transaction.LockPath -Recurse -Force
+                    }
+                } catch {}
+            }
         }
     }
     Remove-Transaction-Artifact $script:transactionPath
@@ -189,6 +198,7 @@ function Backup-Existing-Binary {
             ManifestPath = "$env:MEMORY_LANE_UPGRADE_MANIFEST_PATH"
             ManifestBackupPath = "$env:MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH"
             LockPath = "$env:MEMORY_LANE_UPGRADE_LOCK_PATH"
+            LockOwner = "$env:MEMORY_LANE_UPGRADE_LOCK_OWNER"
             InstallerPid = $PID
         }
         Save-Upgrade-Transaction

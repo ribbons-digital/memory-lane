@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process"
+import { randomUUID } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -41,17 +42,34 @@ export interface UpgradeLock {
   owner: string
 }
 
+interface UpgradeLockOwner {
+  pid: number
+  token: string
+}
+
+function readUpgradeLockOwner(ownerPath: string): UpgradeLockOwner | undefined {
+  try {
+    const value = JSON.parse(fs.readFileSync(ownerPath, "utf8")) as Partial<UpgradeLockOwner>
+    return Number.isInteger(value.pid) && Number(value.pid) > 0 && typeof value.token === "string" && value.token
+      ? { pid: Number(value.pid), token: value.token }
+      : undefined
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined
+    throw error
+  }
+}
+
 export function acquireUpgradeLock(installDir: string, upgradePid: number): UpgradeLock {
   const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
   const ownerPath = path.join(lockPath, "owner")
-  const owner = String(upgradePid)
+  const owner = randomUUID()
   fs.mkdirSync(installDir, { recursive: true })
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       fs.mkdirSync(lockPath)
       try {
-        fs.writeFileSync(ownerPath, owner, "utf8")
+        fs.writeFileSync(ownerPath, JSON.stringify({ pid: upgradePid, token: owner }), "utf8")
       } catch (error) {
         fs.rmSync(lockPath, { recursive: true, force: true })
         throw error
@@ -59,17 +77,11 @@ export function acquireUpgradeLock(installDir: string, upgradePid: number): Upgr
       return { path: lockPath, owner }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
-      let existingOwner = ""
+      const existingOwner = readUpgradeLockOwner(ownerPath)
       try {
-        existingOwner = fs.readFileSync(ownerPath, "utf8").trim()
-      } catch (readError) {
-        if ((readError as NodeJS.ErrnoException).code !== "ENOENT") throw readError
-      }
-      const existingPid = Number(existingOwner)
-      try {
-        if (!Number.isInteger(existingPid) || existingPid <= 0) throw new Error("unknown owner")
-        process.kill(existingPid, 0)
-        throw new Error(`Another Memory Lane upgrade is already in progress (PID ${existingOwner}).`)
+        if (!existingOwner) throw new Error("unknown owner")
+        process.kill(existingOwner.pid, 0)
+        throw new Error(`Another Memory Lane upgrade is already in progress (PID ${existingOwner.pid}).`)
       } catch (ownerError) {
         if ((ownerError as NodeJS.ErrnoException).code !== "ESRCH") throw ownerError
         const quarantinePath = `${lockPath}.stale.${process.pid}.${Date.now()}.${attempt}`
@@ -86,9 +98,9 @@ export function acquireUpgradeLock(installDir: string, upgradePid: number): Upgr
 }
 
 export function releaseUpgradeLock(lock: UpgradeLock | undefined): void {
-  if (!lock || !fs.existsSync(lock.path)) return
-  const ownerPath = path.join(lock.path, "owner")
-  if (fs.readFileSync(ownerPath, "utf8").trim() === lock.owner) {
+  if (!lock) return
+  const owner = readUpgradeLockOwner(path.join(lock.path, "owner"))
+  if (owner?.token === lock.owner) {
     fs.rmSync(lock.path, { recursive: true, force: true })
   }
 }
@@ -115,7 +127,10 @@ export function installerEnvironment(
     env.MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH = manifestTransaction.backupPath
     env.MEMORY_LANE_UPGRADE_MANIFEST_EXISTED = String(manifestTransaction.existed)
   }
-  if (upgradeLock) env.MEMORY_LANE_UPGRADE_LOCK_PATH = upgradeLock.path
+  if (upgradeLock) {
+    env.MEMORY_LANE_UPGRADE_LOCK_PATH = upgradeLock.path
+    env.MEMORY_LANE_UPGRADE_LOCK_OWNER = upgradeLock.owner
+  }
   return env
 }
 
@@ -283,7 +298,11 @@ function installPreviouslyConfigured(
   return { results, replacements }
 }
 
-export function reapplyInstallManifest(options: InitOptions, manifest: InstallManifest): ReapplyInstallManifestResult {
+export function reapplyInstallManifest(
+  options: InitOptions,
+  manifest: InstallManifest,
+  transactional = os.platform() === "win32",
+): ReapplyInstallManifestResult {
   validateManifestOmpConfigPaths(manifest)
   const { results, replacements } = installPreviouslyConfigured(options, manifest)
   const configuredCount = results.filter((result) => result.configured).length
@@ -295,7 +314,7 @@ export function reapplyInstallManifest(options: InitOptions, manifest: InstallMa
     dataDir: options.dataDir,
     integrations: mergeManifestIntegrations(manifest.integrations, replacements),
   }
-  if (configuredCount > 0 && results.every((result) => result.configured)) {
+  if (configuredCount > 0 && (!transactional || results.every((result) => result.configured))) {
     writeInstallManifest(options.dataDir, nextManifest)
   }
   return { results, configuredCount, manifest: nextManifest }

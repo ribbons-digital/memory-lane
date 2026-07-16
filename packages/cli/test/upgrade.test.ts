@@ -142,7 +142,7 @@ describe("upgrade", () => {
     assert.match(result.results[0].message ?? "", /source checkout/u)
   })
 
-  it("skips unknown manifest harnesses without aborting valid reconfiguration", () => {
+  it("records successful non-Windows reconfiguration when another integration fails", () => {
     const home = tempDir()
     const dataDir = path.join(home, ".memory-lane")
     const binaryPath = path.join(home, ".local/bin/memory-lane")
@@ -168,12 +168,47 @@ describe("upgrade", () => {
         homeDir: home,
       },
       manifest,
+      false,
     )
 
     assert.equal(result.configuredCount, 1)
     assert.deepEqual(result.manifest.integrations.map((integration) => integration.harness), ["legacy-harness", "pi"])
     assert.equal(result.results.some((r) => r.configured === false && r.message?.includes("Unknown harness")), true)
     assert.ok(fs.readFileSync(path.join(home, ".pi/agent/extensions/memory-lane/index.ts"), "utf8").includes(binaryPath))
+    const persisted = readInstallManifest(dataDir)
+    assert.equal(persisted.status, "valid")
+    if (persisted.status !== "valid") return
+    assert.equal(persisted.manifest.binaryPath, binaryPath)
+    assert.deepEqual(persisted.manifest.integrations.map((integration) => integration.harness), ["legacy-harness", "pi"])
+  })
+
+  it("suppresses partial manifest persistence for transactional Windows reconfiguration", () => {
+    const home = tempDir()
+    const dataDir = path.join(home, ".memory-lane")
+    const binaryPath = path.join(home, ".local/bin/memory-lane")
+    fs.mkdirSync(dataDir, { recursive: true })
+
+    reapplyInstallManifest(
+      {
+        binaryPath,
+        dataDir,
+        projectMode: false,
+        yes: true,
+        homeDir: home,
+      },
+      {
+        version: "0.1.0",
+        installedAt: "2026-01-01T00:00:00.000Z",
+        binaryPath: path.join(home, ".local/bin/old-memory-lane"),
+        dataDir,
+        integrations: [
+          { harness: "pi", configPath: path.join(home, ".pi/agent/extensions/memory-lane/index.ts") },
+          { harness: "legacy-harness", configPath: path.join(home, "legacy.json") },
+        ],
+      } as InstallManifest,
+      true,
+    )
+
     assert.equal(readInstallManifest(dataDir).status, "missing")
   })
 
@@ -183,7 +218,7 @@ describe("upgrade", () => {
       backupPath: "C:\\Homes\\Ryan\\.memory-lane\\install.json.upgrade.1234",
       existed: true,
     }
-    const upgradeLock = { path: "C:\\custom\\bin\\.memory-lane-upgrade.lock", owner: "1234" }
+    const upgradeLock = { path: "C:\\custom\\bin\\.memory-lane-upgrade.lock", owner: "owner-token" }
     assert.deepEqual(installerEnvironment({ KEEP_ME: "yes" }, "C:\\custom\\bin", 1234, manifestTransaction, upgradeLock), {
       KEEP_ME: "yes",
       INSTALL_DIR: "C:\\custom\\bin",
@@ -192,6 +227,7 @@ describe("upgrade", () => {
       MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH: manifestTransaction.backupPath,
       MEMORY_LANE_UPGRADE_MANIFEST_EXISTED: "true",
       MEMORY_LANE_UPGRADE_LOCK_PATH: upgradeLock.path,
+      MEMORY_LANE_UPGRADE_LOCK_OWNER: upgradeLock.owner,
     })
     assert.deepEqual(installerEnvironment({ KEEP_ME: "yes" }), { KEEP_ME: "yes" })
   })
@@ -201,10 +237,14 @@ describe("upgrade", () => {
     const lock = acquireUpgradeLock(installDir, process.pid)
 
     assert.throws(() => acquireUpgradeLock(installDir, process.pid), /already in progress/u)
-    fs.writeFileSync(path.join(lock.path, "owner"), "different-owner", "utf8")
+    fs.writeFileSync(path.join(lock.path, "owner"), JSON.stringify({ pid: process.pid, token: "different-owner" }), "utf8")
     releaseUpgradeLock(lock)
     assert.equal(fs.existsSync(lock.path), true)
     fs.rmSync(lock.path, { recursive: true, force: true })
+
+    const releasable = acquireUpgradeLock(installDir, process.pid)
+    releaseUpgradeLock(releasable)
+    assert.equal(fs.existsSync(releasable.path), false)
   })
 
   it("uses the HOME-based Windows binary directory when the manifest is missing", () => {
@@ -334,7 +374,15 @@ describe("upgrade", () => {
 
     assert.equal(result.status, 1)
     assert.match(result.stdout, /Failed to reapply 1 required harness configuration/u)
-    assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest)
+    if (process.platform === "win32") {
+      assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest)
+    } else {
+      const persisted = readInstallManifest(dataDir)
+      assert.equal(persisted.status, "valid")
+      if (persisted.status !== "valid") return
+      assert.equal(persisted.manifest.version, VERSION)
+      assert.equal(persisted.manifest.binaryPath, binaryPath)
+    }
   })
 
   it("rejects unsafe manifest-recorded OMP config paths before reapply writes", () => {
