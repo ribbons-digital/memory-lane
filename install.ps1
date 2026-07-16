@@ -98,7 +98,7 @@ function Save-Upgrade-Transaction {
         $json = $script:transaction | ConvertTo-Json -Compress
         [IO.File]::WriteAllText($temporaryPath, $json, [Text.UTF8Encoding]::new($false))
         if (Test-Path -LiteralPath $script:transactionPath) {
-            [IO.File]::Replace($temporaryPath, $script:transactionPath, $null)
+            [IO.File]::Replace($temporaryPath, $script:transactionPath, [Management.Automation.Language.NullString]::Value)
         } else {
             [IO.File]::Move($temporaryPath, $script:transactionPath)
         }
@@ -216,7 +216,7 @@ function Restore-Backup {
 
 function Write-Upgrade-Lock-Owner($temporaryOwnerPath, $ownerPath, $json) {
     [IO.File]::WriteAllText($temporaryOwnerPath, $json, [Text.UTF8Encoding]::new($false))
-    [IO.File]::Replace($temporaryOwnerPath, $ownerPath, $null)
+    [IO.File]::Replace($temporaryOwnerPath, $ownerPath, [Management.Automation.Language.NullString]::Value)
 }
 
 function Acquire-Upgrade-Lock-Owner-Gate($lockPath, $ownerToken) {
