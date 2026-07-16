@@ -286,7 +286,9 @@ describe("upgrade", () => {
       () => acquireUpgradeLock(installDir, process.pid, {
         now: () => now,
         staleAfterMs: 1_000,
-        readProcessStartTime: (processId) => processId === 9876 ? "123456789" : "987654321",
+        inspectProcessStartTime: (processId) => processId === 9876
+          ? { status: "found", startedAt: "123456789" }
+          : { status: "found", startedAt: "987654321" },
       }),
       /already in progress/u,
     )
@@ -314,7 +316,9 @@ describe("upgrade", () => {
     const lock = acquireUpgradeLock(installDir, process.pid, {
       now: () => now,
       createToken: () => "replacement-owner",
-      readProcessStartTime: (processId) => processId === 9876 ? "999999999" : "987654321",
+      inspectProcessStartTime: (processId) => processId === 9876
+        ? { status: "found", startedAt: "999999999" }
+        : { status: "found", startedAt: "987654321" },
     })
 
     assert.equal(lock.owner, "replacement-owner")
@@ -355,28 +359,35 @@ describe("upgrade", () => {
     assert.equal(fs.existsSync(lockPath), false)
   })
 
-  it("preserves a fresh recovery lease after the parent exits", () => {
+  it("preserves an expired recovery lease while its process identity matches", () => {
     const installDir = tempDir()
     const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
     const now = 2_000_000
     const recoveryOwner = {
       pid: 9876,
+      processStartedAt: "123456789",
       token: "recovery-owner",
       createdAt: now - 10_000,
-      heartbeatAt: now,
+      heartbeatAt: now - 5_000,
       phase: "recovery",
     }
     fs.mkdirSync(lockPath)
     fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify(recoveryOwner), "utf8")
 
     assert.throws(
-      () => acquireUpgradeLock(installDir, process.pid, { now: () => now, staleAfterMs: 1_000 }),
+      () => acquireUpgradeLock(installDir, process.pid, {
+        now: () => now,
+        staleAfterMs: 1_000,
+        inspectProcessStartTime: (processId) => processId === 9876
+          ? { status: "found", startedAt: "123456789" }
+          : { status: "found", startedAt: "987654321" },
+      }),
       /already in progress/u,
     )
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(lockPath, "owner"), "utf8")), recoveryOwner)
   })
 
-  it("reclaims a recovery lease only after its heartbeat expires", () => {
+  it("preserves a starting lock when process inspection is unavailable", () => {
     const installDir = tempDir()
     const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
     const now = 2_000_000
@@ -384,10 +395,42 @@ describe("upgrade", () => {
     fs.writeFileSync(
       path.join(lockPath, "owner"),
       JSON.stringify({
-        pid: process.pid,
+        pid: 9876,
+        processStartedAt: "123456789",
+        token: "starting-owner",
+        createdAt: now - 10_000,
+        heartbeatAt: now - 5_000,
+        phase: "starting",
+      }),
+      "utf8",
+    )
+
+    assert.throws(
+      () => acquireUpgradeLock(installDir, process.pid, {
+        now: () => now,
+        staleAfterMs: 1_000,
+        inspectProcessStartTime: (processId) => processId === 9876
+          ? { status: "unknown" }
+          : { status: "found", startedAt: "987654321" },
+      }),
+      /already in progress/u,
+    )
+    assert.equal(fs.existsSync(lockPath), true)
+  })
+
+  it("reclaims a recovery lock only after confirmed process identity mismatch", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const now = 2_000_000
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(
+      path.join(lockPath, "owner"),
+      JSON.stringify({
+        pid: 9876,
+        processStartedAt: "123456789",
         token: "stale-owner",
         createdAt: now - 10_000,
-        heartbeatAt: now - 1_001,
+        heartbeatAt: now,
         phase: "recovery",
       }),
       "utf8",
@@ -396,7 +439,9 @@ describe("upgrade", () => {
     const lock = acquireUpgradeLock(installDir, process.pid, {
       now: () => now,
       createToken: () => "replacement-owner",
-      staleAfterMs: 1_000,
+      inspectProcessStartTime: (processId) => processId === 9876
+        ? { status: "found", startedAt: "999999999" }
+        : { status: "found", startedAt: "987654321" },
     })
 
     assert.equal(lock.owner, "replacement-owner")

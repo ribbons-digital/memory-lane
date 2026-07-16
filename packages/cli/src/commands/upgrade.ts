@@ -44,29 +44,38 @@ export interface UpgradeLock {
 
 interface UpgradeLockOwner {
   pid: number
-  processStartedAt?: string
+  processStartedAt: string
   token: string
   createdAt: number
   heartbeatAt: number
   phase: "starting" | "recovery"
 }
 
+export type ProcessStartTimeInspection =
+  | { status: "found"; startedAt: string }
+  | { status: "missing" }
+  | { status: "unknown" }
+
 export interface UpgradeLockOptions {
   now?: () => number
   createToken?: () => string
   staleAfterMs?: number
-  readProcessStartTime?: (processId: number) => string | undefined
+  inspectProcessStartTime?: (processId: number) => ProcessStartTimeInspection
 }
 
 const DEFAULT_UPGRADE_LOCK_STALE_AFTER_MS = 60 * 60 * 1000
 const CURRENT_PROCESS_STARTED_AT = String(Math.round(Date.now() - process.uptime() * 1000))
 
-function readWindowsProcessStartTime(processId: number): string | undefined {
-  if (process.platform !== "win32") return processId === process.pid ? CURRENT_PROCESS_STARTED_AT : undefined
+function inspectWindowsProcessStartTime(processId: number): ProcessStartTimeInspection {
+  if (process.platform !== "win32") {
+    return processId === process.pid
+      ? { status: "found", startedAt: CURRENT_PROCESS_STARTED_AT }
+      : { status: "missing" }
+  }
   const command = [
     "$processId = [int]$env:MEMORY_LANE_UPGRADE_PROCESS_PID",
-    "$process = Get-Process -Id $processId -ErrorAction Stop",
-    "[Console]::Out.Write($process.StartTime.ToUniversalTime().Ticks)",
+    "$process = Get-Process -Id $processId -ErrorAction SilentlyContinue",
+    "if ($null -eq $process) { [Console]::Out.Write('missing') } else { [Console]::Out.Write($process.StartTime.ToUniversalTime().Ticks) }",
   ].join("; ")
   const result = spawnSync(
     "powershell.exe",
@@ -78,7 +87,11 @@ function readWindowsProcessStartTime(processId: number): string | undefined {
     },
   )
   const startedAt = typeof result.stdout === "string" ? result.stdout.trim() : ""
-  return result.status === 0 && /^\d+$/u.test(startedAt) ? startedAt : undefined
+  if (result.status !== 0) return { status: "unknown" }
+  if (startedAt === "missing") return { status: "missing" }
+  return /^\d+$/u.test(startedAt)
+    ? { status: "found", startedAt }
+    : { status: "unknown" }
 }
 
 function readUpgradeLockOwner(ownerPath: string): UpgradeLockOwner | undefined {
@@ -88,10 +101,11 @@ function readUpgradeLockOwner(ownerPath: string): UpgradeLockOwner | undefined {
       && typeof value.token === "string" && value.token.length > 0
       && typeof value.createdAt === "number" && Number.isFinite(value.createdAt) && value.createdAt > 0
       && typeof value.heartbeatAt === "number" && Number.isFinite(value.heartbeatAt) && value.heartbeatAt > 0
-      && (value.phase === "recovery" || (value.phase === "starting" && typeof value.processStartedAt === "string" && /^\d+$/u.test(value.processStartedAt)))
+      && typeof value.processStartedAt === "string" && /^\d+$/u.test(value.processStartedAt)
+      && (value.phase === "recovery" || value.phase === "starting")
       ? {
           pid: Number(value.pid),
-          ...(typeof value.processStartedAt === "string" ? { processStartedAt: value.processStartedAt } : {}),
+          processStartedAt: value.processStartedAt,
           token: value.token,
           createdAt: value.createdAt,
           heartbeatAt: value.heartbeatAt,
@@ -132,11 +146,12 @@ export function acquireUpgradeLock(
   const ownerPath = path.join(lockPath, "owner")
   const now = options.now ?? Date.now
   const staleAfterMs = options.staleAfterMs ?? DEFAULT_UPGRADE_LOCK_STALE_AFTER_MS
-  const readProcessStartTime = options.readProcessStartTime ?? readWindowsProcessStartTime
-  const processStartedAt = readProcessStartTime(upgradePid)
-  if (!processStartedAt || !/^\d+$/u.test(processStartedAt)) {
+  const inspectProcessStartTime = options.inspectProcessStartTime ?? inspectWindowsProcessStartTime
+  const upgradeProcess = inspectProcessStartTime(upgradePid)
+  if (upgradeProcess.status !== "found" || !/^\d+$/u.test(upgradeProcess.startedAt)) {
     throw new Error("Could not identify the running upgrade process.")
   }
+  const processStartedAt = upgradeProcess.startedAt
   const owner = (options.createToken ?? randomUUID)()
   fs.mkdirSync(installDir, { recursive: true })
 
@@ -166,9 +181,11 @@ export function acquireUpgradeLock(
     if (!snapshot) continue
     const leaseUpdatedAt = existingOwner?.heartbeatAt ?? snapshot.modifiedAt
     const stale = now() - leaseUpdatedAt >= staleAfterMs
-    const activeStartingOwner = existingOwner?.phase === "starting"
-      && readProcessStartTime(existingOwner.pid) === existingOwner.processStartedAt
-    const reclaimable = existingOwner?.phase === "starting" ? !activeStartingOwner : stale
+    const ownerProcess = existingOwner ? inspectProcessStartTime(existingOwner.pid) : undefined
+    const reclaimable = existingOwner
+      ? ownerProcess?.status === "missing"
+        || (ownerProcess?.status === "found" && ownerProcess.startedAt !== existingOwner.processStartedAt)
+      : stale
     if (!reclaimable) {
       if (!existingOwner) {
         throw new Error("Another Memory Lane upgrade is starting; lock owner metadata is not yet available.")

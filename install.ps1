@@ -199,35 +199,45 @@ function Update-Upgrade-Lock-Lease {
     if (-not $transaction.LockPath) {
         return $true
     }
-    if (-not (Test-Path -LiteralPath $transaction.LockPath)) {
-        return $false
-    }
     $ownerPath = Join-Path $transaction.LockPath "owner"
-    if (-not (Test-Path -LiteralPath $ownerPath)) {
-        return $false
-    }
-    $lockOwner = (Get-Content -LiteralPath $ownerPath -Raw) | ConvertFrom-Json
-    if ($lockOwner.Token -ne $transaction.LockOwner) {
-        return $false
-    }
     $temporaryOwnerPath = Join-Path $transaction.LockPath "owner.$PID.tmp"
-    try {
-        $owner = [PSCustomObject]@{
-            pid = $PID
-            token = $transaction.LockOwner
-            createdAt = $lockOwner.createdAt
-            heartbeatAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-            phase = "recovery"
-        }
-        $json = $owner | ConvertTo-Json -Compress
-        [IO.File]::WriteAllText($temporaryOwnerPath, $json, [Text.UTF8Encoding]::new($false))
-        [IO.File]::Replace($temporaryOwnerPath, $ownerPath, $null)
-        return $true
-    } finally {
-        if (Test-Path -LiteralPath $temporaryOwnerPath) {
-            Remove-Item -LiteralPath $temporaryOwnerPath -Force -ErrorAction SilentlyContinue
+    $missingCount = 0
+    $mismatchCount = 0
+    for ($attempt = 0; $attempt -lt 3; $attempt++) {
+        try {
+            if (-not (Test-Path -LiteralPath $transaction.LockPath) `
+                -or -not (Test-Path -LiteralPath $ownerPath)) {
+                $missingCount++
+                Start-Sleep -Milliseconds 100
+                continue
+            }
+            $lockOwner = (Get-Content -LiteralPath $ownerPath -Raw) | ConvertFrom-Json
+            if ($lockOwner.Token -ne $transaction.LockOwner) {
+                $mismatchCount++
+                Start-Sleep -Milliseconds 100
+                continue
+            }
+            $owner = [PSCustomObject]@{
+                pid = $PID
+                processStartedAt = (Get-Process-Start-Time-Ticks $PID)
+                token = $transaction.LockOwner
+                createdAt = $lockOwner.createdAt
+                heartbeatAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+                phase = "recovery"
+            }
+            $json = $owner | ConvertTo-Json -Compress
+            [IO.File]::WriteAllText($temporaryOwnerPath, $json, [Text.UTF8Encoding]::new($false))
+            [IO.File]::Replace($temporaryOwnerPath, $ownerPath, $null)
+            return $true
+        } catch {
+            Start-Sleep -Milliseconds 100
+        } finally {
+            if (Test-Path -LiteralPath $temporaryOwnerPath) {
+                Remove-Item -LiteralPath $temporaryOwnerPath -Force -ErrorAction SilentlyContinue
+            }
         }
     }
+    return $missingCount -lt 3 -and $mismatchCount -lt 3
 }
 
 function Wait-For-Upgrade-Process($processId, $startedAt) {
