@@ -75,7 +75,20 @@ function Test-Upgrade-Process-Identity($processId, $startedAt) {
     }
 }
 
-function Read-Upgrade-Transaction {
+function Test-Same-Filesystem-Path($left, $right) {
+    if ([string]::IsNullOrWhiteSpace("$left") -or [string]::IsNullOrWhiteSpace("$right")) {
+        return $false
+    }
+    try {
+        $leftPath = [IO.Path]::GetFullPath("$left")
+        $rightPath = [IO.Path]::GetFullPath("$right")
+        return [string]::Equals($leftPath, $rightPath, [StringComparison]::OrdinalIgnoreCase)
+    } catch {
+        return $false
+    }
+}
+
+function Read-Upgrade-Transaction($allowLostLease = $false) {
     if ($script:transaction) {
         return $script:transaction
     }
@@ -86,12 +99,52 @@ function Read-Upgrade-Transaction {
     $validStates = @("pending", "committed", "restored")
     $validBackupStates = @("not-backed-up", "backed-up", "no-backup", "restored", "no-original-restored")
     $noOriginalBackupStates = @("no-backup", "no-original-restored")
+    $restoredBackupStates = @("restored", "no-original-restored")
     $validManifestStates = @("existing", "missing", "restored")
+    $manifestPathsValid = [IO.Path]::IsPathRooted("$($transaction.ManifestPath)") `
+        -and (Test-Same-Filesystem-Path $transaction.ManifestBackupPath "$($transaction.ManifestPath).upgrade.$($transaction.ParentPid)")
+    $terminalRestoreValid = $transaction.State -ne "restored" `
+        -or ($restoredBackupStates -contains $transaction.BackupState -and $transaction.ManifestState -eq "restored")
+    $activeEnvironmentValid = $true
+    if ($UpgradeAction) {
+        $expectedManifestState = if ($env:MEMORY_LANE_UPGRADE_MANIFEST_EXISTED -eq "true") {
+            "existing"
+        } elseif ($env:MEMORY_LANE_UPGRADE_MANIFEST_EXISTED -eq "false") {
+            "missing"
+        } else {
+            $null
+        }
+        $activeOwnerValid = $false
+        try {
+            $activeOwnerPath = Join-Path "$env:MEMORY_LANE_UPGRADE_LOCK_PATH" "owner"
+            $activeOwner = (Get-Content -LiteralPath $activeOwnerPath -Raw) | ConvertFrom-Json
+            if ("$($activeOwner.Token)" -ne "$env:MEMORY_LANE_UPGRADE_LOCK_OWNER") {
+                $activeOwnerValid = [bool]$allowLostLease
+            } else {
+                $activeOwnerValid = "$($activeOwner.ParentPid)" -eq "$($transaction.ParentPid)" `
+                    -and "$($activeOwner.ParentProcessStartedAt)" -eq "$($transaction.ParentStartedAt)" `
+                    -and "$($activeOwner.InstallerPid)" -eq "$($transaction.InstallerPid)" `
+                    -and "$($activeOwner.InstallerProcessStartedAt)" -eq "$($transaction.InstallerStartedAt)"
+            }
+        } catch {
+            $activeOwnerValid = [bool]$allowLostLease
+        }
+        $activeEnvironmentValid = "$env:MEMORY_LANE_UPGRADE_PID" -match "^\d+$" `
+            -and "$($transaction.ParentPid)" -eq "$env:MEMORY_LANE_UPGRADE_PID" `
+            -and (Test-Same-Filesystem-Path $transaction.ManifestPath $env:MEMORY_LANE_UPGRADE_MANIFEST_PATH) `
+            -and (Test-Same-Filesystem-Path $transaction.ManifestBackupPath $env:MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH) `
+            -and (Test-Same-Filesystem-Path $transaction.LockPath $env:MEMORY_LANE_UPGRADE_LOCK_PATH) `
+            -and "$($transaction.LockOwner)" -eq "$env:MEMORY_LANE_UPGRADE_LOCK_OWNER" `
+            -and $expectedManifestState `
+            -and ($transaction.ManifestState -eq "restored" -or $transaction.ManifestState -eq $expectedManifestState) `
+            -and (Test-Same-Filesystem-Path $script:transactionPath "$script:installPath.upgrade.$($transaction.ParentPid)") `
+            -and (Test-Same-Filesystem-Path $script:backupPath "$script:installPath.backup.$($transaction.ParentPid)") `
+            -and $activeOwnerValid
+    }
     if ($validStates -notcontains $transaction.State `
         -or $validBackupStates -notcontains $transaction.BackupState `
         -or $validManifestStates -notcontains $transaction.ManifestState `
-        -or [string]::IsNullOrWhiteSpace("$($transaction.ManifestPath)") `
-        -or [string]::IsNullOrWhiteSpace("$($transaction.ManifestBackupPath)") `
+        -or -not $manifestPathsValid `
         -or [string]::IsNullOrWhiteSpace("$($transaction.LockPath)") `
         -or [string]::IsNullOrWhiteSpace("$($transaction.LockOwner)") `
         -or "$($transaction.ParentPid)" -notmatch "^\d+$" `
@@ -99,7 +152,9 @@ function Read-Upgrade-Transaction {
         -or "$($transaction.InstallerPid)" -notmatch "^\d+$" `
         -or "$($transaction.InstallerStartedAt)" -notmatch "^\d+$" `
         -or ($noOriginalBackupStates -contains $transaction.BackupState -and -not [string]::IsNullOrWhiteSpace("$($transaction.OriginalBinaryHash)")) `
-        -or ($noOriginalBackupStates -notcontains $transaction.BackupState -and "$($transaction.OriginalBinaryHash)" -notmatch "^[a-fA-F0-9]{64}$")) {
+        -or ($noOriginalBackupStates -notcontains $transaction.BackupState -and "$($transaction.OriginalBinaryHash)" -notmatch "^[a-fA-F0-9]{64}$") `
+        -or -not $terminalRestoreValid `
+        -or -not $activeEnvironmentValid) {
         throw "invalid upgrade transaction state"
     }
     $script:transaction = $transaction
@@ -524,7 +579,7 @@ function Read-Upgrade-Transaction-After-Actor($actor) {
 
 function Cleanup-Committed-Upgrade-After-Lost-Lease {
     $script:transaction = $null
-    $transaction = Read-Upgrade-Transaction
+    $transaction = Read-Upgrade-Transaction -allowLostLease $true
     if ($transaction -and $transaction.State -eq "committed") {
         Cleanup-Upgrade-Transaction
     }
@@ -633,7 +688,7 @@ if ($UpgradeAction) {
     $script:backupRestored = $false
     $script:transaction = $null
     if ($UpgradeAction -eq "Recover") {
-        $pendingTransaction = Read-Upgrade-Transaction
+        $pendingTransaction = Read-Upgrade-Transaction -allowLostLease $true
         if (-not (Update-Upgrade-Lock-Lease)) {
             Cleanup-Committed-Upgrade-After-Lost-Lease
             exit 0

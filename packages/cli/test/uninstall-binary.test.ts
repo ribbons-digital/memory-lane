@@ -48,6 +48,8 @@ describe("installed binary removal", () => {
     assert.deepEqual(pending, ["memory-lane.exe.uninstall.4321.638500000000000000"])
     assert.equal(invocation?.command, "powershell.exe")
     assert.equal(invocation?.options.detached, undefined)
+    assert.equal(invocation?.options.stdio, "ignore")
+    assert.equal(invocation?.options.windowsHide, true)
     assert.equal(invocation?.options.env?.MEMORY_LANE_UNINSTALL_PARENT_PID, "4321")
     assert.equal(invocation?.options.env?.MEMORY_LANE_UNINSTALL_PARENT_STARTED_AT, "638500000000000000")
     assert.equal(invocation?.options.env?.MEMORY_LANE_UNINSTALL_PENDING_PATH, path.join(dir, pending[0]))

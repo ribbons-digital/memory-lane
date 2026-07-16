@@ -57,7 +57,7 @@ async function main(): Promise<void> {
       "$tokens = $null",
       "$errors = $null",
       "$ast = [Management.Automation.Language.Parser]::ParseFile($env:MEMORY_LANE_INSTALLER_PATH, [ref]$tokens, [ref]$errors)",
-      "$functions = $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and @('Get-Process-Start-Time-Ticks', 'Test-Upgrade-Process-Identity', 'Read-Upgrade-Transaction', 'Read-Upgrade-Transaction-After-Actor', 'Release-Upgrade-Actor', 'Write-Upgrade-Lock-Owner', 'Acquire-Upgrade-Lock-Owner-Gate', 'Release-Upgrade-Lock-Owner-Gate', 'Update-Upgrade-Lock-Lease', 'Wait-For-Upgrade-Process', 'Wait-For-Upgrade-Recovery-Lease') -contains $node.Name }, $true)",
+      "$functions = $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and @('Get-Process-Start-Time-Ticks', 'Test-Upgrade-Process-Identity', 'Test-Same-Filesystem-Path', 'Read-Upgrade-Transaction', 'Read-Upgrade-Transaction-After-Actor', 'Release-Upgrade-Actor', 'Write-Upgrade-Lock-Owner', 'Acquire-Upgrade-Lock-Owner-Gate', 'Release-Upgrade-Lock-Owner-Gate', 'Update-Upgrade-Lock-Lease', 'Wait-For-Upgrade-Process', 'Wait-For-Upgrade-Recovery-Lease') -contains $node.Name }, $true)",
       "$definitions = $functions | ForEach-Object { $_.Extent.Text }",
       "Invoke-Expression ($definitions -join [Environment]::NewLine)",
       "$startedAt = Get-Process-Start-Time-Ticks $PID",
@@ -66,9 +66,27 @@ async function main(): Promise<void> {
       "if ((Test-Upgrade-Process-Identity $PID $reusedStartedAt) -ne 'inactive') { throw 'reused process identity was accepted' }",
       "$interleaveRoot = Join-Path ([IO.Path]::GetTempPath()) ('memory-lane-interleave-' + [Guid]::NewGuid().ToString('N'))",
       "New-Item -ItemType Directory -Path $interleaveRoot | Out-Null",
-      "$script:transactionPath = Join-Path $interleaveRoot 'transaction'",
-      "$interleavedTransaction = [PSCustomObject]@{ State = 'pending'; BackupState = 'no-backup'; ManifestState = 'missing'; ManifestPath = (Join-Path $interleaveRoot 'manifest'); ManifestBackupPath = (Join-Path $interleaveRoot 'manifest-backup'); LockPath = $interleaveRoot; LockOwner = 'interleave-owner'; ParentPid = '1'; ParentStartedAt = '1'; InstallerPid = '1'; InstallerStartedAt = '1'; OriginalBinaryHash = '' }",
+      "$UpgradeAction = 'Recover'",
+      "$env:MEMORY_LANE_UPGRADE_PID = '1'",
+      "$script:installPath = Join-Path $interleaveRoot 'memory-lane.exe'",
+      "$script:backupPath = \"$script:installPath.backup.1\"",
+      "$script:transactionPath = \"$script:installPath.upgrade.1\"",
+      "$interleaveManifestPath = Join-Path $interleaveRoot 'manifest'",
+      "$interleaveManifestBackupPath = \"$interleaveManifestPath.upgrade.1\"",
+      "$env:MEMORY_LANE_UPGRADE_MANIFEST_PATH = $interleaveManifestPath",
+      "$env:MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH = $interleaveManifestBackupPath",
+      "$env:MEMORY_LANE_UPGRADE_MANIFEST_EXISTED = 'false'",
+      "$env:MEMORY_LANE_UPGRADE_LOCK_PATH = $interleaveRoot",
+      "$env:MEMORY_LANE_UPGRADE_LOCK_OWNER = 'interleave-owner'",
+      "$interleaveOwner = [PSCustomObject]@{ Token = 'interleave-owner'; ParentPid = '1'; ParentProcessStartedAt = '1'; InstallerPid = '1'; InstallerProcessStartedAt = '1' }",
+      "[IO.File]::WriteAllText((Join-Path $interleaveRoot 'owner'), ($interleaveOwner | ConvertTo-Json -Compress))",
+      "$interleavedTransaction = [PSCustomObject]@{ State = 'pending'; BackupState = 'no-backup'; ManifestState = 'missing'; ManifestPath = $interleaveManifestPath; ManifestBackupPath = $interleaveManifestBackupPath; LockPath = $interleaveRoot; LockOwner = 'interleave-owner'; ParentPid = '1'; ParentStartedAt = '1'; InstallerPid = '1'; InstallerStartedAt = '1'; OriginalBinaryHash = '' }",
       "[IO.File]::WriteAllText($script:transactionPath, ($interleavedTransaction | ConvertTo-Json -Compress))",
+      "$env:MEMORY_LANE_UPGRADE_MANIFEST_PATH = Join-Path $interleaveRoot 'mismatched-manifest'",
+      "$bindingRejected = $false",
+      "try { $script:transaction = $null; Read-Upgrade-Transaction | Out-Null } catch { if (\"$($_.Exception.Message)\" -ne 'invalid upgrade transaction state') { throw }; $bindingRejected = $true }",
+      "if (-not $bindingRejected) { throw 'recovery accepted a transaction outside the active upgrade environment' }",
+      "$env:MEMORY_LANE_UPGRADE_MANIFEST_PATH = $interleaveManifestPath",
       "$script:transaction = Read-Upgrade-Transaction",
       "$interleavedTransaction.State = 'committed'",
       "[IO.File]::WriteAllText($script:transactionPath, ($interleavedTransaction | ConvertTo-Json -Compress))",
@@ -354,21 +372,35 @@ async function main(): Promise<void> {
     await waitUntil(() => !fs.existsSync(transactionPath), "committed transaction cleanup")
     await waitUntil(() => !fs.existsSync(manifestBackupPath), "manifest snapshot cleanup")
     await waitUntil(() => !fs.existsSync(upgradeLockPath), "upgrade lock cleanup")
+    const writeRecoveryOwner = (lockPath: string, token: string): void => {
+      const now = Date.now()
+      fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
+        pid: process.pid,
+        processStartedAt: "1",
+        token,
+        createdAt: now,
+        heartbeatAt: now,
+        phase: "recovery",
+        parentPid: exitedUpgradePid,
+        parentProcessStartedAt: "1",
+        installerPid: exitedUpgradePid,
+        installerProcessStartedAt: "1",
+        recoveryPid: process.pid,
+        recoveryProcessStartedAt: "1",
+      }), "utf8")
+    }
+
 
     const noOriginalInstallDir = path.join(root, "no-original-bin")
     const noOriginalInstallPath = path.join(noOriginalInstallDir, "memory-lane.exe")
     const noOriginalManifestPath = path.join(root, "no-original-data", "install.json")
-    const noOriginalManifestBackupPath = `${noOriginalManifestPath}.upgrade-backup.${exitedUpgradePid}`
+    const noOriginalManifestBackupPath = `${noOriginalManifestPath}.upgrade.${exitedUpgradePid}`
     const noOriginalTransactionPath = `${noOriginalInstallPath}.upgrade.${exitedUpgradePid}`
     const noOriginalLockPath = path.join(noOriginalInstallDir, ".memory-lane-upgrade.lock")
     const noOriginalLockOwner = "no-original-owner"
     fs.mkdirSync(noOriginalLockPath, { recursive: true })
     fs.mkdirSync(path.dirname(noOriginalManifestPath), { recursive: true })
-    fs.writeFileSync(
-      path.join(noOriginalLockPath, "owner"),
-      JSON.stringify({ pid: process.pid, token: noOriginalLockOwner }),
-      "utf8",
-    )
+    writeRecoveryOwner(noOriginalLockPath, noOriginalLockOwner)
     fs.writeFileSync(noOriginalManifestPath, "new manifest must be removed", "utf8")
     fs.writeFileSync(noOriginalTransactionPath, JSON.stringify({
       State: "pending",
@@ -392,6 +424,9 @@ async function main(): Promise<void> {
         MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
         MEMORY_LANE_UPGRADE_LOCK_PATH: noOriginalLockPath,
         MEMORY_LANE_UPGRADE_LOCK_OWNER: noOriginalLockOwner,
+        MEMORY_LANE_UPGRADE_MANIFEST_PATH: noOriginalManifestPath,
+        MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH: noOriginalManifestBackupPath,
+        MEMORY_LANE_UPGRADE_MANIFEST_EXISTED: "false",
       },
     })
     assert.equal(fs.existsSync(noOriginalInstallPath), false, "no-original retry must preserve the absent binary")
@@ -404,10 +439,7 @@ async function main(): Promise<void> {
     for (const executableState of ["missing", "tampered"] as const) {
       const restoreOwner = `restore-verification-${executableState}`
       fs.mkdirSync(upgradeLockPath)
-      fs.writeFileSync(path.join(upgradeLockPath, "owner"), JSON.stringify({
-        pid: process.pid,
-        token: restoreOwner,
-      }), "utf8")
+      writeRecoveryOwner(upgradeLockPath, restoreOwner)
       fs.writeFileSync(backupPath, "retained backup artifact", "utf8")
       fs.writeFileSync(manifestBackupPath, "retained manifest artifact", "utf8")
       fs.writeFileSync(transactionPath, JSON.stringify({
@@ -462,10 +494,7 @@ async function main(): Promise<void> {
     for (const executableState of ["missing", "tampered"] as const) {
       const checkpointOwner = `pending-checkpoint-${executableState}`
       fs.mkdirSync(upgradeLockPath)
-      fs.writeFileSync(path.join(upgradeLockPath, "owner"), JSON.stringify({
-        pid: process.pid,
-        token: checkpointOwner,
-      }), "utf8")
+      writeRecoveryOwner(upgradeLockPath, checkpointOwner)
       fs.writeFileSync(backupPath, "retained backup artifact", "utf8")
       fs.writeFileSync(manifestPath, "pending checkpoint manifest", "utf8")
       fs.writeFileSync(manifestBackupPath, originalManifest, "utf8")
@@ -522,10 +551,7 @@ async function main(): Promise<void> {
 
     const unexpectedNoOriginalOwner = "pending-no-original-checkpoint"
     fs.mkdirSync(noOriginalLockPath)
-    fs.writeFileSync(path.join(noOriginalLockPath, "owner"), JSON.stringify({
-      pid: process.pid,
-      token: unexpectedNoOriginalOwner,
-    }), "utf8")
+    writeRecoveryOwner(noOriginalLockPath, unexpectedNoOriginalOwner)
     fs.mkdirSync(noOriginalInstallDir, { recursive: true })
     fs.writeFileSync(noOriginalInstallPath, "unexpected executable", "utf8")
     fs.writeFileSync(noOriginalManifestPath, "pending no-original manifest", "utf8")
@@ -554,6 +580,9 @@ async function main(): Promise<void> {
           MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
           MEMORY_LANE_UPGRADE_LOCK_PATH: noOriginalLockPath,
           MEMORY_LANE_UPGRADE_LOCK_OWNER: unexpectedNoOriginalOwner,
+          MEMORY_LANE_UPGRADE_MANIFEST_PATH: noOriginalManifestPath,
+          MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH: noOriginalManifestBackupPath,
+          MEMORY_LANE_UPGRADE_MANIFEST_EXISTED: "false",
         },
         encoding: "utf8",
       },
@@ -572,6 +601,9 @@ async function main(): Promise<void> {
         MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
         MEMORY_LANE_UPGRADE_LOCK_PATH: noOriginalLockPath,
         MEMORY_LANE_UPGRADE_LOCK_OWNER: unexpectedNoOriginalOwner,
+        MEMORY_LANE_UPGRADE_MANIFEST_PATH: noOriginalManifestPath,
+        MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH: noOriginalManifestBackupPath,
+        MEMORY_LANE_UPGRADE_MANIFEST_EXISTED: "false",
       },
     })
     assert.equal(fs.existsSync(noOriginalManifestPath), false, "verified no-original retry must restore the missing manifest")
@@ -582,11 +614,7 @@ async function main(): Promise<void> {
     const staleOwner = "finished-upgrade-owner"
     const replacementOwner = "later-upgrade-owner"
     fs.mkdirSync(ownerRaceLockPath)
-    fs.writeFileSync(
-      path.join(ownerRaceLockPath, "owner"),
-      JSON.stringify({ pid: process.pid, token: replacementOwner }),
-      "utf8",
-    )
+    writeRecoveryOwner(ownerRaceLockPath, replacementOwner)
     fs.writeFileSync(transactionPath, JSON.stringify({
       State: "committed",
       BackupState: "no-backup",
