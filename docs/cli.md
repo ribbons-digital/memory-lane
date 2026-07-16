@@ -63,6 +63,16 @@ memory-lane mcp                   Run the bundled stdio MCP server (used by inst
 All commands support `--json` for machine-readable output and `--project <path>` to set the project scope.
 `memory-lane save` accepts `--kind` to override text-based kind inference; valid values are `preference`, `personal_context`, `project_fact`, `project_checkpoint`, `workflow_rule`, `decision`, `correction`, `procedure`, `session_summary`, and `misc`.
 
+## Upgrade and uninstall behavior
+
+`memory-lane upgrade` preserves memory data and reapplies manifest-recorded integrations with the newly installed binary.
+On Windows, executable replacement and install-manifest updates are transactional: the running executable is renamed, the replacement is smoke-tested, and any installer or required reconfiguration failure restores the previous executable and manifest.
+Successful Windows upgrades defer backup and transaction cleanup until the original process exits, and concurrent maintenance is serialized per installation.
+
+Full `memory-lane uninstall` preserves memory data unless an interactive user explicitly chooses to remove it; `--yes` removes integrations and the binary while preserving data.
+On Windows, the running executable is renamed and deleted by a detached helper after exit.
+Selective `uninstall --only omp` does not remove the binary, Pi, other integrations, or memory data.
+
 ## Recall ordering
 
 When `memory-lane recall` receives no query, or a query that trims to an empty string, it returns approved memories visible to the current project scope in newest-`updatedAt`-first order.

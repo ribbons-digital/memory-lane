@@ -3,6 +3,7 @@
 Memory Lane includes a local stdio MCP server for clients that support explicit MCP tools, such as Claude Desktop and Cursor.
 The workspace package is `@memory-lane/mcp-server`, and its built bin is `memory-lane-mcp`.
 `memory-lane init` configures Claude Desktop and Codex Desktop to launch the installed Memory Lane binary with `memory-lane mcp`; run the same command manually when a client needs an explicit stdio server command.
+The command loads `MEMORY_LANE_CONFIG` when explicitly set; otherwise it resolves `.memory-lane/config.json` from `HOME`, falling back to the operating system home directory when MCP clients omit `HOME` on Windows.
 
 The MCP server exposes explicit tools only.
 When local learning capture is enabled, `memory_review` records content-free suggestion exposure events and mutation tools record their review outcome events.

@@ -480,6 +480,9 @@ To upgrade to the latest release while preserving existing harness configs and m
 memory-lane upgrade
 ```
 Upgrade preserves a valid manifest-recorded release binary path and refuses malformed, relative, unmanaged, or wrong-data-directory manifest paths instead of silently redirecting to a platform default.
+On Windows, upgrade serializes maintenance per installation, renames the running executable, smoke-tests the replacement, and requires every manifest-recorded integration to reapply successfully before commit.
+Installer, smoke-test, or required reconfiguration failures restore both the previous executable and install manifest; successful backup cleanup waits until the original process exits.
+Full uninstall preserves memory data by default, including with `--yes`, and Windows defers deletion of the renamed running executable until exit.
 Uninstall also refuses malformed or unsafe manifest paths instead of falling back to the current environment.
 
 In pi, Memory Lane keeps lifecycle writes intentionally low-noise: `/memory` commands and tools save/read explicitly, `memory_continuity` is the canonical broad-continuity tool, `input` only saves explicit memory requests such as “Remember that ...”, and `turn_end` / `tool_result` capture higher-signal candidates in both the repo-local adapter and release-style generated bridge.

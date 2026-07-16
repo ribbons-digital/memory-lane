@@ -3,7 +3,7 @@
 User-facing reference documentation for Memory Lane.
 Start with the [project README](../README.md) for the quick start.
 
-- [Installation and maintenance](./installation.md) - installer, upgrade, selective uninstall, and install-manifest semantics.
+- [Installation and maintenance](./installation.md) - installer, transactional Windows upgrade, uninstall, and install-manifest semantics.
 - [CLI reference](./cli.md) - full command list and command behavior.
 - [Configuration](./configuration.md) - config file options and environment variables.
 - [Storage and project scoping](./storage.md) - storage tiers, project identity, and migration.

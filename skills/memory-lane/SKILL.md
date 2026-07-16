@@ -101,6 +101,8 @@ Detailed command/reference material lives in `skills/memory-lane/REFERENCE.md`. 
 
 OMP init installs under `~/.omp/agent` by default or the absolute `PI_CODING_AGENT_DIR` override.
 Manifest-recorded OMP paths take precedence for doctor, upgrade, and uninstall after installation.
+Windows upgrade transactionally replaces the running executable, restores the previous binary and install manifest on installer or required reconfiguration failure, and removes committed backup artifacts after the original process exits.
+Full uninstall preserves memory data by default; on Windows it renames the running executable and deletes it after the command exits.
 Use `uninstall --only omp` to preserve Pi, the binary, other integrations, and memory data.
 Named OMP profiles are not auto-discovered; set `PI_CODING_AGENT_DIR` to the profile agent directory before init or configure its `extensions:` list manually.
 

@@ -81,6 +81,9 @@ The tested lifecycle version and date live in `packages/cli/test/fixtures/omp-co
 The current committed lifecycle contract was tested against OMP `16.4.8` on `2026-07-13` and reports `overallPass: true`.
 The committed report must keep `overallPass: true`.
 
+Windows self-maintenance changes also require the `windows-latest` CI smoke.
+It runs the focused deferred-uninstall process-identity test and `scripts/windows-self-maintenance-smoke.ts` against real Windows executable locking to cover failed-upgrade rollback, successful running-executable replacement, post-exit transaction cleanup, self-uninstall, and default memory-data retention.
+
 ### Optional local evals
 
 Memory Lane eval runners are developer commands and stay outside default CI unless a specific task says otherwise.
