@@ -63,13 +63,20 @@ async function main(): Promise<void> {
       "$tokens = $null",
       "$errors = $null",
       "$ast = [Management.Automation.Language.Parser]::ParseFile($env:MEMORY_LANE_INSTALLER_PATH, [ref]$tokens, [ref]$errors)",
-      "$functions = $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and @('Get-Process-Start-Time-Ticks', 'Test-Upgrade-Process-Identity', 'Write-Upgrade-Lock-Owner', 'Update-Upgrade-Lock-Lease', 'Wait-For-Upgrade-Process') -contains $node.Name }, $true)",
+      "$functions = $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and @('Get-Process-Start-Time-Ticks', 'Test-Upgrade-Process-Identity', 'Write-Upgrade-Lock-Owner', 'Update-Upgrade-Lock-Lease', 'Wait-For-Upgrade-Process', 'Wait-For-Upgrade-Recovery-Lease') -contains $node.Name }, $true)",
       "$definitions = $functions | ForEach-Object { $_.Extent.Text }",
       "Invoke-Expression ($definitions -join [Environment]::NewLine)",
       "$startedAt = Get-Process-Start-Time-Ticks $PID",
       "if ((Test-Upgrade-Process-Identity $PID $startedAt) -ne 'active') { throw 'matching process identity was rejected' }",
       "$reusedStartedAt = ([Int64]$startedAt + 1).ToString()",
       "if ((Test-Upgrade-Process-Identity $PID $reusedStartedAt) -ne 'inactive') { throw 'reused process identity was accepted' }",
+      "$handshakeRoot = Join-Path ([IO.Path]::GetTempPath()) ('memory-lane-handshake-' + [Guid]::NewGuid().ToString('N'))",
+      "New-Item -ItemType Directory -Path $handshakeRoot | Out-Null",
+      "$handshakeOwner = [PSCustomObject]@{ pid = $PID; processStartedAt = $startedAt; token = 'handshake-owner'; createdAt = 1; heartbeatAt = 1; phase = 'recovery' }",
+      "[IO.File]::WriteAllText((Join-Path $handshakeRoot 'owner'), ($handshakeOwner | ConvertTo-Json -Compress))",
+      "$script:transaction = [PSCustomObject]@{ LockPath = $handshakeRoot; LockOwner = 'handshake-owner' }",
+      "function Read-Upgrade-Transaction { return $script:transaction }",
+      "try { if (-not (Wait-For-Upgrade-Recovery-Lease 500)) { throw 'durable recovery lease handshake was rejected' }; $handshakeOwner.phase = 'starting'; [IO.File]::WriteAllText((Join-Path $handshakeRoot 'owner'), ($handshakeOwner | ConvertTo-Json -Compress)); if (Wait-For-Upgrade-Recovery-Lease 200) { throw 'starting lease was accepted as recovery handoff' } } finally { Remove-Item -LiteralPath $handshakeRoot -Recurse -Force }",
       "function Get-Process { throw [InvalidOperationException]::new('transient process inspection failure') }",
       "if ((Test-Upgrade-Process-Identity $PID $startedAt) -ne 'unknown') { throw 'process inspection failure was treated as exit' }",
       "Remove-Item -LiteralPath Function:\\Get-Process -Force",
@@ -146,6 +153,18 @@ async function main(): Promise<void> {
 
     const manifestPath = path.join(dataDir, "install.json")
     const manifestBackupPath = `${manifestPath}.upgrade.${runningOldBinary.pid}`
+    const parentStartedAt = spawnSync("powershell.exe", [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "[Console]::Out.Write((Get-Process -Id ([int]$env:TEST_PARENT_PID) -ErrorAction Stop).StartTime.ToUniversalTime().Ticks)",
+    ], {
+      env: { ...process.env, TEST_PARENT_PID: String(runningOldBinary.pid) },
+      encoding: "utf8",
+    }).stdout.trim()
+    assert.match(parentStartedAt, /^\d+$/u)
+    const upgradeLockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    let lockSequence = 0
     const installerEnv: NodeJS.ProcessEnv = {
       ...process.env,
       HOME: home,
@@ -156,11 +175,29 @@ async function main(): Promise<void> {
       MEMORY_LANE_UPGRADE_MANIFEST_PATH: manifestPath,
       MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH: manifestBackupPath,
       MEMORY_LANE_UPGRADE_MANIFEST_EXISTED: "false",
+      MEMORY_LANE_UPGRADE_LOCK_PATH: upgradeLockPath,
+    }
+    const prepareUpgradeLock = (): void => {
+      lockSequence++
+      fs.rmSync(upgradeLockPath, { recursive: true, force: true })
+      fs.mkdirSync(upgradeLockPath)
+      const now = Date.now()
+      const owner = `windows-smoke-owner-${lockSequence}`
+      installerEnv.MEMORY_LANE_UPGRADE_LOCK_OWNER = owner
+      fs.writeFileSync(path.join(upgradeLockPath, "owner"), JSON.stringify({
+        pid: runningOldBinary?.pid,
+        processStartedAt: parentStartedAt,
+        token: owner,
+        createdAt: now,
+        heartbeatAt: now,
+        phase: "starting",
+      }), "utf8")
     }
     const installerArgs = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(repo, "install.ps1")]
     const backupPath = `${installPath}.backup.${runningOldBinary.pid}`
     const transactionPath = `${installPath}.upgrade.${runningOldBinary.pid}`
 
+    prepareUpgradeLock()
     fs.mkdirSync(transactionPath)
     fs.writeFileSync(path.join(transactionPath, "cleanup-blocker"), "block marker cleanup", "utf8")
     const failedMarkerWrite = spawnSync("powershell.exe", installerArgs, {
@@ -184,6 +221,7 @@ async function main(): Promise<void> {
     assert.match(restoredAfterCleanupFailure.stdout, /old binary/u)
     fs.rmSync(transactionPath, { recursive: true, force: true })
 
+    prepareUpgradeLock()
     const failedInstall = spawnSync("powershell.exe", installerArgs, {
       cwd: repo,
       env: { ...installerEnv, MEMORY_LANE_INSTALL_BINARY: invalidReplacementPath },
@@ -217,12 +255,17 @@ async function main(): Promise<void> {
     fs.copyFileSync(manifestPath, manifestBackupPath)
     installerEnv.MEMORY_LANE_UPGRADE_MANIFEST_EXISTED = "true"
 
+    prepareUpgradeLock()
     run("powershell.exe", installerArgs, {
       cwd: repo,
       env: installerEnv,
     })
     assert.equal(fs.existsSync(backupPath), true, "installer must retain the backup until post-install work succeeds")
     assert.equal(fs.existsSync(transactionPath), true, "installer must retain the transaction until post-install work succeeds")
+    const recoveryOwner = JSON.parse(fs.readFileSync(path.join(upgradeLockPath, "owner"), "utf8"))
+    assert.equal(recoveryOwner.phase, "recovery", "installer success must wait for durable recovery lease handoff")
+    assert.equal(recoveryOwner.token, installerEnv.MEMORY_LANE_UPGRADE_LOCK_OWNER)
+    assert.match(recoveryOwner.processStartedAt, /^\d+$/u)
 
     const smoke = spawnSync(installPath, ["--smoke-test"], { encoding: "utf8" })
     assert.equal(smoke.status, 0, smoke.stderr)
@@ -247,8 +290,27 @@ async function main(): Promise<void> {
     assert.match(restored.stdout, /old binary/u)
     assert.equal(runningOldBinary.exitCode, null, "post-install rollback must leave the old process running")
 
+    fs.copyFileSync(manifestPath, manifestBackupPath)
+    prepareUpgradeLock()
+    run("powershell.exe", installerArgs, {
+      cwd: repo,
+      env: installerEnv,
+    })
+    fs.rmSync(installPath, { force: true })
+    fs.renameSync(backupPath, installPath)
+    fs.writeFileSync(manifestPath, "upgraded manifest must be rolled back", "utf8")
+    run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
+      cwd: repo,
+      env: installerEnv,
+    })
+    assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest, "checkpoint retry must restore the manifest")
+    assert.equal(fs.existsSync(backupPath), false, "checkpoint retry must accept a previously consumed backup")
+    const checkpointRestored = spawnSync(installPath, ["--identity"], { encoding: "utf8" })
+    assert.match(checkpointRestored.stdout, /old binary/u)
+
     fs.writeFileSync(claudeConfigPath, "{}", "utf8")
     fs.copyFileSync(manifestPath, manifestBackupPath)
+    prepareUpgradeLock()
     run("powershell.exe", installerArgs, {
       cwd: repo,
       env: installerEnv,
@@ -278,6 +340,7 @@ async function main(): Promise<void> {
     )
     await waitUntil(() => !fs.existsSync(transactionPath), "committed transaction cleanup")
     await waitUntil(() => !fs.existsSync(manifestBackupPath), "manifest snapshot cleanup")
+    await waitUntil(() => !fs.existsSync(upgradeLockPath), "upgrade lock cleanup")
 
     const ownerRaceLockPath = path.join(installDir, ".memory-lane-upgrade.lock")
     const staleOwner = "finished-upgrade-owner"
@@ -343,7 +406,11 @@ async function main(): Promise<void> {
 
     console.log("Windows self-maintenance smoke passed")
   } finally {
-    if (runningOldBinary?.exitCode === null) runningOldBinary.kill()
+    if (runningOldBinary && runningOldBinary.exitCode === null && runningOldBinary.signalCode === null) {
+      const exit = waitForExit(runningOldBinary)
+      runningOldBinary.kill()
+      await exit
+    }
     fs.rmSync(root, { recursive: true, force: true })
   }
 }

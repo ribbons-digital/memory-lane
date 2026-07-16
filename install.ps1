@@ -75,14 +75,15 @@ function Read-Upgrade-Transaction {
     if ($validStates -notcontains $transaction.State `
         -or $validBackupStates -notcontains $transaction.BackupState `
         -or $validManifestStates -notcontains $transaction.ManifestState `
-        -or $null -eq $transaction.ManifestPath `
-        -or $null -eq $transaction.ManifestBackupPath `
-        -or $null -eq $transaction.LockPath `
-        -or $null -eq $transaction.LockOwner `
+        -or [string]::IsNullOrWhiteSpace("$($transaction.ManifestPath)") `
+        -or [string]::IsNullOrWhiteSpace("$($transaction.ManifestBackupPath)") `
+        -or [string]::IsNullOrWhiteSpace("$($transaction.LockPath)") `
+        -or [string]::IsNullOrWhiteSpace("$($transaction.LockOwner)") `
         -or "$($transaction.ParentPid)" -notmatch "^\d+$" `
         -or "$($transaction.ParentStartedAt)" -notmatch "^\d+$" `
         -or "$($transaction.InstallerPid)" -notmatch "^\d+$" `
-        -or "$($transaction.InstallerStartedAt)" -notmatch "^\d+$") {
+        -or "$($transaction.InstallerStartedAt)" -notmatch "^\d+$" `
+        -or ($transaction.BackupState -ne "no-backup" -and "$($transaction.OriginalBinaryHash)" -notmatch "^[a-fA-F0-9]{64}$")) {
         throw "invalid upgrade transaction state"
     }
     $script:transaction = $transaction
@@ -166,15 +167,24 @@ function Restore-Backup {
 
     if ($transaction.BackupState -eq "backed-up") {
         if (-not (Test-Path -LiteralPath $script:backupPath)) {
-            throw "previous binary backup is missing"
+            if (-not (Test-Path -LiteralPath $script:installPath) `
+                -or (Get-FileHash -LiteralPath $script:installPath -Algorithm SHA256).Hash -ne $transaction.OriginalBinaryHash) {
+                throw "previous binary backup is missing"
+            }
+            $transaction.BackupState = "restored"
+            Save-Upgrade-Transaction
+        } else {
+            if ((Get-FileHash -LiteralPath $script:backupPath -Algorithm SHA256).Hash -ne $transaction.OriginalBinaryHash) {
+                throw "previous binary backup does not match the upgrade transaction"
+            }
+            if (Test-Path -LiteralPath $script:installPath) {
+                Remove-Item -LiteralPath $script:installPath -Force
+            }
+            Move-Item -LiteralPath $script:backupPath -Destination $script:installPath -Force
+            $transaction.BackupState = "restored"
+            Save-Upgrade-Transaction
+            Say "restored previous binary"
         }
-        if (Test-Path -LiteralPath $script:installPath) {
-            Remove-Item -LiteralPath $script:installPath -Force
-        }
-        Move-Item -LiteralPath $script:backupPath -Destination $script:installPath -Force
-        $transaction.BackupState = "restored"
-        Save-Upgrade-Transaction
-        Say "restored previous binary"
     } elseif ($transaction.BackupState -eq "no-backup") {
         if (Test-Path -LiteralPath $script:installPath) {
             Remove-Item -LiteralPath $script:installPath -Force
@@ -291,6 +301,35 @@ function Start-Upgrade-Recovery {
         -WindowStyle Hidden | Out-Null
 }
 
+function Wait-For-Upgrade-Recovery-Lease($timeoutMilliseconds = 10000) {
+    $transaction = Read-Upgrade-Transaction
+    if (-not $transaction -or -not $transaction.LockPath) {
+        return $true
+    }
+    $ownerPath = Join-Path $transaction.LockPath "owner"
+    $deadline = [DateTime]::UtcNow.AddMilliseconds($timeoutMilliseconds)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        try {
+            if (Test-Path -LiteralPath $ownerPath) {
+                $lockOwner = (Get-Content -LiteralPath $ownerPath -Raw) | ConvertFrom-Json
+                if ($lockOwner.Token -ne $transaction.LockOwner) {
+                    return $false
+                }
+                if ($lockOwner.phase -eq "recovery" `
+                    -and "$($lockOwner.pid)" -match "^\d+$" `
+                    -and "$($lockOwner.processStartedAt)" -match "^\d+$") {
+                    $identity = Test-Upgrade-Process-Identity $lockOwner.pid $lockOwner.processStartedAt
+                    if ($identity -eq "active") {
+                        return $true
+                    }
+                }
+            }
+        } catch {}
+        Start-Sleep -Milliseconds 100
+    }
+    return $false
+}
+
 function Backup-Existing-Binary {
     $script:backupPath = $null
     $script:backupWasRenamed = $false
@@ -315,9 +354,13 @@ function Backup-Existing-Binary {
             ParentStartedAt = $parentStartedAt
             InstallerPid = "$PID"
             InstallerStartedAt = $installerStartedAt
+            OriginalBinaryHash = if ($existingBinary) { (Get-FileHash -LiteralPath $script:installPath -Algorithm SHA256).Hash } else { "" }
         }
         Save-Upgrade-Transaction
         Start-Upgrade-Recovery
+        if (-not (Wait-For-Upgrade-Recovery-Lease)) {
+            throw "could not transfer the Windows upgrade recovery lease"
+        }
         if ($existingBinary) {
             Move-Item -LiteralPath $script:installPath -Destination $script:backupPath -Force
             $script:backupWasRenamed = $true
@@ -368,12 +411,8 @@ if ($UpgradeAction) {
         }
         $script:transaction = $null
     }
-    if (-not (Test-Path -LiteralPath $script:transactionPath) `
-        -and -not (Test-Path -LiteralPath $script:backupPath)) {
-        exit 0
-    }
-    $transaction = Read-Upgrade-Transaction
     if ($UpgradeAction -eq "Commit") {
+        $transaction = Read-Upgrade-Transaction
         if (-not $transaction) {
             Err "upgrade transaction is missing"
         }
@@ -382,6 +421,11 @@ if ($UpgradeAction) {
         Say "committed Windows upgrade"
         exit 0
     }
+    if (-not (Test-Path -LiteralPath $script:transactionPath) `
+        -and -not (Test-Path -LiteralPath $script:backupPath)) {
+        exit 0
+    }
+    $transaction = Read-Upgrade-Transaction
     if ($UpgradeAction -eq "Recover" -and $transaction -and $transaction.State -eq "committed") {
         Cleanup-Upgrade-Transaction
         exit 0

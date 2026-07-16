@@ -49,7 +49,11 @@ describe("installed binary removal", () => {
     assert.equal(typeof encodedCommand, "string")
     const helperCommand = Buffer.from(encodedCommand ?? "", "base64").toString("utf16le")
     assert.match(helperCommand, /StartTime\.ToUniversalTime\(\)\.Ticks/u)
-    assert.match(helperCommand, /-ne \$parentStartedAt/u)
+    assert.match(helperCommand, /\$identity = 'unknown'/u)
+    assert.match(helperCommand, /NoProcessFoundForGivenId/u)
+    assert.match(helperCommand, /if \(\$identity -eq 'inactive'\) \{ break \}/u)
+    assert.match(helperCommand, /for \(\$attempt = 0; \$attempt -lt 10; \$attempt\+\+\)/u)
+    assert.match(helperCommand, /Remove-Item -LiteralPath .* -ErrorAction Stop/u)
   })
 
   it("distinguishes matching and reused Windows process identities", { skip: process.platform !== "win32" }, async () => {
@@ -104,6 +108,40 @@ describe("installed binary removal", () => {
     })
     assert.equal(reused.status, 0, `${reused.stdout}\n${reused.stderr}`)
     assert.equal(fs.existsSync(reusedPath), false)
+
+    const transientPath = path.join(dir, "transient.exe")
+    const attemptsPath = path.join(dir, "inspection-attempts.txt")
+    fs.writeFileSync(transientPath, "pending", "utf8")
+    const helperCommand = Buffer.from(String(invocation?.args.at(-1)), "base64").toString("utf16le")
+    const transientCommand = [
+      "$script:inspectionAttempts = 0",
+      "function Get-Process {",
+      "  param([int]$Id, $ErrorAction)",
+      "  $script:inspectionAttempts++",
+      "  if ($script:inspectionAttempts -lt 3) { throw [InvalidOperationException]::new('transient inspection failure') }",
+      "  Microsoft.PowerShell.Management\\Get-Process -Id $Id -ErrorAction Stop",
+      "}",
+      helperCommand,
+      "[IO.File]::WriteAllText($env:TEST_ATTEMPTS_PATH, \"$script:inspectionAttempts\")",
+    ].join("\n")
+    const transient = spawnSync("powershell.exe", [
+      "-NoProfile",
+      "-NonInteractive",
+      "-EncodedCommand",
+      Buffer.from(transientCommand, "utf16le").toString("base64"),
+    ], {
+      encoding: "utf8",
+      env: {
+        ...invocation?.options.env,
+        MEMORY_LANE_UNINSTALL_PARENT_PID: String(process.pid),
+        MEMORY_LANE_UNINSTALL_PARENT_STARTED_AT: (BigInt(identity) + 1n).toString(),
+        MEMORY_LANE_UNINSTALL_PENDING_PATH: transientPath,
+        TEST_ATTEMPTS_PATH: attemptsPath,
+      },
+    })
+    assert.equal(transient.status, 0, `${transient.stdout}\n${transient.stderr}`)
+    assert.equal(fs.readFileSync(attemptsPath, "utf8"), "3")
+    assert.equal(fs.existsSync(transientPath), false)
   })
 
   it("keeps the Windows binary when parent identity capture fails", async () => {
