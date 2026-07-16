@@ -166,6 +166,15 @@ function Restore-Backup {
         return
     }
     if ($transaction.State -eq "restored") {
+        $executableRestored = if ($transaction.BackupState -eq "restored") {
+            (Test-Path -LiteralPath $script:installPath) `
+                -and (Get-Sha256-Hash $script:installPath) -eq $transaction.OriginalBinaryHash
+        } else {
+            -not (Test-Path -LiteralPath $script:installPath)
+        }
+        if (-not $executableRestored) {
+            throw "restored executable does not match the upgrade transaction"
+        }
         $script:backupRestored = $true
         try { Cleanup-Upgrade-Transaction } catch {}
         return
@@ -175,9 +184,12 @@ function Restore-Backup {
         if (Test-Path -LiteralPath $script:backupPath) {
             $transaction.BackupState = "backed-up"
             Save-Upgrade-Transaction
-        } else {
+        } elseif ((Test-Path -LiteralPath $script:installPath) `
+            -and (Get-Sha256-Hash $script:installPath) -eq $transaction.OriginalBinaryHash) {
             $transaction.BackupState = "restored"
             Save-Upgrade-Transaction
+        } else {
+            throw "previous binary backup is missing"
         }
     }
 
@@ -202,9 +214,10 @@ function Restore-Backup {
             Say "restored previous binary"
         }
     } elseif ($transaction.BackupState -eq "no-backup") {
-        if (Test-Path -LiteralPath $script:installPath) {
-            Remove-Item -LiteralPath $script:installPath -Force
+        if (-not (Test-Path -LiteralPath $script:installPath)) {
+            throw "new executable is missing before restoring the absent original"
         }
+        Remove-Item -LiteralPath $script:installPath -Force
         $transaction.BackupState = "no-original-restored"
         Save-Upgrade-Transaction
     }

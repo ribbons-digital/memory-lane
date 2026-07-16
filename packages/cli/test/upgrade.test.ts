@@ -714,6 +714,48 @@ describe("upgrade", () => {
     assert.equal(fs.existsSync(lockPath), false)
   })
 
+  it("acquires after reclaiming on the final bounded attempt", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const ownerPath = path.join(lockPath, "owner")
+    const now = 2_000_000
+    let inspections = 0
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(ownerPath, JSON.stringify({
+      pid: 9876,
+      processStartedAt: "111111111",
+      token: "stale-owner",
+      createdAt: now,
+      heartbeatAt: now,
+      phase: "starting",
+      parentPid: 9876,
+      parentProcessStartedAt: "111111111",
+    }), "utf8")
+
+    const lock = acquireUpgradeLock(installDir, process.pid, {
+      now: () => now,
+      createToken: () => "replacement-owner",
+      inspectProcessStartTime: (processId) => processId === process.pid
+        ? { status: "found", startedAt: "333333333" }
+        : { status: "missing" },
+      onReclaimInspected: (reclaimPath) => {
+        inspections++
+        if (inspections < 3) {
+          fs.writeFileSync(reclaimPath, JSON.stringify({
+            pid: 7654,
+            processStartedAt: "222222222",
+            token: `stale-claim-${inspections}`,
+            createdAt: now,
+          }), { encoding: "utf8", flag: "wx" })
+        }
+      },
+    })
+
+    assert.equal(inspections, 3)
+    assert.equal(lock.owner, "replacement-owner")
+    releaseUpgradeLock(lock)
+  })
+
   it("preserves an expired recovery lease while its process identity matches", () => {
     const installDir = tempDir()
     const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
@@ -902,6 +944,77 @@ describe("upgrade", () => {
       releaseUpgradeLock(lock)
     })
   }
+
+  for (const executableState of ["missing", "tampered"] as const) {
+    it(`retains restored transaction artifacts when the executable is ${executableState}`, () => {
+      const fixture = createStaleUpgradeTransaction("restored")
+      if (executableState === "missing") fs.rmSync(fixture.installPath)
+      else fs.writeFileSync(fixture.installPath, "tampered binary", "utf8")
+
+      assert.throws(
+        () => acquireUpgradeLock(fixture.installDir, process.pid, {
+          createToken: () => "replacement-owner",
+          inspectProcessStartTime: (processId) => processId === process.pid
+            ? { status: "found", startedAt: "444444444" }
+            : { status: "missing" },
+        }),
+        /restored executable cannot be verified/u,
+      )
+      assert.equal(fs.existsSync(fixture.transactionPath), true)
+      assert.equal(fs.existsSync(fixture.backupPath), true)
+      assert.equal(fs.existsSync(fixture.manifestBackupPath), true)
+      assert.equal(fs.existsSync(fixture.lockPath), true)
+      assert.equal(fs.existsSync(path.join(fixture.lockPath, ".reclaim")), false)
+    })
+  }
+
+  for (const executableState of ["missing", "tampered"] as const) {
+    it(`retains a pending not-backed-up transaction when the executable is ${executableState}`, () => {
+      const fixture = createStaleUpgradeTransaction()
+      const transaction = JSON.parse(fs.readFileSync(fixture.transactionPath, "utf8"))
+      transaction.BackupState = "not-backed-up"
+      fs.writeFileSync(fixture.transactionPath, JSON.stringify(transaction), "utf8")
+      fs.rmSync(fixture.backupPath)
+      if (executableState === "missing") fs.rmSync(fixture.installPath)
+      else fs.writeFileSync(fixture.installPath, "tampered binary", "utf8")
+
+      assert.throws(
+        () => acquireUpgradeLock(fixture.installDir, process.pid, {
+          createToken: () => "replacement-owner",
+          inspectProcessStartTime: (processId) => processId === process.pid
+            ? { status: "found", startedAt: "444444444" }
+            : { status: "missing" },
+        }),
+        /backup is missing/u,
+      )
+      assert.equal(fs.existsSync(fixture.transactionPath), true)
+      assert.equal(fs.existsSync(fixture.manifestBackupPath), true)
+      assert.equal(fs.existsSync(fixture.lockPath), true)
+    })
+  }
+
+  it("retains a pending no-backup transaction when the new executable is missing", () => {
+    const fixture = createStaleUpgradeTransaction()
+    const transaction = JSON.parse(fs.readFileSync(fixture.transactionPath, "utf8"))
+    transaction.BackupState = "no-backup"
+    transaction.OriginalBinaryHash = ""
+    fs.writeFileSync(fixture.transactionPath, JSON.stringify(transaction), "utf8")
+    fs.rmSync(fixture.installPath)
+    fs.rmSync(fixture.backupPath)
+
+    assert.throws(
+      () => acquireUpgradeLock(fixture.installDir, process.pid, {
+        createToken: () => "replacement-owner",
+        inspectProcessStartTime: (processId) => processId === process.pid
+          ? { status: "found", startedAt: "444444444" }
+          : { status: "missing" },
+      }),
+      /new executable is missing/u,
+    )
+    assert.equal(fs.existsSync(fixture.transactionPath), true)
+    assert.equal(fs.existsSync(fixture.manifestBackupPath), true)
+    assert.equal(fs.existsSync(fixture.lockPath), true)
+  })
 
   it("refuses to reclaim a crashed recovery lock with malformed transaction state", () => {
     const fixture = createStaleUpgradeTransaction()

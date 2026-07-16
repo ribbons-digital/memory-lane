@@ -436,6 +436,9 @@ function reconcileDurableUpgradeTransaction(installDir: string, lockPath: string
     transaction.BackupState = "restored"
     saveDurableUpgradeTransaction(transactionPath, transaction)
   } else if (transaction.BackupState === "no-backup") {
+    if (!fs.existsSync(installPath)) {
+      throw new Error("Cannot safely restore the absent original Windows executable because the new executable is missing.")
+    }
     fs.rmSync(installPath, { force: true })
     transaction.BackupState = "no-original-restored"
     saveDurableUpgradeTransaction(transactionPath, transaction)
@@ -477,35 +480,43 @@ export function acquireUpgradeLock(
   const owner = (options.createToken ?? randomUUID)()
   fs.mkdirSync(installDir, { recursive: true })
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  const createLock = (): UpgradeLock | undefined => {
     try {
       fs.mkdirSync(lockPath)
-      const temporaryOwnerPath = path.join(lockPath, `owner.${owner}.tmp`)
-      try {
-        const createdAt = now()
-        fs.writeFileSync(
-          temporaryOwnerPath,
-          JSON.stringify({
-            pid: upgradePid,
-            processStartedAt,
-            token: owner,
-            createdAt,
-            heartbeatAt: createdAt,
-            phase: "starting",
-            parentPid: upgradePid,
-            parentProcessStartedAt: processStartedAt,
-          }),
-          { encoding: "utf8", flag: "wx" },
-        )
-        fs.renameSync(temporaryOwnerPath, ownerPath)
-      } catch (error) {
-        fs.rmSync(lockPath, { recursive: true, force: true })
-        throw error
-      }
-      return { path: lockPath, owner }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") return undefined
+      throw error
     }
+    const temporaryOwnerPath = path.join(lockPath, `owner.${owner}.tmp`)
+    try {
+      const createdAt = now()
+      fs.writeFileSync(
+        temporaryOwnerPath,
+        JSON.stringify({
+          pid: upgradePid,
+          processStartedAt,
+          token: owner,
+          createdAt,
+          heartbeatAt: createdAt,
+          phase: "starting",
+          parentPid: upgradePid,
+          parentProcessStartedAt: processStartedAt,
+        }),
+        { encoding: "utf8", flag: "wx" },
+      )
+      fs.renameSync(temporaryOwnerPath, ownerPath)
+    } catch (error) {
+      fs.rmSync(lockPath, { recursive: true, force: true })
+      throw error
+    }
+    return { path: lockPath, owner }
+  }
+
+  let reclaimedLock = false
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const createdLock = createLock()
+    if (createdLock) return createdLock
+    reclaimedLock = false
 
     const existingOwner = readUpgradeLockOwner(ownerPath)
     const snapshot = readLockSnapshot(lockPath)
@@ -598,6 +609,7 @@ export function acquireUpgradeLock(
       try {
         fs.renameSync(lockPath, quarantinePath)
         lockQuarantined = true
+        reclaimedLock = true
         fs.rmSync(quarantinePath, { recursive: true, force: true })
       } catch (renameError) {
         if ((renameError as NodeJS.ErrnoException).code !== "ENOENT") throw renameError
@@ -605,6 +617,10 @@ export function acquireUpgradeLock(
     } finally {
       if (!lockQuarantined) releaseUpgradeLockClaim(reclaimPath, reclaimClaim)
     }
+  }
+  if (reclaimedLock) {
+    const createdLock = createLock()
+    if (createdLock) return createdLock
   }
   throw new Error("Could not acquire the Memory Lane upgrade lock.")
 }

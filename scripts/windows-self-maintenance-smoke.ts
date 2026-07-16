@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process"
 import type { ChildProcess } from "node:child_process"
+import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -397,6 +398,66 @@ async function main(): Promise<void> {
     assert.equal(fs.existsSync(noOriginalManifestPath), false, "no-original retry must restore the absent manifest")
     assert.equal(fs.existsSync(noOriginalTransactionPath), false, "no-original retry must close the transaction")
     assert.equal(fs.existsSync(noOriginalLockPath), false, "no-original retry must release its upgrade lock")
+
+    const verifiedExecutable = fs.readFileSync(installPath)
+    const verifiedExecutableHash = createHash("sha256").update(verifiedExecutable).digest("hex")
+    for (const executableState of ["missing", "tampered"] as const) {
+      const restoreOwner = `restore-verification-${executableState}`
+      fs.mkdirSync(upgradeLockPath)
+      fs.writeFileSync(path.join(upgradeLockPath, "owner"), JSON.stringify({
+        pid: process.pid,
+        token: restoreOwner,
+      }), "utf8")
+      fs.writeFileSync(backupPath, "retained backup artifact", "utf8")
+      fs.writeFileSync(manifestBackupPath, "retained manifest artifact", "utf8")
+      fs.writeFileSync(transactionPath, JSON.stringify({
+        State: "restored",
+        BackupState: "restored",
+        ManifestState: "restored",
+        ManifestPath: manifestPath,
+        ManifestBackupPath: manifestBackupPath,
+        LockPath: upgradeLockPath,
+        LockOwner: restoreOwner,
+        ParentPid: exitedUpgradePid,
+        ParentStartedAt: "1",
+        InstallerPid: exitedUpgradePid,
+        InstallerStartedAt: "1",
+        OriginalBinaryHash: verifiedExecutableHash,
+      }), "utf8")
+      if (executableState === "missing") fs.rmSync(installPath)
+      else fs.writeFileSync(installPath, "tampered executable", "utf8")
+
+      const rejectedRestore = spawnSync("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
+        cwd: repo,
+        env: {
+          ...installerEnv,
+          MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
+          MEMORY_LANE_UPGRADE_LOCK_PATH: upgradeLockPath,
+          MEMORY_LANE_UPGRADE_LOCK_OWNER: restoreOwner,
+        },
+        encoding: "utf8",
+      })
+      assert.notEqual(rejectedRestore.status, 0, `${executableState} restored executable must reject cleanup`)
+      assert.equal(fs.existsSync(transactionPath), true, "failed restore verification must retain the transaction")
+      assert.equal(fs.existsSync(backupPath), true, "failed restore verification must retain the backup")
+      assert.equal(fs.existsSync(manifestBackupPath), true, "failed restore verification must retain the manifest backup")
+      assert.equal(fs.existsSync(upgradeLockPath), true, "failed restore verification must retain the upgrade lock")
+
+      fs.writeFileSync(installPath, verifiedExecutable)
+      run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
+        cwd: repo,
+        env: {
+          ...installerEnv,
+          MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
+          MEMORY_LANE_UPGRADE_LOCK_PATH: upgradeLockPath,
+          MEMORY_LANE_UPGRADE_LOCK_OWNER: restoreOwner,
+        },
+      })
+      assert.equal(fs.existsSync(transactionPath), false, "verified restore retry must close the transaction")
+      assert.equal(fs.existsSync(backupPath), false, "verified restore retry must clean the backup")
+      assert.equal(fs.existsSync(manifestBackupPath), false, "verified restore retry must clean the manifest backup")
+      assert.equal(fs.existsSync(upgradeLockPath), false, "verified restore retry must release the upgrade lock")
+    }
 
     const ownerRaceLockPath = path.join(installDir, ".memory-lane-upgrade.lock")
     const staleOwner = "finished-upgrade-owner"
