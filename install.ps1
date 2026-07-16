@@ -34,6 +34,22 @@ function Get-Upgrade-Transaction-Path {
     return "$script:installPath.upgrade.$env:MEMORY_LANE_UPGRADE_PID"
 }
 
+function Get-Process-Start-Time-Ticks($processId) {
+    $process = Get-Process -Id $processId -ErrorAction Stop
+    return "$($process.StartTime.ToUniversalTime().Ticks)"
+}
+
+function Test-Upgrade-Process-Identity($processId, $startedAt) {
+    if ("$processId" -notmatch "^\d+$" -or "$startedAt" -notmatch "^\d+$") {
+        return $false
+    }
+    try {
+        return (Get-Process-Start-Time-Ticks $processId) -eq "$startedAt"
+    } catch {
+        return $false
+    }
+}
+
 function Read-Upgrade-Transaction {
     if ($script:transaction) {
         return $script:transaction
@@ -52,7 +68,10 @@ function Read-Upgrade-Transaction {
         -or $null -eq $transaction.ManifestBackupPath `
         -or $null -eq $transaction.LockPath `
         -or $null -eq $transaction.LockOwner `
-        -or "$($transaction.InstallerPid)" -notmatch "^\d+$") {
+        -or "$($transaction.ParentPid)" -notmatch "^\d+$" `
+        -or "$($transaction.ParentStartedAt)" -notmatch "^\d+$" `
+        -or "$($transaction.InstallerPid)" -notmatch "^\d+$" `
+        -or "$($transaction.InstallerStartedAt)" -notmatch "^\d+$") {
         throw "invalid upgrade transaction state"
     }
     $script:transaction = $transaction
@@ -211,8 +230,8 @@ function Update-Upgrade-Lock-Lease {
     }
 }
 
-function Wait-For-Upgrade-Process($processId) {
-    while (Get-Process -Id $processId -ErrorAction SilentlyContinue) {
+function Wait-For-Upgrade-Process($processId, $startedAt) {
+    while (Test-Upgrade-Process-Identity $processId $startedAt) {
         if (-not (Update-Upgrade-Lock-Lease)) {
             return $false
         }
@@ -248,6 +267,8 @@ function Backup-Existing-Binary {
         $script:backupPath = Get-Upgrade-Backup-Path
         $script:transactionPath = Get-Upgrade-Transaction-Path
         $existingBinary = Test-Path -LiteralPath $script:installPath
+        $parentStartedAt = Get-Process-Start-Time-Ticks $env:MEMORY_LANE_UPGRADE_PID
+        $installerStartedAt = Get-Process-Start-Time-Ticks $PID
         $script:transaction = [PSCustomObject]@{
             State = "pending"
             BackupState = if ($existingBinary) { "not-backed-up" } else { "no-backup" }
@@ -256,7 +277,10 @@ function Backup-Existing-Binary {
             ManifestBackupPath = "$env:MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH"
             LockPath = "$env:MEMORY_LANE_UPGRADE_LOCK_PATH"
             LockOwner = "$env:MEMORY_LANE_UPGRADE_LOCK_OWNER"
-            InstallerPid = $PID
+            ParentPid = "$env:MEMORY_LANE_UPGRADE_PID"
+            ParentStartedAt = $parentStartedAt
+            InstallerPid = "$PID"
+            InstallerStartedAt = $installerStartedAt
         }
         Save-Upgrade-Transaction
         Start-Upgrade-Recovery
@@ -296,11 +320,11 @@ if ($UpgradeAction) {
             Cleanup-Committed-Upgrade-After-Lost-Lease
             exit 0
         }
-        if (-not (Wait-For-Upgrade-Process $env:MEMORY_LANE_UPGRADE_PID)) {
+        if ($pendingTransaction -and -not (Wait-For-Upgrade-Process $pendingTransaction.ParentPid $pendingTransaction.ParentStartedAt)) {
             Cleanup-Committed-Upgrade-After-Lost-Lease
             exit 0
         }
-        if ($pendingTransaction -and -not (Wait-For-Upgrade-Process $pendingTransaction.InstallerPid)) {
+        if ($pendingTransaction -and -not (Wait-For-Upgrade-Process $pendingTransaction.InstallerPid $pendingTransaction.InstallerStartedAt)) {
             Cleanup-Committed-Upgrade-After-Lost-Lease
             exit 0
         }

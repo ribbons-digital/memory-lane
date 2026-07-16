@@ -55,6 +55,28 @@ async function main(): Promise<void> {
   if (process.platform !== "win32") throw new Error("Windows self-maintenance smoke must run on Windows")
 
   const repo = process.cwd()
+  const identityCheck = spawnSync("powershell.exe", [
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    [
+      "$tokens = $null",
+      "$errors = $null",
+      "$ast = [Management.Automation.Language.Parser]::ParseFile($env:MEMORY_LANE_INSTALLER_PATH, [ref]$tokens, [ref]$errors)",
+      "$functions = $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and @('Get-Process-Start-Time-Ticks', 'Test-Upgrade-Process-Identity') -contains $node.Name }, $true)",
+      "$definitions = $functions | ForEach-Object { $_.Extent.Text }",
+      "Invoke-Expression ($definitions -join [Environment]::NewLine)",
+      "$startedAt = Get-Process-Start-Time-Ticks $PID",
+      "if (-not (Test-Upgrade-Process-Identity $PID $startedAt)) { throw 'matching process identity was rejected' }",
+      "$reusedStartedAt = ([Int64]$startedAt + 1).ToString()",
+      "if (Test-Upgrade-Process-Identity $PID $reusedStartedAt) { throw 'reused process identity was accepted' }",
+    ].join("; "),
+  ], {
+    cwd: repo,
+    env: { ...process.env, MEMORY_LANE_INSTALLER_PATH: path.join(repo, "install.ps1") },
+    encoding: "utf8",
+  })
+  assert.equal(identityCheck.status, 0, `${identityCheck.stdout}\n${identityCheck.stderr}`)
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-[paths]-"))
   const home = path.join(root, "home")
   const installDir = path.join(home, "bin")
@@ -253,7 +275,10 @@ async function main(): Promise<void> {
       ManifestBackupPath: manifestBackupPath,
       LockPath: ownerRaceLockPath,
       LockOwner: staleOwner,
+      ParentPid: exitedUpgradePid,
+      ParentStartedAt: "1",
       InstallerPid: exitedUpgradePid,
+      InstallerStartedAt: "1",
     }), "utf8")
     const staleRecovery = spawnSync("powershell.exe", [...installerArgs, "-UpgradeAction", "Recover"], {
       cwd: repo,
