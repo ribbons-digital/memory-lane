@@ -296,7 +296,12 @@ async function main(): Promise<void> {
     assert.equal(smoke.status, 0, smoke.stderr)
     assert.match(smoke.stdout, /memory-lane ok/u)
     assert.equal(runningOldBinary.exitCode, null, "old executable must still be running when replacement succeeds")
-    const failedReapply = spawnSync(installPath, ["upgrade", "--reapply-install-manifest", "--yes"], {
+    const failedReapply = spawnSync(installPath, [
+      "upgrade",
+      "--reapply-install-manifest",
+      "--transactional-windows-upgrade",
+      "--yes",
+    ], {
       env: installerEnv,
       encoding: "utf8",
     })

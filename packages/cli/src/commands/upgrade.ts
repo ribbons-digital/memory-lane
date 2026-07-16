@@ -227,6 +227,23 @@ function readLockSnapshot(lockPath: string): { identity: string; modifiedAt: num
   }
 }
 
+function publishUpgradeLockClaim(claimPath: string, owner: string, claim: UpgradeLockClaim): void {
+  const temporaryPath = `${claimPath}.${owner}.${process.pid}.tmp`
+  let descriptor: number | undefined
+  try {
+    descriptor = fs.openSync(temporaryPath, "wx")
+    fs.writeFileSync(descriptor, JSON.stringify(claim), "utf8")
+    fs.fsyncSync(descriptor)
+    fs.closeSync(descriptor)
+    descriptor = undefined
+    fs.linkSync(temporaryPath, claimPath)
+    fs.unlinkSync(temporaryPath)
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor)
+    fs.rmSync(temporaryPath, { force: true })
+  }
+}
+
 export function acquireUpgradeLock(
   installDir: string,
   upgradePid: number,
@@ -314,20 +331,12 @@ export function acquireUpgradeLock(
 
     const reclaimPath = path.join(lockPath, ".reclaim")
     try {
-      fs.writeFileSync(
-        reclaimPath,
-        JSON.stringify({
-          pid: upgradePid,
-          processStartedAt,
-          token: owner,
-          createdAt: now(),
-          heartbeatAt: now(),
-          phase: "starting",
-          parentPid: upgradePid,
-          parentProcessStartedAt: processStartedAt,
-        }),
-        { encoding: "utf8", flag: "wx" },
-      )
+      publishUpgradeLockClaim(reclaimPath, owner, {
+        pid: upgradePid,
+        processStartedAt,
+        token: owner,
+        createdAt: now(),
+      })
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
       if (code === "ENOENT") continue
@@ -602,6 +611,25 @@ export function reapplyInstallManifest(
   return { results, configuredCount, manifest: nextManifest }
 }
 
+export function validateReapplyManifestAvailability(
+  manifest: InstallManifest | undefined,
+  transactionalWindowsReapply: boolean,
+): "missing" | "empty" | "ready" {
+  if (!manifest) {
+    if (transactionalWindowsReapply) {
+      throw new Error("The required install manifest is missing during transactional Windows reapply.")
+    }
+    return "missing"
+  }
+  if (manifest.integrations.length === 0) {
+    if (transactionalWindowsReapply) {
+      throw new Error("The required install manifest contains no integrations during transactional Windows reapply.")
+    }
+    return "empty"
+  }
+  return "ready"
+}
+
 export async function handleUpgrade(argv: string[]): Promise<void> {
   const yes = argv.includes("--yes")
   const reapplyOnly = argv.includes(REAPPLY_INSTALL_MANIFEST_FLAG)
@@ -619,11 +647,12 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
   }
 
   if (reapplyOnly) {
-    if (!manifest) {
+    const manifestAvailability = validateReapplyManifestAvailability(manifest, transactionalWindowsReapply)
+    if (manifestAvailability === "missing" || !manifest) {
       console.log("No previous install manifest found. Run `memory-lane init` to set up integrations.")
       return
     }
-    if (manifest.integrations.length === 0) {
+    if (manifestAvailability === "empty") {
       console.log("The install manifest is valid but contains no integrations. Run `memory-lane init` to set up integrations.")
       return
     }

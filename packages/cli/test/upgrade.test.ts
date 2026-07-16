@@ -15,6 +15,7 @@ import {
   resolveInstallerDirectory,
   resolveUpgradeBinaryPath,
   snapshotInstallManifest,
+  validateReapplyManifestAvailability,
 } from "../src/commands/upgrade.js"
 import type { InstallManifest } from "../src/commands/upgrade.js"
 import { readInstallManifest, writeInstallManifest } from "../src/installer/manifest.js"
@@ -52,6 +53,27 @@ describe("upgrade", () => {
       "--transactional-windows-upgrade",
       "--yes",
     ])
+  })
+
+  it("rejects missing and empty manifests only for transactional Windows reapply", () => {
+    assert.equal(validateReapplyManifestAvailability(undefined, false), "missing")
+    assert.throws(
+      () => validateReapplyManifestAvailability(undefined, true),
+      /required install manifest is missing/u,
+    )
+
+    const emptyManifest = {
+      version: "0.1.0",
+      installedAt: "2026-01-01T00:00:00.000Z",
+      binaryPath: "C:\\Users\\Ryan\\bin\\memory-lane.exe",
+      dataDir: "C:\\Users\\Ryan\\.memory-lane",
+      integrations: [],
+    } as InstallManifest
+    assert.equal(validateReapplyManifestAvailability(emptyManifest, false), "empty")
+    assert.throws(
+      () => validateReapplyManifestAvailability(emptyManifest, true),
+      /required install manifest contains no integrations/u,
+    )
   })
 
   it("reapplies unique manifest integrations and migrates old Claude Desktop config paths", () => {
@@ -362,6 +384,13 @@ describe("upgrade", () => {
         ? { status: "found", startedAt: "333333333" }
         : { status: "missing" },
       onReclaimClaimed: (claimPath) => {
+        assert.deepEqual(JSON.parse(fs.readFileSync(claimPath, "utf8")), {
+          pid: process.pid,
+          processStartedAt: "333333333",
+          token: "replacement-owner",
+          createdAt: now,
+        })
+        assert.equal(fs.existsSync(`${claimPath}.replacement-owner.${process.pid}.tmp`), false)
         assert.throws(
           () => fs.writeFileSync(claimPath, "recovery handoff", { flag: "wx" }),
           (error: NodeJS.ErrnoException) => error.code === "EEXIST",
@@ -373,6 +402,46 @@ describe("upgrade", () => {
     assert.equal(handoffWasExcluded, true)
     assert.equal(lock.owner, "replacement-owner")
     releaseUpgradeLock(lock)
+  })
+
+  it("never replaces an active reclaim claim during atomic publication", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const reclaimPath = path.join(lockPath, ".reclaim")
+    const now = 2_000_000
+    const activeClaim = {
+      pid: 7654,
+      processStartedAt: "444444444",
+      token: "active-claim",
+      createdAt: now,
+    }
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
+      pid: 9876,
+      processStartedAt: "111111111",
+      token: "stale-owner",
+      createdAt: now,
+      heartbeatAt: now,
+      phase: "starting",
+      parentPid: 9876,
+      parentProcessStartedAt: "111111111",
+    }), "utf8")
+    fs.writeFileSync(reclaimPath, JSON.stringify(activeClaim), "utf8")
+
+    assert.throws(
+      () => acquireUpgradeLock(installDir, process.pid, {
+        now: () => now,
+        createToken: () => "replacement-owner",
+        inspectProcessStartTime: (processId) => processId === process.pid
+          ? { status: "found", startedAt: "333333333" }
+          : processId === activeClaim.pid
+            ? { status: "found", startedAt: activeClaim.processStartedAt }
+            : { status: "missing" },
+      }),
+      /Could not acquire/u,
+    )
+    assert.deepEqual(JSON.parse(fs.readFileSync(reclaimPath, "utf8")), activeClaim)
+    assert.equal(fs.existsSync(`${reclaimPath}.replacement-owner.${process.pid}.tmp`), false)
   })
 
   it("reclaims a starting lock after its PID is reused", () => {

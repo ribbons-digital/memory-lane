@@ -230,11 +230,10 @@ function Acquire-Upgrade-Lock-Owner-Gate($lockPath, $ownerToken) {
         createdAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
     }
     $claimJson = $claim | ConvertTo-Json -Compress
+    $temporaryGatePath = Join-Path $lockPath ".reclaim.$ownerToken.$PID.tmp"
     while ($true) {
-        $createdGate = $false
         try {
-            $stream = [IO.File]::Open($gatePath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-            $createdGate = $true
+            $stream = [IO.File]::Open($temporaryGatePath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
             try {
                 $bytes = [Text.UTF8Encoding]::new($false).GetBytes($claimJson)
                 $stream.Write($bytes, 0, $bytes.Length)
@@ -242,13 +241,10 @@ function Acquire-Upgrade-Lock-Owner-Gate($lockPath, $ownerToken) {
             } finally {
                 $stream.Dispose()
             }
+            [IO.File]::Move($temporaryGatePath, $gatePath)
             return $claim
         } catch {
-            if ($createdGate) {
-                Remove-Item -LiteralPath $gatePath -Force -ErrorAction SilentlyContinue
-                Start-Sleep -Milliseconds 100
-                continue
-            }
+            Remove-Item -LiteralPath $temporaryGatePath -Force -ErrorAction SilentlyContinue
             if (-not (Test-Path -LiteralPath $lockPath) -or -not (Test-Path -LiteralPath $ownerPath)) {
                 return $null
             }
