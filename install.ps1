@@ -304,6 +304,7 @@ function Acquire-Upgrade-Actor($action) {
         processStartedAt = $startedAt
         token = $transaction.LockOwner
         action = $action
+        lockPath = $transaction.LockPath
     }
     $json = $actor | ConvertTo-Json -Compress
     while ($true) {
@@ -345,22 +346,32 @@ function Acquire-Upgrade-Actor($action) {
 }
 
 function Release-Upgrade-Actor($actor) {
-    if (-not $actor) {
+    if (-not $actor -or -not $actor.lockPath) {
         return
     }
-    $transaction = Read-Upgrade-Transaction
-    if (-not $transaction -or -not $transaction.LockPath) {
-        return
-    }
-    $actorPath = Join-Path $transaction.LockPath "active-actor"
+    $actorPath = Join-Path $actor.lockPath "active-actor"
     try {
         $existing = ([IO.File]::ReadAllText($actorPath)) | ConvertFrom-Json
         if ($existing.token -eq $actor.token `
             -and "$($existing.pid)" -eq "$($actor.pid)" `
-            -and "$($existing.processStartedAt)" -eq "$($actor.processStartedAt)") {
+            -and "$($existing.processStartedAt)" -eq "$($actor.processStartedAt)" `
+            -and $existing.action -eq $actor.action) {
             Remove-Item -LiteralPath $actorPath -Force
         }
     } catch {}
+}
+
+function Read-Upgrade-Transaction-After-Actor($actor) {
+    $script:transaction = $null
+    try {
+        $transaction = Read-Upgrade-Transaction
+        if (-not $transaction -or $transaction.LockOwner -ne $actor.token) {
+            return $null
+        }
+        return $transaction
+    } catch {
+        return $null
+    }
 }
 
 function Cleanup-Committed-Upgrade-After-Lost-Lease {
@@ -499,18 +510,20 @@ if ($UpgradeAction) {
         Err "could not acquire the Windows upgrade transaction actor"
     }
     try {
-        if ($UpgradeAction -eq "Commit") {
-            $transaction = Read-Upgrade-Transaction
-            if (-not $transaction) {
-                Err "upgrade transaction is missing"
+        $transaction = Read-Upgrade-Transaction-After-Actor $actor
+        if (-not $transaction) {
+            if ($UpgradeAction -eq "Recover") {
+                exit 0
             }
+            Err "upgrade transaction changed while acquiring the transaction actor"
+        }
+        if ($UpgradeAction -eq "Commit") {
             $transaction.State = "committed"
             Save-Upgrade-Transaction
             Say "committed Windows upgrade"
             exit 0
         }
-        $transaction = Read-Upgrade-Transaction
-        if ($UpgradeAction -eq "Recover" -and $transaction -and $transaction.State -eq "committed") {
+        if ($UpgradeAction -eq "Recover" -and $transaction.State -eq "committed") {
             Cleanup-Upgrade-Transaction
             exit 0
         }
