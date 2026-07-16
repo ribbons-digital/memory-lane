@@ -31,7 +31,7 @@ function waitForExit(child: ChildProcess): Promise<ProcessResult> {
   child.stderr?.on("data", (chunk: string) => { stderr += chunk })
   return new Promise((resolve, reject) => {
     child.once("error", reject)
-    child.once("exit", (code, signal) => resolve({ code, signal, stdout, stderr }))
+    child.once("close", (code, signal) => resolve({ code, signal, stdout, stderr }))
   })
 }
 
