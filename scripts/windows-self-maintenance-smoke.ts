@@ -124,6 +124,11 @@ async function main(): Promise<void> {
     assert.equal(fs.existsSync(installPath), true, "marker cleanup failure must preserve the restored executable path")
     assert.equal(fs.existsSync(backupPath), false, "marker write failure must not strand a backup")
     assert.equal(fs.existsSync(transactionPath), true, "blocked marker cleanup must remain best effort")
+    run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
+      cwd: repo,
+      env: installerEnv,
+    })
+    assert.equal(fs.existsSync(installPath), true, "cross-process rollback retry must preserve the restored executable")
     const restoredAfterCleanupFailure = spawnSync(installPath, ["--identity"], { encoding: "utf8" })
     assert.equal(restoredAfterCleanupFailure.status, 0, restoredAfterCleanupFailure.stderr)
     assert.match(restoredAfterCleanupFailure.stdout, /old binary/u)

@@ -55,6 +55,12 @@ function Restore-Backup {
         -and -not ($script:backupPath -and (Test-Path -LiteralPath $script:backupPath))) {
         return
     }
+    $transactionState = $null
+    if ($script:transactionPath -and (Test-Path -LiteralPath $script:transactionPath)) {
+        try {
+            $transactionState = (Get-Content -LiteralPath $script:transactionPath -Raw).Trim()
+        } catch {}
+    }
     if ($script:backupPath -and (Test-Path -LiteralPath $script:backupPath)) {
         if ($script:installPath -and (Test-Path -LiteralPath $script:installPath)) {
             Remove-Item -LiteralPath $script:installPath -Force
@@ -62,13 +68,16 @@ function Restore-Backup {
         Move-Item -LiteralPath $script:backupPath -Destination $script:installPath -Force
         $script:backupRestored = $true
         Say "restored previous binary"
-    } elseif ($script:installPath -and (Test-Path -LiteralPath $script:installPath)) {
+    } elseif ($transactionState -eq "no-backup" -and $script:installPath -and (Test-Path -LiteralPath $script:installPath)) {
         Remove-Item -LiteralPath $script:installPath -Force
         $script:backupRestored = $true
     } else {
         $script:backupRestored = $true
     }
     if ($script:transactionPath -and (Test-Path -LiteralPath $script:transactionPath)) {
+        try {
+            Set-Content -LiteralPath $script:transactionPath -Value "restored" -NoNewline
+        } catch {}
         try {
             Remove-Item -LiteralPath $script:transactionPath -Force
         } catch {}
@@ -87,7 +96,8 @@ function Backup-Existing-Binary {
             Move-Item -LiteralPath $script:installPath -Destination $script:backupPath -Force
             $script:backupWasRenamed = $true
         }
-        Set-Content -LiteralPath $script:transactionPath -Value "pending" -NoNewline
+        $transactionState = if ($script:backupWasRenamed) { "backed-up" } else { "no-backup" }
+        Set-Content -LiteralPath $script:transactionPath -Value $transactionState -NoNewline
     } elseif (Test-Path -LiteralPath $script:installPath) {
         $script:backupPath = "$script:installPath.backup.$PID"
         Copy-Item -LiteralPath $script:installPath -Destination $script:backupPath -Force

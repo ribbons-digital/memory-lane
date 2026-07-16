@@ -4,6 +4,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { installHarness, installOmp } from "../installer/config.js"
 import {
+  installManifestPath,
   integrationHarness,
   mergeManifestIntegrations,
   readInstallManifest,
@@ -195,6 +196,10 @@ function installPreviouslyConfigured(
   return { results, replacements }
 }
 
+export function rollbackFirstInitManifest(dataDir: string): void {
+  fs.rmSync(installManifestPath(dataDir), { force: true })
+}
+
 export function reapplyInstallManifest(options: InitOptions, manifest: InstallManifest): ReapplyInstallManifestResult {
   validateManifestOmpConfigPaths(manifest)
   const { results, replacements } = installPreviouslyConfigured(options, manifest)
@@ -260,6 +265,7 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-upgrade-"))
   const scriptPath = path.join(tmpDir, isWindows ? "install.ps1" : "install.sh")
   let pendingWindowsUpgrade = false
+  let pendingFirstInitManifestRollback = false
   let installDir: string | undefined
   const commitWindowsUpgrade = (): void => {
     if (!pendingWindowsUpgrade) return
@@ -267,6 +273,7 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
       throw new Error("Could not finalize the Windows upgrade.")
     }
     pendingWindowsUpgrade = false
+    pendingFirstInitManifestRollback = false
   }
   try {
     console.log("Downloading latest installer...")
@@ -305,6 +312,7 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
     }
 
     console.log("\nNo previous install manifest found. Running first-time setup...")
+    pendingFirstInitManifestRollback = isWindows
     if (!runInit(binaryPath, yes)) {
       throw new Error("Init failed after upgrade.")
     }
@@ -316,6 +324,10 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
         console.error("Failed to restore the previous Windows executable.")
       }
       pendingWindowsUpgrade = false
+    }
+    if (pendingFirstInitManifestRollback) {
+      rollbackFirstInitManifest(dataDir)
+      pendingFirstInitManifestRollback = false
     }
     throw error
   } finally {

@@ -10,6 +10,7 @@ import {
   installerEnvironment,
   reapplyInstallManifest,
   reapplyManifestWithInstalledBinary,
+  rollbackFirstInitManifest,
   resolveInstallerDirectory,
   resolveUpgradeBinaryPath,
 } from "../src/commands/upgrade.js"
@@ -195,6 +196,24 @@ describe("upgrade", () => {
     const binaryPath = defaultInstalledBinaryPath("/home/ryan", false, path.posix)
 
     assert.equal(resolveInstallerDirectory(binaryPath, false, false, path.posix), undefined)
+  })
+
+  it("rolls back a first-init manifest without removing user data or integration files", () => {
+    const home = tempDir()
+    const dataDir = path.join(home, ".memory-lane")
+    const memoryPath = path.join(dataDir, "memory.jsonl")
+    const integrationPath = path.join(home, ".pi", "agent", "extensions", "memory-lane", "index.ts")
+    fs.mkdirSync(path.dirname(integrationPath), { recursive: true })
+    fs.mkdirSync(dataDir, { recursive: true })
+    fs.writeFileSync(path.join(dataDir, "install.json"), "new manifest", "utf8")
+    fs.writeFileSync(memoryPath, "preserve memory", "utf8")
+    fs.writeFileSync(integrationPath, "preserve integration", "utf8")
+
+    rollbackFirstInitManifest(dataDir)
+
+    assert.equal(readInstallManifest(dataDir).status, "missing")
+    assert.equal(fs.readFileSync(memoryPath, "utf8"), "preserve memory")
+    assert.equal(fs.readFileSync(integrationPath, "utf8"), "preserve integration")
   })
 
   it("uses a manifest binary path and recorded OMP config path during reapply", () => {
