@@ -149,6 +149,17 @@ function Cleanup-Upgrade-Transaction {
     Remove-Transaction-Artifact $script:transactionPath
 }
 
+function Test-Restored-Executable($transaction) {
+    if ($transaction.BackupState -eq "restored") {
+        return (Test-Path -LiteralPath $script:installPath) `
+            -and (Get-Sha256-Hash $script:installPath) -eq $transaction.OriginalBinaryHash
+    }
+    if ($transaction.BackupState -eq "no-original-restored") {
+        return -not (Test-Path -LiteralPath $script:installPath)
+    }
+    return $false
+}
+
 function Restore-Backup {
     if ($script:backupRestored) {
         return
@@ -166,13 +177,7 @@ function Restore-Backup {
         return
     }
     if ($transaction.State -eq "restored") {
-        $executableRestored = if ($transaction.BackupState -eq "restored") {
-            (Test-Path -LiteralPath $script:installPath) `
-                -and (Get-Sha256-Hash $script:installPath) -eq $transaction.OriginalBinaryHash
-        } else {
-            -not (Test-Path -LiteralPath $script:installPath)
-        }
-        if (-not $executableRestored) {
+        if (-not (Test-Restored-Executable $transaction)) {
             throw "restored executable does not match the upgrade transaction"
         }
         $script:backupRestored = $true
@@ -220,6 +225,10 @@ function Restore-Backup {
         Remove-Item -LiteralPath $script:installPath -Force
         $transaction.BackupState = "no-original-restored"
         Save-Upgrade-Transaction
+    }
+
+    if (-not (Test-Restored-Executable $transaction)) {
+        throw "restored executable does not match the upgrade transaction"
     }
 
     if ($transaction.ManifestState -eq "existing") {

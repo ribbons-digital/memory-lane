@@ -1016,6 +1016,81 @@ describe("upgrade", () => {
     assert.equal(fs.existsSync(fixture.lockPath), true)
   })
 
+  for (const executableState of ["missing", "tampered"] as const) {
+    it(`retains pending restored checkpoint artifacts when the executable is ${executableState}`, () => {
+      const fixture = createStaleUpgradeTransaction()
+      const transaction = JSON.parse(fs.readFileSync(fixture.transactionPath, "utf8"))
+      transaction.BackupState = "restored"
+      fs.writeFileSync(fixture.transactionPath, JSON.stringify(transaction), "utf8")
+      if (executableState === "missing") fs.rmSync(fixture.installPath)
+      else fs.writeFileSync(fixture.installPath, "tampered binary", "utf8")
+
+      assert.throws(
+        () => acquireUpgradeLock(fixture.installDir, process.pid, {
+          createToken: () => "replacement-owner",
+          inspectProcessStartTime: (processId) => processId === process.pid
+            ? { status: "found", startedAt: "444444444" }
+            : { status: "missing" },
+        }),
+        /restored executable cannot be verified/u,
+      )
+      assert.equal(fs.readFileSync(fixture.manifestPath, "utf8"), "replacement manifest")
+      assert.equal(fs.existsSync(fixture.transactionPath), true)
+      assert.equal(fs.existsSync(fixture.backupPath), true)
+      assert.equal(fs.existsSync(fixture.manifestBackupPath), true)
+      assert.equal(fs.existsSync(fixture.lockPath), true)
+
+      fs.writeFileSync(fixture.installPath, "original binary", "utf8")
+      const retry = acquireUpgradeLock(fixture.installDir, process.pid, {
+        createToken: () => "retry-owner",
+        inspectProcessStartTime: (processId) => processId === process.pid
+          ? { status: "found", startedAt: "444444444" }
+          : { status: "missing" },
+      })
+      assert.equal(fs.readFileSync(fixture.manifestPath, "utf8"), "original manifest")
+      assert.equal(fs.existsSync(fixture.transactionPath), false)
+      assert.equal(fs.existsSync(fixture.backupPath), false)
+      assert.equal(fs.existsSync(fixture.manifestBackupPath), false)
+      releaseUpgradeLock(retry)
+    })
+  }
+
+  it("retains a pending no-original checkpoint when an executable is unexpectedly present", () => {
+    const fixture = createStaleUpgradeTransaction()
+    const transaction = JSON.parse(fs.readFileSync(fixture.transactionPath, "utf8"))
+    transaction.BackupState = "no-original-restored"
+    transaction.OriginalBinaryHash = ""
+    fs.writeFileSync(fixture.transactionPath, JSON.stringify(transaction), "utf8")
+    fs.rmSync(fixture.backupPath)
+
+    assert.throws(
+      () => acquireUpgradeLock(fixture.installDir, process.pid, {
+        createToken: () => "replacement-owner",
+        inspectProcessStartTime: (processId) => processId === process.pid
+          ? { status: "found", startedAt: "444444444" }
+          : { status: "missing" },
+      }),
+      /restored executable cannot be verified/u,
+    )
+    assert.equal(fs.readFileSync(fixture.manifestPath, "utf8"), "replacement manifest")
+    assert.equal(fs.existsSync(fixture.transactionPath), true)
+    assert.equal(fs.existsSync(fixture.manifestBackupPath), true)
+    assert.equal(fs.existsSync(fixture.lockPath), true)
+
+    fs.rmSync(fixture.installPath)
+    const retry = acquireUpgradeLock(fixture.installDir, process.pid, {
+      createToken: () => "retry-owner",
+      inspectProcessStartTime: (processId) => processId === process.pid
+        ? { status: "found", startedAt: "444444444" }
+        : { status: "missing" },
+    })
+    assert.equal(fs.existsSync(fixture.installPath), false)
+    assert.equal(fs.readFileSync(fixture.manifestPath, "utf8"), "original manifest")
+    assert.equal(fs.existsSync(fixture.transactionPath), false)
+    assert.equal(fs.existsSync(fixture.manifestBackupPath), false)
+    releaseUpgradeLock(retry)
+  })
+
   it("refuses to reclaim a crashed recovery lock with malformed transaction state", () => {
     const fixture = createStaleUpgradeTransaction()
     fs.writeFileSync(fixture.transactionPath, "{", "utf8")

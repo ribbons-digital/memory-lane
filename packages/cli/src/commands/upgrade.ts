@@ -370,6 +370,18 @@ function readDurableUpgradeTransaction(
   return value as DurableUpgradeTransaction
 }
 
+function isRestoredExecutableVerified(
+  installPath: string,
+  transaction: DurableUpgradeTransaction,
+): boolean {
+  if (transaction.BackupState === "restored") {
+    return fs.existsSync(installPath)
+      && fileSha256(installPath).toLowerCase() === transaction.OriginalBinaryHash.toLowerCase()
+  }
+  if (transaction.BackupState === "no-original-restored") return !fs.existsSync(installPath)
+  return false
+}
+
 function cleanupDurableUpgradeTransaction(
   transactionPath: string,
   backupPath: string,
@@ -399,11 +411,7 @@ function reconcileDurableUpgradeTransaction(installDir: string, lockPath: string
     return
   }
   if (transaction.State === "restored") {
-    const executableRestored = transaction.BackupState === "restored"
-      ? fs.existsSync(installPath)
-        && fileSha256(installPath).toLowerCase() === transaction.OriginalBinaryHash.toLowerCase()
-      : !fs.existsSync(installPath)
-    if (!executableRestored) {
+    if (!isRestoredExecutableVerified(installPath, transaction)) {
       throw new Error("Cannot safely finish Windows upgrade cleanup because the restored executable cannot be verified.")
     }
     cleanupDurableUpgradeTransaction(transactionPath, backupPath, transaction)
@@ -442,6 +450,10 @@ function reconcileDurableUpgradeTransaction(installDir: string, lockPath: string
     fs.rmSync(installPath, { force: true })
     transaction.BackupState = "no-original-restored"
     saveDurableUpgradeTransaction(transactionPath, transaction)
+  }
+
+  if (!isRestoredExecutableVerified(installPath, transaction)) {
+    throw new Error("Cannot safely finish Windows upgrade cleanup because the restored executable cannot be verified.")
   }
 
   if (transaction.ManifestState === "existing") {

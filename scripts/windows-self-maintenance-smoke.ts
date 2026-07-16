@@ -459,6 +459,125 @@ async function main(): Promise<void> {
       assert.equal(fs.existsSync(upgradeLockPath), false, "verified restore retry must release the upgrade lock")
     }
 
+    for (const executableState of ["missing", "tampered"] as const) {
+      const checkpointOwner = `pending-checkpoint-${executableState}`
+      fs.mkdirSync(upgradeLockPath)
+      fs.writeFileSync(path.join(upgradeLockPath, "owner"), JSON.stringify({
+        pid: process.pid,
+        token: checkpointOwner,
+      }), "utf8")
+      fs.writeFileSync(backupPath, "retained backup artifact", "utf8")
+      fs.writeFileSync(manifestPath, "pending checkpoint manifest", "utf8")
+      fs.writeFileSync(manifestBackupPath, originalManifest, "utf8")
+      fs.writeFileSync(transactionPath, JSON.stringify({
+        State: "pending",
+        BackupState: "restored",
+        ManifestState: "existing",
+        ManifestPath: manifestPath,
+        ManifestBackupPath: manifestBackupPath,
+        LockPath: upgradeLockPath,
+        LockOwner: checkpointOwner,
+        ParentPid: exitedUpgradePid,
+        ParentStartedAt: "1",
+        InstallerPid: exitedUpgradePid,
+        InstallerStartedAt: "1",
+        OriginalBinaryHash: verifiedExecutableHash,
+      }), "utf8")
+      if (executableState === "missing") fs.rmSync(installPath)
+      else fs.writeFileSync(installPath, "tampered executable", "utf8")
+
+      const rejectedCheckpoint = spawnSync("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
+        cwd: repo,
+        env: {
+          ...installerEnv,
+          MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
+          MEMORY_LANE_UPGRADE_LOCK_PATH: upgradeLockPath,
+          MEMORY_LANE_UPGRADE_LOCK_OWNER: checkpointOwner,
+        },
+        encoding: "utf8",
+      })
+      assert.notEqual(rejectedCheckpoint.status, 0, `${executableState} pending checkpoint must reject rollback`)
+      assert.equal(fs.readFileSync(manifestPath, "utf8"), "pending checkpoint manifest")
+      assert.equal(fs.existsSync(transactionPath), true, "failed checkpoint verification must retain the transaction")
+      assert.equal(fs.existsSync(backupPath), true, "failed checkpoint verification must retain the backup")
+      assert.equal(fs.existsSync(manifestBackupPath), true, "failed checkpoint verification must retain the manifest backup")
+      assert.equal(fs.existsSync(upgradeLockPath), true, "failed checkpoint verification must retain the upgrade lock")
+
+      fs.writeFileSync(installPath, verifiedExecutable)
+      run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
+        cwd: repo,
+        env: {
+          ...installerEnv,
+          MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
+          MEMORY_LANE_UPGRADE_LOCK_PATH: upgradeLockPath,
+          MEMORY_LANE_UPGRADE_LOCK_OWNER: checkpointOwner,
+        },
+      })
+      assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest)
+      assert.equal(fs.existsSync(transactionPath), false, "verified checkpoint retry must close the transaction")
+      assert.equal(fs.existsSync(backupPath), false, "verified checkpoint retry must clean the backup")
+      assert.equal(fs.existsSync(manifestBackupPath), false, "verified checkpoint retry must clean the manifest backup")
+      assert.equal(fs.existsSync(upgradeLockPath), false, "verified checkpoint retry must release the upgrade lock")
+    }
+
+    const unexpectedNoOriginalOwner = "pending-no-original-checkpoint"
+    fs.mkdirSync(noOriginalLockPath)
+    fs.writeFileSync(path.join(noOriginalLockPath, "owner"), JSON.stringify({
+      pid: process.pid,
+      token: unexpectedNoOriginalOwner,
+    }), "utf8")
+    fs.mkdirSync(noOriginalInstallDir, { recursive: true })
+    fs.writeFileSync(noOriginalInstallPath, "unexpected executable", "utf8")
+    fs.writeFileSync(noOriginalManifestPath, "pending no-original manifest", "utf8")
+    fs.writeFileSync(noOriginalTransactionPath, JSON.stringify({
+      State: "pending",
+      BackupState: "no-original-restored",
+      ManifestState: "missing",
+      ManifestPath: noOriginalManifestPath,
+      ManifestBackupPath: noOriginalManifestBackupPath,
+      LockPath: noOriginalLockPath,
+      LockOwner: unexpectedNoOriginalOwner,
+      ParentPid: exitedUpgradePid,
+      ParentStartedAt: "1",
+      InstallerPid: exitedUpgradePid,
+      InstallerStartedAt: "1",
+      OriginalBinaryHash: "",
+    }), "utf8")
+    const rejectedNoOriginalCheckpoint = spawnSync(
+      "powershell.exe",
+      [...installerArgs, "-UpgradeAction", "Rollback"],
+      {
+        cwd: repo,
+        env: {
+          ...installerEnv,
+          INSTALL_DIR: noOriginalInstallDir,
+          MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
+          MEMORY_LANE_UPGRADE_LOCK_PATH: noOriginalLockPath,
+          MEMORY_LANE_UPGRADE_LOCK_OWNER: unexpectedNoOriginalOwner,
+        },
+        encoding: "utf8",
+      },
+    )
+    assert.notEqual(rejectedNoOriginalCheckpoint.status, 0, "unexpected executable must reject no-original rollback")
+    assert.equal(fs.readFileSync(noOriginalManifestPath, "utf8"), "pending no-original manifest")
+    assert.equal(fs.existsSync(noOriginalTransactionPath), true, "failed no-original verification must retain the transaction")
+    assert.equal(fs.existsSync(noOriginalLockPath), true, "failed no-original verification must retain the upgrade lock")
+
+    fs.rmSync(noOriginalInstallPath)
+    run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
+      cwd: repo,
+      env: {
+        ...installerEnv,
+        INSTALL_DIR: noOriginalInstallDir,
+        MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
+        MEMORY_LANE_UPGRADE_LOCK_PATH: noOriginalLockPath,
+        MEMORY_LANE_UPGRADE_LOCK_OWNER: unexpectedNoOriginalOwner,
+      },
+    })
+    assert.equal(fs.existsSync(noOriginalManifestPath), false, "verified no-original retry must restore the missing manifest")
+    assert.equal(fs.existsSync(noOriginalTransactionPath), false, "verified no-original retry must close the transaction")
+    assert.equal(fs.existsSync(noOriginalLockPath), false, "verified no-original retry must release the upgrade lock")
+
     const ownerRaceLockPath = path.join(installDir, ".memory-lane-upgrade.lock")
     const staleOwner = "finished-upgrade-owner"
     const replacementOwner = "later-upgrade-owner"
