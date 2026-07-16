@@ -52,8 +52,16 @@ describe("installed binary removal", () => {
     assert.match(helperCommand, /\$identity = 'unknown'/u)
     assert.match(helperCommand, /NoProcessFoundForGivenId/u)
     assert.match(helperCommand, /if \(\$identity -eq 'inactive'\) \{ break \}/u)
-    assert.match(helperCommand, /for \(\$attempt = 0; \$attempt -lt 10; \$attempt\+\+\)/u)
+    const retryDelays = helperCommand.match(/\$retryDelays = @\(([^)]+)\)/u)?.[1]
+      .split(",")
+      .map((delay) => Number(delay.trim()))
+    assert.deepEqual(retryDelays, [100, 200, 400, 800, 1600, 3200, 5000, 5000, 5000, 5000, 5000])
+    assert.equal(retryDelays?.reduce((total, delay) => total + delay, 0), 31_300)
+    assert.match(helperCommand, /for \(\$attempt = 0; \$attempt -le \$retryDelays\.Count; \$attempt\+\+\)/u)
     assert.match(helperCommand, /Remove-Item -LiteralPath .* -ErrorAction Stop/u)
+    assert.match(helperCommand, /System\.IO\.IOException/u)
+    assert.match(helperCommand, /System\.UnauthorizedAccessException/u)
+    assert.match(helperCommand, /if \(-not \$retryable -or \$attempt -ge \$retryDelays\.Count\) \{ exit 1 \}/u)
   })
 
   it("distinguishes matching and reused Windows process identities", { skip: process.platform !== "win32" }, async () => {
