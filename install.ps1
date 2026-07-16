@@ -419,7 +419,22 @@ function Acquire-Upgrade-Actor($action) {
     }
     $json = $actor | ConvertTo-Json -Compress
     while ($true) {
+        $claim = $null
         try {
+            $claim = Acquire-Upgrade-Lock-Owner-Gate $transaction.LockPath $transaction.LockOwner
+            if (-not $claim) {
+                return $null
+            }
+            $owner = ([IO.File]::ReadAllText((Join-Path $transaction.LockPath "owner"))) | ConvertFrom-Json
+            if ($owner.token -ne $transaction.LockOwner) {
+                return $null
+            }
+            $currentTransaction = Read-Upgrade-Transaction
+            if (-not $currentTransaction `
+                -or $currentTransaction.LockOwner -ne $transaction.LockOwner `
+                -or $currentTransaction.LockPath -ne $transaction.LockPath) {
+                return $null
+            }
             $stream = [IO.File]::Open($temporaryActorPath, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
             try {
                 $bytes = [Text.UTF8Encoding]::new($false).GetBytes($json)
@@ -452,6 +467,7 @@ function Acquire-Upgrade-Actor($action) {
             Start-Sleep -Milliseconds 100
         } finally {
             Remove-Item -LiteralPath $temporaryActorPath -Force -ErrorAction SilentlyContinue
+            Release-Upgrade-Lock-Owner-Gate $transaction.LockPath $claim
         }
     }
 }

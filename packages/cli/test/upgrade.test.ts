@@ -539,6 +539,75 @@ describe("upgrade", () => {
     releaseUpgradeLock(lock)
   })
 
+  it("does not reconcile when actor publication claims the gate after initial inspection", () => {
+    const fixture = createStaleUpgradeTransaction()
+    const reclaimPath = path.join(fixture.lockPath, ".reclaim")
+    const actorPublisher = {
+      pid: 7654,
+      processStartedAt: "555555555",
+      token: "stale-owner",
+      createdAt: 2_000_000,
+    }
+    let publicationStarted = false
+
+    assert.throws(
+      () => acquireUpgradeLock(fixture.installDir, process.pid, {
+        now: () => 2_000_000,
+        createToken: () => "replacement-owner",
+        inspectProcessStartTime: (processId) => processId === process.pid
+          ? { status: "found", startedAt: "444444444" }
+          : processId === actorPublisher.pid
+            ? { status: "found", startedAt: actorPublisher.processStartedAt }
+            : { status: "missing" },
+        onReclaimInspected: () => {
+          if (publicationStarted) return
+          fs.writeFileSync(reclaimPath, JSON.stringify(actorPublisher), { encoding: "utf8", flag: "wx" })
+          publicationStarted = true
+        },
+      }),
+      /Could not acquire/u,
+    )
+
+    assert.equal(publicationStarted, true)
+    assert.deepEqual(JSON.parse(fs.readFileSync(reclaimPath, "utf8")), actorPublisher)
+    assert.equal(fs.readFileSync(fixture.installPath, "utf8"), "replacement binary")
+    assert.equal(fs.readFileSync(fixture.manifestPath, "utf8"), "replacement manifest")
+    assert.equal(fs.existsSync(fixture.backupPath), true)
+    assert.equal(fs.existsSync(fixture.transactionPath), true)
+  })
+
+  it("revalidates actor activity after claiming the reclaim gate", () => {
+    const fixture = createStaleUpgradeTransaction()
+    const actorPath = path.join(fixture.lockPath, "active-actor")
+    const activeActor = {
+      pid: 7654,
+      processStartedAt: "555555555",
+      token: "stale-owner",
+      action: "Rollback",
+    }
+
+    assert.throws(
+      () => acquireUpgradeLock(fixture.installDir, process.pid, {
+        createToken: () => "replacement-owner",
+        inspectProcessStartTime: (processId) => processId === process.pid
+          ? { status: "found", startedAt: "444444444" }
+          : processId === activeActor.pid
+            ? { status: "found", startedAt: activeActor.processStartedAt }
+            : { status: "missing" },
+        onReclaimClaimed: () => {
+          if (!fs.existsSync(actorPath)) fs.writeFileSync(actorPath, JSON.stringify(activeActor), "utf8")
+        },
+      }),
+      /already in progress/u,
+    )
+
+    assert.equal(fs.existsSync(path.join(fixture.lockPath, ".reclaim")), false)
+    assert.equal(fs.readFileSync(fixture.installPath, "utf8"), "replacement binary")
+    assert.equal(fs.readFileSync(fixture.manifestPath, "utf8"), "replacement manifest")
+    assert.equal(fs.existsSync(fixture.backupPath), true)
+    assert.equal(fs.existsSync(fixture.transactionPath), true)
+  })
+
   it("never replaces an active reclaim claim during atomic publication", () => {
     const installDir = tempDir()
     const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
