@@ -6,16 +6,18 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  build:
+    name: Build release artifacts
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -30,6 +32,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+          no-cache: true
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -43,8 +46,90 @@ jobs:
       - name: Build binaries
         run: bun scripts/build-binaries.ts
 
-      - name: Smoke test current-platform binary
+      - name: Smoke test Linux binary
         run: bun scripts/smoke-binary.ts
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-binaries
+          path: |
+            dist-binaries/*.tar.gz
+            dist-binaries/*.zip
+            dist-binaries/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 1
+
+  native-smoke:
+    name: Native artifact smoke (${{ matrix.name }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux arm64
+            os: ubuntu-24.04-arm
+            archive: memory-lane-linux-arm64.tar.gz
+          - name: macOS arm64
+            os: macos-15
+            archive: memory-lane-darwin-arm64.tar.gz
+          - name: macOS x64
+            os: macos-15-intel
+            archive: memory-lane-darwin-x64.tar.gz
+          - name: Windows x64
+            os: windows-latest
+            archive: memory-lane-windows-x64.exe.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          no-cache: true
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: release-binaries
+          path: dist-binaries
+
+      - name: Extract Linux or macOS release archive
+        if: runner.os != 'Windows'
+        run: tar -xzf "dist-binaries/${{ matrix.archive }}" -C dist-binaries
+
+      - name: Extract Windows release archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Expand-Archive -LiteralPath "dist-binaries/${{ matrix.archive }}" -DestinationPath dist-binaries -Force
+
+      - name: Smoke test extracted release binary
+        run: bun scripts/smoke-binary.ts
+
+  release:
+    name: Publish release
+    needs:
+      - build
+      - native-smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: release-binaries
+          path: dist-binaries
 
       - name: Generate release notes
         run: |
@@ -66,7 +151,8 @@ jobs:
             echo "- Built packages with \`pnpm build\`"
             echo "- Ran test suite with \`pnpm test\`"
             echo "- Built release binaries"
-            echo "- Smoke-tested the current-platform binary"
+            echo "- Smoke-tested the Linux x64 binary on the build runner"
+            echo "- Smoke-tested packaged Linux arm64, macOS arm64/x64, and Windows x64 binaries on matching native runners"
             echo
             echo "## Assets"
             echo
