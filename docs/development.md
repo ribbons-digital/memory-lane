@@ -17,6 +17,18 @@ pnpm build
 For local binary builds, run `pnpm build:binary` after `pnpm build`.
 Compiled binaries embed release metadata from `MEMORY_LANE_VERSION`, an exact Git tag, or a short commit fallback; development builds without that metadata report `0.0.0-dev`.
 
+## Tagged release gate
+
+Pushing a `v*` tag runs the release workflow.
+One Ubuntu build job installs dependencies, builds packages, runs the test suite, and creates all five release archives plus `SHA256SUMS` once.
+It smoke-tests the Linux x64 binary directly before uploading that bundle as a workflow artifact retained for one day.
+Bun setup caching is disabled in both build and native smoke jobs.
+
+The workflow then extracts and smoke-tests the packaged Linux arm64, macOS arm64, macOS x64, and Windows x64 binaries on matching native runners.
+Publication waits for the build and every native smoke job, then downloads and publishes the same uploaded archives and checksum file together with `install.sh` and `install.ps1`.
+The publishing job checks out full Git history to generate notes from the previous tag, including the completed verification and published asset set.
+Repository write permission is limited to that final job, and checkout credentials are not persisted in any job.
+
 ## Link the CLI globally
 
 ```bash
