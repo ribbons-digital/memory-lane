@@ -345,13 +345,6 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
       ? await runTransactionalWindowsInstaller(scriptPath, installDir!, manifestTransaction!, upgradeLock!)
       : runNonWindowsInstaller(scriptPath, installDir)
     if (!installed) {
-      if (isWindows && installDir && upgradeLock) {
-        const restored = rollbackWindowsUpgrade(installDir, upgradeLock)
-        if (!restored) {
-          preserveUpgradeLock = true
-          console.error("Failed to restore the previous Windows executable.")
-        }
-      }
       throw new Error("Installer failed. Please check the output above.")
     }
     pendingWindowsUpgrade = isWindows
@@ -379,7 +372,7 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
     commitPendingWindowsUpgrade()
     console.log("\nUpgrade complete.")
   } catch (error) {
-    if (pendingWindowsUpgrade && installDir && upgradeLock) {
+    if (isWindows && installDir && upgradeLock) {
       if (!rollbackWindowsUpgrade(installDir, upgradeLock)) {
         preserveUpgradeLock = true
         console.error("Failed to restore the previous Windows executable.")

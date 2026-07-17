@@ -17,14 +17,14 @@ function Err($message) {
 }
 
 function Get-Upgrade-Backup-Path {
-    if ("$env:MEMORY_LANE_UPGRADE_PID" -notmatch "^\d+$") {
+    if ("$env:MEMORY_LANE_UPGRADE_PID" -notmatch "^[1-9]\d*$") {
         Err "invalid upgrade process id"
     }
     return "$script:installPath.backup.$env:MEMORY_LANE_UPGRADE_PID"
 }
 
 function Get-Upgrade-Transaction-Path {
-    if ("$env:MEMORY_LANE_UPGRADE_PID" -notmatch "^\d+$") {
+    if ("$env:MEMORY_LANE_UPGRADE_PID" -notmatch "^[1-9]\d*$") {
         Err "invalid upgrade process id"
     }
     return "$script:installPath.upgrade.$env:MEMORY_LANE_UPGRADE_PID"
@@ -42,6 +42,17 @@ function Get-Sha256-Hash($path) {
     } finally {
         $stream.Dispose()
     }
+}
+
+function Test-Positive-Integer($value) {
+    return $null -ne $value `
+        -and ($value -is [byte] `
+            -or $value -is [int16] `
+            -or $value -is [int32] `
+            -or $value -is [int64] `
+            -or $value -is [uint16] `
+            -or $value -is [uint32]) `
+        -and [Convert]::ToInt64($value) -gt 0
 }
 
 function Get-Process-Start-Time-Ticks($processId) {
@@ -88,10 +99,12 @@ function Read-Upgrade-Transaction {
         $ownerPath = Join-Path "$env:MEMORY_LANE_UPGRADE_LOCK_PATH" "owner"
         $owner = (Get-Content -LiteralPath $ownerPath -Raw) | ConvertFrom-Json
         $ownerPropertyNames = @($owner.PSObject.Properties.Name)
-        $commonOwnerValid = "$($owner.Token)" -ne "" `
-            -and "$($owner.Pid)" -match "^\d+$" `
-            -and "$($owner.ProcessStartedAt)" -match "^\d+$" `
-            -and "$($owner.CreatedAt)" -match "^\d+$"
+        $commonOwnerValid = $owner.Token -is [string] `
+            -and -not [string]::IsNullOrWhiteSpace($owner.Token) `
+            -and (Test-Positive-Integer $owner.Pid) `
+            -and $owner.ProcessStartedAt -is [string] `
+            -and $owner.ProcessStartedAt -match "^[1-9]\d*$" `
+            -and (Test-Positive-Integer $owner.CreatedAt)
         $currentOwnerShape = $null -eq $owner.ParentPid `
             -and $null -eq $owner.ParentProcessStartedAt `
             -and $ownerPropertyNames.Count -eq 4 `
@@ -100,12 +113,17 @@ function Read-Upgrade-Transaction {
             -and $ownerPropertyNames -contains "processStartedAt" `
             -and $ownerPropertyNames -contains "createdAt"
         $legacyInstallerValid = ($null -eq $owner.InstallerPid -and $null -eq $owner.InstallerProcessStartedAt) `
-            -or ("$($owner.InstallerPid)" -match "^\d+$" -and "$($owner.InstallerProcessStartedAt)" -match "^\d+$")
+            -or ((Test-Positive-Integer $owner.InstallerPid) `
+                -and $owner.InstallerProcessStartedAt -is [string] `
+                -and $owner.InstallerProcessStartedAt -match "^[1-9]\d*$")
         $legacyRecoveryValid = "$($owner.Phase)" -ne "recovery" `
-            -or ("$($owner.RecoveryPid)" -match "^\d+$" -and "$($owner.RecoveryProcessStartedAt)" -match "^\d+$")
-        $legacyOwnerShape = "$($owner.ParentPid)" -match "^\d+$" `
-            -and "$($owner.ParentProcessStartedAt)" -match "^\d+$" `
-            -and "$($owner.HeartbeatAt)" -match "^\d+$" `
+            -or ((Test-Positive-Integer $owner.RecoveryPid) `
+                -and $owner.RecoveryProcessStartedAt -is [string] `
+                -and $owner.RecoveryProcessStartedAt -match "^[1-9]\d*$")
+        $legacyOwnerShape = (Test-Positive-Integer $owner.ParentPid) `
+            -and $owner.ParentProcessStartedAt -is [string] `
+            -and $owner.ParentProcessStartedAt -match "^[1-9]\d*$" `
+            -and (Test-Positive-Integer $owner.HeartbeatAt) `
             -and (@("starting", "recovery") -contains "$($owner.Phase)") `
             -and $legacyInstallerValid `
             -and $legacyRecoveryValid
@@ -227,6 +245,9 @@ function Restore-Backup {
     if ($script:backupRestored) {
         return
     }
+    if (-not $script:backupWasRenamed -and -not $script:upgradeMutationStarted) {
+        return
+    }
     $transaction = Read-Upgrade-Transaction
     if (-not $transaction) {
         if ($script:backupPath -and (Test-Path -LiteralPath $script:backupPath)) {
@@ -324,11 +345,21 @@ function Backup-Existing-Binary {
             if (-not (Test-Path -LiteralPath $script:installPath)) {
                 throw "previous binary is missing before backup"
             }
-            Move-Item -LiteralPath $script:installPath -Destination $script:backupPath -Force
+            if ((Get-Sha256-Hash $script:installPath) -ne $transaction.OriginalBinaryHash) {
+                throw "previous binary does not match the upgrade transaction"
+            }
+            if (Test-Path -LiteralPath $script:backupPath) {
+                throw "previous binary backup destination already exists"
+            }
+            Move-Item -LiteralPath $script:installPath -Destination $script:backupPath
             $script:backupWasRenamed = $true
             $script:transaction.BackupState = "backed-up"
             Save-Upgrade-Transaction
-        } elseif ($transaction.BackupState -ne "no-backup") {
+        } elseif ($transaction.BackupState -eq "no-backup") {
+            if (Test-Path -LiteralPath $script:installPath) {
+                throw "unexpected existing binary for no-backup checkpoint"
+            }
+        } else {
             throw "invalid Windows upgrade backup checkpoint"
         }
     } elseif (Test-Path -LiteralPath $script:installPath) {
@@ -355,6 +386,7 @@ $script:backupPath = $null
 $script:transactionPath = $null
 $script:transaction = $null
 $script:backupRestored = $false
+$script:upgradeMutationStarted = $false
 if ($env:MEMORY_LANE_UPGRADE_PID) {
     $script:backupPath = Get-Upgrade-Backup-Path
     $script:transactionPath = Get-Upgrade-Transaction-Path
@@ -371,6 +403,7 @@ if ($env:MEMORY_LANE_INSTALL_BINARY) {
     $binaryPath = $env:MEMORY_LANE_INSTALL_BINARY
     try {
         Backup-Existing-Binary
+        $script:upgradeMutationStarted = $true
         Copy-Item -LiteralPath $binaryPath -Destination $script:installPath -Force
         Verify-Installed-Binary
     } catch {
@@ -405,6 +438,7 @@ if ($env:MEMORY_LANE_INSTALL_BINARY) {
 
     try {
         Backup-Existing-Binary
+        $script:upgradeMutationStarted = $true
         Move-Item -LiteralPath "$tmp\memory-lane-$suffix.exe" -Destination $script:installPath -Force
         Verify-Installed-Binary
     } catch {

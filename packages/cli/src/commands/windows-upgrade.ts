@@ -77,6 +77,7 @@ export const WINDOWS_LOCK_PUBLICATION_GUARD_MS = 30_000
 export const WINDOWS_COMMITTED_CLEANUP_TIMEOUT_MS = 30_000
 const DEFAULT_UPGRADE_LOCK_STALE_AFTER_MS = 60 * 60 * 1000
 const STABLE_OBSERVATION_DELAY_MS = 100
+const WINDOWS_PROCESS_INSPECTION_TIMEOUT_MS = 5_000
 const CURRENT_PROCESS_STARTED_AT = String(Math.round(Date.now() - process.uptime() * 1000))
 
 function sleep(milliseconds: number): void {
@@ -100,18 +101,24 @@ export function inspectWindowsProcessStartTime(processId: number): ProcessStartT
     {
       encoding: "utf8",
       windowsHide: true,
+      timeout: WINDOWS_PROCESS_INSPECTION_TIMEOUT_MS,
       env: { ...process.env, MEMORY_LANE_UPGRADE_PROCESS_PID: String(processId) },
     },
   )
   const startedAt = typeof result.stdout === "string" ? result.stdout.trim() : ""
   if (result.status !== 0) return { status: "unknown" }
   if (startedAt === "missing") return { status: "missing" }
-  return /^\d+$/u.test(startedAt) ? { status: "found", startedAt } : { status: "unknown" }
+  return /^[1-9]\d*$/u.test(startedAt) ? { status: "found", startedAt } : { status: "unknown" }
 }
 
 function isProcessIdentity(pid: unknown, processStartedAt: unknown): boolean {
-  return Number.isInteger(pid) && Number(pid) > 0
-    && typeof processStartedAt === "string" && /^\d+$/u.test(processStartedAt)
+  return Number.isSafeInteger(pid) && Number(pid) > 0
+    && typeof processStartedAt === "string" && /^[1-9]\d*$/u.test(processStartedAt)
+}
+
+function isPositiveSafeIntegerString(value: unknown): value is string {
+  if (typeof value !== "string" || !/^[1-9]\d*$/u.test(value)) return false
+  return Number.isSafeInteger(Number(value))
 }
 
 function readJsonFile(filePath: string): unknown | undefined {
@@ -266,8 +273,8 @@ function readDurableUpgradeTransaction(
     && value.LockOwner === owner.token
     && value.ParentPid === String(owner.parentPid)
     && value.ParentStartedAt === owner.parentProcessStartedAt
-    && typeof value.InstallerPid === "string" && /^\d+$/u.test(value.InstallerPid)
-    && typeof value.InstallerStartedAt === "string" && /^\d+$/u.test(value.InstallerStartedAt)
+    && isPositiveSafeIntegerString(value.InstallerPid)
+    && typeof value.InstallerStartedAt === "string" && /^[1-9]\d*$/u.test(value.InstallerStartedAt)
     && hashValid
     && terminalRestoreValid
     && sameFilesystemPath(transactionPath, `${installPath}.upgrade.${owner.parentPid}`)
@@ -302,7 +309,12 @@ function isRestoredExecutableVerified(installPath: string, transaction: DurableU
   return transaction.BackupState === "no-original-restored" && !fs.existsSync(installPath)
 }
 
-function ownerStillMatches(lockPath: string, owner: UpgradeLockOwner): boolean {
+type UpgradeLockIdentity = Pick<
+  UpgradeLockOwner,
+  "token" | "pid" | "processStartedAt" | "parentPid" | "parentProcessStartedAt"
+>
+
+function ownerStillMatches(lockPath: string, owner: UpgradeLockIdentity): boolean {
   const current = readUpgradeLockOwner(path.join(lockPath, "owner"))
   return current?.token === owner.token
     && current.pid === owner.pid
@@ -311,8 +323,29 @@ function ownerStillMatches(lockPath: string, owner: UpgradeLockOwner): boolean {
     && current.parentProcessStartedAt === owner.parentProcessStartedAt
 }
 
-function removeMatchingLock(lockPath: string, owner: UpgradeLockOwner): void {
-  if (ownerStillMatches(lockPath, owner)) fs.rmSync(lockPath, { recursive: true, force: true })
+export function removeMatchingUpgradeLock(
+  lockPath: string,
+  owner: UpgradeLockIdentity,
+  onClaimed?: () => void,
+): void {
+  if (!ownerStillMatches(lockPath, owner)) return
+  const tombstonePath = `${lockPath}.remove.${process.pid}.${Date.now()}.${randomUUID()}`
+  try {
+    fs.renameSync(lockPath, tombstonePath)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return
+    throw error
+  }
+  onClaimed?.()
+  if (!ownerStillMatches(tombstonePath, owner as UpgradeLockOwner)) {
+    try {
+      fs.renameSync(tombstonePath, lockPath)
+    } catch {
+      throw new Error(`Windows upgrade lock changed while it was being removed; preserved unexpected state at ${tombstonePath}.`)
+    }
+    throw new Error("Windows upgrade lock changed while it was being removed and was restored.")
+  }
+  fs.rmSync(tombstonePath, { recursive: true, force: true })
 }
 
 function cleanupTransactionArtifacts(
@@ -328,7 +361,7 @@ function cleanupTransactionArtifacts(
     const backupExists = fs.existsSync(backupPath)
     const manifestBackupExists = fs.existsSync(transaction.ManifestBackupPath)
     if (currentBytes === undefined && !backupExists && !manifestBackupExists) {
-      if (lockMatches) removeMatchingLock(transaction.LockPath, owner)
+      if (lockMatches) removeMatchingUpgradeLock(transaction.LockPath, owner)
       return
     }
     if (currentBytes !== undefined && !lockMatches) {
@@ -344,7 +377,7 @@ function cleanupTransactionArtifacts(
           fs.rmSync(backupPath, { force: true })
           fs.rmSync(transaction.ManifestBackupPath, { force: true })
           fs.rmSync(transactionPath, { force: true })
-          removeMatchingLock(transaction.LockPath, owner)
+          removeMatchingUpgradeLock(transaction.LockPath, owner)
           return
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
@@ -458,6 +491,16 @@ function hasRecoveryResidue(installDir: string): boolean {
   return fs.readdirSync(installDir).some((entry) =>
     /^memory-lane\.exe\.(?:backup|upgrade)\./u.test(entry),
   )
+}
+
+function sweepStaleLockTombstones(installDir: string, now: number, staleAfterMs: number): void {
+  for (const entry of fs.readdirSync(installDir)) {
+    const match = /^\.memory-lane-upgrade\.lock\.remove\.\d+\.(\d+)\./u.exec(entry)
+    if (!match) continue
+    const createdAt = Number(match[1])
+    if (!Number.isSafeInteger(createdAt) || createdAt <= 0 || now - createdAt < staleAfterMs) continue
+    fs.rmSync(path.join(installDir, entry), { recursive: true, force: true })
+  }
 }
 
 interface LockObservation {
@@ -622,11 +665,12 @@ export function acquireUpgradeLock(
   const inspect = options.inspectProcessStartTime ?? inspectWindowsProcessStartTime
   const wait = options.sleep ?? sleep
   const upgradeProcess = inspect(upgradePid)
-  if (upgradeProcess.status !== "found" || !/^\d+$/u.test(upgradeProcess.startedAt)) {
+  if (upgradeProcess.status !== "found" || !/^[1-9]\d*$/u.test(upgradeProcess.startedAt)) {
     throw new Error("Could not identify the running upgrade process.")
   }
   const token = (options.createToken ?? randomUUID)()
   fs.mkdirSync(installDir, { recursive: true })
+  sweepStaleLockTombstones(installDir, now(), staleAfterMs)
 
   const createLock = (): UpgradeLock | undefined => {
     try {
@@ -715,7 +759,7 @@ export function releaseUpgradeLock(lock: UpgradeLock | undefined): void {
       && !fs.existsSync(backupPath)
       && !temporaryResidue
       && (!lock.manifestBackupPath || !fs.existsSync(lock.manifestBackupPath))) {
-      removeMatchingLock(lock.path, owner)
+      removeMatchingUpgradeLock(lock.path, owner)
     }
   } catch (error) {
     console.warn(`Warning: Windows upgrade lock was preserved: ${(error as Error).message}`)
@@ -848,7 +892,7 @@ export function rollbackWindowsUpgrade(installDir: string, upgradeLock: UpgradeL
         .some((entry) => entry.startsWith(`${path.basename(transactionPath)}.`))
       if (fs.existsSync(backupPath) || temporaryResidue) return false
       if (upgradeLock.manifestBackupPath) fs.rmSync(upgradeLock.manifestBackupPath, { force: true })
-      removeMatchingLock(upgradeLock.path, owner)
+      removeMatchingUpgradeLock(upgradeLock.path, owner)
       return true
     }
     rollbackPendingTransaction(installPath, backupPath, transactionPath, transaction, owner)
@@ -935,7 +979,8 @@ export async function handleCommittedCleanup(
   const parentPidValue = cleanupArgument(argv, "--parent-pid")
   const parentStartedAt = cleanupArgument(argv, "--parent-started-at")
   if (!transactionPath || !installPath || !manifestPath || !manifestBackupPath || !lockPath || !ownerToken
-    || !parentPidValue || !parentStartedAt || !/^\d+$/u.test(parentPidValue) || !/^\d+$/u.test(parentStartedAt)) return
+    || !isPositiveSafeIntegerString(parentPidValue)
+    || !parentStartedAt || !/^[1-9]\d*$/u.test(parentStartedAt)) return
   const parentPid = Number(parentPidValue)
   const deadline = now() + WINDOWS_COMMITTED_CLEANUP_TIMEOUT_MS
   while (now() < deadline) {

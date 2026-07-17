@@ -22,6 +22,7 @@ import {
 import {
   commitWindowsUpgrade,
   handleCommittedCleanup,
+  removeMatchingUpgradeLock,
   rollbackWindowsUpgrade,
   runTransactionalWindowsInstaller,
   WINDOWS_COMMITTED_CLEANUP_FLAG,
@@ -541,6 +542,62 @@ describe("upgrade", () => {
     assert.equal(fs.existsSync(lock.path), false)
   })
 
+  for (const [field, value] of [
+    ["pid", String(process.pid)],
+    ["pid", 0],
+    ["processStartedAt", "0"],
+    ["createdAt", "1000000"],
+  ] as const) {
+    it(`rejects a lock owner with invalid ${field} value ${JSON.stringify(value)}`, () => {
+      const installDir = tempDir()
+      const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+      fs.mkdirSync(lockPath)
+      fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
+        token: "malformed-owner",
+        pid: process.pid,
+        processStartedAt: "111111111",
+        createdAt: 1_000_000,
+        [field]: value,
+      }), "utf8")
+      assert.throws(
+        () => acquireUpgradeLock(installDir, process.pid, {
+          inspectProcessStartTime: () => ({ status: "found", startedAt: "111111111" }),
+        }),
+        /owner metadata is not yet available/u,
+      )
+    })
+  }
+
+  it("rejects zero and unsafe installer identities in durable transactions", () => {
+    for (const [field, value] of [
+      ["InstallerPid", "0"],
+      ["InstallerPid", String(Number.MAX_SAFE_INTEGER + 1)],
+      ["InstallerStartedAt", "0"],
+    ] as const) {
+      const fixture = createStaleUpgradeTransaction()
+      const transaction = JSON.parse(fs.readFileSync(fixture.transactionPath, "utf8"))
+      transaction[field] = value
+      fs.writeFileSync(fixture.transactionPath, JSON.stringify(transaction), "utf8")
+      assert.throws(
+        () => acquireUpgradeLock(fixture.installDir, process.pid, {
+          inspectProcessStartTime: (pid) => pid === process.pid
+            ? { status: "found", startedAt: "444444444" }
+            : { status: "missing" },
+        }),
+        /failed state validation/u,
+      )
+    }
+  })
+
+  it("rejects a zero process start time for the acquiring process", () => {
+    assert.throws(
+      () => acquireUpgradeLock(tempDir(), process.pid, {
+        inspectProcessStartTime: () => ({ status: "found", startedAt: "0" }),
+      }),
+      /Could not identify the running upgrade process/u,
+    )
+  })
+
   it("keeps an inactive owner during the 30-second transaction publication guard", () => {
     const installDir = tempDir()
     const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
@@ -807,6 +864,48 @@ describe("upgrade", () => {
     releaseUpgradeLock(lock)
     assert.equal(fs.existsSync(lock.path), false)
   })
+
+  it("preserves a successor lock created after atomic removal claims the old lock", () => {
+    const installDir = tempDir()
+    const lock = acquireUpgradeLock(installDir, process.pid)
+    const owner = JSON.parse(fs.readFileSync(path.join(lock.path, "owner"), "utf8"))
+    removeMatchingUpgradeLock(lock.path, {
+      token: owner.token,
+      pid: owner.pid,
+      processStartedAt: owner.processStartedAt,
+      parentPid: owner.pid,
+      parentProcessStartedAt: owner.processStartedAt,
+    }, () => {
+      fs.mkdirSync(lock.path)
+      fs.writeFileSync(path.join(lock.path, "owner"), JSON.stringify({
+        token: "successor-owner",
+        pid: 9876,
+        processStartedAt: "999999999",
+        createdAt: 2_000_000,
+      }), "utf8")
+    })
+    assert.equal(JSON.parse(fs.readFileSync(path.join(lock.path, "owner"), "utf8")).token, "successor-owner")
+    assert.equal(
+      fs.readdirSync(installDir).some((entry) => entry.includes(".remove.")),
+      false,
+    )
+  })
+
+  it("sweeps only stale lock-removal tombstones during acquisition", () => {
+    const installDir = tempDir()
+    const stalePath = path.join(installDir, ".memory-lane-upgrade.lock.remove.1.1000.stale")
+    const freshPath = path.join(installDir, ".memory-lane-upgrade.lock.remove.1.3000.fresh")
+    fs.mkdirSync(stalePath)
+    fs.mkdirSync(freshPath)
+    const lock = acquireUpgradeLock(installDir, process.pid, {
+      now: () => 4_000,
+      staleAfterMs: 2_000,
+    })
+    assert.equal(fs.existsSync(stalePath), false)
+    assert.equal(fs.existsSync(freshPath), true)
+    releaseUpgradeLock(lock)
+  })
+
   it("preserves malformed transaction state without masking the primary error", () => {
     const installDir = tempDir()
     const lock = acquireUpgradeLock(installDir, process.pid)
@@ -834,6 +933,25 @@ describe("upgrade", () => {
     assert.equal(fs.existsSync(fixture.lockPath), false)
     await handleCommittedCleanup(committedCleanupArgs(fixture), () => ({ status: "missing" }))
   })
+
+  for (const [argument, value] of [
+    ["--parent-pid", "0"],
+    ["--parent-started-at", "0"],
+  ] as const) {
+    it(`rejects committed cleanup with ${argument} ${value} before process inspection`, async () => {
+      const fixture = createStaleUpgradeTransaction("committed")
+      const args = committedCleanupArgs(fixture)
+      args[args.indexOf(argument) + 1] = value
+      let inspected = false
+      await handleCommittedCleanup(args, () => {
+        inspected = true
+        return { status: "missing" }
+      })
+      assert.equal(inspected, false)
+      assert.equal(fs.existsSync(fixture.transactionPath), true)
+      assert.equal(fs.existsSync(fixture.lockPath), true)
+    })
+  }
 
   it("leaves committed residue when the 30-second helper deadline expires", async () => {
     const fixture = createStaleUpgradeTransaction("committed")

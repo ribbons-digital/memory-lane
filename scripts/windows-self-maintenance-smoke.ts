@@ -18,6 +18,7 @@ import {
 
 interface ProcessResult {
   code: number | null
+  signal: NodeJS.Signals | null
   stdout: string
   stderr: string
 }
@@ -40,7 +41,7 @@ function waitForExit(child: ChildProcess): Promise<ProcessResult> {
   child.stderr?.on("data", (chunk: string) => { stderr += chunk })
   return new Promise((resolve, reject) => {
     child.once("error", reject)
-    child.once("close", (code) => resolve({ code, stdout, stderr }))
+    child.once("close", (code, signal) => resolve({ code, signal, stdout, stderr }))
   })
 }
 
@@ -78,7 +79,13 @@ function writeAtomic(filePath: string, value: unknown): void {
   fs.renameSync(temporaryPath, filePath)
 }
 
-function publishOwner(lockPath: string, pid: number, startedAt: string, token: string): void {
+function publishOwner(
+  lockPath: string,
+  pid: number,
+  startedAt: string,
+  token: string,
+  overrides: Record<string, unknown> = {},
+): void {
   fs.rmSync(lockPath, { recursive: true, force: true })
   fs.mkdirSync(lockPath)
   writeAtomic(path.join(lockPath, "owner"), {
@@ -86,6 +93,7 @@ function publishOwner(lockPath: string, pid: number, startedAt: string, token: s
     pid,
     processStartedAt: startedAt,
     createdAt: Date.now(),
+    ...overrides,
   })
 }
 
@@ -99,12 +107,14 @@ async function runCoordinatedInstaller(options: {
   manifestExisted: boolean
   ownerToken: string
   publishTransaction: boolean
+  ownerOverrides?: Record<string, unknown>
+  transactionOverrides?: Record<string, unknown>
 }): Promise<ProcessResult> {
   const installPath = path.join(options.installDir, "memory-lane.exe")
   const lockPath = path.join(options.installDir, ".memory-lane-upgrade.lock")
   const transactionPath = `${installPath}.upgrade.${options.parentPid}`
   const manifestBackupPath = `${options.manifestPath}.upgrade.${options.parentPid}`
-  publishOwner(lockPath, options.parentPid, options.parentStartedAt, options.ownerToken)
+  publishOwner(lockPath, options.parentPid, options.parentStartedAt, options.ownerToken, options.ownerOverrides)
   if (options.manifestExisted) fs.copyFileSync(options.manifestPath, manifestBackupPath)
   else fs.rmSync(manifestBackupPath, { force: true })
   const env: NodeJS.ProcessEnv = {
@@ -142,6 +152,7 @@ async function runCoordinatedInstaller(options: {
       InstallerPid: String(child.pid),
       InstallerStartedAt: installerStartedAt,
       OriginalBinaryHash: fs.existsSync(installPath) ? sha256(installPath) : "",
+      ...options.transactionOverrides,
     })
   }
   return await exit
@@ -211,10 +222,60 @@ async function main(): Promise<void> {
       ownerToken: "no-transaction-owner",
       publishTransaction: false,
     })
+    assert.equal(noTransaction.signal, null, "missing-transaction rejection must exit normally")
     assert.notEqual(noTransaction.code, 0, "installer must reject a missing parent transaction")
     assert.ok(Date.now() - noTransactionStartedAt >= WINDOWS_INSTALLER_HANDSHAKE_TIMEOUT_MS)
     assert.equal(sha256(installPath), originalHash, "startup handshake failure must not mutate the old executable")
     fs.rmSync(path.join(installDir, ".memory-lane-upgrade.lock"), { recursive: true, force: true })
+
+    const assertPreMutationRejection = async (
+      ownerToken: string,
+      overrides: {
+        owner?: Record<string, unknown>
+        transaction?: Record<string, unknown>
+        prepare?: (backupPath: string) => void
+        verify?: (backupPath: string) => void
+      },
+    ): Promise<void> => {
+      const backupPath = `${installPath}.backup.${oldPid}`
+      const transactionPath = `${installPath}.upgrade.${oldPid}`
+      const manifestBackupPath = `${manifestPath}.upgrade.${oldPid}`
+      overrides.prepare?.(backupPath)
+      const result = await runCoordinatedInstaller({
+        installerPath,
+        installDir,
+        replacementPath,
+        parentPid: oldPid,
+        parentStartedAt: oldStartedAt,
+        manifestPath,
+        manifestExisted: false,
+        ownerToken,
+        publishTransaction: true,
+        ownerOverrides: overrides.owner,
+        transactionOverrides: overrides.transaction,
+      })
+      assert.equal(result.signal, null, `${ownerToken} rejection must exit normally`)
+      assert.notEqual(result.code, 0, `${ownerToken} must be rejected`)
+      assert.equal(sha256(installPath), originalHash, `${ownerToken} must not mutate the existing executable`)
+      overrides.verify?.(backupPath)
+      fs.rmSync(path.join(installDir, ".memory-lane-upgrade.lock"), { recursive: true, force: true })
+      fs.rmSync(backupPath, { force: true })
+      fs.rmSync(transactionPath, { force: true })
+      fs.rmSync(manifestBackupPath, { force: true })
+    }
+    await assertPreMutationRejection("string-owner-pid", {
+      owner: { pid: String(oldPid) },
+    })
+    await assertPreMutationRejection("wrong-original-hash", {
+      transaction: { OriginalBinaryHash: "0".repeat(64) },
+    })
+    await assertPreMutationRejection("existing-backup-destination", {
+      prepare: (backupPath) => fs.writeFileSync(backupPath, "unrelated backup", "utf8"),
+      verify: (backupPath) => assert.equal(fs.readFileSync(backupPath, "utf8"), "unrelated backup"),
+    })
+    await assertPreMutationRejection("unexpected-no-backup-executable", {
+      transaction: { BackupState: "no-backup", OriginalBinaryHash: "" },
+    })
 
     const ownerToken = "successful-owner"
     const upgradeLock = acquireUpgradeLock(installDir, oldPid, { createToken: () => ownerToken })
@@ -269,6 +330,7 @@ async function main(): Promise<void> {
       ownerToken: failedOwner,
       publishTransaction: true,
     })
+    assert.equal(failed.signal, null, "installer rollback failure must exit normally")
     assert.notEqual(failed.code, 0, "failed smoke test must fail installation")
     assert.equal(sha256(installPath), beforeFailedHash, "installer-local rollback must restore the exact executable")
     assert.equal(fs.readFileSync(manifestPath, "utf8"), "original manifest")
@@ -319,7 +381,11 @@ async function main(): Promise<void> {
     assert.equal(spawnSync(path.join(standaloneDir, "memory-lane.exe"), ["--smoke-test"]).status, 0)
     console.log("Windows self-maintenance smoke passed")
   } finally {
-    runningOldBinary?.kill()
+    if (runningOldBinary && runningOldBinary.exitCode === null && runningOldBinary.signalCode === null) {
+      const exited = waitForExit(runningOldBinary)
+      runningOldBinary.kill()
+      await exited
+    }
     fs.rmSync(root, { recursive: true, force: true })
   }
 }
