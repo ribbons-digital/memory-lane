@@ -1,11 +1,20 @@
 #!/usr/bin/env node
+import assert from "node:assert/strict"
 import { spawn, spawnSync } from "node:child_process"
 import type { ChildProcess } from "node:child_process"
-import { createHash } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import assert from "node:assert/strict"
+import {
+  acquireUpgradeLock,
+  commitWindowsUpgrade,
+  runTransactionalWindowsInstaller,
+  snapshotInstallManifest,
+  releaseUpgradeLock,
+  WINDOWS_COMMITTED_CLEANUP_TIMEOUT_MS,
+  WINDOWS_INSTALLER_HANDSHAKE_TIMEOUT_MS,
+} from "../packages/cli/src/commands/windows-upgrade.js"
 
 interface ProcessResult {
   code: number | null
@@ -36,7 +45,7 @@ function waitForExit(child: ChildProcess): Promise<ProcessResult> {
   })
 }
 
-async function waitUntil(predicate: () => boolean, description: string, timeoutMs: number = 15_000): Promise<void> {
+async function waitUntil(predicate: () => boolean, description: string, timeoutMs = 15_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (predicate()) return
@@ -45,123 +54,150 @@ async function waitUntil(predicate: () => boolean, description: string, timeoutM
   throw new Error(`Timed out waiting for ${description}`)
 }
 
-async function main(): Promise<void> {
-  if (process.platform !== "win32") throw new Error("Windows self-maintenance smoke must run on Windows")
-
-  const repo = process.cwd()
-  const identityCheck = spawnSync("powershell.exe", [
+function processStartedAt(pid: number): string {
+  const result = spawnSync("powershell.exe", [
     "-NoProfile",
     "-NonInteractive",
     "-Command",
-    [
-      "$tokens = $null",
-      "$errors = $null",
-      "$ast = [Management.Automation.Language.Parser]::ParseFile($env:MEMORY_LANE_INSTALLER_PATH, [ref]$tokens, [ref]$errors)",
-      "$functions = $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and @('Get-Process-Start-Time-Ticks', 'Test-Upgrade-Process-Identity', 'Test-Same-Filesystem-Path', 'Read-Upgrade-Transaction', 'Read-Upgrade-Transaction-After-Actor', 'Release-Upgrade-Actor', 'Write-Upgrade-Lock-Owner', 'Acquire-Upgrade-Lock-Owner-Gate', 'Release-Upgrade-Lock-Owner-Gate', 'Update-Upgrade-Lock-Lease', 'Wait-For-Upgrade-Process', 'Wait-For-Upgrade-Recovery-Lease') -contains $node.Name }, $true)",
-      "$definitions = $functions | ForEach-Object { $_.Extent.Text }",
-      "Invoke-Expression ($definitions -join [Environment]::NewLine)",
-      "$startedAt = Get-Process-Start-Time-Ticks $PID",
-      "if ((Test-Upgrade-Process-Identity $PID $startedAt) -ne 'active') { throw 'matching process identity was rejected' }",
-      "$reusedStartedAt = ([Int64]$startedAt + 1).ToString()",
-      "if ((Test-Upgrade-Process-Identity $PID $reusedStartedAt) -ne 'inactive') { throw 'reused process identity was accepted' }",
-      "$interleaveRoot = Join-Path ([IO.Path]::GetTempPath()) ('memory-lane-interleave-' + [Guid]::NewGuid().ToString('N'))",
-      "New-Item -ItemType Directory -Path $interleaveRoot | Out-Null",
-      "$UpgradeAction = 'Recover'",
-      "$env:MEMORY_LANE_UPGRADE_PID = '1'",
-      "$script:installPath = Join-Path $interleaveRoot 'memory-lane.exe'",
-      "$script:backupPath = \"$script:installPath.backup.1\"",
-      "$script:transactionPath = \"$script:installPath.upgrade.1\"",
-      "$interleaveManifestPath = Join-Path $interleaveRoot 'manifest'",
-      "$interleaveManifestBackupPath = \"$interleaveManifestPath.upgrade.1\"",
-      "$env:MEMORY_LANE_UPGRADE_MANIFEST_PATH = $interleaveManifestPath",
-      "$env:MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH = $interleaveManifestBackupPath",
-      "$env:MEMORY_LANE_UPGRADE_MANIFEST_EXISTED = 'false'",
-      "$env:MEMORY_LANE_UPGRADE_LOCK_PATH = $interleaveRoot",
-      "$env:MEMORY_LANE_UPGRADE_LOCK_OWNER = 'interleave-owner'",
-      "$interleaveOwner = [PSCustomObject]@{ Token = 'interleave-owner'; ParentPid = '1'; ParentProcessStartedAt = '1'; InstallerPid = '1'; InstallerProcessStartedAt = '1' }",
-      "[IO.File]::WriteAllText((Join-Path $interleaveRoot 'owner'), ($interleaveOwner | ConvertTo-Json -Compress))",
-      "$interleavedTransaction = [PSCustomObject]@{ State = 'pending'; BackupState = 'no-backup'; ManifestState = 'missing'; ManifestPath = $interleaveManifestPath; ManifestBackupPath = $interleaveManifestBackupPath; LockPath = $interleaveRoot; LockOwner = 'interleave-owner'; ParentPid = '1'; ParentStartedAt = '1'; InstallerPid = '1'; InstallerStartedAt = '1'; OriginalBinaryHash = '' }",
-      "[IO.File]::WriteAllText($script:transactionPath, ($interleavedTransaction | ConvertTo-Json -Compress))",
-      "$env:MEMORY_LANE_UPGRADE_MANIFEST_PATH = Join-Path $interleaveRoot 'mismatched-manifest'",
-      "$bindingRejected = $false",
-      "try { $script:transaction = $null; Read-Upgrade-Transaction | Out-Null } catch { if (\"$($_.Exception.Message)\" -ne 'invalid upgrade transaction state') { throw }; $bindingRejected = $true }",
-      "if (-not $bindingRejected) { throw 'recovery accepted a transaction outside the active upgrade environment' }",
-      "$env:MEMORY_LANE_UPGRADE_MANIFEST_PATH = $interleaveManifestPath",
-      "$script:transaction = Read-Upgrade-Transaction",
-      "$interleavedTransaction.State = 'committed'",
-      "[IO.File]::WriteAllText($script:transactionPath, ($interleavedTransaction | ConvertTo-Json -Compress))",
-      "$interleaveActor = [PSCustomObject]@{ pid = $PID; processStartedAt = $startedAt; token = 'interleave-owner'; action = 'Recover'; lockPath = $interleaveRoot }",
-      "$freshTransaction = Read-Upgrade-Transaction-After-Actor $interleaveActor",
-      "if (-not $freshTransaction -or $freshTransaction.State -ne 'committed') { throw 'recovery reused the transaction cached before actor acquisition' }",
-      "$interleavedTransaction.LockOwner = 'changed-owner'",
-      "[IO.File]::WriteAllText($script:transactionPath, ($interleavedTransaction | ConvertTo-Json -Compress))",
-      "if ($null -ne (Read-Upgrade-Transaction-After-Actor $interleaveActor)) { throw 'recovery accepted a changed transaction owner' }",
-      "[IO.File]::WriteAllText((Join-Path $interleaveRoot 'active-actor'), ($interleaveActor | ConvertTo-Json -Compress))",
-      "[IO.File]::WriteAllText($script:transactionPath, '{')",
-      "Release-Upgrade-Actor $interleaveActor",
-      "if (Test-Path -LiteralPath (Join-Path $interleaveRoot 'active-actor')) { throw 'owned actor was not released after transaction reread failure' }",
-      "Remove-Item -LiteralPath $interleaveRoot -Recurse -Force",
-      "$handshakeRoot = Join-Path ([IO.Path]::GetTempPath()) ('memory-lane-handshake-' + [Guid]::NewGuid().ToString('N'))",
-      "New-Item -ItemType Directory -Path $handshakeRoot | Out-Null",
-      "$handshakeOwner = [PSCustomObject]@{ pid = $PID; processStartedAt = $startedAt; token = 'handshake-owner'; createdAt = 1; heartbeatAt = 1; phase = 'recovery' }",
-      "[IO.File]::WriteAllText((Join-Path $handshakeRoot 'owner'), ($handshakeOwner | ConvertTo-Json -Compress))",
-      "$script:transaction = [PSCustomObject]@{ LockPath = $handshakeRoot; LockOwner = 'handshake-owner' }",
-      "function Read-Upgrade-Transaction { return $script:transaction }",
-      "try { if (-not (Wait-For-Upgrade-Recovery-Lease 500)) { throw 'durable recovery lease handshake was rejected' }; $handshakeOwner.phase = 'starting'; [IO.File]::WriteAllText((Join-Path $handshakeRoot 'owner'), ($handshakeOwner | ConvertTo-Json -Compress)); if (Wait-For-Upgrade-Recovery-Lease 200) { throw 'starting lease was accepted as recovery handoff' } } finally { Remove-Item -LiteralPath $handshakeRoot -Recurse -Force }",
-      "function Get-Process { throw [InvalidOperationException]::new('transient process inspection failure') }",
-      "if ((Test-Upgrade-Process-Identity $PID $startedAt) -ne 'unknown') { throw 'process inspection failure was treated as exit' }",
-      "Remove-Item -LiteralPath Function:\\Get-Process -Force",
-      "$script:identityChecks = 0",
-      "$script:leaseRefreshes = 0",
-      "function Test-Upgrade-Process-Identity { $script:identityChecks++; if ($script:identityChecks -lt 3) { return 'unknown' }; return 'inactive' }",
-      "function Update-Upgrade-Lock-Lease { $script:leaseRefreshes++; return $true }",
-      "function Start-Sleep {}",
-      "if (-not (Wait-For-Upgrade-Process 1 '1')) { throw 'unknown process identity lost recovery lease' }",
-      "if ($script:identityChecks -ne 3 -or $script:leaseRefreshes -ne 2) { throw 'unknown process identity was not retried' }",
-    ].join("; "),
+    "[Console]::Out.Write((Get-Process -Id ([int]$env:TEST_PID) -ErrorAction Stop).StartTime.ToUniversalTime().Ticks)",
   ], {
-    cwd: repo,
-    env: { ...process.env, MEMORY_LANE_INSTALLER_PATH: path.join(repo, "install.ps1") },
+    env: { ...process.env, TEST_PID: String(pid) },
     encoding: "utf8",
   })
-  assert.equal(identityCheck.status, 0, `${identityCheck.stdout}\n${identityCheck.stderr}`)
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-[paths]-"))
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /^\d+$/u)
+  return result.stdout
+}
+
+function sha256(filePath: string): string {
+  return createHash("sha256").update(fs.readFileSync(filePath)).digest("hex")
+}
+
+function writeAtomic(filePath: string, value: unknown): void {
+  const temporaryPath = `${filePath}.tmp.${process.pid}.${randomUUID()}`
+  fs.writeFileSync(temporaryPath, JSON.stringify(value), { encoding: "utf8", flag: "wx" })
+  fs.renameSync(temporaryPath, filePath)
+}
+
+function publishOwner(
+  lockPath: string,
+  pid: number,
+  startedAt: string,
+  token: string,
+  overrides: Record<string, unknown> = {},
+): void {
+  fs.rmSync(lockPath, { recursive: true, force: true })
+  fs.mkdirSync(lockPath)
+  writeAtomic(path.join(lockPath, "owner"), {
+    token,
+    pid,
+    processStartedAt: startedAt,
+    createdAt: Date.now(),
+    ...overrides,
+  })
+}
+
+async function runCoordinatedInstaller(options: {
+  installerPath: string
+  installDir: string
+  replacementPath: string
+  parentPid: number
+  parentStartedAt: string
+  manifestPath: string
+  manifestExisted: boolean
+  ownerToken: string
+  publishTransaction: boolean
+  ownerOverrides?: Record<string, unknown>
+  transactionOverrides?: Record<string, unknown>
+}): Promise<ProcessResult> {
+  const installPath = path.join(options.installDir, "memory-lane.exe")
+  const lockPath = path.join(options.installDir, ".memory-lane-upgrade.lock")
+  const transactionPath = `${installPath}.upgrade.${options.parentPid}`
+  const manifestBackupPath = `${options.manifestPath}.upgrade.${options.parentPid}`
+  publishOwner(lockPath, options.parentPid, options.parentStartedAt, options.ownerToken, options.ownerOverrides)
+  if (options.manifestExisted) fs.copyFileSync(options.manifestPath, manifestBackupPath)
+  else fs.rmSync(manifestBackupPath, { force: true })
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    INSTALL_DIR: options.installDir,
+    MEMORY_LANE_INSTALL_BINARY: options.replacementPath,
+    MEMORY_LANE_UPGRADE_PID: String(options.parentPid),
+    MEMORY_LANE_UPGRADE_MANIFEST_PATH: options.manifestPath,
+    MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH: manifestBackupPath,
+    MEMORY_LANE_UPGRADE_MANIFEST_EXISTED: String(options.manifestExisted),
+    MEMORY_LANE_UPGRADE_LOCK_PATH: lockPath,
+    MEMORY_LANE_UPGRADE_LOCK_OWNER: options.ownerToken,
+  }
+  const child = spawn("powershell.exe", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    options.installerPath,
+  ], { env, stdio: ["ignore", "pipe", "pipe"] })
+  assert.ok(child.pid, "PowerShell installer must expose its PID")
+  const exit = waitForExit(child)
+  if (options.publishTransaction) {
+    const installerStartedAt = processStartedAt(child.pid)
+    writeAtomic(transactionPath, {
+      State: "pending",
+      BackupState: fs.existsSync(installPath) ? "not-backed-up" : "no-backup",
+      ManifestState: options.manifestExisted ? "existing" : "missing",
+      ManifestPath: options.manifestPath,
+      ManifestBackupPath: manifestBackupPath,
+      LockPath: lockPath,
+      LockOwner: options.ownerToken,
+      ParentPid: String(options.parentPid),
+      ParentStartedAt: options.parentStartedAt,
+      InstallerPid: String(child.pid),
+      InstallerStartedAt: installerStartedAt,
+      OriginalBinaryHash: fs.existsSync(installPath) ? sha256(installPath) : "",
+      ...options.transactionOverrides,
+    })
+  }
+  return await exit
+}
+
+async function main(): Promise<void> {
+  if (process.platform !== "win32") throw new Error("Windows self-maintenance smoke must run on Windows")
+  const repo = process.cwd()
+  const installerPath = path.join(repo, "install.ps1")
+  const syntax = spawnSync("powershell.exe", [
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    "$tokens=$null; $errors=$null; [Management.Automation.Language.Parser]::ParseFile($env:INSTALLER,[ref]$tokens,[ref]$errors) | Out-Null; if ($errors.Count) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }",
+  ], { env: { ...process.env, INSTALLER: installerPath }, encoding: "utf8" })
+  assert.equal(syntax.status, 0, `${syntax.stdout}\n${syntax.stderr}`)
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-windows-smoke-"))
   const home = path.join(root, "home")
   const installDir = path.join(home, "bin")
   const installPath = path.join(installDir, "memory-lane.exe")
   const dataDir = path.join(home, ".memory-lane")
-  const claudeConfigPath = path.join(home, ".claude", "settings.json")
+  const manifestPath = path.join(dataDir, "install.json")
   const replacementPath = path.join(root, "replacement", "memory-lane.exe")
   const invalidReplacementPath = path.join(root, "replacement", "invalid-memory-lane.exe")
-  const holderSource = path.join(root, "running-holder.ts")
-  const failingReplacementSource = path.join(root, "failing-replacement.ts")
-  fs.mkdirSync(path.dirname(replacementPath), { recursive: true })
+  const oldSource = path.join(root, "old.ts")
+  const invalidSource = path.join(root, "invalid.ts")
   fs.mkdirSync(installDir, { recursive: true })
-  fs.writeFileSync(holderSource, "if (process.argv.includes(\"--identity\")) { console.log(\"old binary\"); process.exit(0) }\nsetInterval(() => {}, 1_000)\n", "utf8")
-  fs.writeFileSync(failingReplacementSource, "if (process.argv.includes(\"--smoke-test\")) process.exit(7)\nsetInterval(() => {}, 1_000)\n", "utf8")
+  fs.mkdirSync(dataDir, { recursive: true })
+  fs.mkdirSync(path.dirname(replacementPath), { recursive: true })
+  fs.writeFileSync(oldSource, [
+    "if (process.argv.includes('--smoke-test')) process.exit(0)",
+    "if (process.argv.includes('--identity')) { console.log('old binary'); process.exit(0) }",
+    "setInterval(() => {}, 1_000)",
+  ].join("\n"), "utf8")
+  fs.writeFileSync(invalidSource, "if (process.argv.includes('--smoke-test')) process.exit(7)\n", "utf8")
 
   let runningOldBinary: ChildProcess | undefined
   try {
-    run("bun", ["build", "--compile", "--target", "bun-windows-x64", holderSource, "--outfile", installPath], { cwd: repo })
+    run("bun", ["build", "--compile", "--target", "bun-windows-x64", oldSource, "--outfile", installPath], { cwd: repo })
+    run("bun", ["build", "--compile", "--target", "bun-windows-x64", invalidSource, "--outfile", invalidReplacementPath], { cwd: repo })
     run("bun", [
-      "build",
-      "--compile",
-      "--target",
-      "bun-windows-x64",
-      failingReplacementSource,
-      "--outfile",
-      invalidReplacementPath,
-    ], { cwd: repo })
-    run("bun", [
-      "build",
-      "--compile",
-      "--target",
-      "bun-windows-x64",
-      "packages/cli/src/index.ts",
-      "--outfile",
-      replacementPath,
-      "--define",
-      "process.env.MEMORY_LANE_VERSION=\"0.0.0-windows-smoke\"",
+      "build", "--compile", "--target", "bun-windows-x64", "packages/cli/src/index.ts",
+      "--outfile", replacementPath,
+      "--define", "process.env.MEMORY_LANE_VERSION=\"0.0.0-windows-smoke\"",
     ], { cwd: repo })
 
     runningOldBinary = spawn(installPath, [], { stdio: "ignore" })
@@ -169,518 +205,192 @@ async function main(): Promise<void> {
       runningOldBinary?.once("spawn", resolve)
       runningOldBinary?.once("error", reject)
     })
-    assert.ok(runningOldBinary.pid, "running fixture must expose its process id")
+    assert.ok(runningOldBinary.pid)
+    const oldPid = runningOldBinary.pid
+    const oldStartedAt = processStartedAt(oldPid)
+    const originalHash = sha256(installPath)
 
-    const manifestPath = path.join(dataDir, "install.json")
-    const manifestBackupPath = `${manifestPath}.upgrade.${runningOldBinary.pid}`
-    const parentStartedAt = spawnSync("powershell.exe", [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      "[Console]::Out.Write((Get-Process -Id ([int]$env:TEST_PARENT_PID) -ErrorAction Stop).StartTime.ToUniversalTime().Ticks)",
-    ], {
-      env: { ...process.env, TEST_PARENT_PID: String(runningOldBinary.pid) },
-      encoding: "utf8",
-    }).stdout.trim()
-    assert.match(parentStartedAt, /^\d+$/u)
-    const upgradeLockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    let lockSequence = 0
-    const installerEnv: NodeJS.ProcessEnv = {
-      ...process.env,
-      HOME: home,
-      USERPROFILE: home,
-      INSTALL_DIR: installDir,
-      MEMORY_LANE_INSTALL_BINARY: replacementPath,
-      MEMORY_LANE_UPGRADE_PID: String(runningOldBinary.pid),
-      MEMORY_LANE_UPGRADE_MANIFEST_PATH: manifestPath,
-      MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH: manifestBackupPath,
-      MEMORY_LANE_UPGRADE_MANIFEST_EXISTED: "false",
-      MEMORY_LANE_UPGRADE_LOCK_PATH: upgradeLockPath,
+    const noTransactionStartedAt = Date.now()
+    const noTransaction = await runCoordinatedInstaller({
+      installerPath,
+      installDir,
+      replacementPath,
+      parentPid: oldPid,
+      parentStartedAt: oldStartedAt,
+      manifestPath,
+      manifestExisted: false,
+      ownerToken: "no-transaction-owner",
+      publishTransaction: false,
+    })
+    assert.equal(noTransaction.signal, null, "missing-transaction rejection must exit normally")
+    assert.notEqual(noTransaction.code, 0, "installer must reject a missing parent transaction")
+    assert.ok(Date.now() - noTransactionStartedAt >= WINDOWS_INSTALLER_HANDSHAKE_TIMEOUT_MS)
+    assert.equal(sha256(installPath), originalHash, "startup handshake failure must not mutate the old executable")
+    fs.rmSync(path.join(installDir, ".memory-lane-upgrade.lock"), { recursive: true, force: true })
+
+    const assertPreMutationRejection = async (
+      ownerToken: string,
+      overrides: {
+        owner?: Record<string, unknown>
+        transaction?: Record<string, unknown>
+        prepare?: (backupPath: string) => void
+        verify?: (backupPath: string) => void
+      },
+    ): Promise<void> => {
+      const backupPath = `${installPath}.backup.${oldPid}`
+      const transactionPath = `${installPath}.upgrade.${oldPid}`
+      const manifestBackupPath = `${manifestPath}.upgrade.${oldPid}`
+      overrides.prepare?.(backupPath)
+      const result = await runCoordinatedInstaller({
+        installerPath,
+        installDir,
+        replacementPath,
+        parentPid: oldPid,
+        parentStartedAt: oldStartedAt,
+        manifestPath,
+        manifestExisted: false,
+        ownerToken,
+        publishTransaction: true,
+        ownerOverrides: overrides.owner,
+        transactionOverrides: overrides.transaction,
+      })
+      assert.equal(result.signal, null, `${ownerToken} rejection must exit normally`)
+      assert.notEqual(result.code, 0, `${ownerToken} must be rejected`)
+      assert.equal(sha256(installPath), originalHash, `${ownerToken} must not mutate the existing executable`)
+      overrides.verify?.(backupPath)
+      fs.rmSync(path.join(installDir, ".memory-lane-upgrade.lock"), { recursive: true, force: true })
+      fs.rmSync(backupPath, { force: true })
+      fs.rmSync(transactionPath, { force: true })
+      fs.rmSync(manifestBackupPath, { force: true })
     }
-    const prepareUpgradeLock = (): void => {
-      lockSequence++
-      fs.rmSync(upgradeLockPath, { recursive: true, force: true })
-      fs.mkdirSync(upgradeLockPath)
-      const now = Date.now()
-      const owner = `windows-smoke-owner-${lockSequence}`
-      installerEnv.MEMORY_LANE_UPGRADE_LOCK_OWNER = owner
-      fs.writeFileSync(path.join(upgradeLockPath, "owner"), JSON.stringify({
-        pid: runningOldBinary?.pid,
-        processStartedAt: parentStartedAt,
-        token: owner,
-        createdAt: now,
-        heartbeatAt: now,
-        phase: "starting",
-        parentPid: runningOldBinary?.pid,
-        parentProcessStartedAt: parentStartedAt,
-      }), "utf8")
+    await assertPreMutationRejection("string-owner-pid", {
+      owner: { pid: String(oldPid) },
+    })
+    await assertPreMutationRejection("wrong-original-hash", {
+      transaction: { OriginalBinaryHash: "0".repeat(64) },
+    })
+    await assertPreMutationRejection("existing-backup-destination", {
+      prepare: (backupPath) => fs.writeFileSync(backupPath, "unrelated backup", "utf8"),
+      verify: (backupPath) => assert.equal(fs.readFileSync(backupPath, "utf8"), "unrelated backup"),
+    })
+    await assertPreMutationRejection("unexpected-no-backup-executable", {
+      transaction: { BackupState: "no-backup", OriginalBinaryHash: "" },
+    })
+
+    const ownerToken = "successful-owner"
+    const upgradeLock = acquireUpgradeLock(installDir, oldPid, { createToken: () => ownerToken })
+    const manifestTransaction = snapshotInstallManifest(dataDir, oldPid)
+    upgradeLock.manifestBackupPath = manifestTransaction.backupPath
+    const previousLocalBinary = process.env.MEMORY_LANE_INSTALL_BINARY
+    process.env.MEMORY_LANE_INSTALL_BINARY = replacementPath
+    let installed: boolean
+    try {
+      installed = await runTransactionalWindowsInstaller(
+        installerPath,
+        installDir,
+        manifestTransaction,
+        upgradeLock,
+      )
+    } finally {
+      if (previousLocalBinary === undefined) delete process.env.MEMORY_LANE_INSTALL_BINARY
+      else process.env.MEMORY_LANE_INSTALL_BINARY = previousLocalBinary
     }
-    const installerArgs = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(repo, "install.ps1")]
-    const backupPath = `${installPath}.backup.${runningOldBinary.pid}`
-    const transactionPath = `${installPath}.upgrade.${runningOldBinary.pid}`
+    assert.equal(installed, true)
+    assert.equal(runningOldBinary.exitCode, null, "old executable must remain running through replacement verification")
+    assert.equal(spawnSync(installPath, ["--smoke-test"]).status, 0)
+    const backupPath = `${installPath}.backup.${oldPid}`
+    const transactionPath = `${installPath}.upgrade.${oldPid}`
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    assert.equal(fs.existsSync(backupPath), true)
+    assert.equal(fs.existsSync(path.join(lockPath, ".reclaim")), false)
+    assert.equal(fs.existsSync(path.join(lockPath, "active-actor")), false)
+    assert.equal(commitWindowsUpgrade(installDir, upgradeLock), true)
 
-    prepareUpgradeLock()
-    fs.mkdirSync(transactionPath)
-    fs.writeFileSync(path.join(transactionPath, "cleanup-blocker"), "block marker cleanup", "utf8")
-    const failedMarkerWrite = spawnSync("powershell.exe", installerArgs, {
-      cwd: repo,
-      env: installerEnv,
-      encoding: "utf8",
-    })
-    assert.notEqual(failedMarkerWrite.status, 0, "transaction marker write failure must fail installation")
-    assert.equal(fs.existsSync(installPath), true, "marker cleanup failure must preserve the restored executable path")
-    assert.equal(fs.existsSync(backupPath), false, "marker write failure must not strand a backup")
-    assert.equal(fs.existsSync(transactionPath), true, "blocked marker cleanup must remain best effort")
-    const blockedMarkerRetry = spawnSync("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
-      cwd: repo,
-      env: installerEnv,
-      encoding: "utf8",
-    })
-    assert.notEqual(blockedMarkerRetry.status, 0, "unreadable transaction residue must not report a known rollback")
-    assert.equal(fs.existsSync(installPath), true, "cross-process rollback retry must preserve the restored executable")
-    const restoredAfterCleanupFailure = spawnSync(installPath, ["--identity"], { encoding: "utf8" })
-    assert.equal(restoredAfterCleanupFailure.status, 0, restoredAfterCleanupFailure.stderr)
-    assert.match(restoredAfterCleanupFailure.stdout, /old binary/u)
-    fs.rmSync(transactionPath, { recursive: true, force: true })
-
-    prepareUpgradeLock()
-    const failedInstall = spawnSync("powershell.exe", installerArgs, {
-      cwd: repo,
-      env: { ...installerEnv, MEMORY_LANE_INSTALL_BINARY: invalidReplacementPath },
-      encoding: "utf8",
-    })
-    assert.notEqual(failedInstall.status, 0, "invalid replacement must fail its smoke test")
-    assert.equal(runningOldBinary.exitCode, null, "failed replacement must leave the old process running")
-    assert.equal(fs.existsSync(installPath), true, "failed replacement must restore the original executable path")
-    assert.equal(
-      fs.readdirSync(installDir).some((name) => name.startsWith("memory-lane.exe.backup.")),
-      false,
-      "failed replacement must not strand a backup",
-    )
-    assert.equal(
-      fs.readdirSync(installDir).some((name) => name.startsWith("memory-lane.exe.upgrade.")),
-      false,
-      "failed replacement must not strand a transaction",
-    )
-
-    fs.mkdirSync(path.dirname(claudeConfigPath), { recursive: true })
-    fs.mkdirSync(dataDir, { recursive: true })
-    fs.writeFileSync(claudeConfigPath, "{bad json", "utf8")
-    const originalManifest = JSON.stringify({
-      version: "0.0.0-old",
-      installedAt: new Date().toISOString(),
-      binaryPath: installPath,
-      dataDir,
-      integrations: [{ harness: "claude-code-cli", configPath: claudeConfigPath }],
-    }, null, 2)
-    fs.writeFileSync(manifestPath, originalManifest, "utf8")
-    fs.copyFileSync(manifestPath, manifestBackupPath)
-    installerEnv.MEMORY_LANE_UPGRADE_MANIFEST_EXISTED = "true"
-
-    prepareUpgradeLock()
-    run("powershell.exe", installerArgs, {
-      cwd: repo,
-      env: installerEnv,
-    })
-    assert.equal(fs.existsSync(backupPath), true, "installer must retain the backup until post-install work succeeds")
-    assert.equal(fs.existsSync(transactionPath), true, "installer must retain the transaction until post-install work succeeds")
-    const recoveryOwner = JSON.parse(fs.readFileSync(path.join(upgradeLockPath, "owner"), "utf8"))
-    assert.equal(recoveryOwner.phase, "recovery", "installer success must wait for durable recovery lease handoff")
-    assert.equal(recoveryOwner.token, installerEnv.MEMORY_LANE_UPGRADE_LOCK_OWNER)
-    assert.match(recoveryOwner.processStartedAt, /^\d+$/u)
-    assert.equal(recoveryOwner.parentPid, String(runningOldBinary.pid))
-    assert.equal(recoveryOwner.parentProcessStartedAt, parentStartedAt)
-    assert.equal(recoveryOwner.recoveryPid, recoveryOwner.pid)
-    assert.equal(recoveryOwner.recoveryProcessStartedAt, recoveryOwner.processStartedAt)
-
-    const smoke = spawnSync(installPath, ["--smoke-test"], { encoding: "utf8" })
-    assert.equal(smoke.status, 0, smoke.stderr)
-    assert.match(smoke.stdout, /memory-lane ok/u)
-    assert.equal(runningOldBinary.exitCode, null, "old executable must still be running when replacement succeeds")
-    const failedReapply = spawnSync(installPath, [
-      "upgrade",
-      "--reapply-install-manifest",
-      "--transactional-windows-upgrade",
-      "--yes",
-    ], {
-      env: installerEnv,
-      encoding: "utf8",
-    })
-    assert.notEqual(failedReapply.status, 0, "failed post-install reapply must return non-zero")
-    assert.match(failedReapply.stdout, /Failed to reapply 1 required harness configuration/u)
-
-    run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
-      cwd: repo,
-      env: installerEnv,
-    })
-    assert.equal(fs.existsSync(backupPath), false, "post-install failure rollback must consume the backup")
-    assert.equal(fs.existsSync(transactionPath), false, "post-install failure rollback must close the transaction")
-    assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest, "rollback must restore the original manifest")
-    const restored = spawnSync(installPath, ["--identity"], { encoding: "utf8" })
-    assert.equal(restored.status, 0, restored.stderr)
-    assert.match(restored.stdout, /old binary/u)
-    assert.equal(runningOldBinary.exitCode, null, "post-install rollback must leave the old process running")
-
-    fs.copyFileSync(manifestPath, manifestBackupPath)
-    prepareUpgradeLock()
-    run("powershell.exe", installerArgs, {
-      cwd: repo,
-      env: installerEnv,
-    })
-    fs.rmSync(installPath, { force: true })
-    fs.renameSync(backupPath, installPath)
-    fs.writeFileSync(manifestPath, "upgraded manifest must be rolled back", "utf8")
-    run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
-      cwd: repo,
-      env: installerEnv,
-    })
-    assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest, "checkpoint retry must restore the manifest")
-    assert.equal(fs.existsSync(backupPath), false, "checkpoint retry must accept a previously consumed backup")
-    const checkpointRestored = spawnSync(installPath, ["--identity"], { encoding: "utf8" })
-    assert.match(checkpointRestored.stdout, /old binary/u)
-
-    fs.writeFileSync(claudeConfigPath, "{}", "utf8")
-    fs.copyFileSync(manifestPath, manifestBackupPath)
-    prepareUpgradeLock()
-    run("powershell.exe", installerArgs, {
-      cwd: repo,
-      env: installerEnv,
-    })
-    assert.equal(fs.existsSync(backupPath), true, "successful replacement must remain rollbackable before commit")
-    const successfulReapply = spawnSync(installPath, ["upgrade", "--reapply-install-manifest", "--yes"], {
-      env: installerEnv,
-      encoding: "utf8",
-    })
-    assert.equal(successfulReapply.status, 0, successfulReapply.stdout)
-    assert.match(successfulReapply.stdout, /Reapplied 1 harness configuration/u)
-    run("powershell.exe", [...installerArgs, "-UpgradeAction", "Commit"], {
-      cwd: repo,
-      env: installerEnv,
-    })
-    assert.equal(fs.existsSync(backupPath), true, "committed backup must remain while the parent is running")
-    assert.equal(fs.existsSync(transactionPath), true, "committed transaction must remain recoverable until parent exit")
-
-    const exitedUpgradePid = runningOldBinary.pid!
-    const oldBinaryExit = waitForExit(runningOldBinary)
+    await new Promise((resolve) => setTimeout(resolve, WINDOWS_COMMITTED_CLEANUP_TIMEOUT_MS + 1_000))
+    assert.equal(fs.existsSync(transactionPath), true, "helper deadline must preserve committed residue while parent remains active")
     runningOldBinary.kill()
-    await oldBinaryExit
+    await waitForExit(runningOldBinary)
     runningOldBinary = undefined
-    await waitUntil(
-      () => !fs.readdirSync(installDir).some((name) => name.startsWith("memory-lane.exe.backup.")),
-      "upgrade backup cleanup",
-    )
-    await waitUntil(() => !fs.existsSync(transactionPath), "committed transaction cleanup")
-    await waitUntil(() => !fs.existsSync(manifestBackupPath), "manifest snapshot cleanup")
-    await waitUntil(() => !fs.existsSync(upgradeLockPath), "upgrade lock cleanup")
-    const writeRecoveryOwner = (lockPath: string, token: string): void => {
-      const now = Date.now()
-      fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
-        pid: process.pid,
-        processStartedAt: "1",
-        token,
-        createdAt: now,
-        heartbeatAt: now,
-        phase: "recovery",
-        parentPid: exitedUpgradePid,
-        parentProcessStartedAt: "1",
-        installerPid: exitedUpgradePid,
-        installerProcessStartedAt: "1",
-        recoveryPid: process.pid,
-        recoveryProcessStartedAt: "1",
-      }), "utf8")
-    }
+    const replacementLock = acquireUpgradeLock(installDir, process.pid)
+    assert.equal(fs.existsSync(transactionPath), false, "next upgrade must reconcile committed residue")
+    assert.equal(fs.existsSync(backupPath), false)
+    releaseUpgradeLock(replacementLock)
 
-
-    const noOriginalInstallDir = path.join(root, "no-original-bin")
-    const noOriginalInstallPath = path.join(noOriginalInstallDir, "memory-lane.exe")
-    const noOriginalManifestPath = path.join(root, "no-original-data", "install.json")
-    const noOriginalManifestBackupPath = `${noOriginalManifestPath}.upgrade.${exitedUpgradePid}`
-    const noOriginalTransactionPath = `${noOriginalInstallPath}.upgrade.${exitedUpgradePid}`
-    const noOriginalLockPath = path.join(noOriginalInstallDir, ".memory-lane-upgrade.lock")
-    const noOriginalLockOwner = "no-original-owner"
-    fs.mkdirSync(noOriginalLockPath, { recursive: true })
-    fs.mkdirSync(path.dirname(noOriginalManifestPath), { recursive: true })
-    writeRecoveryOwner(noOriginalLockPath, noOriginalLockOwner)
-    fs.writeFileSync(noOriginalManifestPath, "new manifest must be removed", "utf8")
-    fs.writeFileSync(noOriginalTransactionPath, JSON.stringify({
-      State: "pending",
-      BackupState: "no-backup",
-      ManifestState: "missing",
-      ManifestPath: noOriginalManifestPath,
-      ManifestBackupPath: noOriginalManifestBackupPath,
-      LockPath: noOriginalLockPath,
-      LockOwner: noOriginalLockOwner,
-      ParentPid: exitedUpgradePid,
-      ParentStartedAt: "1",
-      InstallerPid: exitedUpgradePid,
-      InstallerStartedAt: "1",
-      OriginalBinaryHash: "",
-    }), "utf8")
-    run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
-      cwd: repo,
-      env: {
-        ...installerEnv,
-        INSTALL_DIR: noOriginalInstallDir,
-        MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
-        MEMORY_LANE_UPGRADE_LOCK_PATH: noOriginalLockPath,
-        MEMORY_LANE_UPGRADE_LOCK_OWNER: noOriginalLockOwner,
-        MEMORY_LANE_UPGRADE_MANIFEST_PATH: noOriginalManifestPath,
-        MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH: noOriginalManifestBackupPath,
-        MEMORY_LANE_UPGRADE_MANIFEST_EXISTED: "false",
-      },
+    fs.writeFileSync(manifestPath, "original manifest", "utf8")
+    const beforeFailedHash = sha256(installPath)
+    const failedOwner = "failed-owner"
+    const failed = await runCoordinatedInstaller({
+      installerPath,
+      installDir,
+      replacementPath: invalidReplacementPath,
+      parentPid: process.pid,
+      parentStartedAt: processStartedAt(process.pid),
+      manifestPath,
+      manifestExisted: true,
+      ownerToken: failedOwner,
+      publishTransaction: true,
     })
-    assert.equal(fs.existsSync(noOriginalInstallPath), false, "no-original retry must preserve the absent binary")
-    assert.equal(fs.existsSync(noOriginalManifestPath), false, "no-original retry must restore the absent manifest")
-    assert.equal(fs.existsSync(noOriginalTransactionPath), false, "no-original retry must close the transaction")
-    assert.equal(fs.existsSync(noOriginalLockPath), false, "no-original retry must release its upgrade lock")
+    assert.equal(failed.signal, null, "installer rollback failure must exit normally")
+    assert.notEqual(failed.code, 0, "failed smoke test must fail installation")
+    assert.equal(sha256(installPath), beforeFailedHash, "installer-local rollback must restore the exact executable")
+    assert.equal(fs.readFileSync(manifestPath, "utf8"), "original manifest")
+    assert.equal(fs.existsSync(path.join(installDir, ".memory-lane-upgrade.lock")), false)
 
-    const verifiedExecutable = fs.readFileSync(installPath)
-    const verifiedExecutableHash = createHash("sha256").update(verifiedExecutable).digest("hex")
-    for (const executableState of ["missing", "tampered"] as const) {
-      const restoreOwner = `restore-verification-${executableState}`
-      fs.mkdirSync(upgradeLockPath)
-      writeRecoveryOwner(upgradeLockPath, restoreOwner)
-      fs.writeFileSync(backupPath, "retained backup artifact", "utf8")
-      fs.writeFileSync(manifestBackupPath, "retained manifest artifact", "utf8")
-      fs.writeFileSync(transactionPath, JSON.stringify({
-        State: "restored",
-        BackupState: "restored",
-        ManifestState: "restored",
-        ManifestPath: manifestPath,
-        ManifestBackupPath: manifestBackupPath,
-        LockPath: upgradeLockPath,
-        LockOwner: restoreOwner,
-        ParentPid: exitedUpgradePid,
-        ParentStartedAt: "1",
-        InstallerPid: exitedUpgradePid,
-        InstallerStartedAt: "1",
-        OriginalBinaryHash: verifiedExecutableHash,
-      }), "utf8")
-      if (executableState === "missing") fs.rmSync(installPath)
-      else fs.writeFileSync(installPath, "tampered executable", "utf8")
-
-      const rejectedRestore = spawnSync("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
-        cwd: repo,
-        env: {
-          ...installerEnv,
-          MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
-          MEMORY_LANE_UPGRADE_LOCK_PATH: upgradeLockPath,
-          MEMORY_LANE_UPGRADE_LOCK_OWNER: restoreOwner,
-        },
-        encoding: "utf8",
-      })
-      assert.notEqual(rejectedRestore.status, 0, `${executableState} restored executable must reject cleanup`)
-      assert.equal(fs.existsSync(transactionPath), true, "failed restore verification must retain the transaction")
-      assert.equal(fs.existsSync(backupPath), true, "failed restore verification must retain the backup")
-      assert.equal(fs.existsSync(manifestBackupPath), true, "failed restore verification must retain the manifest backup")
-      assert.equal(fs.existsSync(upgradeLockPath), true, "failed restore verification must retain the upgrade lock")
-
-      fs.writeFileSync(installPath, verifiedExecutable)
-      run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
-        cwd: repo,
-        env: {
-          ...installerEnv,
-          MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
-          MEMORY_LANE_UPGRADE_LOCK_PATH: upgradeLockPath,
-          MEMORY_LANE_UPGRADE_LOCK_OWNER: restoreOwner,
-        },
-      })
-      assert.equal(fs.existsSync(transactionPath), false, "verified restore retry must close the transaction")
-      assert.equal(fs.existsSync(backupPath), false, "verified restore retry must clean the backup")
-      assert.equal(fs.existsSync(manifestBackupPath), false, "verified restore retry must clean the manifest backup")
-      assert.equal(fs.existsSync(upgradeLockPath), false, "verified restore retry must release the upgrade lock")
-    }
-
-    for (const executableState of ["missing", "tampered"] as const) {
-      const checkpointOwner = `pending-checkpoint-${executableState}`
-      fs.mkdirSync(upgradeLockPath)
-      writeRecoveryOwner(upgradeLockPath, checkpointOwner)
-      fs.writeFileSync(backupPath, "retained backup artifact", "utf8")
-      fs.writeFileSync(manifestPath, "pending checkpoint manifest", "utf8")
-      fs.writeFileSync(manifestBackupPath, originalManifest, "utf8")
-      fs.writeFileSync(transactionPath, JSON.stringify({
-        State: "pending",
-        BackupState: "restored",
-        ManifestState: "existing",
-        ManifestPath: manifestPath,
-        ManifestBackupPath: manifestBackupPath,
-        LockPath: upgradeLockPath,
-        LockOwner: checkpointOwner,
-        ParentPid: exitedUpgradePid,
-        ParentStartedAt: "1",
-        InstallerPid: exitedUpgradePid,
-        InstallerStartedAt: "1",
-        OriginalBinaryHash: verifiedExecutableHash,
-      }), "utf8")
-      if (executableState === "missing") fs.rmSync(installPath)
-      else fs.writeFileSync(installPath, "tampered executable", "utf8")
-
-      const rejectedCheckpoint = spawnSync("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
-        cwd: repo,
-        env: {
-          ...installerEnv,
-          MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
-          MEMORY_LANE_UPGRADE_LOCK_PATH: upgradeLockPath,
-          MEMORY_LANE_UPGRADE_LOCK_OWNER: checkpointOwner,
-        },
-        encoding: "utf8",
-      })
-      assert.notEqual(rejectedCheckpoint.status, 0, `${executableState} pending checkpoint must reject rollback`)
-      assert.equal(fs.readFileSync(manifestPath, "utf8"), "pending checkpoint manifest")
-      assert.equal(fs.existsSync(transactionPath), true, "failed checkpoint verification must retain the transaction")
-      assert.equal(fs.existsSync(backupPath), true, "failed checkpoint verification must retain the backup")
-      assert.equal(fs.existsSync(manifestBackupPath), true, "failed checkpoint verification must retain the manifest backup")
-      assert.equal(fs.existsSync(upgradeLockPath), true, "failed checkpoint verification must retain the upgrade lock")
-
-      fs.writeFileSync(installPath, verifiedExecutable)
-      run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
-        cwd: repo,
-        env: {
-          ...installerEnv,
-          MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
-          MEMORY_LANE_UPGRADE_LOCK_PATH: upgradeLockPath,
-          MEMORY_LANE_UPGRADE_LOCK_OWNER: checkpointOwner,
-        },
-      })
-      assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest)
-      assert.equal(fs.existsSync(transactionPath), false, "verified checkpoint retry must close the transaction")
-      assert.equal(fs.existsSync(backupPath), false, "verified checkpoint retry must clean the backup")
-      assert.equal(fs.existsSync(manifestBackupPath), false, "verified checkpoint retry must clean the manifest backup")
-      assert.equal(fs.existsSync(upgradeLockPath), false, "verified checkpoint retry must release the upgrade lock")
-    }
-
-    const unexpectedNoOriginalOwner = "pending-no-original-checkpoint"
-    fs.mkdirSync(noOriginalLockPath)
-    writeRecoveryOwner(noOriginalLockPath, unexpectedNoOriginalOwner)
-    fs.mkdirSync(noOriginalInstallDir, { recursive: true })
-    fs.writeFileSync(noOriginalInstallPath, "unexpected executable", "utf8")
-    fs.writeFileSync(noOriginalManifestPath, "pending no-original manifest", "utf8")
-    fs.writeFileSync(noOriginalTransactionPath, JSON.stringify({
+    const recoveryParentPid = 9876
+    const recoveryInstallerPid = 8765
+    const recoveryLockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const recoveryBackupPath = `${installPath}.backup.${recoveryParentPid}`
+    const recoveryTransactionPath = `${installPath}.upgrade.${recoveryParentPid}`
+    const recoveryManifestBackupPath = `${manifestPath}.upgrade.${recoveryParentPid}`
+    const recoverableBinary = fs.readFileSync(installPath)
+    fs.writeFileSync(recoveryBackupPath, recoverableBinary)
+    fs.writeFileSync(installPath, "interrupted replacement", "utf8")
+    fs.copyFileSync(manifestPath, recoveryManifestBackupPath)
+    fs.writeFileSync(manifestPath, "interrupted manifest", "utf8")
+    publishOwner(recoveryLockPath, recoveryParentPid, "111111111", "recovery-owner")
+    writeAtomic(recoveryTransactionPath, {
       State: "pending",
-      BackupState: "no-original-restored",
-      ManifestState: "missing",
-      ManifestPath: noOriginalManifestPath,
-      ManifestBackupPath: noOriginalManifestBackupPath,
-      LockPath: noOriginalLockPath,
-      LockOwner: unexpectedNoOriginalOwner,
-      ParentPid: exitedUpgradePid,
-      ParentStartedAt: "1",
-      InstallerPid: exitedUpgradePid,
-      InstallerStartedAt: "1",
-      OriginalBinaryHash: "",
-    }), "utf8")
-    const rejectedNoOriginalCheckpoint = spawnSync(
-      "powershell.exe",
-      [...installerArgs, "-UpgradeAction", "Rollback"],
-      {
-        cwd: repo,
-        env: {
-          ...installerEnv,
-          INSTALL_DIR: noOriginalInstallDir,
-          MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
-          MEMORY_LANE_UPGRADE_LOCK_PATH: noOriginalLockPath,
-          MEMORY_LANE_UPGRADE_LOCK_OWNER: unexpectedNoOriginalOwner,
-          MEMORY_LANE_UPGRADE_MANIFEST_PATH: noOriginalManifestPath,
-          MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH: noOriginalManifestBackupPath,
-          MEMORY_LANE_UPGRADE_MANIFEST_EXISTED: "false",
-        },
-        encoding: "utf8",
-      },
-    )
-    assert.notEqual(rejectedNoOriginalCheckpoint.status, 0, "unexpected executable must reject no-original rollback")
-    assert.equal(fs.readFileSync(noOriginalManifestPath, "utf8"), "pending no-original manifest")
-    assert.equal(fs.existsSync(noOriginalTransactionPath), true, "failed no-original verification must retain the transaction")
-    assert.equal(fs.existsSync(noOriginalLockPath), true, "failed no-original verification must retain the upgrade lock")
-
-    fs.rmSync(noOriginalInstallPath)
-    run("powershell.exe", [...installerArgs, "-UpgradeAction", "Rollback"], {
-      cwd: repo,
-      env: {
-        ...installerEnv,
-        INSTALL_DIR: noOriginalInstallDir,
-        MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
-        MEMORY_LANE_UPGRADE_LOCK_PATH: noOriginalLockPath,
-        MEMORY_LANE_UPGRADE_LOCK_OWNER: unexpectedNoOriginalOwner,
-        MEMORY_LANE_UPGRADE_MANIFEST_PATH: noOriginalManifestPath,
-        MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH: noOriginalManifestBackupPath,
-        MEMORY_LANE_UPGRADE_MANIFEST_EXISTED: "false",
-      },
-    })
-    assert.equal(fs.existsSync(noOriginalManifestPath), false, "verified no-original retry must restore the missing manifest")
-    assert.equal(fs.existsSync(noOriginalTransactionPath), false, "verified no-original retry must close the transaction")
-    assert.equal(fs.existsSync(noOriginalLockPath), false, "verified no-original retry must release the upgrade lock")
-
-    const ownerRaceLockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    const staleOwner = "finished-upgrade-owner"
-    const replacementOwner = "later-upgrade-owner"
-    fs.mkdirSync(ownerRaceLockPath)
-    writeRecoveryOwner(ownerRaceLockPath, replacementOwner)
-    fs.writeFileSync(transactionPath, JSON.stringify({
-      State: "committed",
-      BackupState: "no-backup",
-      ManifestState: "restored",
+      BackupState: "backed-up",
+      ManifestState: "existing",
       ManifestPath: manifestPath,
-      ManifestBackupPath: manifestBackupPath,
-      LockPath: ownerRaceLockPath,
-      LockOwner: staleOwner,
-      ParentPid: exitedUpgradePid,
-      ParentStartedAt: "1",
-      InstallerPid: exitedUpgradePid,
-      InstallerStartedAt: "1",
-    }), "utf8")
-    const staleRecovery = spawnSync("powershell.exe", [...installerArgs, "-UpgradeAction", "Recover"], {
+      ManifestBackupPath: recoveryManifestBackupPath,
+      LockPath: recoveryLockPath,
+      LockOwner: "recovery-owner",
+      ParentPid: String(recoveryParentPid),
+      ParentStartedAt: "111111111",
+      InstallerPid: String(recoveryInstallerPid),
+      InstallerStartedAt: "222222222",
+      OriginalBinaryHash: createHash("sha256").update(recoverableBinary).digest("hex"),
+    })
+    const recoveredLock = acquireUpgradeLock(installDir, process.pid)
+    assert.equal(sha256(installPath), createHash("sha256").update(recoverableBinary).digest("hex"))
+    assert.equal(fs.readFileSync(manifestPath, "utf8"), "original manifest")
+    assert.equal(fs.existsSync(recoveryTransactionPath), false)
+    releaseUpgradeLock(recoveredLock)
+
+    const standaloneDir = path.join(root, "standalone")
+    run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", installerPath], {
       cwd: repo,
       env: {
-        ...installerEnv,
-        MEMORY_LANE_UPGRADE_PID: String(exitedUpgradePid),
-        MEMORY_LANE_UPGRADE_LOCK_PATH: ownerRaceLockPath,
-        MEMORY_LANE_UPGRADE_LOCK_OWNER: staleOwner,
+        ...process.env,
+        INSTALL_DIR: standaloneDir,
+        MEMORY_LANE_INSTALL_BINARY: replacementPath,
+        MEMORY_LANE_UPGRADE_PID: undefined,
       },
-      encoding: "utf8",
     })
-    assert.equal(staleRecovery.status, 0, staleRecovery.stderr)
-    assert.equal(fs.existsSync(transactionPath), false, "stale recovery must clean its transaction")
-    assert.equal(fs.existsSync(ownerRaceLockPath), true, "stale recovery must preserve a later upgrade lock")
-    fs.rmSync(ownerRaceLockPath, { recursive: true, force: true })
-
-    fs.mkdirSync(dataDir, { recursive: true })
-    fs.writeFileSync(path.join(dataDir, "memory.jsonl"), "{\"text\":\"preserve me\"}\n", "utf8")
-    fs.writeFileSync(path.join(dataDir, "install.json"), JSON.stringify({
-      version: "0.0.0-windows-smoke",
-      installedAt: new Date().toISOString(),
-      binaryPath: installPath,
-      dataDir,
-      integrations: [],
-    }, null, 2), "utf8")
-
-    const uninstall = spawn(installPath, ["uninstall", "--yes"], {
-      env: { ...process.env, HOME: home, USERPROFILE: home },
-      stdio: ["ignore", "pipe", "pipe"],
-    })
-    const uninstallResult = await waitForExit(uninstall)
-    assert.equal(uninstallResult.code, 0, `${uninstallResult.stdout}\n${uninstallResult.stderr}`)
-    assert.match(uninstallResult.stdout, /Scheduled binary removal after exit/u)
-    await waitUntil(() => !fs.existsSync(installPath), "installed binary removal")
-    await waitUntil(
-      () => !fs.readdirSync(installDir).some((name) => name.includes(".uninstall.")),
-      "uninstall tombstone cleanup",
-      75_000,
-    )
-    assert.equal(fs.existsSync(path.join(dataDir, "install.json")), false)
-    assert.equal(fs.existsSync(path.join(dataDir, "memory.jsonl")), true)
-
+    assert.equal(spawnSync(path.join(standaloneDir, "memory-lane.exe"), ["--smoke-test"]).status, 0)
     console.log("Windows self-maintenance smoke passed")
   } finally {
     if (runningOldBinary && runningOldBinary.exitCode === null && runningOldBinary.signalCode === null) {
-      const exit = waitForExit(runningOldBinary)
+      const exited = waitForExit(runningOldBinary)
       runningOldBinary.kill()
-      await exit
+      await exited
     }
     fs.rmSync(root, { recursive: true, force: true })
   }
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error))
+main().catch((error) => {
+  console.error(error)
   process.exit(1)
 })

@@ -1,5 +1,4 @@
 import { spawnSync } from "node:child_process"
-import { createHash, randomUUID } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -18,6 +17,18 @@ import {
 import type { InstallManifest, InstallManifestEntry, InstallManifestReadResult, PathApi } from "../installer/manifest.js"
 import type { Harness, InitOptions, IntegrationResult } from "../installer/types.js"
 import { VERSION } from "../version.js"
+import {
+  acquireUpgradeLock,
+  commitWindowsUpgrade,
+  handleCommittedCleanup,
+  installerEnvironment,
+  isCommittedCleanupRequest,
+  releaseUpgradeLock,
+  rollbackWindowsUpgrade,
+  runTransactionalWindowsInstaller,
+  snapshotInstallManifest,
+} from "./windows-upgrade.js"
+import type { ManifestTransaction, UpgradeLock } from "./windows-upgrade.js"
 
 export type { InstallManifest } from "../installer/manifest.js"
 
@@ -33,672 +44,22 @@ export interface ReapplyInstallManifestResult {
   manifest: InstallManifest
 }
 
-export interface ManifestTransaction {
-  path: string
-  backupPath: string
-  existed: boolean
-}
+export {
+  acquireUpgradeLock,
+  installerEnvironment,
+  releaseUpgradeLock,
+  snapshotInstallManifest,
+} from "./windows-upgrade.js"
+export type {
+  ManifestTransaction,
+  ProcessStartTimeInspection,
+  UpgradeLock,
+  UpgradeLockOptions,
+} from "./windows-upgrade.js"
 
-export interface UpgradeLock {
-  path: string
-  owner: string
-}
-
-interface UpgradeLockProcessIdentity {
-  pid: number
-  processStartedAt: string
-}
-
-interface UpgradeLockOwner extends UpgradeLockProcessIdentity {
-  token: string
-  createdAt: number
-  heartbeatAt: number
-  phase: "starting" | "recovery"
-  parentPid: number
-  parentProcessStartedAt: string
-  installerPid?: number
-  installerProcessStartedAt?: string
-  recoveryPid?: number
-  recoveryProcessStartedAt?: string
-}
-
-interface UpgradeLockActor extends UpgradeLockProcessIdentity {
-  token: string
-  action: "Commit" | "Rollback" | "Recover"
-}
-
-interface UpgradeLockClaim extends UpgradeLockProcessIdentity {
-  token: string
-  createdAt: number
-}
-
-export type ProcessStartTimeInspection =
-  | { status: "found"; startedAt: string }
-  | { status: "missing" }
-  | { status: "unknown" }
-
-export interface UpgradeLockOptions {
-  now?: () => number
-  createToken?: () => string
-  staleAfterMs?: number
-  inspectProcessStartTime?: (processId: number) => ProcessStartTimeInspection
-  onReclaimInspected?: (claimPath: string) => void
-  onReclaimClaimed?: (claimPath: string) => void
-}
-
-const DEFAULT_UPGRADE_LOCK_STALE_AFTER_MS = 60 * 60 * 1000
-const CURRENT_PROCESS_STARTED_AT = String(Math.round(Date.now() - process.uptime() * 1000))
-
-function inspectWindowsProcessStartTime(processId: number): ProcessStartTimeInspection {
-  if (process.platform !== "win32") {
-    return processId === process.pid
-      ? { status: "found", startedAt: CURRENT_PROCESS_STARTED_AT }
-      : { status: "missing" }
-  }
-  const command = [
-    "$processId = [int]$env:MEMORY_LANE_UPGRADE_PROCESS_PID",
-    "$process = Get-Process -Id $processId -ErrorAction SilentlyContinue",
-    "if ($null -eq $process) { [Console]::Out.Write('missing') } else { [Console]::Out.Write($process.StartTime.ToUniversalTime().Ticks) }",
-  ].join("; ")
-  const result = spawnSync(
-    "powershell.exe",
-    ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(command, "utf16le").toString("base64")],
-    {
-      encoding: "utf8",
-      windowsHide: true,
-      env: { ...process.env, MEMORY_LANE_UPGRADE_PROCESS_PID: String(processId) },
-    },
-  )
-  const startedAt = typeof result.stdout === "string" ? result.stdout.trim() : ""
-  if (result.status !== 0) return { status: "unknown" }
-  if (startedAt === "missing") return { status: "missing" }
-  return /^\d+$/u.test(startedAt)
-    ? { status: "found", startedAt }
-    : { status: "unknown" }
-}
-
-function isProcessIdentity(pid: unknown, processStartedAt: unknown): boolean {
-  return Number.isInteger(pid) && Number(pid) > 0
-    && typeof processStartedAt === "string" && /^\d+$/u.test(processStartedAt)
-}
-
-function readUpgradeLockOwner(ownerPath: string): UpgradeLockOwner | undefined {
-  try {
-    const value = JSON.parse(fs.readFileSync(ownerPath, "utf8")) as Partial<UpgradeLockOwner>
-    const validInstaller = value.installerPid === undefined && value.installerProcessStartedAt === undefined
-      || isProcessIdentity(value.installerPid, value.installerProcessStartedAt)
-    const validRecovery = value.phase !== "recovery"
-      || isProcessIdentity(value.recoveryPid, value.recoveryProcessStartedAt)
-    return isProcessIdentity(value.pid, value.processStartedAt)
-      && isProcessIdentity(value.parentPid, value.parentProcessStartedAt)
-      && validInstaller
-      && validRecovery
-      && typeof value.token === "string" && value.token.length > 0
-      && typeof value.createdAt === "number" && Number.isFinite(value.createdAt) && value.createdAt > 0
-      && typeof value.heartbeatAt === "number" && Number.isFinite(value.heartbeatAt) && value.heartbeatAt > 0
-      && (value.phase === "recovery" || value.phase === "starting")
-      ? {
-          pid: Number(value.pid),
-          processStartedAt: value.processStartedAt!,
-          token: value.token,
-          createdAt: value.createdAt,
-          heartbeatAt: value.heartbeatAt,
-          phase: value.phase,
-          parentPid: Number(value.parentPid),
-          parentProcessStartedAt: value.parentProcessStartedAt!,
-          ...(value.installerPid !== undefined
-            ? {
-                installerPid: Number(value.installerPid),
-                installerProcessStartedAt: value.installerProcessStartedAt!,
-              }
-            : {}),
-          ...(value.phase === "recovery"
-            ? {
-                recoveryPid: Number(value.recoveryPid),
-                recoveryProcessStartedAt: value.recoveryProcessStartedAt!,
-              }
-            : {}),
-        }
-      : undefined
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT" || error instanceof SyntaxError) return undefined
-    throw error
-  }
-}
-
-function readUpgradeLockClaim(claimPath: string): UpgradeLockClaim | undefined {
-  try {
-    const value = JSON.parse(fs.readFileSync(claimPath, "utf8")) as Partial<UpgradeLockClaim>
-    return isProcessIdentity(value.pid, value.processStartedAt)
-      && typeof value.token === "string" && value.token.length > 0
-      && typeof value.createdAt === "number" && Number.isFinite(value.createdAt) && value.createdAt > 0
-      ? {
-          pid: Number(value.pid),
-          processStartedAt: value.processStartedAt!,
-          token: value.token,
-          createdAt: value.createdAt,
-        }
-      : undefined
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT" || error instanceof SyntaxError) return undefined
-    throw error
-  }
-}
-
-function readUpgradeLockActor(actorPath: string): UpgradeLockActor | undefined {
-  try {
-    const value = JSON.parse(fs.readFileSync(actorPath, "utf8")) as Partial<UpgradeLockActor>
-    return isProcessIdentity(value.pid, value.processStartedAt)
-      && typeof value.token === "string" && value.token.length > 0
-      && (value.action === "Commit" || value.action === "Rollback" || value.action === "Recover")
-      ? {
-          pid: Number(value.pid),
-          processStartedAt: value.processStartedAt!,
-          token: value.token,
-          action: value.action,
-        }
-      : undefined
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT" || error instanceof SyntaxError) return undefined
-    throw error
-  }
-}
-
-function sameUpgradeLockOwner(left: UpgradeLockOwner | undefined, right: UpgradeLockOwner): boolean {
-  return left?.pid === right.pid
-    && left.processStartedAt === right.processStartedAt
-    && left.token === right.token
-    && left.createdAt === right.createdAt
-    && left.heartbeatAt === right.heartbeatAt
-    && left.phase === right.phase
-    && left.parentPid === right.parentPid
-    && left.parentProcessStartedAt === right.parentProcessStartedAt
-    && left.installerPid === right.installerPid
-    && left.installerProcessStartedAt === right.installerProcessStartedAt
-    && left.recoveryPid === right.recoveryPid
-    && left.recoveryProcessStartedAt === right.recoveryProcessStartedAt
-}
-
-function sameUpgradeLockClaim(left: UpgradeLockClaim | undefined, right: UpgradeLockClaim): boolean {
-  return left?.pid === right.pid
-    && left.processStartedAt === right.processStartedAt
-    && left.token === right.token
-    && left.createdAt === right.createdAt
-}
-
-function trackedUpgradeProcessIdentities(
-  owner: UpgradeLockOwner,
-  actor?: UpgradeLockActor,
-): UpgradeLockProcessIdentity[] {
-  return [
-    { pid: owner.parentPid, processStartedAt: owner.parentProcessStartedAt },
-    ...(owner.installerPid !== undefined
-      ? [{ pid: owner.installerPid, processStartedAt: owner.installerProcessStartedAt! }]
-      : []),
-    ...(owner.phase === "recovery"
-      ? [{ pid: owner.recoveryPid!, processStartedAt: owner.recoveryProcessStartedAt! }]
-      : []),
-    ...(actor?.token === owner.token ? [actor] : []),
-  ]
-}
-
-function allUpgradeProcessIdentitiesInactive(
-  identities: UpgradeLockProcessIdentity[],
-  inspectProcessStartTime: (processId: number) => ProcessStartTimeInspection,
-): boolean {
-  return identities.length > 0 && identities.every((identity) => {
-    const state = inspectProcessStartTime(identity.pid)
-    return state.status === "missing"
-      || (state.status === "found" && state.startedAt !== identity.processStartedAt)
-  })
-}
-
-function releaseUpgradeLockClaim(claimPath: string, claim: UpgradeLockClaim): void {
-  if (sameUpgradeLockClaim(readUpgradeLockClaim(claimPath), claim)) {
-    fs.rmSync(claimPath, { force: true })
-  }
-}
-
-function readLockSnapshot(lockPath: string): { identity: string; modifiedAt: number } | undefined {
-  try {
-    const stat = fs.statSync(lockPath)
-    return { identity: `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`, modifiedAt: stat.mtimeMs }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined
-    throw error
-  }
-}
-
-function publishUpgradeLockClaim(claimPath: string, owner: string, claim: UpgradeLockClaim): void {
-  const temporaryPath = `${claimPath}.${owner}.${process.pid}.tmp`
-  let descriptor: number | undefined
-  try {
-    descriptor = fs.openSync(temporaryPath, "wx")
-    fs.writeFileSync(descriptor, JSON.stringify(claim), "utf8")
-    fs.fsyncSync(descriptor)
-    fs.closeSync(descriptor)
-    descriptor = undefined
-    fs.linkSync(temporaryPath, claimPath)
-    fs.unlinkSync(temporaryPath)
-  } finally {
-    if (descriptor !== undefined) fs.closeSync(descriptor)
-    fs.rmSync(temporaryPath, { force: true })
-  }
-}
-
-interface DurableUpgradeTransaction {
-  State: "pending" | "committed" | "restored"
-  BackupState: "not-backed-up" | "backed-up" | "no-backup" | "restored" | "no-original-restored"
-  ManifestState: "existing" | "missing" | "restored"
-  ManifestPath: string
-  ManifestBackupPath: string
-  LockPath: string
-  LockOwner: string
-  ParentPid: string
-  ParentStartedAt: string
-  InstallerPid: string
-  InstallerStartedAt: string
-  OriginalBinaryHash: string
-}
-
-function sameFilesystemPath(left: string, right: string): boolean {
-  const normalizedLeft = path.resolve(left)
-  const normalizedRight = path.resolve(right)
-  return process.platform === "win32"
-    ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
-    : normalizedLeft === normalizedRight
-}
-
-function fileSha256(filePath: string): string {
-  return createHash("sha256").update(fs.readFileSync(filePath)).digest("hex")
-}
-
-function saveDurableUpgradeTransaction(transactionPath: string, transaction: DurableUpgradeTransaction): void {
-  const temporaryPath = `${transactionPath}.reconcile.${process.pid}.tmp`
-  try {
-    fs.writeFileSync(temporaryPath, JSON.stringify(transaction), { encoding: "utf8", flag: "wx" })
-    fs.renameSync(temporaryPath, transactionPath)
-  } finally {
-    fs.rmSync(temporaryPath, { force: true })
-  }
-}
-
-function readDurableUpgradeTransaction(
-  transactionPath: string,
-  installPath: string,
-  lockPath: string,
-  owner: UpgradeLockOwner,
-): DurableUpgradeTransaction | undefined {
-  if (!fs.existsSync(transactionPath)) return undefined
-
-  let value: Partial<DurableUpgradeTransaction>
-  try {
-    value = JSON.parse(fs.readFileSync(transactionPath, "utf8")) as Partial<DurableUpgradeTransaction>
-  } catch {
-    throw new Error(`Cannot safely reclaim the Windows upgrade lock because ${transactionPath} is malformed.`)
-  }
-
-  const validStates = ["pending", "committed", "restored"]
-  const validBackupStates = ["not-backed-up", "backed-up", "no-backup", "restored", "no-original-restored"]
-  const validManifestStates = ["existing", "missing", "restored"]
-  const noOriginal = value.BackupState === "no-backup" || value.BackupState === "no-original-restored"
-  const hashValid = noOriginal
-    ? value.OriginalBinaryHash === ""
-    : typeof value.OriginalBinaryHash === "string" && /^[a-f\d]{64}$/iu.test(value.OriginalBinaryHash)
-  const manifestPathsValid = typeof value.ManifestPath === "string" && path.isAbsolute(value.ManifestPath)
-    && typeof value.ManifestBackupPath === "string"
-    && sameFilesystemPath(value.ManifestBackupPath, `${value.ManifestPath}.upgrade.${owner.parentPid}`)
-  const terminalRestoreValid = value.State !== "restored"
-    || ((value.BackupState === "restored" || value.BackupState === "no-original-restored")
-      && value.ManifestState === "restored")
-  const valid = validStates.includes(value.State ?? "")
-    && validBackupStates.includes(value.BackupState ?? "")
-    && validManifestStates.includes(value.ManifestState ?? "")
-    && manifestPathsValid
-    && typeof value.LockPath === "string" && sameFilesystemPath(value.LockPath, lockPath)
-    && value.LockOwner === owner.token
-    && value.ParentPid === String(owner.parentPid)
-    && value.ParentStartedAt === owner.parentProcessStartedAt
-    && typeof value.InstallerPid === "string" && /^\d+$/u.test(value.InstallerPid)
-    && typeof value.InstallerStartedAt === "string" && /^\d+$/u.test(value.InstallerStartedAt)
-    && hashValid
-    && terminalRestoreValid
-    && sameFilesystemPath(transactionPath, `${installPath}.upgrade.${owner.parentPid}`)
-  if (!valid) {
-    throw new Error(`Cannot safely reclaim the Windows upgrade lock because ${transactionPath} is malformed.`)
-  }
-  return value as DurableUpgradeTransaction
-}
-
-function isRestoredExecutableVerified(
-  installPath: string,
-  transaction: DurableUpgradeTransaction,
-): boolean {
-  if (transaction.BackupState === "restored") {
-    return fs.existsSync(installPath)
-      && fileSha256(installPath).toLowerCase() === transaction.OriginalBinaryHash.toLowerCase()
-  }
-  if (transaction.BackupState === "no-original-restored") return !fs.existsSync(installPath)
-  return false
-}
-
-function cleanupDurableUpgradeTransaction(
-  transactionPath: string,
-  backupPath: string,
-  transaction: DurableUpgradeTransaction,
-): void {
-  fs.rmSync(backupPath, { force: true })
-  fs.rmSync(transaction.ManifestBackupPath, { force: true })
-  fs.rmSync(transactionPath, { force: true })
-}
-
-function reconcileDurableUpgradeTransaction(installDir: string, lockPath: string, owner: UpgradeLockOwner): void {
-  const installPath = path.join(installDir, "memory-lane.exe")
-  const backupPath = `${installPath}.backup.${owner.parentPid}`
-  const transactionPath = `${installPath}.upgrade.${owner.parentPid}`
-  const transaction = readDurableUpgradeTransaction(transactionPath, installPath, lockPath, owner)
-  if (!transaction) {
-    const transactionPrefix = `${path.basename(transactionPath)}.`
-    const temporaryTransactions = fs.readdirSync(installDir).some((entry) => entry.startsWith(transactionPrefix))
-    if (fs.existsSync(backupPath) || temporaryTransactions) {
-      throw new Error(`Cannot safely reclaim the Windows upgrade lock because transaction residue remains for owner ${owner.token}.`)
-    }
-    return
-  }
-
-  if (transaction.State === "committed") {
-    cleanupDurableUpgradeTransaction(transactionPath, backupPath, transaction)
-    return
-  }
-  if (transaction.State === "restored") {
-    if (!isRestoredExecutableVerified(installPath, transaction)) {
-      throw new Error("Cannot safely finish Windows upgrade cleanup because the restored executable cannot be verified.")
-    }
-    cleanupDurableUpgradeTransaction(transactionPath, backupPath, transaction)
-    return
-  }
-
-  if (transaction.BackupState === "not-backed-up") {
-    if (fs.existsSync(backupPath)) {
-      transaction.BackupState = "backed-up"
-    } else if (fs.existsSync(installPath)
-      && fileSha256(installPath).toLowerCase() === transaction.OriginalBinaryHash.toLowerCase()) {
-      transaction.BackupState = "restored"
-    } else {
-      throw new Error("Cannot safely restore the previous Windows executable because its backup is missing.")
-    }
-    saveDurableUpgradeTransaction(transactionPath, transaction)
-  }
-
-  if (transaction.BackupState === "backed-up") {
-    if (fs.existsSync(backupPath)) {
-      if (fileSha256(backupPath).toLowerCase() !== transaction.OriginalBinaryHash.toLowerCase()) {
-        throw new Error("Cannot safely restore the previous Windows executable because its backup does not match.")
-      }
-      fs.rmSync(installPath, { force: true })
-      fs.renameSync(backupPath, installPath)
-    } else if (!fs.existsSync(installPath)
-      || fileSha256(installPath).toLowerCase() !== transaction.OriginalBinaryHash.toLowerCase()) {
-      throw new Error("Cannot safely restore the previous Windows executable because its backup is missing.")
-    }
-    transaction.BackupState = "restored"
-    saveDurableUpgradeTransaction(transactionPath, transaction)
-  } else if (transaction.BackupState === "no-backup") {
-    fs.rmSync(installPath, { force: true })
-    transaction.BackupState = "no-original-restored"
-    saveDurableUpgradeTransaction(transactionPath, transaction)
-  }
-
-  if (!isRestoredExecutableVerified(installPath, transaction)) {
-    throw new Error("Cannot safely finish Windows upgrade cleanup because the restored executable cannot be verified.")
-  }
-
-  if (transaction.ManifestState === "existing") {
-    if (!fs.existsSync(transaction.ManifestBackupPath)) {
-      throw new Error("Cannot safely restore the install manifest because its backup is missing.")
-    }
-    fs.copyFileSync(transaction.ManifestBackupPath, transaction.ManifestPath)
-    transaction.ManifestState = "restored"
-    saveDurableUpgradeTransaction(transactionPath, transaction)
-  } else if (transaction.ManifestState === "missing") {
-    fs.rmSync(transaction.ManifestPath, { force: true })
-    transaction.ManifestState = "restored"
-    saveDurableUpgradeTransaction(transactionPath, transaction)
-  }
-
-  transaction.State = "restored"
-  saveDurableUpgradeTransaction(transactionPath, transaction)
-  cleanupDurableUpgradeTransaction(transactionPath, backupPath, transaction)
-}
-
-export function acquireUpgradeLock(
-  installDir: string,
-  upgradePid: number,
-  options: UpgradeLockOptions = {},
-): UpgradeLock {
-  const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-  const ownerPath = path.join(lockPath, "owner")
-  const now = options.now ?? Date.now
-  const staleAfterMs = options.staleAfterMs ?? DEFAULT_UPGRADE_LOCK_STALE_AFTER_MS
-  const inspectProcessStartTime = options.inspectProcessStartTime ?? inspectWindowsProcessStartTime
-  const upgradeProcess = inspectProcessStartTime(upgradePid)
-  if (upgradeProcess.status !== "found" || !/^\d+$/u.test(upgradeProcess.startedAt)) {
-    throw new Error("Could not identify the running upgrade process.")
-  }
-  const processStartedAt = upgradeProcess.startedAt
-  const owner = (options.createToken ?? randomUUID)()
-  fs.mkdirSync(installDir, { recursive: true })
-
-  const createLock = (): UpgradeLock | undefined => {
-    try {
-      fs.mkdirSync(lockPath)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EEXIST") return undefined
-      throw error
-    }
-    const temporaryOwnerPath = path.join(lockPath, `owner.${owner}.tmp`)
-    try {
-      const createdAt = now()
-      fs.writeFileSync(
-        temporaryOwnerPath,
-        JSON.stringify({
-          pid: upgradePid,
-          processStartedAt,
-          token: owner,
-          createdAt,
-          heartbeatAt: createdAt,
-          phase: "starting",
-          parentPid: upgradePid,
-          parentProcessStartedAt: processStartedAt,
-        }),
-        { encoding: "utf8", flag: "wx" },
-      )
-      fs.renameSync(temporaryOwnerPath, ownerPath)
-    } catch (error) {
-      fs.rmSync(lockPath, { recursive: true, force: true })
-      throw error
-    }
-    return { path: lockPath, owner }
-  }
-
-  let reclaimedLock = false
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const createdLock = createLock()
-    if (createdLock) return createdLock
-    reclaimedLock = false
-
-    const existingOwner = readUpgradeLockOwner(ownerPath)
-    const snapshot = readLockSnapshot(lockPath)
-    if (!snapshot) continue
-    const leaseUpdatedAt = existingOwner?.heartbeatAt ?? snapshot.modifiedAt
-    const stale = now() - leaseUpdatedAt >= staleAfterMs
-    const actorPath = path.join(lockPath, "active-actor")
-    const actorExists = fs.existsSync(actorPath)
-    const activeActor = readUpgradeLockActor(actorPath)
-    const identities = existingOwner
-      ? trackedUpgradeProcessIdentities(existingOwner, activeActor)
-      : []
-    const allIdentitiesInactive = allUpgradeProcessIdentitiesInactive(identities, inspectProcessStartTime)
-    const reclaimable = existingOwner
-      ? (!actorExists || activeActor?.token === existingOwner.token) && allIdentitiesInactive
-      : stale && !fs.existsSync(ownerPath)
-    if (!reclaimable) {
-      if (!existingOwner) {
-        throw new Error("Another Memory Lane upgrade is starting; lock owner metadata is not yet available.")
-      }
-      if (sameUpgradeLockOwner(readUpgradeLockOwner(ownerPath), existingOwner)) {
-        throw new Error(`Another Memory Lane upgrade is already in progress (PID ${existingOwner.pid}).`)
-      }
-      continue
-    }
-
-    const reclaimPath = path.join(lockPath, ".reclaim")
-    options.onReclaimInspected?.(reclaimPath)
-    const reclaimClaim: UpgradeLockClaim = {
-      pid: upgradePid,
-      processStartedAt,
-      token: owner,
-      createdAt: now(),
-    }
-    try {
-      publishUpgradeLockClaim(reclaimPath, owner, reclaimClaim)
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code
-      if (code === "ENOENT") continue
-      if (code !== "EEXIST") throw error
-
-      const existingClaim = readUpgradeLockClaim(reclaimPath)
-      const claimSnapshot = readLockSnapshot(reclaimPath)
-      const claimIdentity = existingClaim
-        ? inspectProcessStartTime(existingClaim.pid)
-        : undefined
-      const claimInactive = claimIdentity?.status === "missing"
-        || (claimIdentity?.status === "found" && claimIdentity.startedAt !== existingClaim?.processStartedAt)
-      const malformedAndStale = !existingClaim && claimSnapshot
-        && now() - claimSnapshot.modifiedAt >= staleAfterMs
-      if (claimSnapshot && (claimInactive || malformedAndStale)) {
-        const currentClaim = readUpgradeLockClaim(reclaimPath)
-        const currentClaimSnapshot = readLockSnapshot(reclaimPath)
-        const claimStillMatches = existingClaim
-          ? sameUpgradeLockClaim(currentClaim, existingClaim)
-          : currentClaim === undefined && currentClaimSnapshot?.identity === claimSnapshot.identity
-        if (claimStillMatches) fs.rmSync(reclaimPath, { force: true })
-      }
-      continue
-    }
-
-    let lockQuarantined = false
-    try {
-      options.onReclaimClaimed?.(reclaimPath)
-      const currentSnapshot = readLockSnapshot(lockPath)
-      const currentOwner = readUpgradeLockOwner(ownerPath)
-      const currentActorExists = fs.existsSync(actorPath)
-      const currentActor = readUpgradeLockActor(actorPath)
-      const lockStillMatches = currentSnapshot?.identity === snapshot.identity
-      const ownerStillMatches = existingOwner
-        ? sameUpgradeLockOwner(currentOwner, existingOwner)
-        : currentOwner === undefined && !fs.existsSync(ownerPath)
-      let actorCanBeReclaimed = !currentActorExists
-      if (currentActorExists && currentActor && currentActor.token === existingOwner?.token) {
-        actorCanBeReclaimed = allUpgradeProcessIdentitiesInactive([currentActor], inspectProcessStartTime)
-      }
-      const trackedProcessesInactive = existingOwner
-        ? allUpgradeProcessIdentitiesInactive(
-            trackedUpgradeProcessIdentities(existingOwner, currentActor),
-            inspectProcessStartTime,
-          )
-        : true
-      if (!lockStillMatches || !ownerStillMatches || !actorCanBeReclaimed || !trackedProcessesInactive) {
-        continue
-      }
-
-      if (existingOwner) reconcileDurableUpgradeTransaction(installDir, lockPath, existingOwner)
-
-      const quarantinePath = `${lockPath}.stale.${process.pid}.${now()}.${attempt}`
-      try {
-        fs.renameSync(lockPath, quarantinePath)
-        lockQuarantined = true
-        reclaimedLock = true
-        fs.rmSync(quarantinePath, { recursive: true, force: true })
-      } catch (renameError) {
-        if ((renameError as NodeJS.ErrnoException).code !== "ENOENT") throw renameError
-      }
-    } finally {
-      if (!lockQuarantined) releaseUpgradeLockClaim(reclaimPath, reclaimClaim)
-    }
-  }
-  if (reclaimedLock) {
-    const createdLock = createLock()
-    if (createdLock) return createdLock
-  }
-  throw new Error("Could not acquire the Memory Lane upgrade lock.")
-}
-
-export function releaseUpgradeLock(lock: UpgradeLock | undefined): void {
-  if (!lock) return
-  const owner = readUpgradeLockOwner(path.join(lock.path, "owner"))
-  if (owner?.token === lock.owner && owner.phase === "starting") {
-    fs.rmSync(lock.path, { recursive: true, force: true })
-  }
-}
-
-export function snapshotInstallManifest(dataDir: string, upgradePid: number): ManifestTransaction {
-  const manifestPath = installManifestPath(dataDir)
-  const backupPath = `${manifestPath}.upgrade.${upgradePid}`
-  const existed = fs.existsSync(manifestPath)
-  if (existed) fs.copyFileSync(manifestPath, backupPath)
-  return { path: manifestPath, backupPath, existed }
-}
-
-export function installerEnvironment(
-  baseEnv: NodeJS.ProcessEnv,
-  installDir?: string,
-  upgradePid?: number,
-  manifestTransaction?: ManifestTransaction,
-  upgradeLock?: UpgradeLock,
-): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = installDir ? { ...baseEnv, INSTALL_DIR: installDir } : { ...baseEnv }
-  if (upgradePid !== undefined) env.MEMORY_LANE_UPGRADE_PID = String(upgradePid)
-  if (manifestTransaction) {
-    env.MEMORY_LANE_UPGRADE_MANIFEST_PATH = manifestTransaction.path
-    env.MEMORY_LANE_UPGRADE_MANIFEST_BACKUP_PATH = manifestTransaction.backupPath
-    env.MEMORY_LANE_UPGRADE_MANIFEST_EXISTED = String(manifestTransaction.existed)
-  }
-  if (upgradeLock) {
-    env.MEMORY_LANE_UPGRADE_LOCK_PATH = upgradeLock.path
-    env.MEMORY_LANE_UPGRADE_LOCK_OWNER = upgradeLock.owner
-  }
-  return env
-}
-
-function runInstaller(
-  scriptPath: string,
-  installDir?: string,
-  upgradePid?: number,
-  manifestTransaction?: ManifestTransaction,
-  upgradeLock?: UpgradeLock,
-): boolean {
-  const isWindows = os.platform() === "win32"
-  const env = installerEnvironment(process.env, installDir, upgradePid, manifestTransaction, upgradeLock)
-  const result = isWindows
-    ? spawnSync("powershell", ["-ExecutionPolicy", "Bypass", "-File", scriptPath], { stdio: "inherit", env })
-    : spawnSync("sh", [scriptPath], { stdio: "inherit", env })
-  return result.status === 0
-}
-
-function finalizeWindowsUpgrade(
-  scriptPath: string,
-  action: "Commit" | "Rollback",
-  installDir?: string,
-  manifestTransaction?: ManifestTransaction,
-  upgradeLock?: UpgradeLock,
-): boolean {
-  const env = installerEnvironment(process.env, installDir, process.pid, manifestTransaction, upgradeLock)
-  return spawnSync(
-    "powershell",
-    ["-ExecutionPolicy", "Bypass", "-File", scriptPath, "-UpgradeAction", action],
-    { stdio: "inherit", env },
-  ).status === 0
+function runNonWindowsInstaller(scriptPath: string, installDir?: string): boolean {
+  const env = installerEnvironment(process.env, installDir)
+  return spawnSync("sh", [scriptPath], { stdio: "inherit", env }).status === 0
 }
 
 function downloadWithCurl(url: string, dest: string): boolean {
@@ -897,6 +258,11 @@ export function validateReapplyManifestAvailability(
 }
 
 export async function handleUpgrade(argv: string[]): Promise<void> {
+  if (isCommittedCleanupRequest(argv)) {
+    await handleCommittedCleanup(argv)
+    return
+  }
+
   const yes = argv.includes("--yes")
   const reapplyOnly = argv.includes(REAPPLY_INSTALL_MANIFEST_FLAG)
   const isWindows = os.platform() === "win32"
@@ -954,9 +320,9 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
   let manifestTransaction: ManifestTransaction | undefined
   let upgradeLock: UpgradeLock | undefined
   let preserveUpgradeLock = false
-  const commitWindowsUpgrade = (): void => {
+  const commitPendingWindowsUpgrade = (): void => {
     if (!pendingWindowsUpgrade) return
-    if (!finalizeWindowsUpgrade(scriptPath, "Commit", installDir, manifestTransaction, upgradeLock)) {
+    if (!installDir || !upgradeLock || !commitWindowsUpgrade(installDir, upgradeLock)) {
       throw new Error("Could not finalize the Windows upgrade.")
     }
     pendingWindowsUpgrade = false
@@ -974,33 +340,27 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
     installDir = resolveInstallerDirectory(binaryPath, isWindows, manifest !== undefined)
     upgradeLock = isWindows ? acquireUpgradeLock(installDir!, process.pid) : undefined
     manifestTransaction = isWindows ? snapshotInstallManifest(dataDir, process.pid) : undefined
-    if (!runInstaller(scriptPath, installDir, isWindows ? process.pid : undefined, manifestTransaction, upgradeLock)) {
-      if (isWindows) {
-        const restored = finalizeWindowsUpgrade(scriptPath, "Rollback", installDir, manifestTransaction, upgradeLock)
-        if (!restored) {
-          preserveUpgradeLock = true
-          console.error("Failed to restore the previous Windows executable.")
-        } else if (manifestTransaction) {
-          fs.rmSync(manifestTransaction.backupPath, { force: true })
-        }
-      }
+    if (upgradeLock && manifestTransaction) upgradeLock.manifestBackupPath = manifestTransaction.backupPath
+    const installed = isWindows
+      ? await runTransactionalWindowsInstaller(scriptPath, installDir!, manifestTransaction!, upgradeLock!)
+      : runNonWindowsInstaller(scriptPath, installDir)
+    if (!installed) {
       throw new Error("Installer failed. Please check the output above.")
     }
     pendingWindowsUpgrade = isWindows
 
     if (manifest && manifest.integrations.length > 0) {
       console.log("\nRe-configuring previously installed harnesses...")
-
       if (!reapplyManifestWithInstalledBinary(binaryPath, yes, isWindows)) {
         throw new Error("Reconfiguring harnesses with the newly installed binary failed.")
       }
-      commitWindowsUpgrade()
+      commitPendingWindowsUpgrade()
       console.log("Upgrade complete.")
       return
     }
 
     if (manifest) {
-      commitWindowsUpgrade()
+      commitPendingWindowsUpgrade()
       console.log("\nThe install manifest is valid but contains no integrations. Upgrade complete.")
       return
     }
@@ -1009,11 +369,11 @@ export async function handleUpgrade(argv: string[]): Promise<void> {
     if (!runInit(binaryPath, yes)) {
       throw new Error("Init failed after upgrade.")
     }
-    commitWindowsUpgrade()
+    commitPendingWindowsUpgrade()
     console.log("\nUpgrade complete.")
   } catch (error) {
-    if (pendingWindowsUpgrade) {
-      if (!finalizeWindowsUpgrade(scriptPath, "Rollback", installDir, manifestTransaction, upgradeLock)) {
+    if (isWindows && installDir && upgradeLock) {
+      if (!rollbackWindowsUpgrade(installDir, upgradeLock)) {
         preserveUpgradeLock = true
         console.error("Failed to restore the previous Windows executable.")
       }

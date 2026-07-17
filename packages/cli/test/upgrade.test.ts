@@ -2,6 +2,7 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
+import { EventEmitter } from "node:events"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -18,6 +19,15 @@ import {
   snapshotInstallManifest,
   validateReapplyManifestAvailability,
 } from "../src/commands/upgrade.js"
+import {
+  commitWindowsUpgrade,
+  handleCommittedCleanup,
+  removeMatchingUpgradeLock,
+  rollbackWindowsUpgrade,
+  runTransactionalWindowsInstaller,
+  WINDOWS_COMMITTED_CLEANUP_FLAG,
+  WINDOWS_COMMITTED_CLEANUP_TIMEOUT_MS,
+} from "../src/commands/windows-upgrade.js"
 import type { InstallManifest } from "../src/commands/upgrade.js"
 import { readInstallManifest, writeInstallManifest } from "../src/installer/manifest.js"
 import { VERSION } from "../src/version.js"
@@ -33,7 +43,10 @@ function createFakeMemoryLaneSourceRoot(): { root: string; skillDir: string; ski
   return { root, skillDir, skillPath, sentinel }
 }
 
-function createStaleUpgradeTransaction(state: "pending" | "committed" | "restored" = "pending") {
+function createStaleUpgradeTransaction(
+  state: "pending" | "committed" | "restored" = "pending",
+  legacyOwner = false,
+) {
   const installDir = tempDir()
   const dataDir = tempDir()
   const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
@@ -44,20 +57,27 @@ function createStaleUpgradeTransaction(state: "pending" | "committed" | "restore
   const manifestBackupPath = `${manifestPath}.upgrade.9876`
   const originalBinary = "original binary"
   fs.mkdirSync(lockPath)
-  fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
-    pid: 7654,
-    processStartedAt: "333333333",
-    token: "stale-owner",
-    createdAt: 1_000_000,
-    heartbeatAt: 1_000_000,
-    phase: "recovery",
-    parentPid: 9876,
-    parentProcessStartedAt: "111111111",
-    installerPid: 8765,
-    installerProcessStartedAt: "222222222",
-    recoveryPid: 7654,
-    recoveryProcessStartedAt: "333333333",
-  }), "utf8")
+  fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify(legacyOwner
+    ? {
+        pid: 7654,
+        processStartedAt: "333333333",
+        token: "stale-owner",
+        createdAt: 1_000_000,
+        heartbeatAt: 1_000_000,
+        phase: "recovery",
+        parentPid: 9876,
+        parentProcessStartedAt: "111111111",
+        installerPid: 8765,
+        installerProcessStartedAt: "222222222",
+        recoveryPid: 7654,
+        recoveryProcessStartedAt: "333333333",
+      }
+    : {
+        pid: 9876,
+        processStartedAt: "111111111",
+        token: "stale-owner",
+        createdAt: 1_000_000,
+      }), "utf8")
   fs.writeFileSync(installPath, "replacement binary", "utf8")
   fs.writeFileSync(backupPath, originalBinary, "utf8")
   fs.writeFileSync(manifestPath, "replacement manifest", "utf8")
@@ -78,6 +98,37 @@ function createStaleUpgradeTransaction(state: "pending" | "committed" | "restore
     OriginalBinaryHash: createHash("sha256").update(originalBinary).digest("hex"),
   }), "utf8")
   return { installDir, lockPath, installPath, backupPath, transactionPath, manifestPath, manifestBackupPath }
+}
+function committedCleanupArgs(fixture: ReturnType<typeof createStaleUpgradeTransaction>): string[] {
+  return [
+    WINDOWS_COMMITTED_CLEANUP_FLAG,
+    "--transaction", fixture.transactionPath,
+    "--install", fixture.installPath,
+    "--manifest", fixture.manifestPath,
+    "--manifest-backup", fixture.manifestBackupPath,
+    "--lock", fixture.lockPath,
+    "--owner", "stale-owner",
+    "--parent-pid", "9876",
+    "--parent-started-at", "111111111",
+  ]
+}
+function fakeChildProcess(pid: number, exitWithoutKill: boolean): {
+  child: ReturnType<typeof import("node:child_process").spawn>
+  wasKilled: () => boolean
+} {
+  const events = new EventEmitter()
+  let killed = false
+  const child = Object.assign(events, {
+    pid,
+    kill: () => {
+      killed = true
+      queueMicrotask(() => events.emit("exit", null))
+      return true
+    },
+    unref: () => {},
+  }) as unknown as ReturnType<typeof import("node:child_process").spawn>
+  if (exitWithoutKill) queueMicrotask(() => events.emit("exit", 0))
+  return { child, wasKilled: () => killed }
 }
 
 describe("upgrade", () => {
@@ -395,514 +446,570 @@ describe("upgrade", () => {
     })
     assert.deepEqual(installerEnvironment({ KEEP_ME: "yes" }), { KEEP_ME: "yes" })
   })
+  it("publishes the installer identity in the parent-owned durable transaction", async () => {
+    const installDir = tempDir()
+    const dataDir = tempDir()
+    const installPath = path.join(installDir, "memory-lane.exe")
+    fs.writeFileSync(installPath, "original binary", "utf8")
+    const manifestTransaction = snapshotInstallManifest(dataDir, process.pid)
+    const lock = acquireUpgradeLock(installDir, process.pid)
+    lock.manifestBackupPath = manifestTransaction.backupPath
+    const fake = fakeChildProcess(7777, true)
+    const installed = await runTransactionalWindowsInstaller(
+      "install.ps1",
+      installDir,
+      manifestTransaction,
+      lock,
+      (pid) => pid === 7777
+        ? { status: "found", startedAt: "777777777" }
+        : { status: "missing" },
+      { launch: (() => fake.child) as any },
+    )
+    assert.equal(installed, true)
+    const transaction = JSON.parse(fs.readFileSync(`${installPath}.upgrade.${process.pid}`, "utf8"))
+    assert.equal(transaction.ParentPid, String(process.pid))
+    assert.equal(transaction.InstallerPid, "7777")
+    assert.equal(transaction.InstallerStartedAt, "777777777")
+    assert.equal(transaction.OriginalBinaryHash, createHash("sha256").update("original binary").digest("hex"))
+    fs.rmSync(lock.path, { recursive: true, force: true })
+    fs.rmSync(`${installPath}.upgrade.${process.pid}`, { force: true })
+  })
 
-  it("serializes Windows upgrades with an owner-checked lock", () => {
+  it("terminates a non-mutating installer when child identity inspection is unknown", async () => {
+    const installDir = tempDir()
+    const dataDir = tempDir()
+    const manifestTransaction = snapshotInstallManifest(dataDir, process.pid)
+    fs.writeFileSync(manifestTransaction.backupPath, "manifest backup", "utf8")
+    const lock = acquireUpgradeLock(installDir, process.pid)
+    lock.manifestBackupPath = manifestTransaction.backupPath
+    const fake = fakeChildProcess(7777, false)
+    const installed = await runTransactionalWindowsInstaller(
+      "install.ps1",
+      installDir,
+      manifestTransaction,
+      lock,
+      () => ({ status: "unknown" }),
+      { launch: (() => fake.child) as any },
+    )
+    assert.equal(installed, false)
+    assert.equal(fake.wasKilled(), true)
+    assert.equal(fs.existsSync(path.join(installDir, `memory-lane.exe.upgrade.${process.pid}`)), false)
+    assert.equal(rollbackWindowsUpgrade(installDir, lock), true)
+    assert.equal(fs.existsSync(manifestTransaction.backupPath), false)
+    assert.equal(fs.existsSync(lock.path), false)
+  })
+
+  it("enforces the 10-second parent transaction publication deadline", async () => {
+    const installDir = tempDir()
+    const dataDir = tempDir()
+    const manifestTransaction = snapshotInstallManifest(dataDir, process.pid)
+    const lock = acquireUpgradeLock(installDir, process.pid)
+    lock.manifestBackupPath = manifestTransaction.backupPath
+    const fake = fakeChildProcess(7777, false)
+    let clock = 0
+    const installed = await runTransactionalWindowsInstaller(
+      "install.ps1",
+      installDir,
+      manifestTransaction,
+      lock,
+      () => ({ status: "missing" }),
+      {
+        launch: (() => fake.child) as any,
+        now: () => clock,
+        delay: async (milliseconds) => {
+          clock += milliseconds
+        },
+      },
+    )
+    assert.equal(installed, false)
+    assert.equal(clock, 10_000)
+    assert.equal(fake.wasKilled(), true)
+    assert.equal(rollbackWindowsUpgrade(installDir, lock), true)
+    assert.equal(fs.existsSync(lock.path), false)
+  })
+
+
+  it("publishes an immutable minimal lock owner and serializes active upgrades", () => {
     const installDir = tempDir()
     const lock = acquireUpgradeLock(installDir, process.pid)
     const owner = JSON.parse(fs.readFileSync(path.join(lock.path, "owner"), "utf8"))
-
+    assert.deepEqual(Object.keys(owner).sort(), ["createdAt", "pid", "processStartedAt", "token"])
     assert.equal(owner.pid, process.pid)
     assert.match(owner.processStartedAt, /^\d+$/u)
     assert.equal(owner.token, lock.owner)
-    assert.equal(typeof owner.createdAt, "number")
-    assert.equal(owner.heartbeatAt, owner.createdAt)
-    assert.equal(owner.phase, "starting")
-    assert.equal(owner.parentPid, process.pid)
-    assert.equal(owner.parentProcessStartedAt, owner.processStartedAt)
     assert.throws(() => acquireUpgradeLock(installDir, process.pid), /already in progress/u)
-    fs.writeFileSync(
-      path.join(lock.path, "owner"),
-      JSON.stringify({
+    releaseUpgradeLock(lock)
+    assert.equal(fs.existsSync(lock.path), false)
+  })
+
+  for (const [field, value] of [
+    ["pid", String(process.pid)],
+    ["pid", 0],
+    ["processStartedAt", "0"],
+    ["createdAt", "1000000"],
+  ] as const) {
+    it(`rejects a lock owner with invalid ${field} value ${JSON.stringify(value)}`, () => {
+      const installDir = tempDir()
+      const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+      fs.mkdirSync(lockPath)
+      fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
+        token: "malformed-owner",
         pid: process.pid,
-        token: "different-owner",
-        createdAt: Date.now(),
-        heartbeatAt: Date.now(),
-        phase: "starting",
-      }),
-      "utf8",
-    )
-    releaseUpgradeLock(lock)
-    assert.equal(fs.existsSync(lock.path), true)
-    fs.rmSync(lock.path, { recursive: true, force: true })
+        processStartedAt: "111111111",
+        createdAt: 1_000_000,
+        [field]: value,
+      }), "utf8")
+      assert.throws(
+        () => acquireUpgradeLock(installDir, process.pid, {
+          inspectProcessStartTime: () => ({ status: "found", startedAt: "111111111" }),
+        }),
+        /owner metadata is not yet available/u,
+      )
+    })
+  }
 
-    const releasable = acquireUpgradeLock(installDir, process.pid)
-    releaseUpgradeLock(releasable)
-    assert.equal(fs.existsSync(releasable.path), false)
-  })
-
-  it("preserves a long-running starting lock while its process identity matches", () => {
-    const installDir = tempDir()
-    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    const now = 10_000_000
-    fs.mkdirSync(lockPath)
-    fs.writeFileSync(
-      path.join(lockPath, "owner"),
-      JSON.stringify({
-        pid: 9876,
-        processStartedAt: "123456789",
-        token: "active-owner",
-        createdAt: now - 5_000_000,
-        heartbeatAt: now - 5_000_000,
-        phase: "starting",
-        parentPid: 9876,
-        parentProcessStartedAt: "123456789",
-      }),
-      "utf8",
-    )
-
-    assert.throws(
-      () => acquireUpgradeLock(installDir, process.pid, {
-        now: () => now,
-        staleAfterMs: 1_000,
-        inspectProcessStartTime: (processId) => processId === 9876
-          ? { status: "found", startedAt: "123456789" }
-          : { status: "found", startedAt: "987654321" },
-      }),
-      /already in progress/u,
-    )
-    assert.equal(fs.existsSync(lockPath), true)
-  })
-
-  it("preserves a starting lock while its registered installer remains active", () => {
-    const installDir = tempDir()
-    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    const now = 2_000_000
-    fs.mkdirSync(lockPath)
-    fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
-      pid: 9876,
-      processStartedAt: "111111111",
-      token: "starting-owner",
-      createdAt: now,
-      heartbeatAt: now,
-      phase: "starting",
-      parentPid: 9876,
-      parentProcessStartedAt: "111111111",
-      installerPid: 8765,
-      installerProcessStartedAt: "222222222",
-    }), "utf8")
-
-    assert.throws(
-      () => acquireUpgradeLock(installDir, process.pid, {
-        now: () => now,
-        inspectProcessStartTime: (processId) => processId === 8765
-          ? { status: "found", startedAt: "222222222" }
-          : processId === process.pid
-            ? { status: "found", startedAt: "333333333" }
+  it("rejects zero and unsafe installer identities in durable transactions", () => {
+    for (const [field, value] of [
+      ["InstallerPid", "0"],
+      ["InstallerPid", String(Number.MAX_SAFE_INTEGER + 1)],
+      ["InstallerStartedAt", "0"],
+    ] as const) {
+      const fixture = createStaleUpgradeTransaction()
+      const transaction = JSON.parse(fs.readFileSync(fixture.transactionPath, "utf8"))
+      transaction[field] = value
+      fs.writeFileSync(fixture.transactionPath, JSON.stringify(transaction), "utf8")
+      assert.throws(
+        () => acquireUpgradeLock(fixture.installDir, process.pid, {
+          inspectProcessStartTime: (pid) => pid === process.pid
+            ? { status: "found", startedAt: "444444444" }
             : { status: "missing" },
+        }),
+        /failed state validation/u,
+      )
+    }
+  })
+
+  it("rejects a zero process start time for the acquiring process", () => {
+    assert.throws(
+      () => acquireUpgradeLock(tempDir(), process.pid, {
+        inspectProcessStartTime: () => ({ status: "found", startedAt: "0" }),
       }),
-      /already in progress/u,
+      /Could not identify the running upgrade process/u,
+    )
+  })
+
+  it("keeps an inactive owner during the 30-second transaction publication guard", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
+      token: "waiting-owner",
+      pid: 9876,
+      processStartedAt: "111111111",
+      createdAt: 1_000_000,
+    }), "utf8")
+    assert.throws(
+      () => acquireUpgradeLock(installDir, process.pid, {
+        now: () => 1_029_999,
+        inspectProcessStartTime: (pid) => pid === process.pid
+          ? { status: "found", startedAt: "444444444" }
+          : { status: "missing" },
+      }),
+      /transaction publication is still in progress/u,
     )
     assert.equal(fs.existsSync(lockPath), true)
   })
 
-  it("excludes recovery handoff while quarantining a stale starting lock", () => {
+  it("reclaims an inactive owner only after a stable double observation", () => {
     const installDir = tempDir()
     const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    const now = 2_000_000
-    let handoffWasExcluded = false
     fs.mkdirSync(lockPath)
     fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
+      token: "stale-owner",
       pid: 9876,
       processStartedAt: "111111111",
-      token: "stale-owner",
-      createdAt: now,
-      heartbeatAt: now,
-      phase: "starting",
-      parentPid: 9876,
-      parentProcessStartedAt: "111111111",
+      createdAt: 1_000_000,
     }), "utf8")
-
+    let sleeps = 0
     const lock = acquireUpgradeLock(installDir, process.pid, {
-      now: () => now,
+      now: () => 1_030_000,
       createToken: () => "replacement-owner",
-      inspectProcessStartTime: (processId) => processId === process.pid
-        ? { status: "found", startedAt: "333333333" }
-        : { status: "missing" },
-      onReclaimClaimed: (claimPath) => {
-        assert.deepEqual(JSON.parse(fs.readFileSync(claimPath, "utf8")), {
-          pid: process.pid,
-          processStartedAt: "333333333",
-          token: "replacement-owner",
-          createdAt: now,
-        })
-        assert.equal(fs.existsSync(`${claimPath}.replacement-owner.${process.pid}.tmp`), false)
-        assert.throws(
-          () => fs.writeFileSync(claimPath, "recovery handoff", { flag: "wx" }),
-          (error: NodeJS.ErrnoException) => error.code === "EEXIST",
-        )
-        handoffWasExcluded = true
+      sleep: (milliseconds) => {
+        assert.equal(milliseconds, 100)
+        sleeps += 1
       },
+      inspectProcessStartTime: (pid) => pid === process.pid
+        ? { status: "found", startedAt: "444444444" }
+        : { status: "missing" },
     })
-
-    assert.equal(handoffWasExcluded, true)
+    assert.equal(sleeps, 1)
     assert.equal(lock.owner, "replacement-owner")
+    assert.equal(fs.existsSync(path.join(lock.path, ".reclaim")), false)
+    assert.equal(fs.existsSync(path.join(lock.path, "active-actor")), false)
     releaseUpgradeLock(lock)
   })
 
-  it("does not reconcile when actor publication claims the gate after initial inspection", () => {
-    const fixture = createStaleUpgradeTransaction()
-    const reclaimPath = path.join(fixture.lockPath, ".reclaim")
-    const actorPublisher = {
-      pid: 7654,
-      processStartedAt: "555555555",
-      token: "stale-owner",
-      createdAt: 2_000_000,
-    }
-    let publicationStarted = false
-
-    assert.throws(
-      () => acquireUpgradeLock(fixture.installDir, process.pid, {
-        now: () => 2_000_000,
-        createToken: () => "replacement-owner",
-        inspectProcessStartTime: (processId) => processId === process.pid
-          ? { status: "found", startedAt: "444444444" }
-          : processId === actorPublisher.pid
-            ? { status: "found", startedAt: actorPublisher.processStartedAt }
-            : { status: "missing" },
-        onReclaimInspected: () => {
-          if (publicationStarted) return
-          fs.writeFileSync(reclaimPath, JSON.stringify(actorPublisher), { encoding: "utf8", flag: "wx" })
-          publicationStarted = true
-        },
-      }),
-      /Could not acquire/u,
-    )
-
-    assert.equal(publicationStarted, true)
-    assert.deepEqual(JSON.parse(fs.readFileSync(reclaimPath, "utf8")), actorPublisher)
-    assert.equal(fs.readFileSync(fixture.installPath, "utf8"), "replacement binary")
-    assert.equal(fs.readFileSync(fixture.manifestPath, "utf8"), "replacement manifest")
-    assert.equal(fs.existsSync(fixture.backupPath), true)
-    assert.equal(fs.existsSync(fixture.transactionPath), true)
-  })
-
-  it("revalidates actor activity after claiming the reclaim gate", () => {
-    const fixture = createStaleUpgradeTransaction()
-    const actorPath = path.join(fixture.lockPath, "active-actor")
-    const activeActor = {
-      pid: 7654,
-      processStartedAt: "555555555",
-      token: "stale-owner",
-      action: "Rollback",
-    }
-
-    assert.throws(
-      () => acquireUpgradeLock(fixture.installDir, process.pid, {
-        createToken: () => "replacement-owner",
-        inspectProcessStartTime: (processId) => processId === process.pid
-          ? { status: "found", startedAt: "444444444" }
-          : processId === activeActor.pid
-            ? { status: "found", startedAt: activeActor.processStartedAt }
-            : { status: "missing" },
-        onReclaimClaimed: () => {
-          if (!fs.existsSync(actorPath)) fs.writeFileSync(actorPath, JSON.stringify(activeActor), "utf8")
-        },
-      }),
-      /already in progress/u,
-    )
-
-    assert.equal(fs.existsSync(path.join(fixture.lockPath, ".reclaim")), false)
-    assert.equal(fs.readFileSync(fixture.installPath, "utf8"), "replacement binary")
-    assert.equal(fs.readFileSync(fixture.manifestPath, "utf8"), "replacement manifest")
-    assert.equal(fs.existsSync(fixture.backupPath), true)
-    assert.equal(fs.existsSync(fixture.transactionPath), true)
-  })
-
-  it("never replaces an active reclaim claim during atomic publication", () => {
-    const installDir = tempDir()
-    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    const reclaimPath = path.join(lockPath, ".reclaim")
-    const now = 2_000_000
-    const activeClaim = {
-      pid: 7654,
-      processStartedAt: "444444444",
-      token: "active-claim",
-      createdAt: now,
-    }
-    fs.mkdirSync(lockPath)
-    fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
-      pid: 9876,
-      processStartedAt: "111111111",
-      token: "stale-owner",
-      createdAt: now,
-      heartbeatAt: now,
-      phase: "starting",
-      parentPid: 9876,
-      parentProcessStartedAt: "111111111",
-    }), "utf8")
-    fs.writeFileSync(reclaimPath, JSON.stringify(activeClaim), "utf8")
-
-    assert.throws(
-      () => acquireUpgradeLock(installDir, process.pid, {
-        now: () => now,
-        createToken: () => "replacement-owner",
-        inspectProcessStartTime: (processId) => processId === process.pid
-          ? { status: "found", startedAt: "333333333" }
-          : processId === activeClaim.pid
-            ? { status: "found", startedAt: activeClaim.processStartedAt }
-            : { status: "missing" },
-      }),
-      /Could not acquire/u,
-    )
-    assert.deepEqual(JSON.parse(fs.readFileSync(reclaimPath, "utf8")), activeClaim)
-    assert.equal(fs.existsSync(`${reclaimPath}.replacement-owner.${process.pid}.tmp`), false)
-  })
-
-  it("reclaims a starting lock after its PID is reused", () => {
-    const installDir = tempDir()
-    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    const now = 2_000_000
-    fs.mkdirSync(lockPath)
-    fs.writeFileSync(
-      path.join(lockPath, "owner"),
-      JSON.stringify({
-        pid: 9876,
-        processStartedAt: "123456789",
-        token: "old-owner",
-        createdAt: now,
-        heartbeatAt: now,
-        phase: "starting",
-        parentPid: 9876,
-        parentProcessStartedAt: "123456789",
-      }),
-      "utf8",
-    )
-
-    const lock = acquireUpgradeLock(installDir, process.pid, {
-      now: () => now,
-      createToken: () => "replacement-owner",
-      inspectProcessStartTime: (processId) => processId === 9876
-        ? { status: "found", startedAt: "999999999" }
-        : { status: "found", startedAt: "987654321" },
-    })
-
-    assert.equal(lock.owner, "replacement-owner")
-    releaseUpgradeLock(lock)
-    assert.equal(fs.existsSync(lockPath), false)
-  })
-
-  it("preserves a fresh lock with malformed owner metadata", () => {
-    const installDir = tempDir()
-    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    const now = 2_000_000
-    fs.mkdirSync(lockPath)
-    fs.writeFileSync(path.join(lockPath, "owner"), "{", "utf8")
-    fs.utimesSync(lockPath, new Date(now), new Date(now))
-
-    assert.throws(
-      () => acquireUpgradeLock(installDir, process.pid, { now: () => now, staleAfterMs: 1_000 }),
-      /metadata is not yet available/u,
-    )
-    assert.equal(fs.existsSync(lockPath), true)
-  })
-
-  it("reclaims a stale lock with missing owner metadata", () => {
-    const installDir = tempDir()
-    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    const now = 2_000_000
-    fs.mkdirSync(lockPath)
-    fs.utimesSync(lockPath, new Date(now - 1_001), new Date(now - 1_001))
-
-    const lock = acquireUpgradeLock(installDir, process.pid, {
-      now: () => now,
-      createToken: () => "replacement-owner",
-      staleAfterMs: 1_000,
-    })
-
-    assert.equal(lock.owner, "replacement-owner")
-    releaseUpgradeLock(lock)
-    assert.equal(fs.existsSync(lockPath), false)
-  })
-
-  it("acquires after reclaiming on the final bounded attempt", () => {
+  it("aborts reclaim when the stable lock snapshot changes", () => {
     const installDir = tempDir()
     const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
     const ownerPath = path.join(lockPath, "owner")
-    const now = 2_000_000
-    let inspections = 0
     fs.mkdirSync(lockPath)
     fs.writeFileSync(ownerPath, JSON.stringify({
+      token: "stale-owner",
       pid: 9876,
       processStartedAt: "111111111",
-      token: "stale-owner",
-      createdAt: now,
-      heartbeatAt: now,
-      phase: "starting",
-      parentPid: 9876,
-      parentProcessStartedAt: "111111111",
+      createdAt: 1_000_000,
     }), "utf8")
-
-    const lock = acquireUpgradeLock(installDir, process.pid, {
-      now: () => now,
-      createToken: () => "replacement-owner",
-      inspectProcessStartTime: (processId) => processId === process.pid
-        ? { status: "found", startedAt: "333333333" }
-        : { status: "missing" },
-      onReclaimInspected: (reclaimPath) => {
-        inspections++
-        if (inspections < 3) {
-          fs.writeFileSync(reclaimPath, JSON.stringify({
+    assert.throws(
+      () => acquireUpgradeLock(installDir, process.pid, {
+        now: () => 1_030_000,
+        onReclaimClaimed: () => {
+          fs.writeFileSync(ownerPath, JSON.stringify({
+            token: "successor-owner",
             pid: 7654,
             processStartedAt: "222222222",
-            token: `stale-claim-${inspections}`,
-            createdAt: now,
-          }), { encoding: "utf8", flag: "wx" })
-        }
-      },
-    })
+            createdAt: 1_030_000,
+          }), "utf8")
+        },
+        sleep: () => {},
+        inspectProcessStartTime: (pid) => pid === process.pid
+          ? { status: "found", startedAt: "444444444" }
+          : { status: "missing" },
+      }),
+      /state changed/u,
+    )
+    assert.equal(fs.existsSync(lockPath), true)
+  })
+  it("restores a successor lock captured during the quarantine race window", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    const ownerPath = path.join(lockPath, "owner")
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(ownerPath, JSON.stringify({
+      token: "stale-owner",
+      pid: 9876,
+      processStartedAt: "111111111",
+      createdAt: 1_000_000,
+    }), "utf8")
+    assert.throws(
+      () => acquireUpgradeLock(installDir, process.pid, {
+        now: () => 1_030_000,
+        onBeforeQuarantine: () => {
+          fs.rmSync(lockPath, { recursive: true, force: true })
+          fs.mkdirSync(lockPath)
+          fs.writeFileSync(ownerPath, JSON.stringify({
+            token: "successor-owner",
+            pid: 7654,
+            processStartedAt: "222222222",
+            createdAt: 1_030_000,
+          }), "utf8")
+        },
+        sleep: () => {},
+        inspectProcessStartTime: (pid) => pid === process.pid
+          ? { status: "found", startedAt: "444444444" }
+          : { status: "missing" },
+      }),
+      /changed during quarantine and was restored/u,
+    )
+    assert.equal(JSON.parse(fs.readFileSync(ownerPath, "utf8")).token, "successor-owner")
+  })
 
-    assert.equal(inspections, 3)
+
+  it("uses one hour and residue checks for malformed owner metadata", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(path.join(lockPath, "owner"), "{", "utf8")
+    const modifiedAt = fs.statSync(lockPath).mtimeMs
+    const inspect = (pid: number) => pid === process.pid
+      ? { status: "found" as const, startedAt: "444444444" }
+      : { status: "missing" as const }
+    assert.throws(
+      () => acquireUpgradeLock(installDir, process.pid, {
+        now: () => modifiedAt + 3_599_999,
+        inspectProcessStartTime: inspect,
+      }),
+      /owner metadata is not yet available/u,
+    )
+    fs.writeFileSync(path.join(installDir, "memory-lane.exe.backup.9876"), "residue", "utf8")
+    assert.throws(
+      () => acquireUpgradeLock(installDir, process.pid, {
+        now: () => modifiedAt + 3_600_000,
+        inspectProcessStartTime: inspect,
+      }),
+      /recovery residue remains/u,
+    )
+  })
+
+  it("fails closed when process identity inspection is unknown", () => {
+    const fixture = createStaleUpgradeTransaction()
+    assert.throws(
+      () => acquireUpgradeLock(fixture.installDir, process.pid, {
+        inspectProcessStartTime: (pid) => pid === process.pid
+          ? { status: "found", startedAt: "444444444" }
+          : { status: "unknown" },
+      }),
+      /Cannot safely inspect.+PID 9876/u,
+    )
+    assert.equal(fs.existsSync(fixture.transactionPath), true)
+    assert.equal(fs.existsSync(fixture.lockPath), true)
+  })
+
+  it("distinguishes PID reuse by process start time", () => {
+    const installDir = tempDir()
+    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
+    fs.mkdirSync(lockPath)
+    fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
+      token: "stale-owner",
+      pid: 9876,
+      processStartedAt: "111111111",
+      createdAt: 1_000_000,
+    }), "utf8")
+    const lock = acquireUpgradeLock(installDir, process.pid, {
+      now: () => 1_030_000,
+      createToken: () => "replacement-owner",
+      sleep: () => {},
+      inspectProcessStartTime: (pid) => pid === 9876
+        ? { status: "found", startedAt: "999999999" }
+        : { status: "found", startedAt: "444444444" },
+    })
     assert.equal(lock.owner, "replacement-owner")
     releaseUpgradeLock(lock)
   })
 
-  it("preserves an expired recovery lease while its process identity matches", () => {
-    const installDir = tempDir()
-    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    const now = 2_000_000
-    const recoveryOwner = {
-      pid: 9876,
-      processStartedAt: "123456789",
-      token: "recovery-owner",
-      createdAt: now - 10_000,
-      heartbeatAt: now - 5_000,
-      phase: "recovery",
-      parentPid: 8765,
-      parentProcessStartedAt: "222222222",
-      recoveryPid: 9876,
-      recoveryProcessStartedAt: "123456789",
-    }
-    fs.mkdirSync(lockPath)
-    fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify(recoveryOwner), "utf8")
-
+  it("preserves a pending transaction while its installer remains active", () => {
+    const fixture = createStaleUpgradeTransaction()
     assert.throws(
-      () => acquireUpgradeLock(installDir, process.pid, {
-        now: () => now,
-        staleAfterMs: 1_000,
-        inspectProcessStartTime: (processId) => processId === 9876
-          ? { status: "found", startedAt: "123456789" }
-          : processId === 8765
-            ? { status: "missing" }
-            : { status: "found", startedAt: "987654321" },
-      }),
-      /already in progress/u,
-    )
-    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(lockPath, "owner"), "utf8")), recoveryOwner)
-  })
-
-  it("preserves a recovery lock while its original parent remains active", () => {
-    const installDir = tempDir()
-    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    const now = 2_000_000
-    fs.mkdirSync(lockPath)
-    fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
-      pid: 9876,
-      processStartedAt: "111111111",
-      token: "recovery-owner",
-      createdAt: now - 10_000,
-      heartbeatAt: now - 5_000,
-      phase: "recovery",
-      parentPid: 8765,
-      parentProcessStartedAt: "222222222",
-      recoveryPid: 9876,
-      recoveryProcessStartedAt: "111111111",
-    }), "utf8")
-
-    assert.throws(
-      () => acquireUpgradeLock(installDir, process.pid, {
-        now: () => now,
-        inspectProcessStartTime: (processId) => processId === 8765
-          ? { status: "found", startedAt: "222222222" }
-          : processId === 9876
-            ? { status: "missing" }
-            : { status: "found", startedAt: "333333333" },
-      }),
-      /already in progress/u,
-    )
-    assert.equal(fs.existsSync(lockPath), true)
-  })
-
-  it("preserves a lock while a registered finalizer remains active", () => {
-    const installDir = tempDir()
-    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    const now = 2_000_000
-    fs.mkdirSync(lockPath)
-    fs.writeFileSync(path.join(lockPath, "owner"), JSON.stringify({
-      pid: 9876,
-      processStartedAt: "111111111",
-      token: "recovery-owner",
-      createdAt: now - 10_000,
-      heartbeatAt: now - 5_000,
-      phase: "recovery",
-      parentPid: 8765,
-      parentProcessStartedAt: "222222222",
-      recoveryPid: 9876,
-      recoveryProcessStartedAt: "111111111",
-    }), "utf8")
-    fs.writeFileSync(path.join(lockPath, "active-actor"), JSON.stringify({
-      pid: 7654,
-      processStartedAt: "444444444",
-      token: "recovery-owner",
-      action: "Commit",
-    }), "utf8")
-
-    assert.throws(
-      () => acquireUpgradeLock(installDir, process.pid, {
-        now: () => now,
-        inspectProcessStartTime: (processId) => processId === 7654
+      () => acquireUpgradeLock(fixture.installDir, process.pid, {
+        inspectProcessStartTime: (pid) => pid === process.pid
           ? { status: "found", startedAt: "444444444" }
-          : processId === process.pid
-            ? { status: "found", startedAt: "333333333" }
+          : pid === 8765
+            ? { status: "found", startedAt: "222222222" }
             : { status: "missing" },
       }),
       /already in progress/u,
     )
-    assert.equal(fs.existsSync(lockPath), true)
-
-    const replacement = acquireUpgradeLock(installDir, process.pid, {
-      now: () => now,
-      createToken: () => "replacement-owner",
-      inspectProcessStartTime: (processId) => processId === process.pid
-        ? { status: "found", startedAt: "333333333" }
-        : { status: "missing" },
-    })
-    assert.equal(replacement.owner, "replacement-owner")
-    releaseUpgradeLock(replacement)
-    assert.equal(fs.existsSync(lockPath), false)
+    assert.equal(fs.existsSync(fixture.transactionPath), true)
+  })
+  it("preserves a legacy starting transaction during the recovery handoff grace", () => {
+    const fixture = createStaleUpgradeTransaction("pending", true)
+    const ownerPath = path.join(fixture.lockPath, "owner")
+    const owner = JSON.parse(fs.readFileSync(ownerPath, "utf8"))
+    owner.phase = "starting"
+    owner.heartbeatAt = 2_000_000
+    delete owner.recoveryPid
+    delete owner.recoveryProcessStartedAt
+    fs.writeFileSync(ownerPath, JSON.stringify(owner), "utf8")
+    assert.throws(
+      () => acquireUpgradeLock(fixture.installDir, process.pid, {
+        now: () => 2_005_000,
+        inspectProcessStartTime: (pid) => pid === process.pid
+          ? { status: "found", startedAt: "555555555" }
+          : { status: "missing" },
+      }),
+      /legacy recovery handoff is still in progress/u,
+    )
+    assert.equal(fs.existsSync(fixture.transactionPath), true)
+    assert.equal(fs.readFileSync(fixture.installPath, "utf8"), "replacement binary")
   })
 
-  it("preserves a starting lock when process inspection is unavailable", () => {
-    const installDir = tempDir()
-    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    const now = 2_000_000
-    fs.mkdirSync(lockPath)
-    fs.writeFileSync(
-      path.join(lockPath, "owner"),
-      JSON.stringify({
-        pid: 9876,
-        processStartedAt: "123456789",
-        token: "starting-owner",
-        createdAt: now - 10_000,
-        heartbeatAt: now - 5_000,
-        phase: "starting",
-        parentPid: 9876,
-        parentProcessStartedAt: "123456789",
-      }),
-      "utf8",
-    )
 
+  it("reads legacy PR 210 owner and actor identities without writing legacy files", () => {
+    const fixture = createStaleUpgradeTransaction("pending", true)
+    fs.writeFileSync(path.join(fixture.lockPath, "active-actor"), JSON.stringify({
+      token: "stale-owner",
+      pid: 6543,
+      processStartedAt: "444444444",
+      action: "Recover",
+    }), "utf8")
     assert.throws(
-      () => acquireUpgradeLock(installDir, process.pid, {
-        now: () => now,
-        staleAfterMs: 1_000,
-        inspectProcessStartTime: (processId) => processId === 9876
-          ? { status: "unknown" }
-          : { status: "found", startedAt: "987654321" },
+      () => acquireUpgradeLock(fixture.installDir, process.pid, {
+        inspectProcessStartTime: (pid) => pid === process.pid
+          ? { status: "found", startedAt: "555555555" }
+          : pid === 6543
+            ? { status: "found", startedAt: "444444444" }
+            : { status: "missing" },
       }),
       /already in progress/u,
     )
-    assert.equal(fs.existsSync(lockPath), true)
+    fs.rmSync(path.join(fixture.lockPath, "active-actor"))
+    fs.writeFileSync(path.join(fixture.lockPath, ".reclaim"), JSON.stringify({
+      token: "foreign-claimant",
+      pid: 6432,
+      processStartedAt: "333333333",
+      createdAt: 1_500_000,
+    }), "utf8")
+    const lock = acquireUpgradeLock(fixture.installDir, process.pid, {
+      createToken: () => "replacement-owner",
+      sleep: () => {},
+      inspectProcessStartTime: (pid) => pid === process.pid
+        ? { status: "found", startedAt: "555555555" }
+        : { status: "missing" },
+    })
+    assert.equal(fs.readFileSync(fixture.installPath, "utf8"), "original binary")
+    assert.equal(fs.existsSync(path.join(lock.path, ".reclaim")), false)
+    assert.equal(fs.existsSync(path.join(lock.path, "active-actor")), false)
+    releaseUpgradeLock(lock)
   })
+
+  it("does not release a lock while its manifest backup remains", () => {
+    const installDir = tempDir()
+    const manifestBackupPath = path.join(tempDir(), "install.json.upgrade.1234")
+    fs.writeFileSync(manifestBackupPath, "manifest", "utf8")
+    const lock = acquireUpgradeLock(installDir, process.pid)
+    lock.manifestBackupPath = manifestBackupPath
+    releaseUpgradeLock(lock)
+    assert.equal(fs.existsSync(lock.path), true)
+    fs.rmSync(manifestBackupPath)
+    releaseUpgradeLock(lock)
+    assert.equal(fs.existsSync(lock.path), false)
+  })
+
+  it("preserves a successor lock created after atomic removal claims the old lock", () => {
+    const installDir = tempDir()
+    const lock = acquireUpgradeLock(installDir, process.pid)
+    const owner = JSON.parse(fs.readFileSync(path.join(lock.path, "owner"), "utf8"))
+    removeMatchingUpgradeLock(lock.path, {
+      token: owner.token,
+      pid: owner.pid,
+      processStartedAt: owner.processStartedAt,
+      parentPid: owner.pid,
+      parentProcessStartedAt: owner.processStartedAt,
+    }, () => {
+      fs.mkdirSync(lock.path)
+      fs.writeFileSync(path.join(lock.path, "owner"), JSON.stringify({
+        token: "successor-owner",
+        pid: 9876,
+        processStartedAt: "999999999",
+        createdAt: 2_000_000,
+      }), "utf8")
+    })
+    assert.equal(JSON.parse(fs.readFileSync(path.join(lock.path, "owner"), "utf8")).token, "successor-owner")
+    assert.equal(
+      fs.readdirSync(installDir).some((entry) => entry.includes(".remove.")),
+      false,
+    )
+  })
+
+  it("sweeps only stale lock-removal tombstones during acquisition", () => {
+    const installDir = tempDir()
+    const stalePath = path.join(installDir, ".memory-lane-upgrade.lock.remove.1.1000.stale")
+    const freshPath = path.join(installDir, ".memory-lane-upgrade.lock.remove.1.3000.fresh")
+    fs.mkdirSync(stalePath)
+    fs.mkdirSync(freshPath)
+    const lock = acquireUpgradeLock(installDir, process.pid, {
+      now: () => 4_000,
+      staleAfterMs: 2_000,
+    })
+    assert.equal(fs.existsSync(stalePath), false)
+    assert.equal(fs.existsSync(freshPath), true)
+    releaseUpgradeLock(lock)
+  })
+
+  it("preserves malformed transaction state without masking the primary error", () => {
+    const installDir = tempDir()
+    const lock = acquireUpgradeLock(installDir, process.pid)
+    fs.writeFileSync(path.join(installDir, `memory-lane.exe.upgrade.${process.pid}`), "{", "utf8")
+    const warnings: unknown[][] = []
+    const originalWarn = console.warn
+    console.warn = (...args: unknown[]) => warnings.push(args)
+    try {
+      assert.doesNotThrow(() => releaseUpgradeLock(lock))
+      assert.equal(fs.existsSync(lock.path), true)
+      assert.match(String(warnings[0]?.[0]), /lock was preserved/u)
+    } finally {
+      console.warn = originalWarn
+      fs.rmSync(lock.path, { recursive: true, force: true })
+    }
+  })
+
+
+  it("cleans a committed transaction after the parent becomes inactive", async () => {
+    const fixture = createStaleUpgradeTransaction("committed")
+    await handleCommittedCleanup(committedCleanupArgs(fixture), () => ({ status: "missing" }))
+    assert.equal(fs.existsSync(fixture.backupPath), false)
+    assert.equal(fs.existsSync(fixture.manifestBackupPath), false)
+    assert.equal(fs.existsSync(fixture.transactionPath), false)
+    assert.equal(fs.existsSync(fixture.lockPath), false)
+    await handleCommittedCleanup(committedCleanupArgs(fixture), () => ({ status: "missing" }))
+  })
+
+  for (const [argument, value] of [
+    ["--parent-pid", "0"],
+    ["--parent-started-at", "0"],
+  ] as const) {
+    it(`rejects committed cleanup with ${argument} ${value} before process inspection`, async () => {
+      const fixture = createStaleUpgradeTransaction("committed")
+      const args = committedCleanupArgs(fixture)
+      args[args.indexOf(argument) + 1] = value
+      let inspected = false
+      await handleCommittedCleanup(args, () => {
+        inspected = true
+        return { status: "missing" }
+      })
+      assert.equal(inspected, false)
+      assert.equal(fs.existsSync(fixture.transactionPath), true)
+      assert.equal(fs.existsSync(fixture.lockPath), true)
+    })
+  }
+
+  it("leaves committed residue when the 30-second helper deadline expires", async () => {
+    const fixture = createStaleUpgradeTransaction("committed")
+    let clock = 0
+    await handleCommittedCleanup(
+      committedCleanupArgs(fixture),
+      () => ({ status: "found", startedAt: "111111111" }),
+      () => clock,
+      async (milliseconds) => {
+        clock += milliseconds
+      },
+    )
+    assert.equal(clock, WINDOWS_COMMITTED_CLEANUP_TIMEOUT_MS)
+    assert.equal(fs.existsSync(fixture.transactionPath), true)
+    assert.equal(fs.existsSync(fixture.lockPath), true)
+  })
+
+  it("leaves committed residue when helper process inspection is unknown", async () => {
+    const fixture = createStaleUpgradeTransaction("committed")
+    await handleCommittedCleanup(committedCleanupArgs(fixture), () => ({ status: "unknown" }))
+    assert.equal(fs.existsSync(fixture.transactionPath), true)
+    assert.equal(fs.existsSync(fixture.lockPath), true)
+  })
+
+  it("does not let a stale helper delete a successor owner's artifacts", async () => {
+    const fixture = createStaleUpgradeTransaction("committed")
+    fs.writeFileSync(path.join(fixture.lockPath, "owner"), JSON.stringify({
+      token: "successor-owner",
+      pid: 9876,
+      processStartedAt: "999999999",
+      createdAt: 2_000_000,
+    }), "utf8")
+    await handleCommittedCleanup(committedCleanupArgs(fixture), () => ({ status: "missing" }))
+    assert.equal(fs.existsSync(fixture.transactionPath), true)
+    assert.equal(fs.existsSync(fixture.lockPath), true)
+  })
+
+  it("keeps a committed upgrade successful when cleanup launch fails", () => {
+    const fixture = createStaleUpgradeTransaction()
+    const warnings: unknown[][] = []
+    const originalWarn = console.warn
+    console.warn = (...args: unknown[]) => warnings.push(args)
+    try {
+      const committed = commitWindowsUpgrade(
+        fixture.installDir,
+        { path: fixture.lockPath, owner: "stale-owner" },
+        (() => {
+          throw new Error("launch failed")
+        }) as any,
+      )
+      assert.equal(committed, true)
+      assert.equal(JSON.parse(fs.readFileSync(fixture.transactionPath, "utf8")).State, "committed")
+      assert.match(String(warnings[0]?.[0]), /launch failed/u)
+    } finally {
+      console.warn = originalWarn
+    }
+  })
+
 
   it("rolls back a pending transaction before reclaiming a crashed recovery lock", () => {
     const fixture = createStaleUpgradeTransaction()
@@ -921,6 +1028,24 @@ describe("upgrade", () => {
     assert.equal(fs.existsSync(fixture.transactionPath), false)
     releaseUpgradeLock(lock)
   })
+  it("recovers when backup rename completed before its checkpoint was persisted", () => {
+    const fixture = createStaleUpgradeTransaction()
+    const transaction = JSON.parse(fs.readFileSync(fixture.transactionPath, "utf8"))
+    transaction.BackupState = "not-backed-up"
+    fs.writeFileSync(fixture.transactionPath, JSON.stringify(transaction), "utf8")
+    const lock = acquireUpgradeLock(fixture.installDir, process.pid, {
+      createToken: () => "replacement-owner",
+      inspectProcessStartTime: (pid) => pid === process.pid
+        ? { status: "found", startedAt: "444444444" }
+        : { status: "missing" },
+    })
+    assert.equal(fs.readFileSync(fixture.installPath, "utf8"), "original binary")
+    assert.equal(fs.readFileSync(fixture.manifestPath, "utf8"), "original manifest")
+    assert.equal(fs.existsSync(fixture.backupPath), false)
+    assert.equal(fs.existsSync(fixture.transactionPath), false)
+    releaseUpgradeLock(lock)
+  })
+
 
   for (const state of ["committed", "restored"] as const) {
     it(`finishes ${state} transaction cleanup before reclaiming a crashed recovery lock`, () => {
@@ -1103,68 +1228,13 @@ describe("upgrade", () => {
           ? { status: "found", startedAt: "444444444" }
           : { status: "missing" },
       }),
-      /cannot safely reclaim.+malformed/iu,
+      /cannot safely reconcile.+malformed/iu,
     )
     assert.equal(fs.existsSync(fixture.lockPath), true)
     assert.equal(fs.existsSync(path.join(fixture.lockPath, ".reclaim")), false)
     assert.equal(fs.existsSync(fixture.backupPath), true)
   })
 
-  it("reclaims a recovery lock only after confirmed process identity mismatch", () => {
-    const installDir = tempDir()
-    const lockPath = path.join(installDir, ".memory-lane-upgrade.lock")
-    const now = 2_000_000
-    fs.mkdirSync(lockPath)
-    fs.writeFileSync(
-      path.join(lockPath, "owner"),
-      JSON.stringify({
-        pid: 9876,
-        processStartedAt: "123456789",
-        token: "stale-owner",
-        createdAt: now - 10_000,
-        heartbeatAt: now,
-        phase: "recovery",
-        parentPid: 8765,
-        parentProcessStartedAt: "222222222",
-        recoveryPid: 9876,
-        recoveryProcessStartedAt: "123456789",
-      }),
-      "utf8",
-    )
-
-    const lock = acquireUpgradeLock(installDir, process.pid, {
-      now: () => now,
-      createToken: () => "replacement-owner",
-      inspectProcessStartTime: (processId) => processId === 9876
-        ? { status: "found", startedAt: "999999999" }
-        : processId === 8765
-          ? { status: "missing" }
-          : { status: "found", startedAt: "987654321" },
-    })
-
-    assert.equal(lock.owner, "replacement-owner")
-    releaseUpgradeLock(lock)
-  })
-
-  it("does not let the parent release a recovery-owned lock", () => {
-    const installDir = tempDir()
-    const lock = acquireUpgradeLock(installDir, process.pid)
-    const ownerPath = path.join(lock.path, "owner")
-    const owner = JSON.parse(fs.readFileSync(ownerPath, "utf8"))
-    fs.writeFileSync(ownerPath, JSON.stringify({
-      ...owner,
-      pid: 9876,
-      processStartedAt: "123456789",
-      phase: "recovery",
-      recoveryPid: 9876,
-      recoveryProcessStartedAt: "123456789",
-    }), "utf8")
-
-    releaseUpgradeLock(lock)
-
-    assert.equal(fs.existsSync(lock.path), true)
-    fs.rmSync(lock.path, { recursive: true, force: true })
-  })
 
   it("uses the HOME-based Windows binary directory when the manifest is missing", () => {
     const binaryPath = defaultInstalledBinaryPath("C:\\Homes\\Ryan", true, path.win32)
