@@ -2,7 +2,6 @@ import { spawn, spawnSync } from "node:child_process"
 import { createHash, randomUUID } from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { installManifestPath } from "../installer/manifest.js"
 
 export interface ManifestTransaction {
   path: string
@@ -724,7 +723,7 @@ export function releaseUpgradeLock(lock: UpgradeLock | undefined): void {
 }
 
 export function snapshotInstallManifest(dataDir: string, upgradePid: number): ManifestTransaction {
-  const manifestPath = installManifestPath(dataDir)
+  const manifestPath = path.join(dataDir, "install.json")
   const backupPath = `${manifestPath}.upgrade.${upgradePid}`
   const existed = fs.existsSync(manifestPath)
   if (existed) fs.copyFileSync(manifestPath, backupPath)
