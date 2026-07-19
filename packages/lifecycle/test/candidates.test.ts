@@ -40,6 +40,36 @@ test("question-only messages produce no candidates", () => {
   assert.deepEqual(candidates, [])
 })
 
+test("keeps declarative preferences with comma and semicolon clauses", () => {
+  const messages = [
+    "This repo uses pnpm, which is faster than npm.",
+    "I prefer dark mode, when available.",
+    "I prefer dark mode; when available, dark mode is easier to read.",
+  ]
+
+  for (const lastUserMessage of messages) {
+    const candidates = extractStopCandidates({ cwd: process.cwd(), lastUserMessage })
+    assert.deepEqual(candidates.map((candidate) => candidate.text), [lastUserMessage.slice(0, -1)], lastUserMessage)
+  }
+})
+
+test("continues to reject genuine questions after declarative clauses", () => {
+  const questions = [
+    "Which package manager should this repo use",
+    "I prefer dark mode; can you enable dark mode",
+  ]
+
+  for (const lastUserMessage of questions) {
+    assert.deepEqual(extractStopCandidates({ cwd: process.cwd(), lastUserMessage }), [], lastUserMessage)
+  }
+
+  const mixedCandidates = extractStopCandidates({
+    cwd: process.cwd(),
+    lastUserMessage: "I prefer dark mode. Which theme should this repo use",
+  })
+  assert.deepEqual(mixedCandidates.map((candidate) => candidate.text), ["I prefer dark mode"])
+})
+
 test("transient project imperatives produce no candidates", () => {
   const candidates = extractStopCandidates({
     cwd: process.cwd(),
@@ -301,6 +331,25 @@ test("does not split inferred preferences at abbreviations, decimals, or version
     const candidates = extractStopCandidates({ cwd: process.cwd(), lastUserMessage })
     assert.deepEqual(candidates.map((candidate) => candidate.text), [lastUserMessage.slice(0, -1)], lastUserMessage)
   }
+})
+
+test("splits ordinary sentence-final no from the following preference", () => {
+  const candidates = extractStopCandidates({
+    cwd: process.cwd(),
+    lastUserMessage: "My answer is usually no. I prefer written confirmations.",
+  })
+
+  assert.deepEqual(candidates.map((candidate) => candidate.text), ["I prefer written confirmations"])
+})
+
+test("rejects quoted copied-list bullets before preference inference", () => {
+  const candidates = extractStopCandidates({
+    cwd: process.cwd(),
+    lastUserMessage: `> - This repo uses pnpm for package management.
+> - I prefer concise status updates.`,
+  })
+
+  assert.deepEqual(candidates, [])
 })
 
 test("preserves atomic I use X for Y preferences", () => {
