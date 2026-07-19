@@ -83,6 +83,164 @@ test("returns a pending session-summary candidate", async () => {
   assert.strictEqual(candidate.provenance.sessionId, "s1")
 })
 
+test("pre-compact preserves an unrepresented bare merge as session narrative", async () => {
+  const engine = makeEngine()
+  const provider: LLMProvider = { complete: async () => "- PR #201 merged." }
+
+  const result = await handlePreCompact(engine, {
+    cwd: "/tmp",
+    sessionId: "s-bare-narrative",
+    turnId: "t-bare-narrative",
+    messages: [{ role: "assistant", content: "Merge completed." }],
+  }, { provider, adapter: "codex", requireConfirmation: false })
+
+  assert.equal(result.length, 1)
+  assert.ok(result[0].text.split("\n").includes("- PR #201 merged."))
+})
+
+test("pre-compact coalesces equivalent checkpoint bullets within one summary", async () => {
+  const engine = makeEngine()
+  const provider: LLMProvider = {
+    complete: async () => [
+      "- PR #201 merged.",
+      "- Pull request 201 was merged.",
+      "- Next steps: validate summary deduplication.",
+    ].join("\n"),
+  }
+
+  const result = await handlePreCompact(engine, {
+    cwd: "/tmp",
+    sessionId: "s-summary-dedupe",
+    turnId: "t-summary-dedupe",
+    messages: [{ role: "assistant", content: "Merge completed." }],
+  }, { provider, adapter: "codex", requireConfirmation: false })
+
+  assert.equal(result.length, 1)
+  assert.ok(result[0].text.split("\n").includes("- PR #201 merged."))
+  assert.doesNotMatch(result[0].text, /Pull request 201/iu)
+  assert.equal(result[0].text.match(/\bmerged\b/giu)?.length, 1)
+  assert.match(result[0].text, /validate summary deduplication/iu)
+})
+
+test("pre-compact removes a canonical merge already represented by a checkpoint", async () => {
+  const engine = makeEngine()
+  engine.refreshScope("/tmp")
+  engine.save({
+    text: "PR #201 merged with canonical checkpoint identity and regression coverage.",
+    category: "project",
+    scopeType: "project",
+    status: "pending",
+    source: "agent-suggested",
+    kind: "project_checkpoint",
+  })
+  const provider: LLMProvider = {
+    complete: async () => [
+      "- Pull request 201 was merged with canonical checkpoint identity and regression coverage.",
+      "- Next steps: validate the lifecycle package.",
+    ].join("\n"),
+  }
+
+  const result = await handlePreCompact(engine, {
+    cwd: "/tmp",
+    sessionId: "s-cross-lifecycle",
+    turnId: "t-cross-lifecycle",
+    messages: [{ role: "assistant", content: "Implementation and tests completed." }],
+  }, { provider, adapter: "codex", requireConfirmation: false })
+
+  assert.equal(result.length, 1)
+  assert.doesNotMatch(result[0].text, /pull request 201/iu)
+  assert.match(result[0].text, /validate the lifecycle package/iu)
+})
+
+test("pre-compact checkpoint filtering is pure and does not enrich pending storage", async () => {
+  const engine = makeEngine()
+  engine.refreshScope("/tmp")
+  const provisional = engine.save({
+    text: "PR #201 merged.",
+    category: "project",
+    scopeType: "project",
+    status: "pending",
+    source: "agent-suggested",
+    kind: "project_checkpoint",
+  })
+  if (provisional.status !== "saved") throw new Error("expected checkpoint")
+  const provider: LLMProvider = {
+    complete: async () => [
+      "- PR #201 merged with canonical checkpoint identity and regression coverage.",
+      "- Next steps: validate summary filtering.",
+    ].join("\n"),
+  }
+
+  const result = await handlePreCompact(engine, {
+    cwd: "/tmp",
+    sessionId: "s-pure-filter",
+    turnId: "t-pure-filter",
+    messages: [{ role: "assistant", content: "Implementation completed." }],
+  }, { provider, adapter: "codex", requireConfirmation: false })
+
+  assert.equal(result.length, 1)
+  assert.doesNotMatch(result[0].text, /PR #201/iu)
+  assert.match(result[0].text, /validate summary filtering/iu)
+  const stored = engine.list({ status: "pending" }).find((memory) => memory.id === provisional.memory.id)
+  assert.equal(stored?.text, provisional.memory.text)
+  assert.equal(stored?.updatedAt, provisional.memory.updatedAt)
+})
+
+test("pre-compact preserves a novel compound event while removing its duplicate identity", async () => {
+  const engine = makeEngine()
+  engine.refreshScope("/tmp")
+  engine.save({
+    text: "PR #201 merged with canonical checkpoint identity.",
+    category: "project",
+    scopeType: "project",
+    status: "approved",
+    source: "agent-suggested",
+    kind: "project_checkpoint",
+  })
+  const provider: LLMProvider = {
+    complete: async () => "- PR #201 merged with canonical checkpoint identity and released v0.9.1.",
+  }
+
+  const result = await handlePreCompact(engine, {
+    cwd: "/tmp",
+    sessionId: "s-compound",
+    turnId: "t-compound",
+    messages: [{ role: "assistant", content: "Release completed." }],
+  }, { provider, adapter: "codex", requireConfirmation: false })
+
+  assert.equal(result.length, 1)
+  assert.doesNotMatch(result[0].text, /PR #201/iu)
+  assert.ok(result[0].text.split("\n").includes("- Released v0.9.1."))
+})
+
+test("pre-compact does not recreate a rejected canonical merge event", async () => {
+  const engine = makeEngine()
+  engine.refreshScope("/tmp")
+  const saved = engine.save({
+    text: "PR #201 merged with canonical checkpoint identity and regression coverage.",
+    category: "project",
+    scopeType: "project",
+    status: "pending",
+    source: "agent-suggested",
+    kind: "project_checkpoint",
+  })
+  if (saved.status !== "saved") throw new Error("expected checkpoint")
+  engine.reject(saved.memory.id)
+  const provider: LLMProvider = {
+    complete: async () => "- PR #201 merged with canonical checkpoint identity and regression coverage.",
+  }
+
+  const result = await handlePreCompact(engine, {
+    cwd: "/tmp",
+    sessionId: "s-rejected",
+    turnId: "t-rejected",
+    messages: [{ role: "assistant", content: "Implementation completed." }],
+  }, { provider, adapter: "codex", requireConfirmation: false })
+
+  assert.deepStrictEqual(result, [])
+  assert.equal(engine.list({ status: "pending" }).length, 0)
+})
+
 test("returns a pending pre-compact session-summary candidate", async () => {
   const engine = makeEngine()
   let captured = ""

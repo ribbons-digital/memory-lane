@@ -90,6 +90,8 @@ export interface MemoryContextDecision {
 export interface LifecycleResult {
   additionalContext?: string
   saved: SaveResult[]
+  /** Existing checkpoint records enriched in place; these are not newly suggested memories. */
+  revised?: MemoryRecord[]
   discarded: Array<{ text: string; reason: string }>
   skippedSecret?: number
   contextDecision?: MemoryContextDecision

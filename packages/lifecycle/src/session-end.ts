@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import { analyzeSummaryHygiene, containsLikelySecret, normalizeMemoryText, type MemoryEngine, type MemoryFreshness, type MemoryLifecycleEvent, type MemoryRecord } from "@memory-lane/core"
+import { extractCheckpointCandidatesFromStop, inspectCheckpointCandidates } from "./checkpoint-capture.js"
 import { createOpenAICompatibleProvider } from "./llm-provider.js"
 import { captureLifecycleTrace } from "./trace-capture.js"
 import type { LLMProvider, PreCompactInput, PreCompactOptions, SessionEndInput, SessionEndOptions } from "./types.js"
@@ -77,6 +78,38 @@ function cleanGeneratedSummary(raw: string): string {
     .filter((line) => !isReviewManagementChatter(line))
     .join("\n")
     .trim()
+}
+
+function capitalizeCheckpointProse(text: string): string {
+  return text.replace(/\p{L}/u, (letter) => letter.toLocaleUpperCase("en-US"))
+}
+
+function reconcileSummaryCheckpointLines(engine: MemoryEngine, text: string): string {
+  const reconciled: string[] = []
+  const seenIdentities = new Set<string>()
+  for (const line of text.split("\n")) {
+    const listPrefix = /^(\s*[-*]\s*)/u.exec(line)?.[1] ?? ""
+    const checkpointText = line.trim().replace(/^[-*]\s*/u, "")
+    if (!checkpointText) {
+      reconciled.push(line)
+      continue
+    }
+
+    const extracted = extractCheckpointCandidatesFromStop({ cwd: engine.getProjectScope()?.root ?? process.cwd(), lastAssistantMessage: checkpointText })
+    if (extracted.length === 0) {
+      reconciled.push(line)
+      continue
+    }
+
+    const inspection = inspectCheckpointCandidates(engine, extracted, {
+      preserveUnrepresentedDiscards: true,
+      seenIdentities,
+    })
+    for (const candidate of inspection.candidates) {
+      if (candidate.decision !== "discard") reconciled.push(`${listPrefix}${capitalizeCheckpointProse(candidate.text)}`)
+    }
+  }
+  return reconciled.join("\n").trim()
 }
 
 function sessionSummaryContentKey(text: string): string | undefined {
@@ -260,7 +293,7 @@ export async function handleSessionEnd(
 
   if (/^NO_DURABLE_MEMORY[.\s]*$/iu.test(raw.trim())) return []
 
-  const cleaned = cleanGeneratedSummary(raw)
+  const cleaned = reconcileSummaryCheckpointLines(engine, cleanGeneratedSummary(raw))
   if (!sessionSummaryContentKey(cleaned)) return []
   const hygiene = analyzeSummaryHygiene(cleaned, { kind: "session_summary", source: "session-summary" })
   if (hygiene.action === "suppress") return []

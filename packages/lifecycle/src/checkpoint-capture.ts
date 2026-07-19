@@ -12,7 +12,20 @@ interface CheckpointMatch {
   confidence: number
 }
 
+export interface CheckpointCandidateResolution {
+  candidates: MemoryCandidate[]
+  revised: MemoryRecord[]
+}
+
+export interface CheckpointInspectionOptions {
+  preserveUnrepresentedDiscards?: boolean
+  seenIdentities?: Set<string>
+}
+
 const VERSION_PATTERN = /v?\d+\.\d+\.\d+(?:[-+][\w.]+)?/iu
+const MERGE_PATTERN = /\b(?:merged\s+(?:PR|pull request)\s*#?(\d+)|(?:PR|pull request)\s*#?(\d+)\s+(?:(?:was|has\s+been)\s+)?merged)\b/iu
+const BARE_MERGE_SUPPRESSION_REASON = "bare merge checkpoint lacks durable project context"
+const REJECTED_CHECKPOINT_SUPPRESSION_REASON = "rejected equivalent checkpoint: Memory Lane suppression remains active until explicitly deleted"
 
 function versionWithPrefix(version: string): string {
   return version.toLowerCase().startsWith("v") ? version : `v${version}`
@@ -136,9 +149,25 @@ function keyPhrase(text: string): string {
     .slice(0, 80)
 }
 
+function mergeDurableContextScore(text: string): number {
+  if (!MERGE_PATTERN.test(text)) return 0
+  const remainder = compactWhitespace(text)
+    .replace(MERGE_PATTERN, " ")
+    .replace(/^[-*]\s*/u, "")
+    .replace(/\b(?:this\s+(?:repo|project|repository)|successfully|after\s+review)\b/giu, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+  if (!remainder) return 0
+
+  const words = remainder.split(/\s+/u).filter((word) => word.length > 1)
+  const durableConnector = /\b(?:with|to|for|because|implemented?|fixed?|added?|removed?|prevented?|resolved?|enabled?|delivered?|shipped?|verified?|tests?|coverage|decision|invariant|outcome|next|continue)\b/iu.test(remainder)
+  return durableConnector && words.length >= 2 ? words.length : 0
+}
+
 function checkpointCandidate(match: CheckpointMatch): MemoryCandidate[] {
   const normalized = candidateCheckpointText(match.text)
   if (!normalized) return []
+  const bareMerge = match.key.startsWith("merge:") && mergeDurableContextScore(normalized) === 0
 
   return [{
     text: normalized,
@@ -146,8 +175,8 @@ function checkpointCandidate(match: CheckpointMatch): MemoryCandidate[] {
     scopeType: "project",
     kind: "project_checkpoint",
     confidence: match.confidence,
-    decision: "save-pending",
-    reason: match.reason,
+    decision: bareMerge ? "discard" : "save-pending",
+    reason: bareMerge ? BARE_MERGE_SUPPRESSION_REASON : match.reason,
     source: "agent-suggested",
   }]
 }
@@ -167,13 +196,12 @@ function releaseMatchFromText(text: string): CheckpointMatch | undefined {
 }
 
 function mergeMatchFromText(text: string): CheckpointMatch | undefined {
-  const mergePattern = /\b(?:merged\s+(?:PR|pull request)\s*#?(\d+)|(?:PR|pull request)\s*#?(\d+)\s+merged)\b/iu
-  const match = mergePattern.exec(text)
+  const match = MERGE_PATTERN.exec(text)
   const prNumber = match?.[1] ?? match?.[2]
   if (!prNumber) return undefined
   return {
     key: `merge:pr-${prNumber}`,
-    text: sentenceContainingMatch(text, mergePattern),
+    text: sentenceContainingMatch(text, MERGE_PATTERN),
     reason: "explicit merged pull request progress statement",
     confidence: 0.9,
   }
@@ -269,19 +297,59 @@ function mergeMatchFromToolEvidence(command: string, preview: string): Checkpoin
   }
 }
 
-export function checkpointKeyFromText(text: string): string | undefined {
-  const match = matchCheckpointText(text)
-  if (match) return match.key
+export function checkpointKeysFromText(text: string): string[] {
+  const normalized = compactWhitespace(text)
+  if (!normalizeMemoryText(normalized) || containsLikelySecret(normalized) || isNegativeCheckpointEvidence(normalized)) return []
 
-  const normalized = safeNormalize(text)
-  if (!normalized) return undefined
-  const lower = normalized.toLowerCase()
-  const release = /\b(?:released|tagged|published)\s+(v?\d+\.\d+\.\d+(?:[-+][\w.]+)?)/iu.exec(lower)
-  if (release?.[1]) return `release:${versionWithPrefix(release[1])}`
-  const merge = /\b(?:merged\s+(?:pr|pull request)\s*#?(\d+)|(?:pr|pull request)\s*#?(\d+)\s+merged)\b/iu.exec(lower)
-  const prNumber = merge?.[1] ?? merge?.[2]
-  if (prNumber) return `merge:pr-${prNumber}`
-  return undefined
+  const matches = [
+    releaseMatchFromText(normalized),
+    mergeMatchFromText(normalized),
+    verificationMatchFromText(normalized),
+    docsSyncMatchFromText(normalized),
+    roadmapDecisionMatchFromText(normalized),
+    majorFixMatchFromText(normalized),
+  ]
+  return [...new Set(matches.map((match) => match?.key).filter((key): key is string => Boolean(key)))]
+}
+
+export function checkpointKeyFromText(text: string): string | undefined {
+  return checkpointKeysFromText(text)[0]
+}
+
+export function checkpointIdentityFromText(projectScope: string, text: string): string | undefined {
+  const key = checkpointKeyFromText(text)
+  return key ? `${projectScope}:${key}` : undefined
+}
+
+function checkpointIdentitiesFromText(scopeIdentity: string, text: string): string[] {
+  return checkpointKeysFromText(text).map((key) => `${scopeIdentity}:${key}`)
+}
+
+function candidateScopeIdentity(candidate: MemoryCandidate, projectScope?: string): string {
+  return candidate.scopeType === "global" ? "global" : projectScope ?? "global"
+}
+
+function splitCompoundCheckpointCandidate(candidate: MemoryCandidate): MemoryCandidate[] {
+  if (candidate.decision === "discard" || checkpointKeysFromText(candidate.text).length <= 1) return [candidate]
+  const parts = candidate.text
+    .split(/\s+(?:and|but)\s+(?=(?:released|tagged|published|merged)\b|(?:PR|pull request)\s*#?\d+\s+(?:(?:was|has\s+been)\s+)?merged\b)/iu)
+    .map((part) => part.trim())
+    .filter(Boolean)
+  if (parts.length <= 1) return [candidate]
+
+  const split = parts.flatMap((text) => {
+    const match = matchCheckpointText(text)
+    const derived = match ? checkpointCandidate(match)[0] : undefined
+    if (!derived) return []
+    return [{
+      ...derived,
+      category: candidate.category,
+      scopeType: candidate.scopeType,
+      source: candidate.source,
+      decision: derived.decision === "discard" ? "discard" : candidate.decision,
+    }]
+  })
+  return split.length > 0 ? split : [candidate]
 }
 
 export function extractCheckpointCandidatesFromStop(input: StopInput): MemoryCandidate[] {
@@ -314,22 +382,107 @@ function visibleInCurrentProject(memory: MemoryRecord, projectScope?: string): b
   return Boolean(projectScope) && (memory.scope.key === projectScope || memory.project?.key === projectScope || memory.project?.root === projectScope)
 }
 
-export function filterDuplicateCheckpointCandidates(engine: MemoryEngine, candidates: MemoryCandidate[]): MemoryCandidate[] {
-  const projectScope = engine.getProjectScope()?.key
-  const existingKeys = new Set(
-    engine.list({ all: true })
-      .filter((memory) => (memory.status === "pending" || memory.status === "approved") && visibleInCurrentProject(memory, projectScope))
-      .filter((memory) => memory.kind === "project_checkpoint")
-      .map((memory) => checkpointKeyFromText(memory.text))
-      .filter((key): key is string => Boolean(key)),
-  )
+function scopeIdentityForMemory(memory: MemoryRecord): string | undefined {
+  if (memory.scope.type === "global") return "global"
+  return memory.scope.key ?? memory.project?.key ?? memory.project?.root
+}
 
-  const seen = new Set<string>()
-  return candidates.filter((candidate) => {
-    const key = checkpointKeyFromText(candidate.text)
-    if (!key) return true
-    if (existingKeys.has(key) || seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+function checkpointIdentitiesForMemory(memory: MemoryRecord): string[] {
+  const scope = scopeIdentityForMemory(memory)
+  return scope ? checkpointIdentitiesFromText(scope, memory.text) : []
+}
+
+function inspectOrResolveCheckpointCandidates(
+  engine: MemoryEngine,
+  candidates: MemoryCandidate[],
+  options: { coalesce: boolean; preserveUnrepresentedDiscards?: boolean; seenIdentities?: Set<string> },
+): CheckpointCandidateResolution {
+  const projectScope = engine.getProjectScope()?.key
+  const existingByIdentity = new Map<string, MemoryRecord[]>()
+  for (const memory of engine.list({ all: true })) {
+    if (memory.status !== "pending" && memory.status !== "approved" && memory.status !== "rejected") continue
+    if (!visibleInCurrentProject(memory, projectScope)) continue
+    for (const identity of checkpointIdentitiesForMemory(memory)) {
+      const existing = existingByIdentity.get(identity) ?? []
+      existing.push(memory)
+      existingByIdentity.set(identity, existing)
+    }
+  }
+
+  const seen = options.seenIdentities ?? new Set<string>()
+  const resolved: MemoryCandidate[] = []
+  const revised: MemoryRecord[] = []
+  for (const candidate of candidates.flatMap(splitCompoundCheckpointCandidate)) {
+    const scopeIdentity = candidateScopeIdentity(candidate, projectScope)
+    const identities = checkpointIdentitiesFromText(scopeIdentity, candidate.text)
+    if (identities.length === 0) {
+      resolved.push(candidate)
+      continue
+    }
+    if (identities.every((identity) => seen.has(identity))) continue
+    for (const identity of identities) seen.add(identity)
+
+    const existing = [...new Map(
+      identities.flatMap((identity) => existingByIdentity.get(identity) ?? []).map((memory) => [memory.id, memory]),
+    ).values()]
+    if (candidate.decision === "discard") {
+      if (existing.some((memory) => memory.status === "rejected")) {
+        resolved.push({ ...candidate, reason: REJECTED_CHECKPOINT_SUPPRESSION_REASON })
+      } else if (options.preserveUnrepresentedDiscards && existing.length === 0) {
+        resolved.push({ ...candidate, decision: "save-pending" })
+      } else {
+        resolved.push(candidate)
+      }
+      continue
+    }
+
+    const representedIdentities = new Set(existing.flatMap((memory) => checkpointIdentitiesForMemory(memory)))
+    if (identities.some((identity) => !representedIdentities.has(identity))) {
+      resolved.push(candidate)
+      continue
+    }
+    if (existing.some((memory) => memory.status === "rejected")) {
+      resolved.push({ ...candidate, decision: "discard", reason: REJECTED_CHECKPOINT_SUPPRESSION_REASON })
+      continue
+    }
+
+    const active = existing.filter((memory) => memory.status === "pending" || memory.status === "approved")
+    const provisional = active.find((memory) =>
+      memory.status === "pending" &&
+      memory.kind === "project_checkpoint" &&
+      mergeDurableContextScore(candidate.text) > mergeDurableContextScore(memory.text),
+    )
+    if (provisional) {
+      if (options.coalesce) {
+        try {
+          const updated = engine.update(provisional.id, { text: candidate.text }, { actor: "lifecycle" })
+          if (updated) revised.push(updated)
+        } catch {
+          // Coalescing is best-effort. The existing canonical checkpoint still suppresses a duplicate.
+        }
+      }
+      continue
+    }
+    if (active.length > 0) continue
+
+    resolved.push(candidate)
+  }
+
+  return { candidates: resolved, revised }
+}
+
+export function inspectCheckpointCandidates(
+  engine: MemoryEngine,
+  candidates: MemoryCandidate[],
+  options: CheckpointInspectionOptions = {},
+): CheckpointCandidateResolution {
+  return inspectOrResolveCheckpointCandidates(engine, candidates, { coalesce: false, ...options })
+}
+
+export function resolveCheckpointCandidates(engine: MemoryEngine, candidates: MemoryCandidate[]): CheckpointCandidateResolution {
+  return inspectOrResolveCheckpointCandidates(engine, candidates, { coalesce: true })
+}
+
+export function filterDuplicateCheckpointCandidates(engine: MemoryEngine, candidates: MemoryCandidate[]): MemoryCandidate[] {
+  return inspectCheckpointCandidates(engine, candidates).candidates.filter((candidate) => candidate.decision !== "discard")
 }

@@ -505,7 +505,7 @@ test("stop shows pending review notice for checkpoint capture without leaking ch
     engine,
     env: {} as NodeJS.ProcessEnv,
     payloadText: stopPayload({
-      last_user_message: "PR #19 merged after review.",
+      last_user_message: "PR #19 merged with checkpoint deduplication and regression coverage.",
       last_assistant_message: "Done.",
     }),
   })
@@ -513,7 +513,7 @@ test("stop shows pending review notice for checkpoint capture without leaking ch
   const parsed = JSON.parse(output)
   assert.match(parsed.systemMessage, /Memory Lane: suggested 1 pending memory for review/u)
   assert.match(parsed.systemMessage, /memory-lane review/u)
-  assert.doesNotMatch(parsed.systemMessage, /PR #19|merged after review/u)
+  assert.doesNotMatch(parsed.systemMessage, /PR #19|checkpoint deduplication/u)
 
   const saved = engine.list({ all: true })
   assert.equal(saved.length, 1)
@@ -521,6 +521,30 @@ test("stop shows pending review notice for checkpoint capture without leaking ch
   assert.equal(saved[0].kind, "project_checkpoint")
   assert.equal(saved[0].provenance?.adapter, "codex")
   assert.equal(saved[0].provenance?.lifecycleEvent, "turn_stop")
+})
+
+test("stop checkpoint revision stays quiet instead of announcing a new pending suggestion", async () => {
+  const engine = engineInTemp()
+  const provisional = engine.save({
+    text: "PR #19 merged.",
+    status: "pending",
+    category: "project",
+    scopeType: "project",
+    kind: "project_checkpoint",
+  })
+  if (provisional.status !== "saved") throw new Error("expected provisional checkpoint")
+
+  const output = await runCodexHookCommand("stop", {
+    engine,
+    env: {} as NodeJS.ProcessEnv,
+    payloadText: stopPayload({
+      last_assistant_message: "PR #19 merged with checkpoint deduplication and regression coverage.",
+    }),
+  })
+
+  assert.equal(output, "{}")
+  const revised = engine.list({ all: true }).find((memory) => memory.id === provisional.memory.id)
+  assert.match(revised?.text ?? "", /checkpoint deduplication/u)
 })
 
 test("post-tool-use shows pending review notice for pending tool outcome", async () => {

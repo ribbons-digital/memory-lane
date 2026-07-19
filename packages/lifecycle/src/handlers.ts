@@ -1,7 +1,7 @@
-import { containsLikelySecret, type MemoryEngine, type MemoryProvenance, type MemorySource, type SaveResult } from "@memory-lane/core"
+import { containsLikelySecret, type MemoryEngine, type MemoryProvenance, type MemoryRecord, type MemorySource, type SaveResult } from "@memory-lane/core"
 import { analyzeAutomaticHandoff, classifyPromptRoute, isAlwaysOnMemory, isUnsafeAutomaticHandoffPointer, limitsFromContextPolicy, renderContinuityIntentGuidance, renderContinuityNotice, renderMemoryContext, renderMemoryManagementListGuidance, renderSessionStartMemoryContext, resolveContextPolicy, selectAlwaysOnMemories, selectDescriptorMemories, selectMemoriesForInjection, SESSION_START_DESCRIPTOR_MAX_CHARS, SESSION_START_DESCRIPTOR_MAX_ITEMS, type AutomaticHandoffAnalysis, type ContinuityIntent, type MemoryInjectionLimits } from "./injection.js"
 import { extractStopCandidates } from "./candidates.js"
-import { checkpointKeyFromText, extractCheckpointCandidatesFromPostToolUse, extractCheckpointCandidatesFromStop, filterDuplicateCheckpointCandidates } from "./checkpoint-capture.js"
+import { checkpointKeyFromText, extractCheckpointCandidatesFromPostToolUse, extractCheckpointCandidatesFromStop, resolveCheckpointCandidates } from "./checkpoint-capture.js"
 import { correctionKeyFromText, extractCorrectionCandidatesFromStop, filterDuplicateCorrectionCandidates, filterSameTurnCorrectionCandidates } from "./correction-capture.js"
 import { extractPostmortemLearningCandidatesFromStop, filterDuplicatePostmortemLearningCandidates, filterSameTurnPostmortemLearningCandidates, postmortemLearningKeyFromText } from "./postmortem-learning.js"
 import { filterDuplicateProcedureCandidates, summarizeToolOutcome } from "./tool-outcomes.js"
@@ -11,12 +11,13 @@ function createResult(additionalContext?: string, contextDecision?: MemoryContex
   return { additionalContext, saved: [], discarded: [], contextDecision }
 }
 
-function lifecycleResult(saved: SaveResult[], discarded: LifecycleResult["discarded"], skippedSecret?: number): LifecycleResult {
+function lifecycleResult(saved: SaveResult[], discarded: LifecycleResult["discarded"], skippedSecret?: number, revised?: MemoryRecord[]): LifecycleResult {
   const saveSkippedSecret = saved.filter((result) => result.status === "skipped" && result.reason === "secret").length
   const totalSkippedSecret = (skippedSecret ?? 0) + saveSkippedSecret
   return {
     saved,
     discarded,
+    ...(revised?.length ? { revised } : {}),
     ...(totalSkippedSecret > 0 ? { skippedSecret: totalSkippedSecret } : {}),
   }
 }
@@ -389,10 +390,10 @@ export function handleSessionStart(
 export function handleStop(engine: MemoryEngine, input: StopInput, options?: LifecycleHandlerOptions): LifecycleResult {
   engine.refreshScope(input.cwd)
   const stopCandidates = extractStopCandidates(input)
-  const checkpointCandidates = filterSameTurnCheckpointCandidates(
+  const checkpointResolution = resolveCheckpointCandidates(engine, filterSameTurnCheckpointCandidates(
     stopCandidates,
-    filterDuplicateCheckpointCandidates(engine, extractCheckpointCandidatesFromStop(input)),
-  )
+    extractCheckpointCandidatesFromStop(input),
+  ))
   const correctionCandidates = filterSameTurnCorrectionCandidates(
     stopCandidates,
     filterDuplicateCorrectionCandidates(engine, extractCorrectionCandidatesFromStop(input)),
@@ -416,24 +417,27 @@ export function handleStop(engine: MemoryEngine, input: StopInput, options?: Lif
     const generatedAdapterLearning = learningPostmortemKeys.has("postmortem:harness-generated-adapter-contract-tests")
     return !(generatedAdapterLearning && (correctionKey === "review-gate" || correctionKey === "verification-before-completion"))
   })
-  const result = persistCandidates(engine, [...effectiveCorrectionCandidates, ...learningCandidates, ...checkpointCandidates, ...stopCandidates], input, "turn_stop", options)
+  const result = persistCandidates(engine, [...effectiveCorrectionCandidates, ...learningCandidates, ...checkpointResolution.candidates, ...stopCandidates], input, "turn_stop", options)
   return lifecycleResult(
     result.saved,
     result.discarded,
     inputHasLikelySecret(input.lastUserMessage, input.lastAssistantMessage) ? 1 : undefined,
+    checkpointResolution.revised,
   )
 }
 
 export function handlePostToolUse(engine: MemoryEngine, input: PostToolUseInput, options?: LifecycleHandlerOptions): LifecycleResult {
   engine.refreshScope(input.cwd)
+  const checkpointResolution = resolveCheckpointCandidates(engine, extractCheckpointCandidatesFromPostToolUse(input))
   const candidates = [
     ...filterDuplicateProcedureCandidates(engine, summarizeToolOutcome(input)),
-    ...filterDuplicateCheckpointCandidates(engine, extractCheckpointCandidatesFromPostToolUse(input)),
+    ...checkpointResolution.candidates,
   ]
   const result = persistCandidates(engine, candidates, input, "post_tool_use", options)
   return lifecycleResult(
     result.saved,
     result.discarded,
     inputHasLikelySecret(input.toolInput, input.toolResponse) ? 1 : undefined,
+    checkpointResolution.revised,
   )
 }
