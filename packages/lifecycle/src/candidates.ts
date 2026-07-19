@@ -18,7 +18,7 @@ const TRANSIENT_IMPERATIVE_PATTERN = new RegExp(`^(?:please\\s+)?(?:${EXECUTION_
 const PREFERENCE_STATEMENT_PATTERN = new RegExp(`\\b(?:${PREFERENCE_CUE_SOURCE})\\b`, "iu")
 const TASK_SPECIFIC_PREFERENCE_PATTERN = new RegExp(`\\bi\\s+prefer\\s+(?:that\\s+)?you\\s+(?:${EXECUTION_VERB_SOURCE})\\b`, "iu")
 const TRAILING_EXECUTION_PATTERN = new RegExp(`(?:[,;]|\\band\\s+then\\b)\\s*(?:and|but)?\\s*(?:please\\s+)?(?:${EXECUTION_VERB_SOURCE})\\b`, "iu")
-const NON_TERMINAL_ABBREVIATION_PATTERN = /\b(?:e\.g|i\.e|a\.m|p\.m|u\.s|u\.k|mr|mrs|ms|dr|prof|sr|jr|vs|etc|approx|fig|no)\.$/iu
+const NON_TERMINAL_ABBREVIATION_PATTERN = /\b(?:e\.g|i\.e|a\.m|p\.m|u\.s|u\.k|mr|mrs|ms|dr|prof|sr|jr|vs|etc|approx|fig)\.$/iu
 
 function isOpeningQuestion(text: string): boolean {
   return /^(?:what|how|why|when|where|who|do|does|did|is|are|can|could|should)\b/iu.test(text.trim())
@@ -27,7 +27,7 @@ function isOpeningQuestion(text: string): boolean {
 function isQuestion(text: string): boolean {
   const normalized = text.trim()
   return normalized.includes("?") ||
-    /(?:^|[.!;,]\s+)(?:what|how|why|when|where|who|which|do|does|did|is|are|can|could|should|would|will)\b/iu.test(normalized) ||
+    /(?:^|[.!]\s+)(?:what|how|why|when|where|who|which|do|does|did|is|are|can|could|should|would|will)\b/iu.test(normalized) ||
     /\b(?:can|could|would|will)\s+you\b/iu.test(normalized)
 }
 
@@ -105,9 +105,8 @@ function inferredUnits(text: string): string[] {
   return withoutFencedCode
     .split(/\r?\n/u)
     .flatMap(splitInferredLine)
-    .map((unit) => unit.trim())
-    .filter((unit) => !/^(?:[-*+]|\d+[.)])\s+/u.test(unit))
     .map((unit) => unit.replace(/^>\s*/u, "").trim())
+    .filter((unit) => !/^(?:[-*+]|\d+[.)])\s+/u.test(unit))
     .filter(Boolean)
 }
 
