@@ -203,7 +203,7 @@ test("continuity hints report expired and stale freshness advisories without tex
   const result = buildContinuityHints([
     memory({ id: "expired", text: "SECRET expired body", freshness: { expiresAt: "2026-06-18T00:00:00.000Z" } }),
     memory({ id: "stale", text: "SECRET stale body", updatedAt: "2026-06-01T00:00:00.000Z", freshness: { staleAfterDays: 1 } }),
-    memory({ id: "current", text: "SECRET current body", freshness: { staleAfterDays: 30 } }),
+    memory({ id: "current", text: "SECRET current body", freshness: { staleAfterDays: 30, capturedAt: "9999-01-01T00:00:00.000Z" } }),
   ], { projectScopeKey: "project-a" })
 
   const hint = result.hints.find((item) => item.code === "freshness-advisory")
