@@ -23,9 +23,14 @@ function lifecycleResult(statuses: Array<"pending" | "approved">): LifecycleResu
   }
 }
 
-test("pendingReviewCount counts only saved pending memories", () => {
+test("pendingReviewCount counts only newly saved pending memories", () => {
   assert.equal(pendingReviewCount(lifecycleResult(["pending", "approved", "pending"])), 2)
   assert.equal(pendingReviewCount({ saved: [{ status: "skipped", reason: "duplicate" }], discarded: [] }), 0)
+
+  const revisedOnly = lifecycleResult([])
+  revisedOnly.revised = lifecycleResult(["pending"]).saved.flatMap((entry) => entry.status === "saved" ? [entry.memory] : [])
+  assert.equal(pendingReviewCount(revisedOnly), 0)
+  assert.equal(renderPendingReviewNotice(revisedOnly), undefined)
 })
 
 test("renderPendingReviewNotice returns undefined when nothing pending was saved", () => {

@@ -778,19 +778,19 @@ test("stop keeps inferred checkpoint for release text that also looks like a pro
   assert.equal(pendingCheckpoints[0]?.source, "agent-suggested")
 })
 
-test("stop keeps inferred checkpoint for merged PR text that also looks like a project fact", () => {
+test("stop keeps inferred checkpoint for enriched merged PR text that also looks like a project fact", () => {
   const project = tempDir()
   const engine = engineInTemp(project)
 
   const result = handleStop(engine, {
     cwd: project,
-    lastUserMessage: "This repo PR #19 merged after review.",
+    lastUserMessage: "This repo PR #19 merged with checkpoint deduplication and regression coverage.",
   })
 
   const savedMemories = result.saved.flatMap((save) => save.status === "saved" ? [save.memory] : [])
   const pendingCheckpoints = savedMemories.filter((memory) => memory.status === "pending" && memory.kind === "project_checkpoint")
   assert.equal(pendingCheckpoints.length, 1)
-  assert.equal(pendingCheckpoints[0]?.text, "This repo PR #19 merged after review.")
+  assert.equal(pendingCheckpoints[0]?.text, "This repo PR #19 merged with checkpoint deduplication and regression coverage.")
   assert.equal(pendingCheckpoints[0]?.source, "agent-suggested")
 })
 
@@ -1054,7 +1054,7 @@ test("post-tool-use captures successful release command as pending checkpoint", 
   assert.equal(result.saved[0].memory.provenance?.toolName, "Bash")
 })
 
-test("post-tool-use captures successful merge command as pending checkpoint", () => {
+test("post-tool-use suppresses a successful bare merge command without durable context", () => {
   const project = tempDir()
   const engine = engineInTemp(project)
 
@@ -1065,18 +1065,97 @@ test("post-tool-use captures successful merge command as pending checkpoint", ()
     toolResponse: { stdout: "Merged pull request #19", exit_code: 0 },
   }, { adapter: "test" })
 
-  assert.equal(result.saved.length, 1)
-  assert.equal(result.saved[0]?.status, "saved")
-  if (result.saved[0]?.status !== "saved") throw new Error("expected saved checkpoint")
-  assert.equal(result.saved[0].memory.text, "Merged PR #19.")
-  assert.equal(result.saved[0].memory.status, "pending")
-  assert.equal(result.saved[0].memory.kind, "project_checkpoint")
-  assert.equal(result.saved[0].memory.category, "project")
-  assert.equal(result.saved[0].memory.scope.type, "project")
-  assert.equal(result.saved[0].memory.source, "agent-suggested")
-  assert.equal(result.saved[0].memory.provenance?.adapter, "test")
-  assert.equal(result.saved[0].memory.provenance?.lifecycleEvent, "post_tool_use")
-  assert.equal(result.saved[0].memory.provenance?.toolName, "Bash")
+  assert.equal(result.saved.length, 0)
+  assert.equal(result.discarded.length, 1)
+  assert.equal(result.discarded[0].text, "Merged PR #19.")
+  assert.match(result.discarded[0].reason, /bare merge.*durable project context/iu)
+  assert.equal(engine.list({ status: "pending" }).length, 0)
+})
+
+test("stop suppresses repeated bare PR merge wording without saving another memory kind", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const first = handleStop(engine, { cwd: project, lastUserMessage: "PR #201 merged." }, { adapter: "test" })
+  const second = handleStop(engine, { cwd: project, lastUserMessage: "Pull request 201 was merged." }, { adapter: "test" })
+
+  assert.equal(first.saved.length, 0)
+  assert.equal(second.saved.length, 0)
+  assert.equal(first.discarded.length, 1)
+  assert.equal(second.discarded.length, 1)
+  assert.equal(engine.list({ all: true }).length, 0)
+})
+
+test("stop reports rejected canonical merge suppression and does not create another pending record", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+  const initial = engine.save({
+    text: "PR #201 merged with checkpoint deduplication coverage.",
+    status: "pending",
+    category: "project",
+    scopeType: "project",
+    kind: "project_checkpoint",
+  })
+  if (initial.status !== "saved") throw new Error("expected initial checkpoint")
+  engine.reject(initial.memory.id)
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastAssistantMessage: "Pull request 201 was merged with checkpoint deduplication coverage.",
+  }, { adapter: "test" })
+
+  assert.equal(result.saved.length, 0)
+  assert.equal(result.discarded.length, 1)
+  assert.match(result.discarded[0].reason, /rejected equivalent.*memory lane suppression/iu)
+  assert.equal(engine.list({ status: "pending" }).filter((memory) => /#?201\b/u.test(memory.text)).length, 0)
+})
+
+test("stop revises an earlier provisional merge checkpoint with richer durable content", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+  const provisional = engine.save({
+    text: "PR #201 merged.",
+    status: "pending",
+    category: "project",
+    scopeType: "project",
+    kind: "project_checkpoint",
+    provenance: { adapter: "test", lifecycleEvent: "post_tool_use", toolName: "Bash" },
+  })
+  if (provisional.status !== "saved") throw new Error("expected provisional checkpoint")
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastAssistantMessage: "PR #201 merged with canonical event identity and rejection suppression.",
+  }, { adapter: "test" })
+
+  assert.equal(result.saved.length, 0)
+  assert.equal(result.revised?.length, 1)
+  assert.equal(result.revised?.[0]?.id, provisional.memory.id)
+  assert.match(result.revised?.[0]?.text ?? "", /canonical event identity/u)
+  assert.equal(engine.list({ status: "pending" }).filter((memory) => /#201\b/u.test(memory.text)).length, 1)
+})
+
+test("stop fails open when best-effort checkpoint coalescing cannot update storage", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+  const provisional = engine.save({
+    text: "PR #201 merged.",
+    status: "pending",
+    category: "project",
+    scopeType: "project",
+    kind: "project_checkpoint",
+  })
+  if (provisional.status !== "saved") throw new Error("expected provisional checkpoint")
+  engine.update = () => { throw new Error("simulated coalescing failure") }
+
+  const result = handleStop(engine, {
+    cwd: project,
+    lastAssistantMessage: "PR #201 merged with canonical event identity and rejection suppression.",
+  }, { adapter: "test" })
+
+  assert.equal(result.saved.length, 0)
+  assert.equal(result.revised, undefined)
+  assert.equal(engine.list({ status: "pending" })[0]?.text, "PR #201 merged.")
 })
 
 test("post-tool-use ignores failed release command", () => {
