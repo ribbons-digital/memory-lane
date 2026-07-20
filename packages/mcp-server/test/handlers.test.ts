@@ -491,6 +491,22 @@ test("memory_review includes review hygiene metadata for operational summary cha
   assert.ok(memory.reviewHygiene.reasons.includes("delegated-subagent"))
 })
 
+test("memory_review includes advisory quality signals and filters by one or more signals", async () => {
+  const engine = engineInTemp()
+  engine.suggest("Should we keep it?", "project", "project", "project_fact")
+  engine.suggest("Use pnpm for package installation in this project.", "project", "project", "workflow_rule")
+
+  const all = parseToolResult(await handleMemoryReview(engine, {}))
+  const signaled = all.data.memories.find((memory: any) => memory.text === "Should we keep it?")
+  const valid = all.data.memories.find((memory: any) => memory.text.startsWith("Use pnpm"))
+  assert.deepEqual(signaled.qualitySignals.map((signal: any) => signal.code), ["contains-question", "ambiguous-reference"])
+  assert.deepEqual(valid.qualitySignals, [])
+
+  const filtered = parseToolResult(await handleMemoryReview(engine, { signal: ["contains-question", "contains-code-fence"] }))
+  assert.deepEqual(filtered.meta.filters, { signal: ["contains-question", "contains-code-fence"] })
+  assert.deepEqual(filtered.data.memories.map((memory: any) => memory.text), ["Should we keep it?"])
+})
+
 test("memory_review filters pending memories by kind source and provenance", async () => {
   const projectA = tempDir()
   fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "review-filter-project" }))

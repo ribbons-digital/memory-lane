@@ -14,7 +14,7 @@ When local learning capture is enabled, `memory_review` records content-free sug
 - `memory_continuity` - canonical continuity read model for broad prior-work, project resumption, last-worked-on, accomplished, next-action, project-status, resume, and handoff-style questions; accepts optional `query` for read-only workstream discovery
 - `memory_status` - read Memory Lane counts, config paths, project scope, legacy project-memory diagnostics, and integration diagnostics
 - `memory_list` - list memories visible to the current project scope by default
-- `memory_review` - list pending memories visible to the current project scope by default; supports `kind`, `source`, and `provenance` filters such as `kind: "session_summary"`, `source: "session-summary"`, `provenance: "pi/session_end"`, and `provenance: "codex/pre_compact"`; pass `all: true` only for cross-project maintenance
+- `memory_review` - list pending memories with advisory deterministic `qualitySignals`, visible to the current project scope by default; supports `kind`, `source`, `provenance`, and signal-code array filters such as `signal: ["contains-question", "contains-code-fence"]`; pass `all: true` only for cross-project maintenance
 - `memory_approve` - approve a memory by id within the current project scope; pass `all: true` only for cross-project maintenance
 - `memory_reject` - reject a memory by id within the current project scope; pass `all: true` only for cross-project maintenance
 - `memory_delete` - soft-delete a memory by id within the current project scope; pass `all: true` only for cross-project maintenance

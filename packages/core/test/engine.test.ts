@@ -1500,6 +1500,27 @@ describe("MemoryEngine", () => {
     assert.equal(replaced.superseded[0].revision?.supersededBy, replaced.successor.id)
   })
 
+  it("getByIdFresh bypasses a stale memory cache for grouped mutation preflight", () => {
+    const e = engine()
+    const saved = e.save({ text: "Pending grouped review candidate", status: "pending", scopeType: "global" })
+    assert.equal(saved.status, "saved")
+    if (saved.status !== "saved") return
+
+    assert.equal(e.reviewPending()[0]?.status, "pending")
+    const memoryFile = path.join(dir, "mem.jsonl")
+    const before = fs.statSync(memoryFile)
+    const externallyApproved = {
+      ...saved.memory,
+      status: "approved" as const,
+      updatedAt: "2099-01-01T00:00:00.000Z",
+    }
+    fs.appendFileSync(memoryFile, JSON.stringify(externallyApproved) + "\n", "utf8")
+    fs.utimesSync(memoryFile, before.atime, new Date(before.mtimeMs - 1_000))
+
+    assert.equal(e.getById(saved.memory.id)?.status, "pending")
+    assert.equal(e.getByIdFresh(saved.memory.id)?.status, "approved")
+  })
+
   it("reviewPending with no project scope returns globals only unless all is requested", () => {
     const e = engine()
     const { projectA } = projectScopes()

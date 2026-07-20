@@ -2086,6 +2086,186 @@ describe("CLI integration", () => {
     assert.match(payload.data.groups[0].label, /Kind: session_summary/u)
   })
 
+  it("review JSON exposes stable advisory quality signal metadata and leaves valid candidates unannotated", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "quality-review-project" }))
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    const records: MemoryRecord[] = [
+      {
+        id: "quality-pending",
+        text: "What should we do with it?\n```sh\npnpm test\n```",
+        category: "project",
+        scope: { type: "project", key: "quality-review-project" },
+        status: "pending",
+        source: "agent-suggested",
+        kind: "project_fact",
+        provenance: { adapter: "pi", lifecycleEvent: "turn_stop" },
+        createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        id: "quality-rejected",
+        text: "what should we do with it? ```sh pnpm test ```",
+        category: "project",
+        scope: { type: "project", key: "quality-review-project" },
+        status: "rejected",
+        source: "agent-suggested",
+        kind: "project_fact",
+        createdAt: "2026-06-30T00:00:00.000Z",
+        updatedAt: "2026-06-30T00:00:00.000Z",
+      },
+      {
+        id: "quality-valid",
+        text: "Use pnpm for package installation in this project.",
+        category: "project",
+        scope: { type: "project", key: "quality-review-project" },
+        status: "pending",
+        source: "agent-suggested",
+        kind: "workflow_rule",
+        createdAt: "2026-07-01T01:00:00.000Z",
+        updatedAt: "2026-07-01T01:00:00.000Z",
+      },
+    ]
+    writeMemoryRecords(memFile, records)
+
+    const result = runProcess(["review", "--json"], { env, cwd: project })
+    assert.equal(result.status, 0, result.stderr)
+    const payload = JSON.parse(result.stdout)
+    const signaled = payload.data.memories.find((memory: MemoryRecord) => memory.id === "quality-pending")
+    const valid = payload.data.memories.find((memory: MemoryRecord) => memory.id === "quality-valid")
+
+    assert.deepEqual(signaled.qualitySignals, [
+      {
+        code: "previously-rejected-equivalent",
+        label: "rejected equivalent",
+        reason: "The candidate text exactly matches previously rejected memory quality-rejected after whitespace and case normalization.",
+        suggestedAction: "consider-rejecting",
+      },
+      {
+        code: "contains-question",
+        label: "question",
+        reason: "The candidate contains a question and may include transient conversational text.",
+        suggestedAction: "inspect",
+      },
+      {
+        code: "contains-code-fence",
+        label: "code fence",
+        reason: "The candidate contains a fenced code block and may be a raw prompt or copied specification.",
+        suggestedAction: "inspect",
+      },
+      {
+        code: "ambiguous-reference",
+        label: "ambiguous reference",
+        reason: "The candidate contains a reference whose meaning may depend on missing conversational context.",
+        suggestedAction: "inspect",
+      },
+    ])
+    assert.deepEqual(valid.qualitySignals, [])
+    assert.equal(signaled.text, records[0].text)
+    assert.deepEqual(signaled.provenance, records[0].provenance)
+  })
+
+  it("review human output shows concise quality labels alongside candidate text and provenance", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "quality-human-project" }))
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile, NO_COLOR: "1" }
+    const engine = new MemoryEngine({ memoryPath: memFile, embeddingsPath: embFile, configPath: cfgFile })
+    engine.refreshScope(project)
+    engine.save({
+      text: "Should we keep it?",
+      category: "project",
+      scopeType: "project",
+      status: "pending",
+      source: "agent-suggested",
+      kind: "project_fact",
+      provenance: { adapter: "codex", lifecycleEvent: "turn_stop" },
+    })
+
+    const output = runProcess(["review"], { env, cwd: project })
+    assert.equal(output.status, 0, output.stderr)
+    assert.match(output.stdout, /Quality signals: \[contains-question\] \[ambiguous-reference\]/u)
+    assert.match(output.stdout, /Quality signals are advisory and never mutate memories automatically\./u)
+    assert.match(output.stdout, /Should we keep it\?/u)
+    assert.match(output.stdout, /codex\/turn_stop/u)
+  })
+
+  it("review filters by one or more quality signals with OR semantics", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "quality-filter-project" }))
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    writeMemoryRecords(memFile, [
+      { id: "question", text: "Should we save this project fact?", category: "project", scope: { type: "project", key: "quality-filter-project" }, status: "pending", source: "agent-suggested", kind: "project_fact", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" },
+      { id: "fence", text: "Use this command:\n```sh\npnpm test\n```", category: "project", scope: { type: "project", key: "quality-filter-project" }, status: "pending", source: "agent-suggested", kind: "procedure", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" },
+      { id: "valid", text: "The project uses pnpm for package installation.", category: "project", scope: { type: "project", key: "quality-filter-project" }, status: "pending", source: "agent-suggested", kind: "project_fact", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" },
+    ])
+
+    const payload = JSON.parse(runProcess(["review", "--signal", "contains-question,contains-code-fence", "--json"], { env, cwd: project }).stdout)
+    assert.deepEqual(payload.data.memories.map((memory: MemoryRecord) => memory.id), ["question", "fence"])
+    assert.deepEqual(payload.meta.filters, { signal: "contains-question,contains-code-fence" })
+    assert.equal(payload.data.groups.reduce((count: number, group: any) => count + group.count, 0), 2)
+  })
+
+  it("grouped review mutation previews exact IDs and enforces ID and broad-scope confirmations", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "mutation-project" }))
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    writeMemoryRecords(memFile, [
+      { id: "local-question", text: "Should we save the local choice?", category: "project", scope: { type: "project", key: "mutation-project" }, status: "pending", source: "agent-suggested", kind: "project_fact", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" },
+      { id: "global-question", text: "Should this preference apply globally?", category: "preference", scope: { type: "global" }, status: "pending", source: "user-suggested", kind: "preference", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" },
+      { id: "other-question", text: "Should we save the other project choice?", category: "project", scope: { type: "project", key: "other-project" }, status: "pending", source: "agent-suggested", kind: "project_fact", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" },
+    ])
+
+    const preview = runProcess(["review", "--all", "--signal", "contains-question", "--action", "reject", "--json"], { env, cwd: project })
+    assert.equal(preview.status, 0, preview.stderr)
+    const plan = JSON.parse(preview.stdout).data.reviewMutation
+    assert.equal(plan.status, "preview")
+    assert.deepEqual(plan.memoryIds, ["local-question", "global-question", "other-question"])
+    assert.deepEqual(plan.broadScopeMemoryIds, ["global-question", "other-question"])
+    assert.equal(plan.confirmationIds, "local-question,global-question,other-question")
+    assert.equal(plan.requiresBroadScopeConfirmation, true)
+
+    const mismatched = runProcess(["review", "--all", "--signal", "contains-question", "--action", "reject", "--confirm-ids", "local-question", "--yes", "--confirm-global"], { env, cwd: project })
+    assert.equal(mismatched.status, 1)
+    assert.match(mismatched.stdout, /does not match the exact filtered memory IDs/u)
+
+    const missingBroadConfirmation = runProcess(["review", "--all", "--signal", "contains-question", "--action", "reject", "--confirm-ids", plan.confirmationIds, "--yes"], { env, cwd: project })
+    assert.equal(missingBroadConfirmation.status, 1)
+    assert.match(missingBroadConfirmation.stdout, /requires --confirm-global/u)
+
+    const before = JSON.parse(runProcess(["list", "--status", "pending", "--all", "--json"], { env, cwd: project }).stdout)
+    assert.equal(before.data.memories.length, 3)
+
+    const applied = runProcess(["review", "--all", "--signal", "contains-question", "--action", "reject", "--confirm-ids", plan.confirmationIds, "--yes", "--confirm-global", "--json"], { env, cwd: project })
+    assert.equal(applied.status, 0, applied.stderr)
+    assert.equal(JSON.parse(applied.stdout).data.reviewMutation.status, "applied")
+    const rejected = JSON.parse(runProcess(["list", "--status", "rejected", "--all", "--json"], { env, cwd: project }).stdout)
+    assert.deepEqual(rejected.data.memories.map((memory: MemoryRecord) => memory.id), plan.memoryIds)
+  })
+
+  it("grouped review mutation applies a confirmed current-project approval without broad-scope confirmation", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "approval-project" }))
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    writeMemoryRecords(memFile, [
+      { id: "local-approval", text: "Should the project keep pnpm?", category: "project", scope: { type: "project", key: "approval-project" }, status: "pending", source: "agent-suggested", kind: "project_fact", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" },
+    ])
+
+    const preview = JSON.parse(runProcess(["review", "--signal", "contains-question", "--action", "approve", "--json"], { env, cwd: project }).stdout).data.reviewMutation
+    assert.deepEqual(preview.memoryIds, ["local-approval"])
+    assert.deepEqual(preview.broadScopeMemoryIds, [])
+    assert.equal(preview.requiresBroadScopeConfirmation, false)
+
+    const applied = runProcess(["review", "--signal", "contains-question", "--action", "approve", "--confirm-ids", preview.confirmationIds, "--yes", "--json"], { env, cwd: project })
+    assert.equal(applied.status, 0, applied.stderr)
+    assert.equal(JSON.parse(applied.stdout).data.reviewMutation.action, "approve")
+    const approved = JSON.parse(runProcess(["list", "--status", "approved", "--json"], { env, cwd: project }).stdout)
+    assert.deepEqual(approved.data.memories.map((memory: MemoryRecord) => memory.id), ["local-approval"])
+  })
+
   it("dashboard --json summarizes memory health without long memory bodies", () => {
     const project = tempDir()
     fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "dashboard-project" }))

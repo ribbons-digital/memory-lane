@@ -1,4 +1,4 @@
-import { classifyCheckpointCandidate, groupReviewMemories, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryEngine, type MemoryMutationResult, type MemoryRecord, type MemoryRecordWithReviewHygiene, type RecallResult, type SaveResult } from "@memory-lane/core"
+import { analyzeReviewQuality, classifyCheckpointCandidate, groupReviewMemories, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryEngine, type MemoryMutationResult, type MemoryRecord, type MemoryRecordWithReviewHygiene, type ReviewQualitySignal, type RecallResult, type SaveResult } from "@memory-lane/core"
 import type {
   ContinuityToolInput, ListToolInput, MemoryGetToolInput, MemoryIdToolInput, RecallToolInput, ReviewFilters, ReviewToolInput, SaveToolInput, StatusToolInput, SuggestToolInput, ToolEnvelope,
 } from "./types.js"
@@ -163,7 +163,7 @@ export async function handleMemoryGet(engine: MemoryEngine, input: MemoryGetTool
 
 function activeReviewFilters(input: ReviewToolInput): ReviewFilters {
   return Object.fromEntries(
-    Object.entries({ kind: input.kind, source: input.source, provenance: input.provenance })
+    Object.entries({ kind: input.kind, source: input.source, provenance: input.provenance, signal: input.signal })
       .filter(([, value]) => Boolean(value)),
   ) as ReviewFilters
 }
@@ -172,30 +172,48 @@ function reviewProvenanceLabel(memory: MemoryRecord): string {
   return memory.provenance ? `${memory.provenance.adapter}/${memory.provenance.lifecycleEvent}` : "none"
 }
 
-function filterReviewMemories(memories: MemoryRecord[], filters: ReviewFilters): MemoryRecord[] {
-  return memories.filter((memory) => {
+interface AnalyzedReviewMemory {
+  memory: MemoryRecord
+  qualitySignals: ReviewQualitySignal[]
+}
+
+function filterReviewMemories(candidates: AnalyzedReviewMemory[], filters: ReviewFilters): AnalyzedReviewMemory[] {
+  return candidates.filter(({ memory, qualitySignals }) => {
     if (filters.kind && (memory.kind ?? "misc") !== filters.kind) return false
     if (filters.source && memory.source !== filters.source) return false
     if (filters.provenance && reviewProvenanceLabel(memory) !== filters.provenance) return false
+    if (filters.signal?.length) {
+      const assigned = new Set(qualitySignals.map((signal) => signal.code))
+      if (!filters.signal.some((signal) => assigned.has(signal))) return false
+    }
     return true
   })
 }
 
-type ReviewMemoryOutput = MemoryRecordWithReviewHygiene & { checkpointCandidate?: CheckpointCandidateMetadata }
+type ReviewMemoryOutput = MemoryRecordWithReviewHygiene & { checkpointCandidate?: CheckpointCandidateMetadata; qualitySignals: ReviewQualitySignal[] }
 
-function withCheckpointCandidate(memory: MemoryRecord): ReviewMemoryOutput {
+function withReviewMetadata(memory: MemoryRecord, qualitySignals: ReviewQualitySignal[]): ReviewMemoryOutput {
   const withHygiene = withReviewHygiene(memory)
   const checkpointCandidate = classifyCheckpointCandidate(memory)
-  return checkpointCandidate ? { ...withHygiene, checkpointCandidate } : withHygiene
+  return checkpointCandidate ? { ...withHygiene, checkpointCandidate, qualitySignals } : { ...withHygiene, qualitySignals }
 }
 
 export async function handleMemoryReview(engine: MemoryEngine, input: ReviewToolInput) {
   try {
     applyProjectPath(engine, input.projectPath)
     const filters = activeReviewFilters(input)
-    const memories = filterReviewMemories(engine.reviewPending({ all: input.all ?? false }), filters)
+    const qualityContext = {
+      rejectedMemories: engine.list({ status: "rejected", all: input.all ?? false }),
+      activeProjectScope: engine.getProjectScope()?.key,
+    }
+    const analyzedMemories = engine.reviewPending({ all: input.all ?? false }).map((memory) => ({
+      memory,
+      qualitySignals: analyzeReviewQuality(memory, qualityContext),
+    }))
+    const selected = filterReviewMemories(analyzedMemories, filters)
+    const memories = selected.map(({ memory }) => memory)
     engine.recordSuggestionsShown(memories, "mcp")
-    return jsonContent(envelope(engine, { memories: memories.map(withCheckpointCandidate), groups: groupReviewMemories(memories), notes: scopeNotes(engine) }, memories.length, filters))
+    return jsonContent(envelope(engine, { memories: selected.map(({ memory, qualitySignals }) => withReviewMetadata(memory, qualitySignals)), groups: groupReviewMemories(memories), notes: scopeNotes(engine) }, memories.length, filters))
   } catch (error) {
     return jsonContent(errorEnvelope(error))
   }

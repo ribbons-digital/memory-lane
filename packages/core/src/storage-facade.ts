@@ -6,7 +6,7 @@ import { defaultContinuityBaselinePath } from "./continuity-baseline.js"
 import { createEmbeddingStore, foldEmbeddings, type EmbeddingLine, type EmbeddingStore } from "./embedding-store.js"
 import { normalizeMemoryRecord } from "./storage-validation.js"
 import { ensureProjectLocalStorageFiles, type MemoryPaths } from "./storage-locations.js"
-import { createMemoryStore, withFileLocks, type MemoryStore, type MemoryStoreDiagnostics } from "./storage.js"
+import { createMemoryStore, foldMemoryRecords, withFileLocks, type MemoryStore, type MemoryStoreDiagnostics } from "./storage.js"
 import type { CompactReport, EmbeddingInvalidationRecord, EmbeddingRecord, LegacyProjectMemoryDiagnostics, LegacyProjectMigrationApplyResult, LegacyProjectMigrationPlan, LegacyProjectMigrationPlanItem, MemoryRecord } from "./types.js"
 
 /**
@@ -25,6 +25,8 @@ export interface MemoryEngineStorage {
   appendMemories(records: MemoryRecord[]): void
   readMemoryLog(): MemoryRecord[]
   listMemories(): MemoryRecord[]
+  /** Re-read and fold current storage without using the memory cache. */
+  listMemoriesFresh(): MemoryRecord[]
   memoryDiagnostics(): MemoryStoreDiagnostics
   appendEmbedding(record: EmbeddingLine): void
   listEmbeddings(): EmbeddingRecord[]
@@ -291,6 +293,9 @@ export function createSingleStoreEngineStorage(memoryPath: string, embeddingsPat
     },
     listMemories() {
       return memoryStore.list()
+    },
+    listMemoriesFresh() {
+      return foldMemoryRecords(memoryStore.readLog())
     },
     memoryDiagnostics() {
       return memoryStore.diagnostics()
@@ -646,6 +651,9 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
       return allMemoryLogs()
     },
     listMemories() {
+      return foldMergedMemoryRecords(allLocatedMemoryLogs())
+    },
+    listMemoriesFresh() {
       return foldMergedMemoryRecords(allLocatedMemoryLogs())
     },
     memoryDiagnostics() {

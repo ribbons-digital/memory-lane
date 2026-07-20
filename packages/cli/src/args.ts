@@ -3,10 +3,12 @@
 // treated as boolean and never consumes the next token, so an unregistered
 // boolean flag can never swallow positional arguments (issue #135).
 export const VALUE_FLAGS: Record<string, true> = {
+  "action": true,
   "apply-plan": true,
   "area": true,
   "captured-at": true,
   "category": true,
+  "confirm-ids": true,
   "expires-at": true,
   "folder": true,
   "kind": true,
@@ -19,6 +21,7 @@ export const VALUE_FLAGS: Record<string, true> = {
   "reason": true,
   "related-limit": true,
   "scope": true,
+  "signal": true,
   "since": true,
   "source": true,
   "stale-after-days": true,

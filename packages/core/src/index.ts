@@ -30,7 +30,18 @@ export {
   type ReviewHygieneMetadata,
   type MemoryRecordWithReviewHygiene,
 } from "./summary-hygiene.js"
-export { groupReviewMemories, reviewProjectScope, reviewProvenance, type ReviewGroup } from "./review.js"
+export {
+  analyzeReviewQuality,
+  groupReviewMemories,
+  qualitySignalCodes,
+  reviewProjectScope,
+  reviewProvenance,
+  type ReviewGroup,
+  type ReviewQualityContext,
+  type ReviewQualitySignal,
+  type ReviewQualitySignalCode,
+  type ReviewQualitySuggestedAction,
+} from "./review.js"
 export {
   inferCategory, inferMemoryKind, effectiveMemoryKind,
   memoryMatchesContext, filterMemoriesForContext, searchMemories, findDuplicateMemory,

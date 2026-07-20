@@ -2,7 +2,7 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { buildContinuityHints, buildContinuityWarningRenderPlan, continuityWarningInspectionActions, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryRecord, type MemoryRecordWithReviewHygiene, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type UpdatePreview, type RescopeResult, type SupersedeResult, type ReplaceResult, type LegacyProjectMemoryDiagnostics, type LegacyProjectMigrationApplyResult, type LegacyProjectMigrationPlan } from "@memory-lane/core"
+import { analyzeReviewQuality, buildContinuityHints, buildContinuityWarningRenderPlan, continuityWarningInspectionActions, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryRecord, type MemoryRecordWithReviewHygiene, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type ReviewQualityContext, type ReviewQualitySignal, type UpdatePreview, type RescopeResult, type SupersedeResult, type ReplaceResult, type LegacyProjectMemoryDiagnostics, type LegacyProjectMigrationApplyResult, type LegacyProjectMigrationPlan } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 import { VERSION } from "./version.js"
 export { VERSION }
@@ -245,12 +245,15 @@ function reviewPreview(memory: MemoryRecord): string {
   return memory.kind === "session_summary" ? sessionSummaryPreview(memory.text) : compactPreview(memory.text)
 }
 
-type ReviewMemoryOutput = MemoryRecordWithReviewHygiene & { checkpointCandidate?: CheckpointCandidateMetadata }
+type ReviewMemoryOutput = MemoryRecordWithReviewHygiene & {
+  checkpointCandidate?: CheckpointCandidateMetadata
+  qualitySignals: ReviewQualitySignal[]
+}
 
-function withCheckpointCandidate(memory: MemoryRecord): ReviewMemoryOutput {
+function withReviewMetadata(memory: MemoryRecord, qualitySignals: ReviewQualitySignal[], includeCheckpoint = true): ReviewMemoryOutput {
   const withHygiene = withReviewHygiene(memory)
-  const checkpointCandidate = classifyCheckpointCandidate(memory)
-  return checkpointCandidate ? { ...withHygiene, checkpointCandidate } : withHygiene
+  const checkpointCandidate = includeCheckpoint ? classifyCheckpointCandidate(memory) : undefined
+  return checkpointCandidate ? { ...withHygiene, checkpointCandidate, qualitySignals } : { ...withHygiene, qualitySignals }
 }
 
 function checkpointCandidateLines(memory: MemoryRecord): string[] {
@@ -259,6 +262,16 @@ function checkpointCandidateLines(memory: MemoryRecord): string[] {
   return [
     `    Checkpoint candidate: ${checkpoint.kind} — ${checkpoint.reason}`,
     "    Review: approve if this should become durable project continuity.",
+  ]
+}
+
+function qualitySignalLines(memory: MemoryRecord, qualitySignals: ReviewQualitySignal[]): string[] {
+  if (!qualitySignals.length) return []
+  return [
+    `    Quality signals: ${qualitySignals.map((signal) => `[${signal.code}]`).join(" ")}`,
+    "    Advisory only: inspect the candidate before choosing an action.",
+    "    Original candidate text:",
+    ...memory.text.split(/\r?\n/u).map((line) => `      ${line}`),
   ]
 }
 
@@ -293,10 +306,17 @@ function filterSummary(extraMeta?: Record<string, unknown>): string | undefined 
   return entries.length ? `Filters: ${entries.join(", ")}` : undefined
 }
 
-export function formatReviewMemories(memories: MemoryRecord[], json: boolean, extraMeta?: Record<string, unknown>): string {
+export function formatReviewMemories(
+  memories: MemoryRecord[],
+  json: boolean,
+  extraMeta?: Record<string, unknown>,
+  qualityContext: ReviewQualityContext = {},
+  suppliedQualitySignals?: ReadonlyMap<string, ReviewQualitySignal[]>,
+): string {
   const groups = groupReviewMemories(memories)
+  const qualitySignals = suppliedQualitySignals ?? new Map(memories.map((memory) => [memory.id, analyzeReviewQuality(memory, qualityContext)]))
   if (json) {
-    const outputMemories = extraMeta?.suspectMeta ? memories : memories.map(withCheckpointCandidate)
+    const outputMemories = memories.map((memory) => withReviewMetadata(memory, qualitySignals.get(memory.id) ?? [], !extraMeta?.suspectMeta))
     return JSON.stringify({ ok: true, data: { memories: outputMemories, groups }, meta: meta({ count: memories.length, ...extraMeta }) }, null, 2)
   }
   if (!memories.length) return extraMeta?.suspectMeta ? "No likely operational prompt pollution found." : "No pending memories found."
@@ -326,6 +346,7 @@ export function formatReviewMemories(memories: MemoryRecord[], json: boolean, ex
 
   const headerLines = [
     "Pending memories grouped by project, source, kind, and provenance.",
+    "Quality signals are advisory and never mutate memories automatically.",
     filterSummary(extraMeta),
   ].filter(Boolean)
   const table = new Table({
@@ -355,12 +376,66 @@ export function formatReviewMemories(memories: MemoryRecord[], json: boolean, ex
       lines.push(
         `  ${figures.bullet} ${reviewStatusLine(memory)}`,
         `    ${reviewPreview(memory)}  (saved ${formatDate(memory.createdAt)})`,
+        ...qualitySignalLines(memory, qualitySignals.get(memory.id) ?? []),
         ...checkpointCandidateLines(memory),
         ...correctionCandidateLines(memory),
         ...reviewHygieneLines(memory),
         `    Suggested: ${reviewAction(memory)}`,
       )
     }
+  }
+  return lines.join("\n")
+}
+
+export interface ReviewMutationOutput {
+  status: "preview" | "applied" | "partial"
+  action: "approve" | "reject"
+  memoryIds: string[]
+  broadScopeMemoryIds: string[]
+  requiresBroadScopeConfirmation: boolean
+  confirmationIds: string
+  appliedMemoryIds?: string[]
+  remainingMemoryIds?: string[]
+  uncertainMemoryIds?: string[]
+  failedMemoryId?: string
+  error?: string
+}
+
+export function formatReviewMutation(result: ReviewMutationOutput, json: boolean): string {
+  if (json) return JSON.stringify({
+    ok: result.status !== "partial",
+    ...(result.status === "partial" ? { error: `Grouped review mutation partially applied: ${result.error ?? "storage failure"}` } : {}),
+    data: { reviewMutation: result },
+    meta: meta({ count: result.memoryIds.length }),
+  }, null, 2)
+  const lines = [
+    result.status === "preview"
+      ? `Review ${result.action} preview:`
+      : result.status === "partial"
+        ? `Review ${result.action} partially applied:`
+        : `Review ${result.action} applied:`,
+    `Exact memory IDs (${result.memoryIds.length}):`,
+    ...result.memoryIds.map((id) => `  - ${id}`),
+  ]
+  if (result.broadScopeMemoryIds.length) {
+    lines.push(
+      `Cross-project or global IDs (${result.broadScopeMemoryIds.length}):`,
+      ...result.broadScopeMemoryIds.map((id) => `  - ${id}`),
+    )
+  }
+  if (result.status === "preview") {
+    lines.push("No memories were changed.")
+    lines.push(`Apply this exact filtered set with --action ${result.action} --confirm-ids ${result.confirmationIds} --yes${result.requiresBroadScopeConfirmation ? " --confirm-global" : ""}.`)
+  }
+  if (result.status === "partial") {
+    lines.push(
+      `Applied IDs (${result.appliedMemoryIds?.length ?? 0}): ${(result.appliedMemoryIds ?? []).join(",") || "none"}`,
+      `Uncertain IDs (${result.uncertainMemoryIds?.length ?? 0}): ${(result.uncertainMemoryIds ?? []).join(",") || "none"}`,
+      `Unattempted IDs (${result.remainingMemoryIds?.length ?? 0}): ${(result.remainingMemoryIds ?? []).join(",") || "none"}`,
+      `Failed ID: ${result.failedMemoryId ?? "unknown"}`,
+      `Storage error: ${result.error ?? "unknown"}`,
+      "Inspect the uncertain and unattempted IDs, then rerun review for recovery.",
+    )
   }
   return lines.join("\n")
 }
@@ -1005,7 +1080,9 @@ Commands:
                   Mark approved old memories as superseded by an approved successor
   replace <old-id...> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run] [--yes] [--all]
                   Create a successor memory and optionally supersede old memories
-  review [--kind <kind>] [--source <source>] [--provenance <adapter/event>] [--suspect-meta] [--include-approved] [--all]
+  review [--kind <kind>] [--source <source>] [--provenance <adapter/event>] [--signal <code[,code...]>] [--suspect-meta] [--include-approved] [--all]
+  review [filters] --action approve|reject [--confirm-ids <id[,id...]> --yes] [--confirm-global]
+                  Preview or apply a filtered grouped review mutation; global/cross-project records require --confirm-global
   dashboard [--all]
                   Compact continuity and review overview
   agreements [--area <area>] [--limit <n>] [--related-limit <n>] [--all]

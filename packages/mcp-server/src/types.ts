@@ -1,9 +1,10 @@
-import type { MemoryCategory, MemoryKind, MemoryScopeType, MemoryStatus } from "@memory-lane/core"
+import type { MemoryCategory, MemoryKind, MemoryScopeType, MemoryStatus, ReviewQualitySignalCode } from "@memory-lane/core"
 
 export interface ReviewFilters {
   kind?: MemoryKind
   source?: string
   provenance?: string
+  signal?: ReviewQualitySignalCode[]
 }
 
 export type ToolEnvelope<T> =
