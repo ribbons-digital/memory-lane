@@ -1,6 +1,6 @@
 import * as path from "node:path"
 import { Type } from "typebox"
-import { classifyPromptRoute, createLearningEventSink, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy } from "@memory-lane/lifecycle"
+import { classifyPromptRoute, createLearningEventSink, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy, saveSessionSummaryCandidates as persistSessionSummaryCandidates } from "@memory-lane/lifecycle"
 import type { PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
 import {
   MemoryEngine, buildContinuityWarningRenderPlan, continuityWarningInspectionActions, createSingleStoreEngineStorage, createTwoTierEngineStorage, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableEngineStoragePaths, type SaveResult,
@@ -362,6 +362,37 @@ function normalizedToolResult(event: unknown): { turnId?: string; toolName?: str
   }
 }
 
+function compactionValues(event: any): unknown[] {
+  const preparation = event?.preparation
+  return [
+    ...(Array.isArray(preparation?.messagesToSummarize) ? preparation.messagesToSummarize : []),
+    ...(Array.isArray(preparation?.turnPrefixMessages) ? preparation.turnPrefixMessages : []),
+    ...(Array.isArray(event?.messages) ? event.messages : []),
+    ...(Array.isArray(event?.branchEntries) ? event.branchEntries : []),
+  ]
+}
+
+function compactionWouldDiscardSplitTurnEvidence(event: any): boolean {
+  return compactionValues(event).some((value) => {
+    if (!value || typeof value !== "object") return false
+    const record = value as { role?: unknown; message?: { role?: unknown; content?: unknown }; content?: unknown; type?: unknown }
+    const role = typeof record.role === "string" ? record.role : typeof record.message?.role === "string" ? record.message.role : undefined
+    if (role === "toolResult" || role === "tool_result") return true
+    const content = record.content ?? record.message?.content
+    if (!Array.isArray(content)) return false
+    return content.some((part) => {
+      if (!part || typeof part !== "object") return false
+      const type = (part as { type?: unknown }).type
+      return type !== "text"
+    })
+  })
+}
+
+function compactionSummary(event: any): string | undefined {
+  const summary = event?.compactionEntry?.summary
+  return typeof summary === "string" && summary.trim() ? summary.trim() : undefined
+}
+
 function sessionMessagesFromPiCompactionEvent(event: any): SessionMessage[] {
   const preparation = event?.preparation
   const preparedMessages = [
@@ -388,6 +419,28 @@ function piPreCompactTrigger(event: any): "manual" | "auto" {
 // ── Main extension ───────────────────────────────────────────
 
 export default function memoryLaneExtension(pi: ExtensionAPI) {
+  const deferredPreCompact = new Map<string, { turnId?: string; trigger: "manual" | "auto" }>()
+  const maxDeferredSessions = 32
+
+  function sessionDeferralKey(ctx: ExtensionContext): string {
+    return piSessionId(ctx) ?? `cwd:${path.resolve(ctx.cwd)}`
+  }
+
+  function deferPreCompact(ctx: ExtensionContext, turnId: string | undefined, trigger: "manual" | "auto"): void {
+    const key = sessionDeferralKey(ctx)
+    deferredPreCompact.delete(key)
+    deferredPreCompact.set(key, { turnId, trigger })
+    while (deferredPreCompact.size > maxDeferredSessions) {
+      const oldest = deferredPreCompact.keys().next().value
+      if (typeof oldest !== "string") break
+      deferredPreCompact.delete(oldest)
+    }
+  }
+
+  function clearDeferredPreCompact(ctx?: ExtensionContext): void {
+    if (ctx) deferredPreCompact.delete(sessionDeferralKey(ctx))
+    else deferredPreCompact.clear()
+  }
   // ── Commands ─────────────────────────────────────────────
 
   async function runPiSessionSummaryCommand(ctx: ExtensionContext): Promise<void> {
@@ -718,17 +771,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   }
 
   function saveSessionSummaryCandidates(e: MemoryEngine, candidates: Awaited<ReturnType<typeof handleSessionEnd>>): Array<Extract<SaveResult, { status: "saved" }>> {
-    return candidates
-      .map((candidate) => e.save({
-        text: candidate.text,
-        category: candidate.category,
-        scopeType: candidate.scopeType,
-        status: candidate.status,
-        source: candidate.source,
-        kind: candidate.kind,
-        provenance: { ...candidate.provenance, adapter: "pi" },
-        freshness: candidate.freshness,
-      }))
+    return persistSessionSummaryCandidates(e, candidates)
       .filter((result): result is Extract<SaveResult, { status: "saved" }> => result.status === "saved")
   }
 
@@ -751,6 +794,12 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         return undefined
       }
 
+      if (compactionWouldDiscardSplitTurnEvidence(event)) {
+        deferPreCompact(ctx, typeof event?.turnId === "string" ? event.turnId : undefined, trigger)
+        return undefined
+      }
+
+      clearDeferredPreCompact(ctx)
       const messages = sessionMessagesFromPiCompactionEvent(event)
       if (!messages.length) return undefined
 
@@ -787,6 +836,63 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
       if (isPiDebugEnabled()) notify(ctx, err instanceof Error ? `Pre-compact summary failed: ${err.message}` : "Pre-compact summary failed", "warning")
       return undefined
     }
+  })
+
+  pi.on("session_compact", async (event, ctx) => {
+    if (isOmpTaskSession(ctx)) return undefined
+    const key = sessionDeferralKey(ctx)
+    const deferred = deferredPreCompact.get(key)
+    if (!deferred) return undefined
+    deferredPreCompact.delete(key)
+    const summary = compactionSummary(event)
+    if (!summary) return undefined
+
+    try {
+      const config = loadConfig(process.env.PI_MEMORY_CONFIG_FILE ?? process.env.MEMORY_LANE_CONFIG)
+      if (!preCompactSummaryEnabled(config)) return undefined
+      const summaryConfig = config.memory?.sessionEndSummary
+      if (!summaryConfig?.baseUrl || !summaryConfig.model || summaryConfig.requireConfirmation !== false) return undefined
+      const e = getEngine(ctx.cwd)
+      const provider = createOpenAICompatibleProvider({
+        provider: "openai-compatible",
+        baseUrl: summaryConfig.baseUrl,
+        apiKeyEnv: summaryConfig.apiKeyEnv,
+        model: summaryConfig.model,
+        timeoutMs: summaryConfig.timeoutMs,
+      }, memoryEnv())
+      const candidates = await handlePreCompact(e, {
+        cwd: ctx.cwd,
+        sessionId: piSessionId(ctx),
+        turnId: deferred.turnId,
+        trigger: deferred.trigger,
+        messages: [{ role: "assistant", content: summary }],
+      }, {
+        provider,
+        promptTemplate: summaryConfig.promptTemplate ?? undefined,
+        maxTokens: summaryConfig.maxTokens,
+        requireConfirmation: false,
+        confirmed: true,
+        includeToolOutputs: false,
+        adapter: "pi",
+        trigger: deferred.trigger,
+      }, memoryEnv())
+      const saved = saveSessionSummaryCandidates(e, candidates)
+      if (saved.length) notify(ctx, `Memory Lane suggested ${saved.length} pending pre-compact summar${saved.length === 1 ? "y" : "ies"} for review. Run /memory review to inspect.`, "info")
+      return undefined
+    } catch (err) {
+      if (isPiDebugEnabled()) notify(ctx, err instanceof Error ? `Deferred pre-compact summary failed: ${err.message}` : "Deferred pre-compact summary failed", "warning")
+      return undefined
+    }
+  })
+
+  pi.on("session_switch", async (_event, _ctx) => {
+    clearDeferredPreCompact()
+    return undefined
+  })
+
+  pi.on("session_shutdown", async (_event, _ctx) => {
+    clearDeferredPreCompact()
+    return undefined
   })
 
   // ── Input event handler (auto-save / suggest on user input) ──

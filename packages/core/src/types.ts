@@ -20,9 +20,13 @@ export interface MemoryProvenance {
   sessionId?: string
   turnId?: string
   toolName?: string
+  /** Stable digest linking atomic extracted claims to their generated source summary envelope. */
+  sourceSummaryId?: string
+  /** Zero-based source-summary claim index for independently reviewable extracted candidates. */
+  summaryClaimIndex?: number
 }
 
-export type MemoryRevisionActor = "manual" | "cli" | "mcp"
+export type MemoryRevisionActor = "manual" | "cli" | "mcp" | "lifecycle"
 
 export interface MemoryRevision {
   supersedes?: string[]

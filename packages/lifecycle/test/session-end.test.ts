@@ -1,7 +1,8 @@
+import { readFileSync } from "node:fs"
 import { test } from "node:test"
 import assert from "node:assert"
 import { MemoryEngine } from "@memory-lane/core"
-import { handlePreCompact, handleSessionEnd } from "../src/session-end.js"
+import { handlePreCompact, handleSessionEnd, saveSessionSummaryCandidates } from "../src/session-end.js"
 import type { LLMProvider } from "../src/types.js"
 
 function makeEngine(): MemoryEngine {
@@ -147,9 +148,7 @@ test("pre-compact removes a canonical merge already represented by a checkpoint"
     messages: [{ role: "assistant", content: "Implementation and tests completed." }],
   }, { provider, adapter: "codex", requireConfirmation: false })
 
-  assert.equal(result.length, 1)
-  assert.doesNotMatch(result[0].text, /pull request 201/iu)
-  assert.match(result[0].text, /validate the lifecycle package/iu)
+  assert.deepStrictEqual(result, [])
 })
 
 test("pre-compact checkpoint filtering is pure and does not enrich pending storage", async () => {
@@ -178,9 +177,7 @@ test("pre-compact checkpoint filtering is pure and does not enrich pending stora
     messages: [{ role: "assistant", content: "Implementation completed." }],
   }, { provider, adapter: "codex", requireConfirmation: false })
 
-  assert.equal(result.length, 1)
-  assert.doesNotMatch(result[0].text, /PR #201/iu)
-  assert.match(result[0].text, /validate summary filtering/iu)
+  assert.deepStrictEqual(result, [])
   const stored = engine.list({ status: "pending" }).find((memory) => memory.id === provisional.memory.id)
   assert.equal(stored?.text, provisional.memory.text)
   assert.equal(stored?.updatedAt, provisional.memory.updatedAt)
@@ -487,7 +484,7 @@ test("removes obvious Memory Lane review-management chatter from generated summa
   assert.doesNotMatch(result[0].text, /memory IDs/u)
 })
 
-test("keeps durable Memory Lane review work while removing review-management instructions", async () => {
+test("does not let a broad fixed keyword preserve Memory Lane review-management instructions", async () => {
   const engine = makeEngine()
   const provider: LLMProvider = {
     complete: async () => [
@@ -499,9 +496,7 @@ test("keeps durable Memory Lane review work while removing review-management ins
     cwd: "/tmp",
     messages: [{ role: "user", content: "summarize this session" }],
   }, { requireConfirmation: false, provider })
-  assert.strictEqual(result.length, 1)
-  assert.match(result[0].text, /Fixed memory-lane review duplicate display/u)
-  assert.doesNotMatch(result[0].text, /approve memory IDs/u)
+  assert.deepStrictEqual(result, [])
 })
 
 test("returns empty when generated summary is only review-management chatter", async () => {
@@ -578,6 +573,124 @@ test("throws when no provider is configured", async () => {
     }, { requireConfirmation: false }),
     /no LLM provider is configured/,
   )
+})
+
+test("extracts reviewed Windows summaries into atomic durable candidates and expiring handoff state", async () => {
+  const fixtures = JSON.parse(readFileSync(new URL("./fixtures/issue-215-session-summaries.json", import.meta.url), "utf8")) as Record<string, string>
+  const engine = makeEngine()
+
+  for (const [name, summary] of Object.entries(fixtures)) {
+    const provider: LLMProvider = { complete: async () => summary }
+    const candidates = await handleSessionEnd(engine, {
+      cwd: "/tmp",
+      sessionId: `fixture-${name}`,
+      messages: [{ role: "assistant", content: "Sanitized source session." }],
+    }, { requireConfirmation: false, provider, adapter: "test" })
+
+    const durable = candidates.filter((candidate) => candidate.kind !== "session_summary")
+    assert.ok(durable.length > 0, `${name} should retain durable claims`)
+    assert.ok(durable.every((candidate) => candidate.text.length <= 600))
+    assert.ok(durable.every((candidate) => candidate.provenance.sourceSummaryId))
+    assert.ok(durable.every((candidate) => candidate.provenance.sourceSummaryId === candidates[0].provenance.sourceSummaryId))
+    assert.ok(candidates.filter((candidate) => candidate.kind === "session_summary").every((candidate) => candidate.freshness?.expiresAt))
+    assert.doesNotMatch(durable.map((candidate) => candidate.text).join("\n"), /branch|next turn|reviewer|uncommitted|awaiting merge|in progress/iu)
+  }
+})
+
+test("temporary handoff claims are separate pending candidates with explicit expiry", async () => {
+  const engine = makeEngine()
+  const provider: LLMProvider = {
+    complete: async () => [
+      "## Decisions made",
+      "- Windows recovery must preserve quoted arguments.",
+      "## Temporary handoff state",
+      "- Windows ARM verification is blocked on access to a test device.",
+    ].join("\n"),
+  }
+  const candidates = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    sessionId: "expiring-handoff",
+    messages: [{ role: "assistant", content: "Sanitized source session.", timestamp: "2026-07-18T00:00:00.000Z" }],
+  }, { requireConfirmation: false, provider })
+
+  assert.equal(candidates.length, 2)
+  const handoff = candidates.find((candidate) => candidate.kind === "session_summary")
+  assert.deepEqual(handoff?.freshness, {
+    capturedAt: "2026-07-18T00:00:00.000Z",
+    expiresAt: "2026-07-25T00:00:00.000Z",
+  })
+  assert.equal(handoff?.provenance.sourceSummaryId, candidates[0].provenance.sourceSummaryId)
+})
+
+test("completed PR checkpoints suppress corresponding pre-merge handoff state", async () => {
+  const engine = makeEngine()
+  const provider: LLMProvider = {
+    complete: async () => [
+      "## Checkpoints",
+      "- PR #212 merged with Windows recovery verification.",
+      "## Temporary handoff state",
+      "- PR #212 is awaiting merge and branch fix/windows must be preserved.",
+    ].join("\n"),
+  }
+  const candidates = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    sessionId: "completion-supersession",
+    messages: [{ role: "assistant", content: "Sanitized source session." }],
+  }, { requireConfirmation: false, provider })
+
+  assert.equal(candidates.length, 1)
+  assert.equal(candidates[0].kind, "project_checkpoint")
+  assert.match(candidates[0].text, /PR #212 merged/u)
+})
+
+test("saving a completion checkpoint supersedes matching pending pre-merge handoff state", async () => {
+  const engine = makeEngine()
+  engine.refreshScope("/tmp")
+  const old = engine.save({
+    text: "PR #210 is awaiting merge on branch fix/windows-recovery.",
+    category: "project",
+    scopeType: "global",
+    status: "pending",
+    source: "session-summary",
+    kind: "session_summary",
+    provenance: { adapter: "test", lifecycleEvent: "pre_compact", sessionId: "older", turnId: "turn-1" },
+    freshness: { expiresAt: "2099-01-01T00:00:00.000Z" },
+  })
+  assert.equal(old.status, "saved")
+  if (old.status !== "saved") return
+
+  const provider: LLMProvider = { complete: async () => "## Checkpoints\n- PR #210 merged after Windows recovery verification passed." }
+  const candidates = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    sessionId: "completion",
+    messages: [{ role: "assistant", content: "Completion." }],
+  }, { requireConfirmation: false, provider, adapter: "test" })
+  const saved = saveSessionSummaryCandidates(engine, candidates)
+  assert.equal(saved.filter((result) => result.status === "saved").length, 1)
+
+  const superseded = engine.list({ all: true }).find((memory) => memory.id === old.memory.id)
+  assert.ok(superseded?.revision?.supersededBy)
+  assert.equal(superseded?.revision?.revisedBy, "lifecycle")
+})
+
+test("pending summary review units have bounded sections, bullets, and characters", async () => {
+  const engine = makeEngine()
+  const oversized = "x".repeat(900)
+  const provider: LLMProvider = {
+    complete: async () => `## Decisions made\n${Array.from({ length: 20 }, (_, index) => `- Decision ${index}: ${oversized}`).join("\n")}`,
+  }
+  const candidates = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    sessionId: "bounded-summary",
+    messages: [{ role: "assistant", content: "Sanitized source session." }],
+  }, { requireConfirmation: false, provider })
+
+  assert.ok(candidates.length <= 8)
+  for (const candidate of candidates) {
+    assert.ok(candidate.text.length <= 600)
+    assert.ok((candidate.text.match(/^#{1,6}\s/gmu)?.length ?? 0) <= 1)
+    assert.ok((candidate.text.match(/^\s*[-*]\s/gmu)?.length ?? 0) <= 1)
+  }
 })
 
 test("uses project scope when available", async () => {

@@ -263,6 +263,50 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
     assert.equal(payload.messages[2].toolName, "bash")
   })
 
+  it("generated pi CLI bridge defers lossy split turns to session_compact summary", () => {
+    const { nativeBinary, logPath } = writeNativeMemoryLaneStub("deferred-precompact-calls.jsonl", `if (args[0] === "pi" && args[1] === "pre-compact") {
+  console.log(JSON.stringify({ ok: true, data: { saved: 1 } }));
+} else {
+  console.log(JSON.stringify({ data: {} }));
+}`)
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const notifications = [];
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const ctx = {
+        cwd: "/tmp/pi-generated-bridge-project",
+        ui: { notify(message, level) { notifications.push({ message, level }); } },
+        sessionManager: { getSessionFile() { return "/tmp/pi-lossy-session.json"; } },
+      };
+      await handlers.session_before_compact({
+        reason: "threshold",
+        turnId: "lossy-turn",
+        preparation: { messagesToSummarize: [
+          { role: "user", content: [{ type: "text", text: "Initial request" }] },
+          { role: "assistant", content: [{ type: "toolCall", name: "bash", arguments: { command: "RAW_COMMAND" } }] },
+          { role: "toolResult", content: [{ type: "text", text: "RAW_OUTPUT" }] },
+        ] },
+      }, ctx);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      await handlers.session_compact({ compactionEntry: { summary: "CURRENT_TURN_IMPLEMENTED_AND_VERIFIED" } }, ctx);
+      const started = Date.now();
+      while (!notifications.length && Date.now() - started < 1000) await new Promise((resolve) => setTimeout(resolve, 10));
+      if (!notifications.length) throw new Error("expected deferred precompact notification");
+    `)
+
+    const entries = readJsonlEntries(logPath)
+    assert.equal(entries.length, 1)
+    const payload = JSON.parse(entries[0].stdin)
+    assert.equal(payload.session_id, "/tmp/pi-lossy-session.json")
+    assert.equal(payload.turn_id, "lossy-turn")
+    assert.deepEqual(payload.messages, [{ role: "assistant", content: "CURRENT_TURN_IMPLEMENTED_AND_VERIFIED" }])
+    assert.doesNotMatch(entries[0].stdin, /RAW_COMMAND|RAW_OUTPUT/u)
+  })
+
   it("generated pi CLI bridge forwards input turn_end and tool_result with OMP normalization", () => {
     const { nativeBinary, logPath } = writeNativeMemoryLaneStub("lifecycle-calls.jsonl", "console.log(JSON.stringify({ data: { saved: 1 } }));")
     const piExt = installPiCliBridge(nativeBinary)

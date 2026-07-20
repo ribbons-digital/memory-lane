@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { analyzeSummaryHygiene, containsLikelySecret, normalizeMemoryText, type MemoryEngine, type MemoryFreshness, type MemoryLifecycleEvent, type MemoryRecord } from "@memory-lane/core"
+import { analyzeSummaryHygiene, classifySummaryClaims, containsLikelySecret, normalizeMemoryText, type MemoryEngine, type MemoryFreshness, type MemoryKind, type MemoryLifecycleEvent, type MemoryRecord, type SaveResult, type SummaryClaim, type SummaryClaimClassification } from "@memory-lane/core"
 import { extractCheckpointCandidatesFromStop, inspectCheckpointCandidates } from "./checkpoint-capture.js"
 import { createOpenAICompatibleProvider } from "./llm-provider.js"
 import { captureLifecycleTrace } from "./trace-capture.js"
@@ -10,10 +10,10 @@ Read the session transcript and produce a concise, structured summary.
 
 Include only these sections if they have content:
 - Decisions made
-- Blockers or failures
-- Open questions
-- Next steps
-- Key facts about the project, codebase, or user preferences
+- Procedures
+- Key project facts
+- Checkpoints
+- Temporary handoff state
 
 Rules:
 - Do not include secrets, API keys, passwords, or private data.
@@ -30,13 +30,14 @@ Read the session transcript and produce a concise, structured summary.
 
 Include only these sections if they have content:
 - Decisions made
-- Blockers or failures
-- Open questions
-- Next steps
-- Key facts about the project, codebase, or user preferences
+- Procedures
+- Key project facts
+- Checkpoints
+- Temporary handoff state
 
 Rules:
 - Focus on information needed to continue after compaction.
+- When a prior summary conflicts with later Turn Context, split-turn context, or continuation content, treat the later section as authoritative for progress and next steps.
 - Do not include secrets, API keys, passwords, or private data.
 - Do not include transient commands or raw tool output.
 - Do not include Memory Lane review-queue management, memory IDs, approval/rejection instructions, or commands like memory-lane review unless the user explicitly made review decisions that are themselves durable project outcomes.
@@ -118,7 +119,7 @@ function sessionSummaryContentKey(text: string): string | undefined {
   return normalized || undefined
 }
 
-function sessionSummaryProvenanceKey(input: { adapter?: string; sessionId?: string; turnId?: string; lifecycleEvent?: string }): string | undefined {
+function sessionSummaryProvenanceKey(input: { adapter?: string; sessionId?: string; turnId?: string; lifecycleEvent?: string; sourceSummaryId?: string; summaryClaimIndex?: number }): string | undefined {
   const lifecycleEvent = input.lifecycleEvent
   if (lifecycleEvent !== "session_end" && lifecycleEvent !== "pre_compact") return undefined
 
@@ -127,6 +128,7 @@ function sessionSummaryProvenanceKey(input: { adapter?: string; sessionId?: stri
 
   const parts = [input.adapter ?? "unknown", lifecycleEvent, sessionId]
   if (lifecycleEvent === "pre_compact") parts.push(input.turnId?.trim() || "unknown-turn")
+  if (input.sourceSummaryId) parts.push(input.sourceSummaryId, String(input.summaryClaimIndex ?? "unknown-claim"))
   return parts.join(":")
 }
 
@@ -141,7 +143,7 @@ function existingSessionSummaryKeys(engine: MemoryEngine): { provenance: Set<str
   const content = new Set<string>()
 
   for (const memory of engine.list({ all: true })) {
-    if (memory.kind !== "session_summary") continue
+    if (memory.kind !== "session_summary" && memory.source !== "session-summary") continue
     if (memory.status !== "pending" && memory.status !== "approved") continue
     if (!visibleInCurrentScope(memory, projectScopeKey)) continue
 
@@ -150,6 +152,8 @@ function existingSessionSummaryKeys(engine: MemoryEngine): { provenance: Set<str
       lifecycleEvent: memory.provenance?.lifecycleEvent,
       sessionId: memory.provenance?.sessionId,
       turnId: memory.provenance?.turnId,
+      sourceSummaryId: memory.provenance?.sourceSummaryId,
+      summaryClaimIndex: memory.provenance?.summaryClaimIndex,
     })
     if (provenanceKey) provenance.add(provenanceKey)
 
@@ -160,12 +164,12 @@ function existingSessionSummaryKeys(engine: MemoryEngine): { provenance: Set<str
   return { provenance, content }
 }
 
-function hasSessionSummaryProvenance(existing: { provenance: Set<string> }, provenance: { adapter?: string; sessionId?: string; turnId?: string; lifecycleEvent?: string }): boolean {
+function hasSessionSummaryProvenance(existing: { provenance: Set<string> }, provenance: { adapter?: string; sessionId?: string; turnId?: string; lifecycleEvent?: string; sourceSummaryId?: string; summaryClaimIndex?: number }): boolean {
   const provenanceKey = sessionSummaryProvenanceKey(provenance)
   return Boolean(provenanceKey && existing.provenance.has(provenanceKey))
 }
 
-export function hasExistingSessionSummaryProvenance(engine: MemoryEngine, provenance: { adapter?: string; sessionId?: string; turnId?: string; lifecycleEvent?: string }): boolean {
+export function hasExistingSessionSummaryProvenance(engine: MemoryEngine, provenance: { adapter?: string; sessionId?: string; turnId?: string; lifecycleEvent?: string; sourceSummaryId?: string; summaryClaimIndex?: number }): boolean {
   return hasSessionSummaryProvenance(existingSessionSummaryKeys(engine), provenance)
 }
 
@@ -239,7 +243,7 @@ export interface SessionEndCandidate {
   text: string
   category: "project"
   scopeType: "project" | "global"
-  kind: "session_summary"
+  kind: MemoryKind
   status: "pending"
   source: "session-summary"
   provenance: {
@@ -247,8 +251,150 @@ export interface SessionEndCandidate {
     lifecycleEvent: MemoryLifecycleEvent
     sessionId?: string
     turnId?: string
+    sourceSummaryId?: string
+    summaryClaimIndex?: number
   }
   freshness?: MemoryFreshness
+}
+
+const SUMMARY_REVIEW_UNIT_MAX_CHARS = 600
+const SUMMARY_REVIEW_UNIT_MAX_COUNT = 8
+const TEMPORARY_HANDOFF_TTL_DAYS = 7
+
+const STRUCTURED_SECTIONS = new Set([
+  "decisions made",
+  "decisions",
+  "procedures",
+  "procedure",
+  "key project facts",
+  "project facts",
+  "checkpoints",
+  "checkpoint",
+  "temporary handoff state",
+  "handoff state",
+])
+
+function hasStructuredClaimSections(text: string): boolean {
+  return text.split(/\r?\n/u).some((line) => {
+    const match = /^\s*#{1,6}\s+(.+?)\s*#*\s*$/u.exec(line)
+    return Boolean(match && STRUCTURED_SECTIONS.has(match[1].trim().toLowerCase()))
+  })
+}
+
+function boundReviewUnit(text: string, maxChars = SUMMARY_REVIEW_UNIT_MAX_CHARS): string {
+  const normalized = text.replace(/\s+/gu, " ").trim()
+  if (normalized.length <= maxChars) return normalized
+  const slice = normalized.slice(0, maxChars - 1).trimEnd()
+  const boundary = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("; "), slice.lastIndexOf(" "))
+  return `${slice.slice(0, boundary >= 80 ? boundary : slice.length).trimEnd()}…`
+}
+
+function sourceSummaryId(text: string): string {
+  return createHash("sha256").update(normalizeMemoryText(text)).digest("hex").slice(0, 32)
+}
+
+function claimKind(classification: SummaryClaimClassification): MemoryKind {
+  switch (classification) {
+    case "decision": return "decision"
+    case "procedure": return "procedure"
+    case "project_fact": return "project_fact"
+    case "checkpoint": return "project_checkpoint"
+    case "temporary_handoff": return "session_summary"
+  }
+}
+
+function completionReferences(claims: SummaryClaim[]): Set<string> {
+  const references = new Set<string>()
+  for (const claim of claims) {
+    if (claim.classification !== "checkpoint") continue
+    const completed = /\b(?:merged|closed|completed|released|published|shipped)\b/iu.test(claim.text)
+    if (!completed) continue
+    for (const match of claim.text.matchAll(/\b(PR|pull\s+request|issue)\s*#?(\d+)\b/giu)) {
+      const type = /issue/iu.test(match[1]) ? "issue" : "pr"
+      references.add(`${type}:${match[2]}`)
+    }
+  }
+  return references
+}
+
+function claimReferences(claim: SummaryClaim): Set<string> {
+  const references = new Set<string>()
+  for (const match of claim.text.matchAll(/\b(PR|pull\s+request|issue)\s*#?(\d+)\b/giu)) {
+    const type = /issue/iu.test(match[1]) ? "issue" : "pr"
+    references.add(`${type}:${match[2]}`)
+  }
+  return references
+}
+
+function isSupersededHandoffClaim(claim: SummaryClaim, completed: Set<string>): boolean {
+  if (claim.classification !== "temporary_handoff") return false
+  return [...claimReferences(claim)].some((reference) => completed.has(reference))
+}
+
+function temporaryExpiry(capturedAt: string | undefined): string {
+  const base = capturedAt ? Date.parse(capturedAt) : Date.now()
+  return new Date(base + TEMPORARY_HANDOFF_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString()
+}
+
+function extractedSummaryCandidates(input: {
+  cleaned: string
+  scopeType: "project" | "global"
+  adapter: string
+  lifecycleEvent: MemoryLifecycleEvent
+  sessionId?: string
+  turnId?: string
+  capturedAt?: string
+}): SessionEndCandidate[] | undefined {
+  if (!hasStructuredClaimSections(input.cleaned)) return undefined
+  const claims = classifySummaryClaims(input.cleaned)
+  const completed = completionReferences(claims)
+  const sourceId = sourceSummaryId(input.cleaned)
+  const candidates: SessionEndCandidate[] = []
+
+  for (const [claimIndex, claim] of claims.entries()) {
+    if (candidates.length >= SUMMARY_REVIEW_UNIT_MAX_COUNT) break
+    if (isSupersededHandoffClaim(claim, completed)) continue
+    if (claim.classification === "temporary_handoff" && claim.operationalReasons.length > 0) continue
+    const text = boundReviewUnit(claim.text)
+    if (!text || containsLikelySecret(text)) continue
+    const temporary = claim.classification === "temporary_handoff"
+    candidates.push({
+      text,
+      category: "project",
+      scopeType: input.scopeType,
+      kind: claimKind(claim.classification),
+      status: "pending",
+      source: "session-summary",
+      provenance: {
+        adapter: input.adapter,
+        lifecycleEvent: input.lifecycleEvent,
+        sessionId: input.sessionId,
+        turnId: input.turnId,
+        sourceSummaryId: sourceId,
+        summaryClaimIndex: claimIndex,
+      },
+      ...(temporary
+        ? { freshness: { ...(input.capturedAt ? { capturedAt: input.capturedAt } : {}), expiresAt: temporaryExpiry(input.capturedAt) } }
+        : input.capturedAt ? { freshness: { capturedAt: input.capturedAt } } : {}),
+    })
+  }
+  return candidates
+}
+
+function boundedLegacySummary(cleaned: string): string {
+  const heading = `## Session Summary (${new Date().toISOString().slice(0, 10)})`
+  const boundedLines: string[] = []
+  let sections = 0
+  let bullets = 0
+  for (const line of cleaned.split(/\r?\n/u)) {
+    if (/^\s*#{1,6}\s/u.test(line) && ++sections > 4) continue
+    if (/^\s*[-*+]\s/u.test(line) && ++bullets > 8) continue
+    boundedLines.push(line)
+  }
+  const available = SUMMARY_REVIEW_UNIT_MAX_CHARS - heading.length - 2
+  const content = boundedLines.join("\n").trim()
+  const bounded = content.length <= available ? content : `${content.slice(0, available - 1).trimEnd()}…`
+  return [heading, "", bounded].join("\n")
 }
 
 export async function handleSessionEnd(
@@ -296,16 +442,24 @@ export async function handleSessionEnd(
   const cleaned = reconcileSummaryCheckpointLines(engine, cleanGeneratedSummary(raw))
   if (!sessionSummaryContentKey(cleaned)) return []
   const hygiene = analyzeSummaryHygiene(cleaned, { kind: "session_summary", source: "session-summary" })
+  const capturedAt = latestMessageTimestamp(input.messages)
+  const scopeType = scope ? "project" : "global"
+  const extracted = extractedSummaryCandidates({
+    cleaned,
+    scopeType,
+    adapter,
+    lifecycleEvent,
+    sessionId: input.sessionId,
+    turnId,
+    capturedAt,
+  })
+  if (extracted) return filterDuplicateSessionSummariesWithExisting(existingSummaries, extracted)
   if (hygiene.action === "suppress") return []
 
-  const heading = `## Session Summary (${new Date().toISOString().slice(0, 10)})`
-  const text = [heading, "", cleaned].join("\n")
-  const capturedAt = latestMessageTimestamp(input.messages)
-
   return filterDuplicateSessionSummariesWithExisting(existingSummaries, [{
-    text,
+    text: boundedLegacySummary(cleaned),
     category: "project",
-    scopeType: scope ? "project" : "global",
+    scopeType,
     kind: "session_summary",
     status: "pending",
     source: "session-summary",
@@ -317,6 +471,47 @@ export async function handleSessionEnd(
     },
     ...(capturedAt ? { freshness: { capturedAt } } : {}),
   }])
+}
+
+function completedCandidateReferences(candidate: SessionEndCandidate): Set<string> {
+  if (candidate.kind !== "project_checkpoint" || !/\b(?:merged|closed|completed|released|published|shipped)\b/iu.test(candidate.text)) return new Set()
+  const claim: SummaryClaim = { text: candidate.text, classification: "checkpoint", operationalReasons: [] }
+  return claimReferences(claim)
+}
+
+function isMatchingPreCompletionHandoff(memory: MemoryRecord, references: Set<string>): boolean {
+  if (memory.status !== "pending" || memory.kind !== "session_summary" || memory.source !== "session-summary" || memory.revision?.supersededBy) return false
+  if (!/\b(?:in progress|awaiting (?:merge|review)|uncommitted|branch|checked out|next (?:turn|step|action))\b/iu.test(memory.text)) return false
+  const claim: SummaryClaim = { text: memory.text, classification: "temporary_handoff", operationalReasons: [] }
+  return [...claimReferences(claim)].some((reference) => references.has(reference))
+}
+
+export function saveSessionSummaryCandidates(engine: MemoryEngine, candidates: SessionEndCandidate[]): SaveResult[] {
+  const existing = engine.list({ all: true })
+  const results = candidates.map((candidate) => engine.save({
+    text: candidate.text,
+    category: candidate.category,
+    scopeType: candidate.scopeType,
+    status: candidate.status,
+    source: candidate.source,
+    kind: candidate.kind,
+    provenance: candidate.provenance,
+    freshness: candidate.freshness,
+  }))
+
+  for (const [index, result] of results.entries()) {
+    if (result.status !== "saved") continue
+    const references = completedCandidateReferences(candidates[index])
+    if (references.size === 0) continue
+    const oldIds = existing.filter((memory) => isMatchingPreCompletionHandoff(memory, references)).map((memory) => memory.id)
+    if (oldIds.length === 0) continue
+    try {
+      engine.supersedePendingHandoffs(result.memory.id, oldIds, "Corresponding issue or pull request completed")
+    } catch {
+      // Lifecycle supersession is best-effort; the new pending checkpoint remains independently reviewable.
+    }
+  }
+  return results
 }
 
 /**

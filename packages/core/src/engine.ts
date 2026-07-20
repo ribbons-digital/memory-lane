@@ -502,6 +502,34 @@ export class MemoryEngine {
     return mirrorWarnings.length ? { ...preview, mirrorWarnings } : preview
   }
 
+  /** Deterministically supersede pending temporary handoff records when a pending lifecycle checkpoint completes their referenced work. */
+  supersedePendingHandoffs(successorId: string, oldIds: string[], reason: string): MemoryRecord[] {
+    this.validateOldIds(successorId, oldIds)
+    const successor = this.requireRevisionMemory(successorId, "Successor")
+    const oldRecords = oldIds.map((id) => this.requireRevisionMemory(id, "Old"))
+    if (successor.status !== "pending" || successor.kind !== "project_checkpoint" || successor.source !== "session-summary") {
+      throw new Error(`Lifecycle handoff successor must be a pending extracted checkpoint: ${successor.id}`)
+    }
+    for (const memory of oldRecords) {
+      if (memory.status !== "pending" || memory.kind !== "session_summary" || memory.source !== "session-summary") {
+        throw new Error(`Lifecycle handoff record must be a pending session summary: ${memory.id}`)
+      }
+      if (memory.revision?.supersededBy) throw new Error(`Old memory is already superseded: ${memory.id}`)
+    }
+    const revisedSuccessor: MemoryRecord = {
+      ...successor,
+      revision: revisionForSuccessor(oldIds, reason, "lifecycle"),
+      updatedAt: timestamp(),
+    }
+    const superseded = oldRecords.map((memory): MemoryRecord => ({
+      ...memory,
+      revision: revisionForSuperseded(successor.id, reason, "lifecycle"),
+      updatedAt: timestamp(),
+    }))
+    this.appendMemoryRecords([revisedSuccessor, ...superseded])
+    return superseded
+  }
+
   /** Create a successor memory for approved old memories. Respects project scope unless `all` is true. */
   replace(oldIds: string[], input: {
     text: string

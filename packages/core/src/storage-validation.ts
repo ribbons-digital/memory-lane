@@ -29,7 +29,7 @@ export const VALID_LIFECYCLE_EVENTS = new Set<MemoryLifecycleEvent>([
   "session_end",
   "pre_compact",
 ])
-export const VALID_REVISION_ACTORS = new Set<MemoryRevisionActor>(["manual", "cli", "mcp"])
+export const VALID_REVISION_ACTORS = new Set<MemoryRevisionActor>(["manual", "cli", "mcp", "lifecycle"])
 
 const DESCRIPTOR_TEXT_MAX_CHARS = 240
 const DESCRIPTOR_KEYWORD_MAX_CHARS = 40
@@ -88,6 +88,8 @@ function hasValidProvenance(value: Record<string, unknown>): boolean {
     && isOptionalString(provenance.sessionId)
     && isOptionalString(provenance.turnId)
     && isOptionalString(provenance.toolName)
+    && isOptionalString(provenance.sourceSummaryId)
+    && (provenance.summaryClaimIndex === undefined || (typeof provenance.summaryClaimIndex === "number" && Number.isInteger(provenance.summaryClaimIndex) && provenance.summaryClaimIndex >= 0))
 }
 
 function isValidIsoTimestamp(value: unknown): value is string {
@@ -201,10 +203,10 @@ export function validateSaveInput(input: SaveInput): void {
   validateOptionalEnum("source", input.source, VALID_SOURCES)
   validateOptionalEnum("kind", input.kind, VALID_KINDS)
   if (input.provenance !== undefined && !hasValidProvenance({ provenance: input.provenance })) {
-    throw new Error("Invalid provenance. Expected adapter, lifecycleEvent, and optional string sessionId/turnId/toolName")
+    throw new Error("Invalid provenance. Expected adapter, lifecycleEvent, optional string sessionId/turnId/toolName/sourceSummaryId, and optional non-negative summaryClaimIndex")
   }
   if (input.revision !== undefined && !hasValidRevision({ revision: input.revision })) {
-    throw new Error("Invalid revision. Expected optional supersedes/supersededBy/reason, ISO revisedAt, and revisedBy manual|cli|mcp")
+    throw new Error("Invalid revision. Expected optional supersedes/supersededBy/reason, ISO revisedAt, and revisedBy manual|cli|mcp|lifecycle")
   }
   if (input.freshness !== undefined && !hasValidFreshness({ freshness: input.freshness })) {
     if (!isPlainObject(input.freshness)) {

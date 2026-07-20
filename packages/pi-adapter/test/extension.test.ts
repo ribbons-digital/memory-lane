@@ -137,7 +137,7 @@ async function runMemoryCommand(pi: FakePi, args: string, ctx: ExtensionContext)
   await command.handler(args, ctx)
 }
 
-async function withMockSummaryServer(summary: string, fn: (baseUrl: string, prompts: string[]) => Promise<void>): Promise<void> {
+async function withMockSummaryServer(summary: string | ((requestBody: string, index: number) => string), fn: (baseUrl: string, prompts: string[]) => Promise<void>): Promise<void> {
   const prompts: string[] = []
   const server = http.createServer((req, res) => {
     let body = ""
@@ -145,8 +145,9 @@ async function withMockSummaryServer(summary: string, fn: (baseUrl: string, prom
     req.on("data", (chunk) => { body += chunk })
     req.on("end", () => {
       prompts.push(body)
+      const content = typeof summary === "function" ? summary(body, prompts.length - 1) : summary
       res.writeHead(200, { "content-type": "application/json" })
-      res.end(JSON.stringify({ choices: [{ message: { content: summary } }] }))
+      res.end(JSON.stringify({ choices: [{ message: { content } }] }))
     })
   })
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
@@ -196,6 +197,9 @@ test("registers pi commands tools input and before_agent_start handlers", () => 
   assert.equal(pi.events.get("tool_result")?.length, 1)
   assert.equal(pi.events.get("before_agent_start")?.length, 1)
   assert.equal(pi.events.get("session_before_compact")?.length, 1)
+  assert.equal(pi.events.get("session_compact")?.length, 1)
+  assert.equal(pi.events.get("session_switch")?.length, 1)
+  assert.equal(pi.events.get("session_shutdown")?.length, 1)
 })
 
 test("before_agent_start returns nothing when no relevant memory exists", async () => {
@@ -874,12 +878,153 @@ test("session_before_compact saves pending pi summary without overriding compact
     const mem = JSON.parse(rawMemory.trim())
     assert.equal(mem.status, "pending")
     assert.equal(mem.source, "session-summary")
-    assert.equal(mem.kind, "session_summary")
+    assert.equal(mem.kind, "decision")
+    assert.ok(mem.provenance.sourceSummaryId)
     assert.equal(mem.provenance.adapter, "pi")
     assert.equal(mem.provenance.lifecycleEvent, "pre_compact")
     assert.equal(mem.provenance.turnId, "turn-compact")
     assert.match(mem.text, /Pi pre-compact summary survived/)
     assert.ok(notifications.some((n) => n.message.includes("pending pre-compact summary")))
+
+    await runEvent(pi, "session_compact", { compactionEntry: { summary: "SHOULD_NOT_DUPLICATE" } }, ctx)
+    assert.equal(prompts.length, 1)
+    assert.equal(fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8").trim().split("\n").length, 1)
+  })
+})
+
+test("lossy split-turn compaction defers to the host summary without leaking tool or reasoning content", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  await withMockSummaryServer("## Checkpoints\n- Completed issue #215 implementation and verification.", async (baseUrl, prompts) => {
+    fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
+      semantic: { enabled: false },
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-summary", requireConfirmation: false } },
+    }))
+    const pi = createFakePi()
+    memoryLaneExtension(pi)
+    const ctx = ctxWithUi(env.dir)
+
+    await runEvent(pi, "session_before_compact", {
+      reason: "threshold",
+      turnId: "active-split-turn",
+      preparation: {
+        messagesToSummarize: [
+          { role: "user", content: [{ type: "text", text: "Implement issue #215." }] },
+          { role: "assistant", content: [{ type: "thinking", thinking: "HIDDEN_REASONING_SENTINEL" }, { type: "toolCall", name: "bash", arguments: { command: "RAW_TOOL_COMMAND_SENTINEL" } }] },
+          { role: "toolResult", content: [{ type: "text", text: "RAW_TOOL_OUTPUT_SENTINEL" }] },
+        ],
+        turnPrefixMessages: [],
+      },
+    }, ctx)
+
+    assert.equal(prompts.length, 0)
+    assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
+
+    await runEvent(pi, "session_compact", {
+      compactionEntry: {
+        summary: "## Turn Context\nImplementation and verification for issue #215 completed. The scope is known and all focused tests passed.",
+      },
+    }, ctx)
+
+    assert.equal(prompts.length, 1)
+    assert.match(prompts[0], /Implementation and verification for issue #215 completed/u)
+    assert.doesNotMatch(prompts[0], /HIDDEN_REASONING_SENTINEL|RAW_TOOL_COMMAND_SENTINEL|RAW_TOOL_OUTPUT_SENTINEL/u)
+    const records = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    assert.equal(records.length, 1)
+    assert.match(records[0].text, /Completed issue #215 implementation and verification/u)
+    assert.doesNotMatch(records[0].text, /scope is unknown|HIDDEN_REASONING_SENTINEL|RAW_TOOL/iu)
+  })
+})
+
+test("lossy split-turn compaction fails open without saving on a legacy host", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  await withMockSummaryServer("## Checkpoints\n- SHOULD_NOT_SAVE.", async (baseUrl, prompts) => {
+    fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
+      semantic: { enabled: false },
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-summary", requireConfirmation: false } },
+    }))
+    const pi = createFakePi()
+    memoryLaneExtension(pi)
+    await runEvent(pi, "session_before_compact", {
+      reason: "threshold",
+      turnId: "legacy-lossy-turn",
+      preparation: {
+        messagesToSummarize: [
+          { role: "user", content: [{ type: "text", text: "Implement the issue." }] },
+          { role: "assistant", content: [{ type: "toolCall", name: "bash", arguments: { command: "private" } }] },
+        ],
+      },
+    }, ctxWithUi(env.dir))
+
+    assert.equal(prompts.length, 0)
+    assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
+  })
+})
+
+test("deferred split-turn state clears on cancellation, session switch, and shutdown", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  await withMockSummaryServer("## Checkpoints\n- SHOULD_NOT_SAVE.", async (baseUrl, prompts) => {
+    fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
+      semantic: { enabled: false },
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-summary", requireConfirmation: false } },
+    }))
+
+    for (const clearEvent of ["session_compact", "session_switch", "session_shutdown"]) {
+      const pi = createFakePi()
+      memoryLaneExtension(pi)
+      const ctx = ctxWithUi(env.dir)
+      await runEvent(pi, "session_before_compact", {
+        reason: "threshold",
+        turnId: `lossy-${clearEvent}`,
+        preparation: { messagesToSummarize: [{ role: "assistant", content: [{ type: "toolCall", name: "bash" }] }] },
+      }, ctx)
+      await runEvent(pi, clearEvent, {}, ctx)
+      await runEvent(pi, "session_compact", { compactionEntry: { summary: "LATE_SUMMARY_SHOULD_NOT_SAVE" } }, ctx)
+    }
+
+    assert.equal(prompts.length, 0)
+    assert.equal(fs.existsSync(path.join(env.dir, "memory.jsonl")), false)
+  })
+})
+
+test("deferred split-turn state is isolated by concurrent session id", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  await withMockSummaryServer((body) => body.includes("SESSION_A_COMPLETE")
+    ? "## Checkpoints\n- Issue #301 completed for session A."
+    : "## Checkpoints\n- Issue #302 completed for session B.", async (baseUrl, prompts) => {
+    fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
+      semantic: { enabled: false },
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-summary", requireConfirmation: false } },
+    }))
+    const pi = createFakePi()
+    memoryLaneExtension(pi)
+    const context = (id: string): ExtensionContext => ({
+      ...ctxWithUi(env.dir),
+      sessionManager: { getSessionFile: () => path.join(env.dir, `${id}.jsonl`) },
+    })
+    const ctxA = context("session-a")
+    const ctxB = context("session-b")
+    const lossy = (turnId: string) => ({
+      reason: "threshold",
+      turnId,
+      preparation: { messagesToSummarize: [{ role: "assistant", content: [{ type: "toolCall", name: "bash" }] }] },
+    })
+
+    await runEvent(pi, "session_before_compact", lossy("turn-a"), ctxA)
+    await runEvent(pi, "session_before_compact", lossy("turn-b"), ctxB)
+    await runEvent(pi, "session_compact", { compactionEntry: { summary: "SESSION_B_COMPLETE" } }, ctxB)
+    await runEvent(pi, "session_compact", { compactionEntry: { summary: "SESSION_A_COMPLETE" } }, ctxA)
+
+    assert.equal(prompts.length, 2)
+    const records = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    assert.equal(records.length, 2)
+    assert.deepEqual(new Set(records.map((record) => record.provenance.sessionId)), new Set([
+      path.join(env.dir, "session-a.jsonl"),
+      path.join(env.dir, "session-b.jsonl"),
+    ]))
   })
 })
 
@@ -914,7 +1059,8 @@ test("memory session-summary saves pending pi session summary without raw branch
     const mem = JSON.parse(lines[0])
     assert.equal(mem.status, "pending")
     assert.equal(mem.source, "session-summary")
-    assert.equal(mem.kind, "session_summary")
+    assert.equal(mem.kind, "decision")
+    assert.ok(mem.provenance.sourceSummaryId)
     assert.equal(mem.provenance.adapter, "pi")
     assert.equal(mem.provenance.lifecycleEvent, "session_end")
     assert.equal(mem.provenance.sessionId, path.join(env.dir, ".pi-session.jsonl"))

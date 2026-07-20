@@ -1,7 +1,7 @@
 import {
   appendHookDebugLog, hookDebugEnabled, loadConfig, parseExplicitMemoryRequest, skippedSecretCount, type HookDebugLogStatus, type MemoryEngine, type SaveResult,
 } from "@memory-lane/core"
-import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleStop, shouldCaptureLifecycleTrace, type PostToolUseInput, type SessionMessage } from "@memory-lane/lifecycle"
+import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleStop, saveSessionSummaryCandidates as persistSessionSummaryCandidates, shouldCaptureLifecycleTrace, type PostToolUseInput, type SessionMessage } from "@memory-lane/lifecycle"
 
 export interface RunPiHookOptions {
   engine: MemoryEngine
@@ -198,16 +198,7 @@ function preCompactSummaryEnabled(config: ReturnType<typeof loadConfig>): boolea
 }
 
 function saveSessionSummaryCandidates(engine: MemoryEngine, candidates: Awaited<ReturnType<typeof handlePreCompact>>): SaveResult[] {
-  return candidates.map((candidate) => engine.save({
-    text: candidate.text,
-    category: candidate.category,
-    scopeType: candidate.scopeType,
-    status: candidate.status,
-    source: candidate.source,
-    kind: candidate.kind,
-    provenance: { ...candidate.provenance, adapter: "pi" },
-    freshness: candidate.freshness,
-  }))
+  return persistSessionSummaryCandidates(engine, candidates)
 }
 
 function output(data: { saved?: number; skipped?: number; discarded?: number; reason?: string; message?: string }): string {
