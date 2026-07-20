@@ -41,7 +41,7 @@ import type {
   RecallOptions, RecallResult, EmbeddingProvider, CompactReport, MemoryEngineConfig, MemoryContextPolicyConfig, HandoffMode,
   FreshnessStatus, ContinuityHintSummary, ContinuityReadModel, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
   SupersedeResult, ReplaceResult, MemoryRevisionActor, ResolvedContinuityBaseline, ContinuityBaselineDiagnostic,
-  LegacyProjectMigrationApplyResult, LegacyProjectMigrationPlan, LocalLearningActor, LocalLearningEventInput, LocalLearningEventSink,
+  LegacyProjectMigrationApplyResult, LegacyProjectMigrationPlan, LocalLearningActor, LocalLearningEventInput, LocalLearningEventSink, EmbeddingRecord,
 } from "./types.js"
 
 function displayValue(value: unknown): string {
@@ -753,10 +753,11 @@ export class MemoryEngine {
     for (let i = 0; i < needsEmbedding.length; i += batchSize) {
       const batch = needsEmbedding.slice(i, i + batchSize)
       const vectors = await this.embProvider.embed(batch.map((m) => m.text), opts?.signal)
+      const records: EmbeddingRecord[] = []
       batch.forEach((memory, index) => {
         const vector = vectors[index]
         if (!vector?.length) return
-        this.storage.appendEmbedding({
+        records.push({
           memoryId: memory.id,
           memoryUpdatedAt: memory.updatedAt,
           contentHash: contentHash(memory.text),
@@ -768,6 +769,7 @@ export class MemoryEngine {
         })
         embedded++
       })
+      this.storage.appendEmbeddings(records)
     }
     return { embedded, skippedExisting, skippedSecrets }
   }

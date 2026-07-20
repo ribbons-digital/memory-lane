@@ -2803,6 +2803,63 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(readJsonl(embeddingsPath).length, 4)
   })
 
+  it("reindexes a multi-thousand-record store with one storage rewrite per provider batch", async () => {
+    const recordCount = 2500
+    const batchSize = 128
+    const memoryPath = path.join(dir, "mem-large-reindex.jsonl")
+    const embeddingsPath = path.join(dir, "emb-large-reindex.jsonl")
+    const configPath = path.join(dir, "cfg-large-reindex.json")
+    const now = "2026-01-01T00:00:00.000Z"
+    const memories: MemoryRecord[] = Array.from({ length: recordCount }, (_, index) => ({
+      id: `large-${index}`,
+      text: `approved memory ${index}`,
+      status: "approved",
+      category: "preference",
+      scope: { type: "global" },
+      source: "manual",
+      createdAt: now,
+      updatedAt: now,
+    }))
+    fs.writeFileSync(memoryPath, memories.map((memory) => JSON.stringify(memory)).join("\n") + "\n", "utf8")
+    fs.writeFileSync(configPath, JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "test-profile",
+        embeddings: { profiles: { "test-profile": { provider: "openai-compatible-embeddings", baseUrl: "http://localhost", model: "test-model", batchSize } } },
+      },
+    }), "utf8")
+
+    const baseStorage = createSingleStoreEngineStorage(memoryPath, embeddingsPath)
+    const storageBatchSizes: number[] = []
+    let singleWrites = 0
+    const storage = {
+      ...baseStorage,
+      appendEmbedding(record: Parameters<typeof baseStorage.appendEmbedding>[0]) {
+        singleWrites += 1
+        baseStorage.appendEmbedding(record)
+      },
+      appendEmbeddings(records: Parameters<typeof baseStorage.appendEmbeddings>[0]) {
+        storageBatchSizes.push(records.length)
+        baseStorage.appendEmbeddings(records)
+      },
+    }
+    const providerBatchSizes: number[] = []
+    const provider: EmbeddingProvider = { embed: async (inputs) => {
+      providerBatchSizes.push(inputs.length)
+      return inputs.map(() => [1, 0])
+    } }
+    const e = new MemoryEngine({ storage, configPath, embeddingProvider: provider, autoCompact: false })
+
+    const result = await e.reindexEmbeddings()
+
+    const expectedBatchCount = Math.ceil(recordCount / batchSize)
+    assert.deepEqual(result, { embedded: recordCount, skippedExisting: 0, skippedSecrets: 0 })
+    assert.equal(providerBatchSizes.length, expectedBatchCount)
+    assert.deepEqual(storageBatchSizes, providerBatchSizes)
+    assert.equal(singleWrites, 0)
+    assert.equal(readJsonl(embeddingsPath).length, recordCount)
+  })
+
   it("reindex handles providers returning too few vectors", async () => {
     const configPath = path.join(dir, "cfg-short-reindex.json")
     fs.writeFileSync(configPath, JSON.stringify({

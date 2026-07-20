@@ -40,6 +40,11 @@ export function foldEmbeddings(records: EmbeddingRecord[]): EmbeddingRecord[] {
 export interface EmbeddingStore {
   readonly file: string
   append(record: EmbeddingLine): void
+  /**
+   * Append all records in one lock-protected tmp-file rewrite.
+   * The rename makes the whole batch atomic for this file: readers see either the prior file or the file containing every record in the batch.
+   */
+  appendMany(records: EmbeddingLine[]): void
   readLog(): EmbeddingLine[]
   listEmbeddings(): EmbeddingRecord[]
   listInvalidations(): EmbeddingInvalidationRecord[]
@@ -71,22 +76,31 @@ export function createEmbeddingStore(filePath: string): EmbeddingStore {
     } catch { return [] }
   }
 
+  function appendMany(records: EmbeddingLine[]): void {
+    // Serialize the complete batch before taking the lock so serialization failures cannot alter the store.
+    const rows = records.map((record) => JSON.stringify(record)).join("\n")
+    if (!rows) return
+    withFileLock(filePath, () => {
+      const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : ""
+      // Preserve existing bytes, including malformed rows and blank separators, while ensuring a trailing partial row remains separate from the new batch.
+      const prefix = existing && !existing.endsWith("\n") ? existing + "\n" : existing
+      const tmp = filePath + ".tmp." + crypto.randomBytes(4).toString("hex")
+      try {
+        fs.writeFileSync(tmp, prefix + rows + "\n", "utf8")
+        fs.renameSync(tmp, filePath)
+      } finally {
+        if (fs.existsSync(tmp)) fs.rmSync(tmp, { force: true })
+      }
+    })
+    cache = null
+  }
+
   return {
     file: filePath,
     append(record) {
-      withFileLock(filePath, () => {
-        const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : ""
-        const prefix = existing && !existing.endsWith("\n") ? existing + "\n" : existing
-        const tmp = filePath + ".tmp." + crypto.randomBytes(4).toString("hex")
-        try {
-          fs.writeFileSync(tmp, prefix + JSON.stringify(record) + "\n", "utf8")
-          fs.renameSync(tmp, filePath)
-        } finally {
-          if (fs.existsSync(tmp)) fs.rmSync(tmp, { force: true })
-        }
-      })
-      cache = null
+      appendMany([record])
     },
+    appendMany,
     readLog: parse,
     listEmbeddings() {
       return foldEmbeddings(readAll().filter((l): l is EmbeddingRecord => isEmbeddingRecord(l)))

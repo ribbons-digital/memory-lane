@@ -29,6 +29,11 @@ export interface MemoryEngineStorage {
   listMemoriesFresh(): MemoryRecord[]
   memoryDiagnostics(): MemoryStoreDiagnostics
   appendEmbedding(record: EmbeddingLine): void
+  /**
+   * Append embeddings atomically per underlying store.
+   * A two-tier mixed batch is grouped into one atomic rewrite per target store, but the rewrites across stores are not one transaction.
+   */
+  appendEmbeddings(records: EmbeddingLine[]): void
   listEmbeddings(): EmbeddingRecord[]
   listEmbeddingInvalidations(): EmbeddingInvalidationRecord[]
   /** Return read-only diagnostics for active current-project memories that still live in the home store. */
@@ -303,6 +308,9 @@ export function createSingleStoreEngineStorage(memoryPath: string, embeddingsPat
     appendEmbedding(record) {
       embeddingStore.append(record)
     },
+    appendEmbeddings(records) {
+      embeddingStore.appendMany(records)
+    },
     listEmbeddings() {
       return embeddingStore.listEmbeddings()
     },
@@ -376,10 +384,6 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
 
   function allLocatedMemoryLogs(): LocatedMemoryRecord[] {
     return entries.flatMap((entry) => readLog(entry).map((record, logIndex) => ({ entry, record, logIndex })))
-  }
-
-  function routeForEmbedding(record: EmbeddingLine): StoreEntry {
-    return ownerEntry(record.memoryId) ?? home
   }
 
   function existingEntries(): StoreEntry[] {
@@ -554,8 +558,22 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
     }
   }
 
-  function appendEmbeddingsTo(entry: StoreEntry, records: EmbeddingRecord[]): void {
-    for (const record of records) embeddingStore(entry, true)!.append(record)
+  function appendEmbeddingsTo(entry: StoreEntry, records: EmbeddingLine[]): void {
+    if (!records.length) return
+    embeddingStore(entry, true)!.appendMany(records)
+  }
+
+  function appendEmbeddingsByRoute(records: EmbeddingLine[]): void {
+    if (!records.length) return
+    const owners = latestLocatedById()
+    const grouped = new Map<StoreEntry, EmbeddingLine[]>()
+    for (const record of records) {
+      const entry = owners.get(record.memoryId)?.entry ?? home
+      const group = grouped.get(entry)
+      if (group) group.push(record)
+      else grouped.set(entry, [record])
+    }
+    for (const [entry, group] of grouped) appendEmbeddingsTo(entry, group)
   }
 
   function compactMemoryLogs(compactedEntries: StoreEntry[]): { report: CompactReport; aliveById: Map<string, LocatedMemoryRecord> } {
@@ -660,7 +678,10 @@ export function createTwoTierEngineStorage(homePaths: MemoryPaths, projectPaths?
       return entries.reduce((sum, entry) => addDiagnostics(sum, memoryStore(entry)?.diagnostics() ?? emptyDiagnostics()), emptyDiagnostics())
     },
     appendEmbedding(record) {
-      embeddingStore(routeForEmbedding(record), true)!.append(record)
+      appendEmbeddingsByRoute([record])
+    },
+    appendEmbeddings(records) {
+      appendEmbeddingsByRoute(records)
     },
     listEmbeddings() {
       return foldEmbeddings(entries.flatMap((entry) => embeddingStore(entry)?.listEmbeddings() ?? []))
