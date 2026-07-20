@@ -858,6 +858,44 @@ describe("MemoryEngine", () => {
     assert.equal(e.list({ all: true }).find((m) => m.id === oldA.memory.id)?.status, "approved")
   })
 
+  it("supersedePendingHandoffs reconciles the Obsidian mirror", () => {
+    const vault = path.join(dir, "vault")
+    fs.mkdirSync(path.join(vault, ".obsidian"), { recursive: true })
+    const configPath = path.join(dir, "config.json")
+    fs.writeFileSync(configPath, JSON.stringify({
+      obsidian: { enabled: true, vaultPath: vault, folder: "Memory Lane", mode: "mirror" },
+    }), "utf8")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "memory.jsonl"),
+      embeddingsPath: path.join(dir, "embeddings.jsonl"),
+      configPath,
+    })
+    const old = e.save({
+      text: "PR #215 is awaiting merge on branch fix/issue-215.",
+      status: "pending",
+      source: "session-summary",
+      kind: "session_summary",
+    })
+    const successor = e.save({
+      text: "PR #215 merged after verification completed.",
+      status: "pending",
+      source: "session-summary",
+      kind: "project_checkpoint",
+    })
+    assert.equal(old.status, "saved")
+    assert.equal(successor.status, "saved")
+    if (old.status !== "saved" || successor.status !== "saved") return
+
+    const oldMirrorPath = path.join(vault, "Memory Lane", "memories", `${old.memory.id}.md`)
+    fs.writeFileSync(oldMirrorPath, "---\nmemory_lane_mirror: true\n---\n\nSTALE MIRROR\n", "utf8")
+
+    e.supersedePendingHandoffs(successor.memory.id, [old.memory.id], "PR completed")
+
+    const mirrored = fs.readFileSync(oldMirrorPath, "utf8")
+    assert.match(mirrored, /PR #215 is awaiting merge/u)
+    assert.doesNotMatch(mirrored, /STALE MIRROR/u)
+  })
+
   it("supersede validates all inputs before writing", () => {
     const e = engine()
     const old = e.save({ text: "Old", status: "approved" })

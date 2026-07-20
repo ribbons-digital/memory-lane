@@ -989,6 +989,41 @@ test("deferred split-turn state clears on cancellation, session switch, and shut
   })
 })
 
+test("session switch clears only the switched session's deferred split-turn state", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  await withMockSummaryServer("## Checkpoints\n- Issue #302 completed for session B.", async (baseUrl, prompts) => {
+    fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
+      semantic: { enabled: false },
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-summary", requireConfirmation: false } },
+    }))
+    const pi = createFakePi()
+    memoryLaneExtension(pi)
+    const context = (id: string): ExtensionContext => ({
+      ...ctxWithUi(env.dir),
+      sessionManager: { getSessionFile: () => path.join(env.dir, `${id}.jsonl`) },
+    })
+    const ctxA = context("session-a")
+    const ctxB = context("session-b")
+    const lossy = (turnId: string) => ({
+      reason: "threshold",
+      turnId,
+      preparation: { messagesToSummarize: [{ role: "assistant", content: [{ type: "toolCall", name: "bash" }] }] },
+    })
+
+    await runEvent(pi, "session_before_compact", lossy("turn-a"), ctxA)
+    await runEvent(pi, "session_before_compact", lossy("turn-b"), ctxB)
+    await runEvent(pi, "session_switch", {}, ctxA)
+    await runEvent(pi, "session_compact", { compactionEntry: { summary: "SESSION_B_COMPLETE" } }, ctxB)
+    await runEvent(pi, "session_compact", { compactionEntry: { summary: "SESSION_A_MUST_NOT_SAVE" } }, ctxA)
+
+    assert.equal(prompts.length, 1)
+    const records = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    assert.equal(records.length, 1)
+    assert.equal(records[0].provenance.sessionId, path.join(env.dir, "session-b.jsonl"))
+  })
+})
+
 test("deferred split-turn state is isolated by concurrent session id", async () => {
   const env = makeTempEnv()
   cleanup = env.restore

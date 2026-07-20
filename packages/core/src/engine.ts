@@ -527,6 +527,7 @@ export class MemoryEngine {
       updatedAt: timestamp(),
     }))
     this.appendMemoryRecords([revisedSuccessor, ...superseded])
+    this.syncMirrorAndCollectWarnings()
     return superseded
   }
 
