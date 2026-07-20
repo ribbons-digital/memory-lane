@@ -2,7 +2,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { MemoryEngine, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, deepMergeConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type WorkflowArea } from "@memory-lane/core"
+import { MemoryEngine, analyzeReviewQuality, qualitySignalCodes, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, deepMergeConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type ReviewQualitySignalCode, type WorkflowArea } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import { classifyPromptRoute, createLearningEventSink, handleSessionEnd, createOpenAICompatibleProvider, purgeTraces, traceStatus, type TraceStatus } from "@memory-lane/lifecycle"
@@ -14,6 +14,7 @@ import { handleUpgrade } from "./commands/upgrade.js"
 import { handleObsidian } from "./commands/obsidian.js"
 import { flag, hasFlag, positionals } from "./args.js"
 import { ompDiagnosticTarget, readInstallManifest } from "./installer/manifest.js"
+import { applyGroupedReviewMutation } from "./review-mutation.js"
 import type { CliContext } from "./commands/context.js"
 import { loadPlugins } from "@memory-lane/plugin-api"
 import type { BundledPluginModule, LoadedPlugin } from "@memory-lane/plugin-api"
@@ -21,7 +22,7 @@ import type { SemanticMemoryConfig } from "@memory-lane/core"
 
 import { resolveBundledPlugin } from "./plugins.js"
 import {
-  formatMemories, formatReviewMemories, formatRecall, formatSaveResult, formatResult, formatMutationResult,
+  formatMemories, formatReviewMemories, formatReviewMutation, formatRecall, formatSaveResult, formatResult, formatMutationResult,
   formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatPreferenceDiagnosticsSummary, formatOperatingAgreements, formatContinuityReadModel, formatError, formatMemoryGet, formatUpdatePreview, formatRescopeResult, formatSupersedeResult, formatReplaceResult, formatLegacyProjectMemorySummary, formatLegacyProjectMemoryMigrationPreview, formatLegacyProjectMemoryMigrationApply, usage,
   VERSION,
 } from "./formatters.js"
@@ -402,19 +403,49 @@ async function handleReplace(ctx: CliContext): Promise<void> {
   console.log(formatReplaceResult(result, ctx.json))
 }
 
+function reviewSignalFilter(argv: string[]): ReviewQualitySignalCode[] {
+  const value = flag(argv, "signal")
+  if (value === undefined) return []
+  if (value === "true" || !value.trim()) throw new Error("Missing value for --signal")
+  const requested = [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))]
+  const invalid = requested.filter((item) => !qualitySignalCodes.includes(item as ReviewQualitySignalCode))
+  if (invalid.length) throw new Error(`Invalid review quality signal: ${invalid.join(", ")}. Expected one or more of: ${qualitySignalCodes.join(", ")}`)
+  return requested as ReviewQualitySignalCode[]
+}
+
+function reviewMutationAction(argv: string[]): "approve" | "reject" | undefined {
+  const value = flag(argv, "action")
+  if (value === undefined) return undefined
+  if (value !== "approve" && value !== "reject") throw new Error("Invalid --action. Expected approve or reject.")
+  return value
+}
+
 function handleReview(ctx: CliContext): void {
   const suspectMeta = hasFlag(ctx.argv, "suspect-meta")
   const includeApproved = suspectMeta && hasFlag(ctx.argv, "include-approved")
   const allScope = hasFlag(ctx.argv, "all")
+  const signalFilters = reviewSignalFilter(ctx.argv)
+  const action = reviewMutationAction(ctx.argv)
+  if (action && includeApproved) throw new Error("Grouped review mutation cannot include approved memories")
+  const activeProjectScope = ctx.engine.getProjectScope()?.key
+  const qualityContext = {
+    rejectedMemories: ctx.engine.list({ status: "rejected", all: allScope }),
+    activeProjectScope,
+  }
   const filters = {
     kind: flag(ctx.argv, "kind"),
     source: flag(ctx.argv, "source"),
     provenance: flag(ctx.argv, "provenance"),
+    signal: signalFilters.length ? signalFilters.join(",") : undefined,
   }
   const reviewMemories = includeApproved
     ? [...ctx.engine.reviewPending({ all: allScope }), ...ctx.engine.list({ status: "approved", all: allScope })]
     : ctx.engine.reviewPending({ all: allScope })
-  const memories = reviewMemories.filter((memory) => {
+  const analyzedReviewMemories = reviewMemories.map((memory) => ({
+    memory,
+    qualitySignals: analyzeReviewQuality(memory, qualityContext),
+  }))
+  const selectedReviewMemories = analyzedReviewMemories.filter(({ memory, qualitySignals }) => {
     if (suspectMeta && !isMetaTaskPromptText(memory.text)) return false
     if (filters.kind && (memory.kind ?? "misc") !== filters.kind) return false
     if (filters.source && memory.source !== filters.source) return false
@@ -422,16 +453,66 @@ function handleReview(ctx: CliContext): void {
       const provenance = memory.provenance ? `${memory.provenance.adapter}/${memory.provenance.lifecycleEvent}` : "none"
       if (provenance !== filters.provenance) return false
     }
+    if (signalFilters.length) {
+      const assigned = new Set(qualitySignals.map((signal) => signal.code))
+      if (!signalFilters.some((signal) => assigned.has(signal))) return false
+    }
     return true
   })
+  const memories = selectedReviewMemories.map(({ memory }) => memory)
+  const qualitySignalsById = new Map(selectedReviewMemories.map(({ memory, qualitySignals }) => [memory.id, qualitySignals]))
   const activeFilters = Object.fromEntries(Object.entries(filters).filter(([, value]) => Boolean(value)))
   ctx.engine.recordSuggestionsShown(memories, "cli")
+
+  if (action) {
+    if (!memories.length) throw new Error("No pending memories match the grouped review mutation filters")
+    const memoryIds = memories.map((memory) => memory.id)
+    const confirmationIds = memoryIds.join(",")
+    const broadScopeMemoryIds = memories
+      .filter((memory) => memory.scope.type === "global" || memory.scope.key !== activeProjectScope)
+      .map((memory) => memory.id)
+    const preview = {
+      status: "preview" as const,
+      action,
+      memoryIds,
+      broadScopeMemoryIds,
+      requiresBroadScopeConfirmation: broadScopeMemoryIds.length > 0,
+      confirmationIds,
+    }
+    if (!hasFlag(ctx.argv, "yes")) {
+      console.log(formatReviewMutation(preview, ctx.json))
+      return
+    }
+    const confirmedIds = flag(ctx.argv, "confirm-ids")
+    if (!confirmedIds || confirmedIds === "true") throw new Error(`Grouped review mutation requires --confirm-ids ${confirmationIds}`)
+    const expected = [...memoryIds].sort().join(",")
+    const confirmed = [...new Set(confirmedIds.split(",").map((id) => id.trim()).filter(Boolean))].sort().join(",")
+    if (confirmed !== expected) throw new Error(`--confirm-ids does not match the exact filtered memory IDs: ${confirmationIds}`)
+    if (broadScopeMemoryIds.length && !hasFlag(ctx.argv, "confirm-global")) {
+      throw new Error(`Cross-project or global review mutation requires --confirm-global for IDs: ${broadScopeMemoryIds.join(",")}`)
+    }
+    const mutation = applyGroupedReviewMutation({
+      action,
+      expected: memories,
+      resolve: (id) => ctx.engine.getByIdFresh(id, { all: allScope }),
+      mutate: (id) => action === "approve"
+        ? ctx.engine.approve(id, { all: allScope, actor: "cli" })
+        : ctx.engine.reject(id, { all: allScope, actor: "cli" }),
+    })
+    console.log(formatReviewMutation({
+      ...preview,
+      ...mutation,
+    }, ctx.json))
+    if (mutation.status === "partial") process.exitCode = 1
+    return
+  }
+
   console.log(formatReviewMemories(memories, ctx.json, {
     suspectMeta,
     includeApproved,
     filters: activeFilters,
-    projectScope: ctx.engine.getProjectScope()?.key ?? "none",
-  }))
+    projectScope: activeProjectScope ?? "none",
+  }, qualityContext, qualitySignalsById))
 }
 
 function handleDashboard(ctx: CliContext): void {
@@ -846,6 +927,7 @@ const readOnlyStorageSubcommands: Record<string, Set<string | undefined>> = {
 
 function usesReadOnlyStorageResolution(command: string, argv: string[]): boolean {
   if (command === "migrate" && hasFlag(argv, "apply-plan")) return false
+  if (command === "review" && hasFlag(argv, "action") && hasFlag(argv, "yes")) return false
   if (readOnlyStorageCommands.has(command)) return true
   const subcommands = readOnlyStorageSubcommands[command]
   if (!subcommands) return false
@@ -1075,7 +1157,7 @@ async function main(): Promise<void> {
     process.exit(1)
   }
   // Force clean exit in case any dependency leaves handles alive (e.g. compiled binary).
-  process.exit(0)
+  process.exit(process.exitCode && process.exitCode !== 0 ? process.exitCode : 0)
 }
 
 main()

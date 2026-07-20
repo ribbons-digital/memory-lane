@@ -266,6 +266,15 @@ export class MemoryEngine {
     )
   }
 
+  /** Re-read storage for mutation confirmation preflight instead of relying on cached review records. */
+  getByIdFresh(id: string, opts?: { all?: boolean }): MemoryRecord | undefined {
+    return this.storage.listMemoriesFresh().find((memory) =>
+      memory.id === id
+      && (Boolean(opts?.all) || memory.status === "approved" || memory.status === "pending")
+      && this.visibleByScope(memory, opts),
+    )
+  }
+
   private requireActiveMemory(id: string, opts?: { all?: boolean }): MemoryRecord {
     const memory = this.findScopedMemory(
       id,

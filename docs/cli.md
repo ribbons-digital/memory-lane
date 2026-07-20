@@ -17,6 +17,11 @@ memory-lane review [--all]        Show pending memories
 memory-lane review --kind session_summary Filter pending review by memory kind
 memory-lane review --source session-summary Filter pending review by source
 memory-lane review --provenance pi/session_end Filter pending review by adapter/event provenance, e.g. pi/session_end or codex/pre_compact
+memory-lane review --signal contains-question Filter by one quality signal
+memory-lane review --signal contains-question,contains-code-fence Filter by any listed quality signal
+memory-lane review [filters] --action approve|reject Preview the exact IDs selected for grouped mutation
+memory-lane review [filters] --action approve|reject --confirm-ids <id[,id...]> --yes [--confirm-global]
+                                  Apply the previewed IDs; global or cross-project records also require --confirm-global
 memory-lane review --suspect-meta Show likely old pending operational prompt pollution only
 memory-lane review --suspect-meta --include-approved [--all] Show pending+approved suspect pollution; --all includes other projects
 memory-lane dashboard [--all]     Compact continuity/review overview without long memory bodies
@@ -99,6 +104,24 @@ Freshness metadata is advisory.
 Memory Lane stores, validates, displays, and classifies it for status/continuity inspection, but does not automatically delete, hide, refresh, consolidate, deprioritize, or filter memories.
 Stale and expired advisory metadata may include existing dry-run revision commands so users can inspect a safe next action per memory id.
 Generated session summaries can also carry `freshness.capturedAt` when the source messages include canonical ISO timestamps; this captured time is the session as-of/source timestamp and may differ from the summary heading/write date.
+
+## Candidate quality signals
+
+`memory-lane review` annotates candidates with deterministic quality signals for bare checkpoints, previously rejected exact equivalents, questions, code fences, ambiguous references, cross-project global candidates, and summaries that mix durable and transient content.
+JSON output includes stable `qualitySignals` arrays with a code, concise label, reason, and non-binding suggested action.
+Human output shows concise signal codes beside the existing candidate preview and provenance, followed by the original full text for signaled candidates.
+Use `--signal <code[,code...]>` to filter for candidates matching any listed signal.
+
+Quality signals are advisory.
+They never approve, reject, rescope, hide, or otherwise mutate a memory automatically.
+A signal is a prompt for user inspection, not a model-generated score or an automatic rejection decision.
+
+Grouped review mutation is an explicit preview-and-confirm flow.
+For example, `memory-lane review --signal contains-question --action reject` prints the exact selected memory IDs without changing them.
+To apply that exact set, repeat the filters with the printed `--confirm-ids <id[,id...]> --yes` arguments.
+The command revalidates every confirmed candidate and its pending status before the first write, and rejects stale or mismatched candidates without mutating any selected memory.
+If a later storage operation fails, output identifies definitely applied, uncertain, and unattempted IDs so review can recover safely.
+If any selected record is global or belongs to a project other than the active review project, `--confirm-global` is also required.
 
 ## Checkpoint candidates and review-first capture
 

@@ -1,4 +1,30 @@
+import { classifyCheckpointCandidate } from "./checkpoint-candidates.js"
 import type { MemoryLifecycleEvent, MemoryRecord, MemorySource } from "./types.js"
+
+export const qualitySignalCodes = [
+  "bare-checkpoint",
+  "previously-rejected-equivalent",
+  "contains-question",
+  "contains-code-fence",
+  "ambiguous-reference",
+  "cross-project-global-candidate",
+  "mixed-durable-transient-summary",
+] as const
+
+export type ReviewQualitySignalCode = typeof qualitySignalCodes[number]
+export type ReviewQualitySuggestedAction = "inspect" | "consider-rejecting" | "consider-rescoping"
+
+export interface ReviewQualitySignal {
+  code: ReviewQualitySignalCode
+  label: string
+  reason: string
+  suggestedAction: ReviewQualitySuggestedAction
+}
+
+export interface ReviewQualityContext {
+  rejectedMemories?: MemoryRecord[]
+  activeProjectScope?: string
+}
 
 export interface ReviewGroup {
   key: string
@@ -10,6 +36,108 @@ export interface ReviewGroup {
   lifecycleEvent: MemoryLifecycleEvent | "none"
   count: number
   memoryIds: string[]
+}
+
+const DURABLE_SUMMARY_PATTERN = /\b(?:decided|decision|implemented|fixed|resolved|released|merged|verified|completed|adopted|configured|now uses?|must|always|never)\b/iu
+const TRANSIENT_SUMMARY_PATTERN = /\b(?:next (?:step|action)|todo|follow[- ]?up|for now|tomorrow|later|in progress|awaiting|review this|run (?:the )?(?:tests?|command)|open (?:a )?pr)\b/iu
+const RESOLVED_REFERENCE_NOUNS = "project|repository|repo|workflow|process|preference|rule|command|tool|package|file|branch|pr|pull request|release|test|tests|issue|memory|candidate|summary|task"
+const AMBIGUOUS_REFERENCE_PATTERN = new RegExp(`\\b(?:it|this|that|these|those)\\b(?!\\s+(?:${RESOLVED_REFERENCE_NOUNS})\\b)`, "iu")
+const PROJECT_KINDS = new Set(["project_fact", "project_checkpoint", "decision", "correction", "procedure", "session_summary"])
+
+function normalizedEquivalentText(text: string): string {
+  return text.toLocaleLowerCase().replace(/\s+/gu, " ").trim()
+}
+
+const BARE_CHECKPOINT_PATTERNS: Array<{ event: string; pattern: RegExp }> = [
+  { event: "merge", pattern: /^merged\s+(?:pull request|pr)\s*#?\d+$/iu },
+  { event: "release", pattern: /^(?:released|tagged|published)\s+v?\d+\.\d+\.\d+(?:[-+][\w.]+)?$/iu },
+  { event: "verification", pattern: /^(?:(?:tests?|build|verification)(?:\s+and\s+(?:tests?|build|verification))?\s+passed|verified\s+release(?:\s+v?\d+\.\d+\.\d+(?:[-+][\w.]+)?)?)$/iu },
+  { event: "docs sync", pattern: /^(?:(?:docs?|documentation)\s+(?:synced|updated)|updated\s+(?:roadmap|handoff)(?:\.md)?)$/iu },
+  { event: "project", pattern: /^(?:(?:project\s+)?checkpoint(?:\s+(?:created|saved|complete(?:d)?))?|phase\s+\d+\s+complete(?:d)?|(?:milestone|deployment|migration)(?:\s+[\p{L}\p{N}_.-]+)?\s+complete(?:d)?)$/iu },
+]
+
+function bareCheckpointReason(memory: MemoryRecord): string | undefined {
+  if (!classifyCheckpointCandidate(memory)) return undefined
+  const firstSentence = memory.text.trim().split(/(?<=[.!?])\s+/u)[0]?.trim().replace(/[.!]+$/u, "") ?? ""
+  const words = firstSentence.match(/[\p{L}\p{N}#_.+-]+/gu) ?? []
+  if (!firstSentence || words.length > 8) return undefined
+  const bare = BARE_CHECKPOINT_PATTERNS.find((candidate) => candidate.pattern.test(firstSentence))
+  if (!bare) return undefined
+  return `The ${bare.event} checkpoint identifies only an artifact or event and does not explain the durable outcome.`
+}
+
+function crossProjectGlobalReason(memory: MemoryRecord, activeProjectScope?: string): string | undefined {
+  if (memory.scope.type !== "global" || !activeProjectScope) return undefined
+  const origin = memory.project?.key ?? memory.project?.root
+  if (origin && origin !== activeProjectScope) {
+    return `The global candidate originated from project ${origin}, outside the active review project ${activeProjectScope}.`
+  }
+  if (memory.category === "project" || PROJECT_KINDS.has(memory.kind ?? "")) {
+    return "The project-oriented candidate is global and would be visible across project boundaries."
+  }
+  return undefined
+}
+
+/** Deterministic, side-effect-free advisory analysis for one review candidate. */
+export function analyzeReviewQuality(memory: MemoryRecord, context: ReviewQualityContext = {}): ReviewQualitySignal[] {
+  const signals: ReviewQualitySignal[] = []
+  const text = memory.text
+  const bareReason = bareCheckpointReason(memory)
+  if (bareReason) signals.push({
+    code: "bare-checkpoint",
+    label: "bare checkpoint",
+    reason: bareReason,
+    suggestedAction: "inspect",
+  })
+
+  const normalized = normalizedEquivalentText(text)
+  const rejectedEquivalent = context.rejectedMemories?.find((candidate) =>
+    candidate.id !== memory.id && candidate.status === "rejected" && normalizedEquivalentText(candidate.text) === normalized,
+  )
+  if (rejectedEquivalent) signals.push({
+    code: "previously-rejected-equivalent",
+    label: "rejected equivalent",
+    reason: `The candidate text exactly matches previously rejected memory ${rejectedEquivalent.id} after whitespace and case normalization.`,
+    suggestedAction: "consider-rejecting",
+  })
+
+  if (/\?/u.test(text)) signals.push({
+    code: "contains-question",
+    label: "question",
+    reason: "The candidate contains a question and may include transient conversational text.",
+    suggestedAction: "inspect",
+  })
+
+  if (/(?:```|~~~)/u.test(text)) signals.push({
+    code: "contains-code-fence",
+    label: "code fence",
+    reason: "The candidate contains a fenced code block and may be a raw prompt or copied specification.",
+    suggestedAction: "inspect",
+  })
+
+  if (AMBIGUOUS_REFERENCE_PATTERN.test(text) || /\b(?:for now|this task)\b/iu.test(text)) signals.push({
+    code: "ambiguous-reference",
+    label: "ambiguous reference",
+    reason: "The candidate contains a reference whose meaning may depend on missing conversational context.",
+    suggestedAction: "inspect",
+  })
+
+  const globalReason = crossProjectGlobalReason(memory, context.activeProjectScope)
+  if (globalReason) signals.push({
+    code: "cross-project-global-candidate",
+    label: "cross-project global",
+    reason: globalReason,
+    suggestedAction: "consider-rescoping",
+  })
+
+  if (memory.kind === "session_summary" && DURABLE_SUMMARY_PATTERN.test(text) && TRANSIENT_SUMMARY_PATTERN.test(text)) signals.push({
+    code: "mixed-durable-transient-summary",
+    label: "mixed durable/transient",
+    reason: "The session summary mixes durable outcomes with transient next-step or execution state.",
+    suggestedAction: "inspect",
+  })
+
+  return signals
 }
 
 export function reviewProjectScope(memory: MemoryRecord): string {

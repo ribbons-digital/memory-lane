@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
-import type { MemoryEngine } from "@memory-lane/core"
+import { qualitySignalCodes, type MemoryEngine } from "@memory-lane/core"
 import type { LoadedPlugin, McpResourceDefinition, McpToolDefinition } from "@memory-lane/plugin-api"
 import type { EngineForProjectPathOptions } from "./engine.js"
 import {
@@ -50,6 +50,7 @@ const kindSchema = z.enum([
 
 const sourceSchema = z.enum(["manual", "user-suggested", "agent-suggested", "session-summary"])
 const provenanceSchema = z.string().min(1).describe("Optional adapter/event filter such as pi/session_end, claude/session_end, codex/session_end, or none")
+const qualitySignalSchema = z.enum(qualitySignalCodes)
 const projectPath = z.string().optional().describe("Optional directory to use for project-scoped Memory Lane operations")
 const since = z.string().optional().describe("Optional ISO timestamp used to report approved visible-memory freshness since that time")
 const memoryId = z.string().min(1).describe("Memory Lane memory id")
@@ -194,11 +195,12 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
     "memory_review",
     {
       title: "Review Pending Memories",
-      description: "List pending Memory Lane memories visible to the current project scope by default. Pass projectPath for current-project review context. Use all=true only for cross-project/admin review. Use kind/source/provenance filters to inspect session summaries or other continuity candidates.",
+      description: "List pending Memory Lane memories with advisory deterministic quality signals, visible to the current project scope by default. Pass projectPath for current-project review context. Use all=true only for cross-project/admin review. Use kind/source/provenance/signal filters to inspect candidates.",
       inputSchema: {
         kind: kindSchema.optional(),
         source: sourceSchema.optional(),
         provenance: provenanceSchema.optional(),
+        signal: z.array(qualitySignalSchema).min(1).optional(),
         all: z.boolean().optional(),
         projectPath,
       },
