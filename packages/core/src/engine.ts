@@ -52,6 +52,8 @@ import type {
   EmbeddingProviderDiagnostic,
 } from "./types.js"
 
+const EMBEDDING_PROVIDER_PROBE_TIMEOUT_MS = 10000
+
 function displayValue(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value)
 }
@@ -820,7 +822,7 @@ export class MemoryEngine {
   }
 
   /** Probe the embedding provider without writing an embedding record. */
-  async probeEmbeddingProvider(): Promise<EmbeddingProviderDiagnostic> {
+  async probeEmbeddingProvider(opts?: { timeoutMs?: number }): Promise<EmbeddingProviderDiagnostic> {
     const base = this.embeddingProviderBaseDiagnostic()
     if (!this.config.semantic.enabled) return { status: "disabled", ...base }
     if (!this.embProvider || base.providerType === "unconfigured") {
@@ -830,15 +832,28 @@ export class MemoryEngine {
         recoveryAction: "Configure an active embedding profile, then rerun `memory-lane doctor`.",
       }
     }
+    const timeoutMs = opts?.timeoutMs ?? EMBEDDING_PROVIDER_PROBE_TIMEOUT_MS
+    const controller = new AbortController()
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, timeoutMs)
+    timer.unref?.()
     try {
-      const vectors = await this.embProvider.embed(["Memory Lane embedding provider health probe"])
+      const vectors = await this.embProvider.embed(["Memory Lane embedding provider health probe"], controller.signal)
       const dimensions = vectors[0]?.length
       if (!dimensions) {
         return this.embeddingProviderFailureDiagnostic(new EmbeddingProviderRequestError("incompatible-response", "Embedding provider returned no vector"))
       }
       return { status: "healthy", ...base, dimensions }
     } catch (error) {
+      if ((error as { name?: string }).name === "AbortError" && timedOut) {
+        return this.embeddingProviderFailureDiagnostic(new EmbeddingProviderRequestError("timeout", `Embedding provider health probe timed out after ${timeoutMs}ms`))
+      }
       return this.embeddingProviderFailureDiagnostic(error)
+    } finally {
+      clearTimeout(timer)
     }
   }
 

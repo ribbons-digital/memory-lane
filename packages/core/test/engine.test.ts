@@ -2895,6 +2895,59 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(health.providerType, "unconfigured")
   })
 
+  it("probe applies its own privacy-safe timeout while preserving provider timeouts", async () => {
+    const configPath = path.join(dir, "cfg-provider-probe-timeout.json")
+    fs.writeFileSync(configPath, JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "private-profile",
+        embeddings: {
+          profiles: {
+            "private-profile": {
+              provider: "openai-compatible-embeddings",
+              baseUrl: "http://user:password@localhost:9999/v1?api_key=SECRET#private",
+              model: "test-model",
+              timeoutMs: 60000,
+            },
+          },
+        },
+      },
+    }), "utf8")
+
+    const probeTimedOut = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-provider-probe-timeout.jsonl"),
+      embeddingsPath: path.join(dir, "emb-provider-probe-timeout.jsonl"),
+      configPath,
+      embeddingProvider: {
+        embed: async (_inputs, signal) => new Promise<number[][]>((_resolve, reject) => {
+          const abort = () => reject(Object.assign(new Error("private probe cancellation detail"), { name: "AbortError" }))
+          if (signal?.aborted) abort()
+          else signal?.addEventListener("abort", abort, { once: true })
+        }),
+      },
+    })
+    const probeHealth = await probeTimedOut.probeEmbeddingProvider({ timeoutMs: 1 })
+    assert.equal(probeHealth.status, "unhealthy")
+    assert.equal(probeHealth.failure?.class, "timeout")
+    assert.match(probeHealth.failure?.message ?? "", /health probe timed out after 1ms/u)
+    assert.match(probeHealth.recoveryAction ?? "", /responsive or increase its timeout/u)
+    assert.equal(probeHealth.endpoint, "http://localhost:9999/v1")
+    assert.doesNotMatch(JSON.stringify(probeHealth), /password|SECRET|api_key|private probe/u)
+
+    const providerTimedOut = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-provider-profile-timeout.jsonl"),
+      embeddingsPath: path.join(dir, "emb-provider-profile-timeout.jsonl"),
+      configPath,
+      embeddingProvider: {
+        embed: async () => { throw new EmbeddingProviderRequestError("timeout", "Embedding provider timed out after its profile limit") },
+      },
+    })
+    const providerHealth = await providerTimedOut.probeEmbeddingProvider({ timeoutMs: 100 })
+    assert.equal(providerHealth.status, "unhealthy")
+    assert.equal(providerHealth.failure?.class, "timeout")
+    assert.equal(providerHealth.failure?.message, "Embedding provider timed out after its profile limit")
+  })
+
   it("probe and reindex share sanitized structured provider failure diagnostics", async () => {
     const configPath = path.join(dir, "cfg-provider-failure.json")
     fs.writeFileSync(configPath, JSON.stringify({
