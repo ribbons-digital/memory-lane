@@ -3,6 +3,7 @@ import * as path from "node:path"
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { MemoryEngine } from "../src/engine.js"
+import { EmbeddingProviderDiagnosticError, EmbeddingProviderRequestError } from "../src/embedding-provider.js"
 import { normalizeMemoryRecord } from "../src/storage-validation.js"
 import { contentHash, visibleInScope } from "../src/engine-helpers.js"
 import { createSingleStoreEngineStorage } from "../src/storage-facade.js"
@@ -2887,11 +2888,100 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(result.embedded, 1)
   })
 
-  it("probe returns error without provider", async () => {
+  it("probe reports disabled semantic retrieval without contacting a provider", async () => {
     const e = engine()
-    const p = await e.probeEmbeddingProvider()
-    assert.equal(p.ok, false)
-    assert.ok(p.error)
+    const health = await e.probeEmbeddingProvider()
+    assert.equal(health.status, "disabled")
+    assert.equal(health.providerType, "unconfigured")
+  })
+
+  it("probe and reindex share sanitized structured provider failure diagnostics", async () => {
+    const configPath = path.join(dir, "cfg-provider-failure.json")
+    fs.writeFileSync(configPath, JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "private-profile",
+        embeddings: {
+          profiles: {
+            "private-profile": {
+              provider: "openai-compatible-embeddings",
+              baseUrl: "http://user:password@localhost:9999/v1?api_key=SECRET#private",
+              model: "test-model",
+              apiKeyEnv: "EMBED_SECRET",
+            },
+          },
+        },
+      },
+    }), "utf8")
+    const provider: EmbeddingProvider = {
+      embed: async () => { throw new EmbeddingProviderRequestError("connection-refused", "Embedding provider refused the connection") },
+    }
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-provider-failure.jsonl"),
+      embeddingsPath: path.join(dir, "emb-provider-failure.jsonl"),
+      configPath,
+      embeddingProvider: provider,
+      env: { EMBED_SECRET: "SUPER_SECRET_VALUE" },
+    })
+    e.save({ text: "approved provider fixture", status: "approved" })
+    await e.settle()
+
+    const health = await e.probeEmbeddingProvider()
+    assert.equal(health.status, "unhealthy")
+    assert.equal(health.profileName, "private-profile")
+    assert.equal(health.endpoint, "http://localhost:9999/v1")
+    assert.equal(health.model, "test-model")
+    assert.equal(health.providerType, "openai-compatible-embeddings")
+    assert.equal(health.failure?.class, "connection-refused")
+    assert.match(health.recoveryAction ?? "", /Start the configured local embedding service/u)
+
+    await assert.rejects(() => e.reindexEmbeddings(), (error: unknown) => {
+      assert.ok(error instanceof EmbeddingProviderDiagnosticError)
+      assert.deepEqual(error.diagnostic, health)
+      assert.doesNotMatch(JSON.stringify(error.diagnostic), /password|SECRET|SUPER_SECRET_VALUE|api_key/u)
+      return true
+    })
+  })
+
+  it("reindex preserves caller cancellation without reporting provider failure", async () => {
+    const configPath = path.join(dir, "cfg-reindex-cancellation.json")
+    fs.writeFileSync(configPath, JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "test-profile",
+        embeddings: {
+          profiles: {
+            "test-profile": {
+              provider: "openai-compatible-embeddings",
+              baseUrl: "http://localhost:9999",
+              model: "test-model",
+            },
+          },
+        },
+      },
+    }), "utf8")
+    const provider: EmbeddingProvider = {
+      embed: async (_inputs, signal) => {
+        if (signal?.aborted) throw Object.assign(new Error("cancelled by caller"), { name: "AbortError" })
+        return [[1]]
+      },
+    }
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "mem-reindex-cancellation.jsonl"),
+      embeddingsPath: path.join(dir, "emb-reindex-cancellation.jsonl"),
+      configPath,
+      embeddingProvider: provider,
+    })
+    e.save({ text: "approved cancellation fixture", status: "approved" })
+    await e.settle()
+
+    const caller = new AbortController()
+    caller.abort()
+    await assert.rejects(() => e.reindexEmbeddings({ force: true, signal: caller.signal }), (error: unknown) => {
+      assert.equal((error as { name?: string }).name, "AbortError")
+      assert.equal(error instanceof EmbeddingProviderDiagnosticError, false)
+      return true
+    })
   })
 
   it("recall returns lexical results", async () => {

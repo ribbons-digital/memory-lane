@@ -99,6 +99,40 @@ async function withMockSummaryServer<T>(summary: string, fn: (baseUrl: string, r
   }
 }
 
+async function withMockEmbeddingServer<T>(
+  responseFixture: { status?: number; body?: unknown },
+  fn: (baseUrl: string, requests: unknown[]) => Promise<T>,
+): Promise<T> {
+  const requests: unknown[] = []
+  const server = http.createServer((req, res) => {
+    let body = ""
+    req.setEncoding("utf8")
+    req.on("data", (chunk) => { body += chunk })
+    req.on("end", () => {
+      let parsedBody: unknown = body
+      try { parsedBody = JSON.parse(body) } catch { /* retain raw fixture body */ }
+      requests.push(parsedBody)
+      const status = responseFixture.status ?? 200
+      const inputCount = Array.isArray((parsedBody as { input?: unknown } | undefined)?.input)
+        ? ((parsedBody as { input: unknown[] }).input.length)
+        : 1
+      const responseBody = responseFixture.body ?? {
+        data: Array.from({ length: inputCount }, () => ({ embedding: [1, 0, 0] })),
+      }
+      res.writeHead(status, { "Content-Type": "application/json" })
+      res.end(typeof responseBody === "string" ? responseBody : JSON.stringify(responseBody))
+    })
+  })
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("Expected TCP server address")
+  try {
+    return await fn(`http://127.0.0.1:${address.port}/v1`, requests)
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+  }
+}
+
 function writeMemoryRecords(filePath: string, records: MemoryRecord[]): void {
   fs.writeFileSync(filePath, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
 }
@@ -2944,6 +2978,161 @@ describe("CLI integration", () => {
     assert.equal(status.data.handoffMode, "manual")
     assert.equal(status.data.handoffModeBehaviorActive, true)
     assert.equal(status.data.handoffModeNote, "Current inspection-first behavior is active.")
+  })
+
+  it("reindex and doctor report healthy provider context and complete incremental coverage", async () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      EMBED_API_KEY: "SUPER_SECRET_API_KEY",
+      NO_COLOR: "1",
+    }
+    run(["save", "first approved embedding fixture"], env)
+    run(["save", "second approved embedding fixture"], env)
+
+    await withMockEmbeddingServer({}, async (baseUrl, requests) => {
+      fs.writeFileSync(cfgFile, JSON.stringify({
+        semantic: {
+          enabled: true,
+          activeEmbeddingProfile: "fixture-profile",
+          embeddings: {
+            profiles: {
+              "fixture-profile": {
+                provider: "openai-compatible-embeddings",
+                baseUrl,
+                model: "fixture-model",
+                apiKeyEnv: "EMBED_API_KEY",
+                batchSize: 8,
+                timeoutMs: 1000,
+              },
+            },
+          },
+        },
+      }), "utf8")
+
+      const first = await runProcessAsync(["reindex", "--json"], { env })
+      assert.equal(first.status, 0, first.stderr || first.stdout)
+      assert.deepEqual(JSON.parse(first.stdout).data, { embedded: 2, skippedExisting: 0, skippedSecrets: 0 })
+
+      const incremental = await runProcessAsync(["reindex", "--json"], { env })
+      assert.equal(incremental.status, 0, incremental.stderr || incremental.stdout)
+      assert.deepEqual(JSON.parse(incremental.stdout).data, { embedded: 0, skippedExisting: 2, skippedSecrets: 0 })
+
+      const doctorResult = await runProcessAsync(["doctor", "--json"], { env })
+      assert.equal(doctorResult.status, 0, doctorResult.stderr || doctorResult.stdout)
+      const doctor = JSON.parse(doctorResult.stdout)
+      assert.equal(doctor.data.semanticApprovedMemories, 2)
+      assert.equal(doctor.data.semanticEmbeddedApprovedMemories, 2)
+      assert.equal(doctor.data.semanticEmbeddingCoverage, 1)
+      assert.deepEqual(doctor.data.semanticWarnings, [])
+      assert.deepEqual(doctor.data.embeddingProviderHealth, {
+        status: "healthy",
+        profileName: "fixture-profile",
+        endpoint: baseUrl,
+        model: "fixture-model",
+        providerType: "openai-compatible-embeddings",
+        dimensions: 3,
+      })
+
+      const humanDoctor = await runProcessAsync(["doctor"], { env })
+      assert.equal(humanDoctor.status, 0, humanDoctor.stderr || humanDoctor.stdout)
+      assert.match(humanDoctor.stdout, /embeddingProviderHealth: healthy \(profile="fixture-profile", provider=openai-compatible-embeddings/u)
+      assert.doesNotMatch(humanDoctor.stdout, /SUPER_SECRET_API_KEY|Authorization|Bearer/u)
+
+      const status = JSON.parse(run(["status", "--json"], env))
+      assert.equal(status.data.semanticApprovedMemories, 2)
+      assert.equal(status.data.semanticEmbeddedApprovedMemories, 2)
+      assert.equal(status.data.semanticEmbeddingCoverage, 1)
+      assert.equal(status.data.embeddingProviderHealth, undefined)
+      assert.equal(requests.length, 3)
+    })
+  })
+
+  it("reindex json and doctor share privacy-safe structured provider failures", async () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      EMBED_API_KEY: "SUPER_SECRET_API_KEY",
+      NO_COLOR: "1",
+    }
+    run(["save", "approved authentication failure fixture"], env)
+
+    await withMockEmbeddingServer({ status: 401, body: "SENSITIVE_PROVIDER_RESPONSE_BODY" }, async (baseUrl) => {
+      fs.writeFileSync(cfgFile, JSON.stringify({
+        semantic: {
+          enabled: true,
+          activeEmbeddingProfile: "auth-profile",
+          embeddings: {
+            profiles: {
+              "auth-profile": {
+                provider: "openai-compatible-embeddings",
+                baseUrl,
+                model: "auth-model",
+                apiKeyEnv: "EMBED_API_KEY",
+                timeoutMs: 1000,
+              },
+            },
+          },
+        },
+      }), "utf8")
+
+      const reindex = await runProcessAsync(["reindex", "--json"], { env })
+      assert.equal(reindex.status, 1, reindex.stderr || reindex.stdout)
+      const reindexPayload = JSON.parse(reindex.stdout)
+      assert.equal(reindexPayload.ok, false)
+      assert.equal(reindexPayload.data.embeddingProviderHealth.failure.class, "authentication-failure")
+      assert.equal(reindexPayload.data.embeddingProviderHealth.failure.httpStatus, 401)
+      assert.match(reindexPayload.data.embeddingProviderHealth.recoveryAction, /credential environment variable/u)
+
+      const doctorResult = await runProcessAsync(["doctor", "--json"], { env })
+      assert.equal(doctorResult.status, 0, doctorResult.stderr || doctorResult.stdout)
+      const doctorPayload = JSON.parse(doctorResult.stdout)
+      assert.deepEqual(doctorPayload.data.embeddingProviderHealth, reindexPayload.data.embeddingProviderHealth)
+
+      const combined = reindex.stdout + doctorResult.stdout
+      assert.doesNotMatch(combined, /SUPER_SECRET_API_KEY|SENSITIVE_PROVIDER_RESPONSE_BODY|Authorization|Bearer/u)
+    })
+  })
+
+  it("reindex classifies a stopped local endpoint as connection refused", async () => {
+    const server = http.createServer()
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (!address || typeof address === "string") throw new Error("Expected TCP server address")
+    const baseUrl = `http://127.0.0.1:${address.port}/v1`
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    run(["save", "approved stopped endpoint fixture"], env)
+    fs.writeFileSync(cfgFile, JSON.stringify({
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "stopped-local",
+        embeddings: {
+          profiles: {
+            "stopped-local": {
+              provider: "openai-compatible-embeddings",
+              baseUrl,
+              model: "local-model",
+              timeoutMs: 1000,
+            },
+          },
+        },
+      },
+    }), "utf8")
+
+    const result = runProcess(["reindex", "--json"], { env })
+    assert.equal(result.status, 1, result.stderr || result.stdout)
+    const payload = JSON.parse(result.stdout)
+    assert.equal(payload.data.embeddingProviderHealth.failure.class, "connection-refused")
+    assert.equal(payload.data.embeddingProviderHealth.endpoint, baseUrl)
+    assert.match(payload.data.embeddingProviderHealth.recoveryAction, /Start the configured local embedding service/u)
   })
 
   it("doctor human output renders configured review handoff mode", () => {

@@ -2,7 +2,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { MemoryEngine, analyzeReviewQuality, qualitySignalCodes, resolveReviewProjectScopeKeys, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, deepMergeConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type ReviewQualitySignalCode, type WorkflowArea } from "@memory-lane/core"
+import { MemoryEngine, EmbeddingProviderDiagnosticError, analyzeReviewQuality, qualitySignalCodes, resolveReviewProjectScopeKeys, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, deepMergeConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type ReviewQualitySignalCode, type WorkflowArea } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import { classifyPromptRoute, createLearningEventSink, handleSessionEnd, createOpenAICompatibleProvider, purgeTraces, traceStatus, type TraceStatus } from "@memory-lane/lifecycle"
@@ -558,9 +558,16 @@ function handleCompact(ctx: CliContext): void {
   console.log(formatCompact(ctx.engine.compact(), ctx.json))
 }
 
-function handleDoctor(ctx: CliContext): void {
+async function handleDoctor(ctx: CliContext): Promise<void> {
   const since = flag(ctx.argv, "since")
-  console.log(formatDoctor(ctx.engine.doctor({ freshnessSince: since }), ctx.json))
+  const report = ctx.engine.doctor({ freshnessSince: since })
+  const embeddingProviderHealth = report.semanticEnabled
+    ? await ctx.engine.probeEmbeddingProvider()
+    : undefined
+  console.log(formatDoctor({
+    ...report,
+    ...(embeddingProviderHealth ? { embeddingProviderHealth } : {}),
+  }, ctx.json))
   printInitPrompt(ctx.json)
 }
 
@@ -1154,7 +1161,10 @@ async function main(): Promise<void> {
     await settleEngineForCommand(command, engine)
     const msg = err instanceof Error ? err.message : String(err)
     if (isHookInvocation(command)) failSafeHookInitialization(msg)
-    console.log(formatError(msg, json))
+    const details = err instanceof EmbeddingProviderDiagnosticError
+      ? { embeddingProviderHealth: err.diagnostic }
+      : undefined
+    console.log(formatError(msg, json, details))
     process.exit(1)
   }
   // Force clean exit in case any dependency leaves handles alive (e.g. compiled binary).
