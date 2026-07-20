@@ -98,7 +98,7 @@ export class MemoryEngine {
   private readonly config: ReturnType<typeof loadConfig>
   private scope: ProjectScope | null = null
   private readonly embProvider?: EmbeddingProvider
-  private readonly configPath?: string
+  private readonly configPath: string
   private readonly hookDebugLogPath: string
   private readonly integrationPaths?: Partial<IntegrationDiagnosticPaths>
   private readonly integrationWarnings?: IntegrationDiagnosticWarnings
@@ -1124,7 +1124,7 @@ export class MemoryEngine {
 
     return {
       configFile: this.configPath,
-      configExists: true,
+      configExists: fs.existsSync(this.configPath),
       semanticEnabled: config.enabled,
       memoryFile: this.storage.memoryFile,
       embeddingFile: this.storage.embeddingFile,

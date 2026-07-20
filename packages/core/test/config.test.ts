@@ -2,8 +2,21 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
-import { loadConfig, DEFAULT_CONFIG, isLocalBaseUrl, validateConfig, ConfigError, writeConfig } from "../src/config.js"
+import { loadConfig, DEFAULT_CONFIG, isLocalBaseUrl, validateConfig, ConfigError, writeConfig, readRawConfig } from "../src/config.js"
 import { tempDir } from "./helpers.js"
+
+function assertMalformedConfigError(action: () => unknown, configPath: string): void {
+  assert.throws(
+    action,
+    (error: unknown) => {
+      assert.ok(error instanceof ConfigError)
+      assert.ok(error.message.includes(configPath))
+      assert.match(error.message, /failed to parse/u)
+      assert.match(error.message, /JSON|position|line|column|Unexpected|Expected/u)
+      return true
+    },
+  )
+}
 
 describe("loadConfig", () => {
   let dir: string
@@ -15,6 +28,13 @@ describe("loadConfig", () => {
     assert.equal(cfg.semantic.retrieval.topK, 8)
     assert.equal(DEFAULT_CONFIG.obsidian?.enabled, false)
     assert.equal(cfg.obsidian?.enabled, false)
+  })
+
+  it("includes the config path and parse details for malformed JSON", () => {
+    const f = path.join(dir, "malformed.json")
+    fs.writeFileSync(f, "{ invalid json\n", "utf8")
+
+    assertMalformedConfigError(() => loadConfig(f), f)
   })
 
   it("merges user config over defaults", () => {
@@ -95,6 +115,24 @@ describe("writeConfig", () => {
     )
 
     assert.equal(fs.readFileSync(f, "utf8"), original)
+  })
+
+  it("includes the config path and parse details for malformed existing JSON", () => {
+    const f = path.join(dir, "malformed-existing.json")
+    const original = "{ invalid json\n"
+    fs.writeFileSync(f, original, "utf8")
+
+    assertMalformedConfigError(() => writeConfig(f, { semantic: { enabled: true } }), f)
+    assert.equal(fs.readFileSync(f, "utf8"), original)
+  })
+})
+
+describe("readRawConfig", () => {
+  it("includes the config path and parse details for malformed JSON", () => {
+    const f = path.join(tempDir(), "malformed-raw.json")
+    fs.writeFileSync(f, "{ invalid json\n", "utf8")
+
+    assertMalformedConfigError(() => readRawConfig(f), f)
   })
 })
 

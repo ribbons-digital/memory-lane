@@ -247,6 +247,16 @@ function validateConfigOverrides(config: unknown): void {
   }
 }
 
+function parseConfigFile(file: string): unknown {
+  const contents = fs.readFileSync(file, "utf8")
+  try {
+    return JSON.parse(contents)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new ConfigError(`failed to parse ${file}: ${message}`)
+  }
+}
+
 export function loadConfig(configPath?: string): SemanticMemoryConfig {
   const file = configPath ?? getDefaultConfigPath()
   if (!fs.existsSync(file)) {
@@ -256,7 +266,7 @@ export function loadConfig(configPath?: string): SemanticMemoryConfig {
       semantic: { ...DEFAULT_CONFIG.semantic, embeddings: { profiles: {} } },
     }
   }
-  const raw = JSON.parse(fs.readFileSync(file, "utf8"))
+  const raw = parseConfigFile(file)
   validateConfigOverrides(raw)
   return validateConfig(deepMergeConfig(DEFAULT_CONFIG, raw))
 }
@@ -271,7 +281,7 @@ export function isLocalBaseUrl(url: string): boolean {
 
 /** Write a config file, merging the given partial config with defaults. */
 export function writeConfig(configPath: string, partial: unknown): void {
-  const existing = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {}
+  const existing = fs.existsSync(configPath) ? parseConfigFile(configPath) : {}
   const merged = deepMergeConfig(DEFAULT_CONFIG, deepMergeConfig(existing, partial)) as SemanticMemoryConfig
   validateConfig(structuredClone(merged))
   fs.mkdirSync(path.dirname(configPath), { recursive: true })
@@ -282,5 +292,5 @@ export function writeConfig(configPath: string, partial: unknown): void {
 export function readRawConfig(configPath?: string): unknown {
   const file = configPath ?? getDefaultConfigPath()
   if (!fs.existsSync(file)) return null
-  return JSON.parse(fs.readFileSync(file, "utf8"))
+  return parseConfigFile(file)
 }

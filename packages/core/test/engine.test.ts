@@ -1718,6 +1718,21 @@ You are continuing the same subagent session. Before this run can be accepted, c
     assert.equal(d.embeddingFile, path.join(dir, "emb.jsonl"))
   })
 
+  it("doctor reports whether the resolved config file exists", () => {
+    const configPath = path.join(dir, "missing-config.json")
+    const e = new MemoryEngine({
+      memoryPath: path.join(dir, "doctor-config-mem.jsonl"),
+      embeddingsPath: path.join(dir, "doctor-config-emb.jsonl"),
+      configPath,
+    })
+
+    assert.equal(e.doctor().configFile, configPath)
+    assert.equal(e.doctor().configExists, false)
+
+    fs.writeFileSync(configPath, "{}", "utf8")
+    assert.equal(e.doctor().configExists, true)
+  })
+
   it("accepts correction and procedure memory kinds", () => {
     const e = engine()
     const correction = e.save({ text: "Workflow correction: wait for PR merge before cleanup.", status: "pending", category: "project", kind: "correction" })
