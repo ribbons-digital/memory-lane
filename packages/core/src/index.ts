@@ -55,7 +55,14 @@ export {
   writeConfig, readRawConfig, deepMergeConfig,
 } from "./config.js"
 export { createEmbeddingStore, foldEmbeddings, type EmbeddingLine } from "./embedding-store.js"
-export { createOpenAIEmbeddingProvider } from "./embedding-provider.js"
+export {
+  createOpenAIEmbeddingProvider,
+  EmbeddingProviderDiagnosticError,
+  EmbeddingProviderRequestError,
+  embeddingFailure,
+  embeddingRecoveryAction,
+  sanitizeEmbeddingEndpoint,
+} from "./embedding-provider.js"
 export { cosineSimilarity, lexicalScore, recencyScore, findMatchingEmbedding } from "./scoring.js"
 export { retrieveSemanticMemories } from "./retrieval.js"
 export { compact, shouldCompact } from "./compact.js"

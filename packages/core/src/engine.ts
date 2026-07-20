@@ -14,6 +14,13 @@ import { loadConfig, getDefaultConfigPath } from "./config.js"
 import { createSingleStoreEngineStorage, type MemoryEngineStorage } from "./storage-facade.js"
 import { defaultHookDebugLogPath, hookDebugEnabled } from "./hook-debug-log.js"
 import { retrieveSemanticMemories } from "./retrieval.js"
+import {
+  EmbeddingProviderDiagnosticError,
+  EmbeddingProviderRequestError,
+  embeddingFailure,
+  embeddingRecoveryAction,
+  sanitizeEmbeddingEndpoint,
+} from "./embedding-provider.js"
 import { diagnoseIntegrations } from "./integration-diagnostics.js"
 import type { IntegrationDiagnosticPaths, IntegrationDiagnosticWarnings } from "./integration-diagnostics.js"
 import { VALID_REVISION_ACTORS, validateSaveInput } from "./storage-validation.js"
@@ -42,6 +49,7 @@ import type {
   FreshnessStatus, ContinuityHintSummary, ContinuityReadModel, OperatingAgreementList, OperatingAgreementOptions, OperatingAgreementSummary,
   SupersedeResult, ReplaceResult, MemoryRevisionActor, ResolvedContinuityBaseline, ContinuityBaselineDiagnostic,
   LegacyProjectMigrationApplyResult, LegacyProjectMigrationPlan, LocalLearningActor, LocalLearningEventInput, LocalLearningEventSink, EmbeddingRecord,
+  EmbeddingProviderDiagnostic,
 } from "./types.js"
 
 function displayValue(value: unknown): string {
@@ -752,7 +760,13 @@ export class MemoryEngine {
     const batchSize = profile.batchSize ?? 16
     for (let i = 0; i < needsEmbedding.length; i += batchSize) {
       const batch = needsEmbedding.slice(i, i + batchSize)
-      const vectors = await this.embProvider.embed(batch.map((m) => m.text), opts?.signal)
+      let vectors: number[][]
+      try {
+        vectors = await this.embProvider.embed(batch.map((m) => m.text), opts?.signal)
+      } catch (error) {
+        if ((error as { name?: string }).name === "AbortError") throw error
+        throw new EmbeddingProviderDiagnosticError(this.embeddingProviderFailureDiagnostic(error))
+      }
       const records: EmbeddingRecord[] = []
       batch.forEach((memory, index) => {
         const vector = vectors[index]
@@ -774,14 +788,57 @@ export class MemoryEngine {
     return { embedded, skippedExisting, skippedSecrets }
   }
 
-  /** Probe the embedding provider to verify connectivity. */
-  async probeEmbeddingProvider(): Promise<{ ok: boolean; dimensions?: number; error?: string }> {
-    if (!this.embProvider) return { ok: false, error: "No embedding provider configured" }
+  private embeddingProviderBaseDiagnostic(): Omit<EmbeddingProviderDiagnostic, "status"> {
+    const config = this.config.semantic
+    const profileName = config.activeEmbeddingProfile
+    const profile = config.embeddings.profiles[profileName]
+    if (!profile) {
+      return {
+        profileName,
+        endpoint: "[not configured]",
+        model: "[not configured]",
+        providerType: "unconfigured",
+      }
+    }
+    return {
+      profileName,
+      endpoint: sanitizeEmbeddingEndpoint(profile.baseUrl),
+      model: profile.model,
+      providerType: profile.provider,
+    }
+  }
+
+  private embeddingProviderFailureDiagnostic(error: unknown): EmbeddingProviderDiagnostic {
+    const base = this.embeddingProviderBaseDiagnostic()
+    const failure = embeddingFailure(error)
+    return {
+      status: "unhealthy",
+      ...base,
+      failure,
+      recoveryAction: embeddingRecoveryAction(failure.class, base.endpoint),
+    }
+  }
+
+  /** Probe the embedding provider without writing an embedding record. */
+  async probeEmbeddingProvider(): Promise<EmbeddingProviderDiagnostic> {
+    const base = this.embeddingProviderBaseDiagnostic()
+    if (!this.config.semantic.enabled) return { status: "disabled", ...base }
+    if (!this.embProvider || base.providerType === "unconfigured") {
+      return {
+        status: "unconfigured",
+        ...base,
+        recoveryAction: "Configure an active embedding profile, then rerun `memory-lane doctor`.",
+      }
+    }
     try {
-      const vectors = await this.embProvider.embed(["probe"])
-      return { ok: true, dimensions: vectors[0]?.length }
-    } catch (e: any) {
-      return { ok: false, error: e.message }
+      const vectors = await this.embProvider.embed(["Memory Lane embedding provider health probe"])
+      const dimensions = vectors[0]?.length
+      if (!dimensions) {
+        return this.embeddingProviderFailureDiagnostic(new EmbeddingProviderRequestError("incompatible-response", "Embedding provider returned no vector"))
+      }
+      return { status: "healthy", ...base, dimensions }
+    } catch (error) {
+      return this.embeddingProviderFailureDiagnostic(error)
     }
   }
 

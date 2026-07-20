@@ -661,6 +661,30 @@ export interface EmbeddingProvider {
   embed(inputs: string[], signal?: AbortSignal): Promise<number[][]>
 }
 
+export type EmbeddingFailureClass =
+  | "connection-refused"
+  | "dns-failure"
+  | "timeout"
+  | "authentication-failure"
+  | "incompatible-response"
+  | "http-error"
+  | "connection-failure"
+
+export interface EmbeddingProviderDiagnostic {
+  status: "healthy" | "unhealthy" | "disabled" | "unconfigured"
+  profileName: string
+  endpoint: string
+  model: string
+  providerType: EmbeddingProfileConfig["provider"] | "unconfigured"
+  dimensions?: number
+  failure?: {
+    class: EmbeddingFailureClass
+    httpStatus?: number
+    message: string
+  }
+  recoveryAction?: string
+}
+
 export interface EmbeddingProfileConfig {
   provider: "openai-compatible-embeddings"
   baseUrl: string

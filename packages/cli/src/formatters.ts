@@ -1001,6 +1001,27 @@ export function formatOperatingAgreements(result: OperatingAgreementList, json: 
   return lines.join("\n")
 }
 
+function formatEmbeddingProviderHealth(value: unknown): string | undefined {
+  if (!value || typeof value !== "object") return undefined
+  const health = value as Record<string, unknown>
+  const status = typeof health.status === "string" ? health.status : "unknown"
+  const profile = typeof health.profileName === "string" ? health.profileName : "unknown"
+  const provider = typeof health.providerType === "string" ? health.providerType : "unknown"
+  const endpoint = typeof health.endpoint === "string" ? health.endpoint : "unknown"
+  const model = typeof health.model === "string" ? health.model : "unknown"
+  const dimensions = typeof health.dimensions === "number" ? `, dimensions=${health.dimensions}` : ""
+  const lines = [`embeddingProviderHealth: ${status} (profile=${JSON.stringify(profile)}, provider=${provider}, endpoint=${JSON.stringify(endpoint)}, model=${JSON.stringify(model)}${dimensions})`]
+  const failure = health.failure
+  if (failure && typeof failure === "object") {
+    const detail = failure as Record<string, unknown>
+    const failureClass = typeof detail.class === "string" ? detail.class : "unknown"
+    const httpStatus = typeof detail.httpStatus === "number" ? `, HTTP ${detail.httpStatus}` : ""
+    lines.push(`embeddingProviderFailure: ${failureClass}${httpStatus}`)
+  }
+  if (typeof health.recoveryAction === "string") lines.push(`embeddingProviderRecovery: ${health.recoveryAction}`)
+  return lines.join("\n")
+}
+
 export function formatDoctor(report: Record<string, unknown>, json: boolean): string {
   if (json) {
     return JSON.stringify({ ok: true, data: report, meta: meta() }, null, 2)
@@ -1015,6 +1036,7 @@ export function formatDoctor(report: Record<string, unknown>, json: boolean): st
       if (k === "continuityHints") return formatContinuityHintSummary(v) ?? "continuityHints: unavailable"
       if (k === "legacyProjectMemories") return formatLegacyProjectMemoryDoctor(v) ?? "legacyProjectMemories: unavailable"
       if (k === "operatingAgreements") return formatOperatingAgreementSummary(v) ?? "operatingAgreements: unavailable"
+      if (k === "embeddingProviderHealth") return formatEmbeddingProviderHealth(v) ?? "embeddingProviderHealth: unavailable"
       if (v && typeof v === "object") return `${k}: ${JSON.stringify(v, null, 2)}`
       return `${k}: ${v}`
     })
@@ -1041,9 +1063,9 @@ export function formatImportPlan(result: ObsidianImportPlan | ObsidianImportAppl
   return lines.join("\n")
 }
 
-export function formatError(message: string, json: boolean): string {
+export function formatError(message: string, json: boolean, data?: Record<string, unknown>): string {
   if (json) {
-    return JSON.stringify({ ok: false, error: message, meta: meta() }, null, 2)
+    return JSON.stringify({ ok: false, error: message, ...(data ? { data } : {}), meta: meta() }, null, 2)
   }
   return `Error: ${message}`
 }
