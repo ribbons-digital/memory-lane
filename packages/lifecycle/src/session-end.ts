@@ -145,17 +145,23 @@ function existingSessionSummaryKeys(engine: MemoryEngine): { provenance: Set<str
   for (const memory of engine.list({ all: true })) {
     if (memory.kind !== "session_summary" && memory.source !== "session-summary") continue
     if (memory.status !== "pending" && memory.status !== "approved") continue
+    if (memory.revision?.supersededBy) continue
     if (!visibleInCurrentScope(memory, projectScopeKey)) continue
 
-    const provenanceKey = sessionSummaryProvenanceKey({
+    const provenanceInput = {
       adapter: memory.provenance?.adapter,
       lifecycleEvent: memory.provenance?.lifecycleEvent,
       sessionId: memory.provenance?.sessionId,
       turnId: memory.provenance?.turnId,
+    }
+    const provenanceKey = sessionSummaryProvenanceKey({
+      ...provenanceInput,
       sourceSummaryId: memory.provenance?.sourceSummaryId,
       summaryClaimIndex: memory.provenance?.summaryClaimIndex,
     })
     if (provenanceKey) provenance.add(provenanceKey)
+    const sessionProvenanceKey = sessionSummaryProvenanceKey(provenanceInput)
+    if (sessionProvenanceKey) provenance.add(sessionProvenanceKey)
 
     const contentKey = sessionSummaryContentKey(memory.text)
     if (contentKey) content.add(contentKey)
