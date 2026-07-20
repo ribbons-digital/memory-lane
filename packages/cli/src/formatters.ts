@@ -268,7 +268,7 @@ function checkpointCandidateLines(memory: MemoryRecord): string[] {
 function qualitySignalLines(memory: MemoryRecord, qualitySignals: ReviewQualitySignal[]): string[] {
   if (!qualitySignals.length) return []
   return [
-    `    Quality signals: ${qualitySignals.map((signal) => `[${signal.code}]`).join(" ")}`,
+    `    Quality signals: ${qualitySignals.map((signal) => `[${signal.label}]`).join(" ")}`,
     "    Advisory only: inspect the candidate before choosing an action.",
     "    Original candidate text:",
     ...memory.text.split(/\r?\n/u).map((line) => `      ${line}`),

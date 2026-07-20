@@ -252,8 +252,9 @@ export class MemoryEngine {
     id: string,
     predicate: (memory: MemoryRecord) => boolean,
     opts?: { all?: boolean },
+    records?: MemoryRecord[],
   ): MemoryRecord | undefined {
-    return this.storage.listMemories().find((memory) =>
+    return (records ?? this.storage.listMemories()).find((memory) =>
       memory.id === id && predicate(memory) && this.visibleByScope(memory, opts),
     )
   }
@@ -268,10 +269,11 @@ export class MemoryEngine {
 
   /** Re-read storage for mutation confirmation preflight instead of relying on cached review records. */
   getByIdFresh(id: string, opts?: { all?: boolean }): MemoryRecord | undefined {
-    return this.storage.listMemoriesFresh().find((memory) =>
-      memory.id === id
-      && (Boolean(opts?.all) || memory.status === "approved" || memory.status === "pending")
-      && this.visibleByScope(memory, opts),
+    return this.findScopedMemory(
+      id,
+      (memory) => Boolean(opts?.all) || memory.status === "approved" || memory.status === "pending",
+      opts,
+      this.storage.listMemoriesFresh(),
     )
   }
 
@@ -379,7 +381,7 @@ export class MemoryEngine {
 
   /** Approve a pending memory or reactivate a rejected memory by id. Respects project scope unless `all` is true. */
   approve(id: string, opts?: { all?: boolean; actor?: LocalLearningActor }): MemoryMutationResult | undefined {
-    const mem = this.findScopedMemory(id, (memory) => memory.status !== "deleted", opts)
+    const mem = this.findScopedMemory(id, (memory) => memory.status !== "deleted", opts, this.storage.listMemoriesFresh())
     if (!mem) return undefined
     const updated = clone(mem, { status: "approved" })
     this.storage.appendMemory(updated)
@@ -616,7 +618,7 @@ export class MemoryEngine {
 
   /** Reject a memory by id. Respects project scope unless `all` is true. */
   reject(id: string, opts?: { all?: boolean; actor?: LocalLearningActor }): MemoryMutationResult | undefined {
-    const mem = this.findScopedMemory(id, (memory) => memory.status !== "deleted", opts)
+    const mem = this.findScopedMemory(id, (memory) => memory.status !== "deleted", opts, this.storage.listMemoriesFresh())
     if (!mem) return undefined
     const updated = clone(mem, { status: "rejected" })
     this.storage.appendMemory(updated)

@@ -1,4 +1,5 @@
 import { classifyCheckpointCandidate } from "./checkpoint-candidates.js"
+import { resolveProjectScope } from "./project-scope.js"
 import type { MemoryLifecycleEvent, MemoryRecord, MemorySource } from "./types.js"
 
 export const qualitySignalCodes = [
@@ -24,6 +25,7 @@ export interface ReviewQualitySignal {
 export interface ReviewQualityContext {
   rejectedMemories?: MemoryRecord[]
   activeProjectScope?: string
+  projectScopeKeysByRoot?: ReadonlyMap<string, string>
 }
 
 export interface ReviewGroup {
@@ -66,11 +68,32 @@ function bareCheckpointReason(memory: MemoryRecord): string | undefined {
   return `The ${bare.event} checkpoint identifies only an artifact or event and does not explain the durable outcome.`
 }
 
-function crossProjectGlobalReason(memory: MemoryRecord, activeProjectScope?: string): string | undefined {
+type ProjectScopeResolver = (root: string) => { key: string } | null
+
+/** Resolve unique legacy project roots once before deterministic per-memory quality analysis. */
+export function resolveReviewProjectScopeKeys(
+  memories: MemoryRecord[],
+  resolver: ProjectScopeResolver = resolveProjectScope,
+): ReadonlyMap<string, string> {
+  const scopeKeys = new Map<string, string>()
+  const legacyRoots = memories
+    .filter((memory) => !memory.project?.key)
+    .map((memory) => memory.project?.root)
+    .filter((value): value is string => Boolean(value))
+  for (const root of new Set(legacyRoots)) {
+    const scope = resolver(root)
+    if (scope) scopeKeys.set(root, scope.key)
+  }
+  return scopeKeys
+}
+
+function crossProjectGlobalReason(memory: MemoryRecord, context: ReviewQualityContext): string | undefined {
+  const activeProjectScope = context.activeProjectScope
   if (memory.scope.type !== "global" || !activeProjectScope) return undefined
-  const origin = memory.project?.key ?? memory.project?.root
-  if (origin && origin !== activeProjectScope) {
-    return `The global candidate originated from project ${origin}, outside the active review project ${activeProjectScope}.`
+  const originScopeKey = memory.project?.key
+    ?? (memory.project?.root ? context.projectScopeKeysByRoot?.get(memory.project.root) : undefined)
+  if (originScopeKey && originScopeKey !== activeProjectScope) {
+    return `The global candidate originated from project ${originScopeKey}, outside the active review project ${activeProjectScope}.`
   }
   if (memory.category === "project" || PROJECT_KINDS.has(memory.kind ?? "")) {
     return "The project-oriented candidate is global and would be visible across project boundaries."
@@ -122,7 +145,7 @@ export function analyzeReviewQuality(memory: MemoryRecord, context: ReviewQualit
     suggestedAction: "inspect",
   })
 
-  const globalReason = crossProjectGlobalReason(memory, context.activeProjectScope)
+  const globalReason = crossProjectGlobalReason(memory, context)
   if (globalReason) signals.push({
     code: "cross-project-global-candidate",
     label: "cross-project global",

@@ -2,7 +2,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { MemoryEngine, analyzeReviewQuality, qualitySignalCodes, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, deepMergeConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type ReviewQualitySignalCode, type WorkflowArea } from "@memory-lane/core"
+import { MemoryEngine, analyzeReviewQuality, qualitySignalCodes, resolveReviewProjectScopeKeys, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, deepMergeConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type ReviewQualitySignalCode, type WorkflowArea } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import { classifyPromptRoute, createLearningEventSink, handleSessionEnd, createOpenAICompatibleProvider, purgeTraces, traceStatus, type TraceStatus } from "@memory-lane/lifecycle"
@@ -428,10 +428,6 @@ function handleReview(ctx: CliContext): void {
   const action = reviewMutationAction(ctx.argv)
   if (action && includeApproved) throw new Error("Grouped review mutation cannot include approved memories")
   const activeProjectScope = ctx.engine.getProjectScope()?.key
-  const qualityContext = {
-    rejectedMemories: ctx.engine.list({ status: "rejected", all: allScope }),
-    activeProjectScope,
-  }
   const filters = {
     kind: flag(ctx.argv, "kind"),
     source: flag(ctx.argv, "source"),
@@ -441,6 +437,11 @@ function handleReview(ctx: CliContext): void {
   const reviewMemories = includeApproved
     ? [...ctx.engine.reviewPending({ all: allScope }), ...ctx.engine.list({ status: "approved", all: allScope })]
     : ctx.engine.reviewPending({ all: allScope })
+  const qualityContext = {
+    rejectedMemories: ctx.engine.list({ status: "rejected", all: allScope }),
+    activeProjectScope,
+    projectScopeKeysByRoot: resolveReviewProjectScopeKeys(reviewMemories),
+  }
   const analyzedReviewMemories = reviewMemories.map((memory) => ({
     memory,
     qualitySignals: analyzeReviewQuality(memory, qualityContext),

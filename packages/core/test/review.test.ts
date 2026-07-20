@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { analyzeReviewQuality, qualitySignalCodes, type MemoryRecord } from "../src/index.js"
+import { analyzeReviewQuality, qualitySignalCodes, resolveReviewProjectScopeKeys, type MemoryRecord } from "../src/index.js"
 
 function memory(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
   return {
@@ -88,6 +88,48 @@ test("review quality analysis uses conservative exact normalized rejected equiva
     ["previously-rejected-equivalent"],
   )
   assert.equal(analyzeReviewQuality(memory({ text: "Use pnpm for all package installation." }), { rejectedMemories: [rejected] }).length, 0)
+})
+
+test("review quality analysis uses only explicit legacy project-root mappings", () => {
+  const legacyGlobal = memory({
+    category: "preference",
+    scope: { type: "global" },
+    kind: "preference",
+    text: "Prefer concise status updates.",
+    project: { cwd: "/legacy/same", root: "/legacy/same" },
+  })
+
+  const sameProjectSignals = analyzeReviewQuality(legacyGlobal, {
+    activeProjectScope: "review-project",
+    projectScopeKeysByRoot: new Map([["/legacy/same", "review-project"]]),
+  })
+  assert.equal(sameProjectSignals.some((signal) => signal.code === "cross-project-global-candidate"), false)
+
+  const otherProjectSignals = analyzeReviewQuality(legacyGlobal, {
+    activeProjectScope: "review-project",
+    projectScopeKeysByRoot: new Map([["/legacy/same", "other-project"]]),
+  })
+  assert.deepEqual(otherProjectSignals.map((signal) => signal.code), ["cross-project-global-candidate"])
+  assert.match(otherProjectSignals[0].reason, /other-project.*outside the active review project review-project/u)
+
+  assert.deepEqual(analyzeReviewQuality(legacyGlobal, { activeProjectScope: "review-project" }), [])
+})
+
+test("review quality scope precomputation resolves each unique unkeyed legacy root once", () => {
+  const roots = ["/legacy/one", "/legacy/one", "/legacy/two"]
+  const calls: string[] = []
+  const memories = [
+    ...roots.map((root, index) => memory({ id: `memory-${index}`, project: { cwd: root, root } })),
+    memory({ id: "keyed", project: { cwd: "/legacy/keyed", root: "/legacy/keyed", key: "project-keyed" } }),
+  ]
+
+  const result = resolveReviewProjectScopeKeys(memories, (root) => {
+    calls.push(root)
+    return { key: root === "/legacy/one" ? "project-one" : "project-two" }
+  })
+
+  assert.deepEqual(calls, ["/legacy/one", "/legacy/two"])
+  assert.deepEqual([...result], [["/legacy/one", "project-one"], ["/legacy/two", "project-two"]])
 })
 
 test("review quality analysis leaves clear valid candidates unannotated", () => {

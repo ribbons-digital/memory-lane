@@ -1,4 +1,4 @@
-import { analyzeReviewQuality, classifyCheckpointCandidate, groupReviewMemories, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryEngine, type MemoryMutationResult, type MemoryRecord, type MemoryRecordWithReviewHygiene, type ReviewQualitySignal, type RecallResult, type SaveResult } from "@memory-lane/core"
+import { analyzeReviewQuality, classifyCheckpointCandidate, groupReviewMemories, resolveReviewProjectScopeKeys, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryEngine, type MemoryMutationResult, type MemoryRecord, type MemoryRecordWithReviewHygiene, type ReviewQualitySignal, type RecallResult, type SaveResult } from "@memory-lane/core"
 import type {
   ContinuityToolInput, ListToolInput, MemoryGetToolInput, MemoryIdToolInput, RecallToolInput, ReviewFilters, ReviewToolInput, SaveToolInput, StatusToolInput, SuggestToolInput, ToolEnvelope,
 } from "./types.js"
@@ -202,11 +202,13 @@ export async function handleMemoryReview(engine: MemoryEngine, input: ReviewTool
   try {
     applyProjectPath(engine, input.projectPath)
     const filters = activeReviewFilters(input)
+    const reviewMemories = engine.reviewPending({ all: input.all ?? false })
     const qualityContext = {
       rejectedMemories: engine.list({ status: "rejected", all: input.all ?? false }),
       activeProjectScope: engine.getProjectScope()?.key,
+      projectScopeKeysByRoot: resolveReviewProjectScopeKeys(reviewMemories),
     }
-    const analyzedMemories = engine.reviewPending({ all: input.all ?? false }).map((memory) => ({
+    const analyzedMemories = reviewMemories.map((memory) => ({
       memory,
       qualitySignals: analyzeReviewQuality(memory, qualityContext),
     }))

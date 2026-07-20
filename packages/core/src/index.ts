@@ -34,6 +34,7 @@ export {
   analyzeReviewQuality,
   groupReviewMemories,
   qualitySignalCodes,
+  resolveReviewProjectScopeKeys,
   reviewProjectScope,
   reviewProvenance,
   type ReviewGroup,
