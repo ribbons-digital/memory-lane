@@ -392,6 +392,80 @@ test("skips duplicate session summary for same adapter and session id", async ()
   assert.deepStrictEqual(result, [])
 })
 
+test("structured session summaries short-circuit repeated session-end and pre-compact runs", async () => {
+  for (const lifecycleEvent of ["session_end", "pre_compact"] as const) {
+    const engine = makeEngine()
+    let calls = 0
+    const provider: LLMProvider = {
+      async complete() {
+        calls += 1
+        return "## Decisions made\n- Structured summaries must be deduplicated before provider invocation."
+      },
+    }
+    const sessionId = `structured-${lifecycleEvent}`
+    const input = {
+      cwd: "/tmp",
+      sessionId,
+      messages: [{ role: "assistant" as const, content: "Structured summary source." }],
+    }
+    const first = lifecycleEvent === "pre_compact"
+      ? await handlePreCompact(engine, { ...input, turnId: "turn-1" }, { requireConfirmation: false, provider, adapter: "test" })
+      : await handleSessionEnd(engine, input, { requireConfirmation: false, provider, adapter: "test" })
+    assert.ok(first.length > 0)
+    saveSessionSummaryCandidates(engine, first)
+
+    const repeated = lifecycleEvent === "pre_compact"
+      ? await handlePreCompact(engine, { ...input, turnId: "turn-1" }, { requireConfirmation: false, provider, adapter: "test" })
+      : await handleSessionEnd(engine, input, { requireConfirmation: false, provider, adapter: "test" })
+    assert.deepStrictEqual(repeated, [])
+    assert.equal(calls, 1, `${lifecycleEvent} should return before invoking the provider again`)
+  }
+})
+
+test("superseded session summaries do not block replacement capture", async () => {
+  const engine = makeEngine()
+  engine.refreshScope("/tmp")
+  const obsolete = engine.save({
+    text: "Windows recovery must preserve quoted arguments.",
+    category: "project",
+    scopeType: "project",
+    status: "pending",
+    source: "session-summary",
+    kind: "session_summary",
+    provenance: { adapter: "test", lifecycleEvent: "session_end", sessionId: "replacement-session" },
+  })
+  const successor = engine.save({
+    text: "Issue #215 completed.",
+    category: "project",
+    scopeType: "project",
+    status: "pending",
+    source: "session-summary",
+    kind: "project_checkpoint",
+    provenance: { adapter: "test", lifecycleEvent: "session_end", sessionId: "completion-session" },
+  })
+  assert.equal(obsolete.status, "saved")
+  assert.equal(successor.status, "saved")
+  if (obsolete.status !== "saved" || successor.status !== "saved") return
+  engine.supersedePendingHandoffs(successor.memory.id, [obsolete.memory.id], "Issue completed")
+
+  let calls = 0
+  const provider: LLMProvider = {
+    async complete() {
+      calls += 1
+      return "## Decisions made\n- Windows recovery must preserve quoted arguments."
+    },
+  }
+  const result = await handleSessionEnd(engine, {
+    cwd: "/tmp",
+    sessionId: "replacement-session",
+    messages: [{ role: "assistant", content: "A new handoff was captured." }],
+  }, { requireConfirmation: false, provider, adapter: "test" })
+
+  assert.equal(calls, 1)
+  assert.equal(result.length, 1)
+  assert.equal(result[0].kind, "decision")
+})
+
 test("skips duplicate session summary with equivalent durable content despite heading date", async () => {
   const engine = makeEngine()
   engine.save({

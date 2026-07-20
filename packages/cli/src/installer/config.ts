@@ -353,6 +353,9 @@ function piCliBridgeBaseSource(binaryPath: string): string {
 
 export function piCliBridgeSource(binaryPath: string): string {
   let taskGuardCount = 0
+  let deferredFactoryCount = 0
+  let deferralBranchCount = 0
+  let deferredHandlerBlockCount = 0
   const base = piCliBridgeBaseSource(binaryPath)
     .replace(
       /(  pi\.on\("(?:session_before_compact|before_agent_start)", async \(event: [^\n]+\n)/gu,
@@ -403,13 +406,18 @@ function sessionMessagesFromPiCompactionEvent(event: any, ctx: any): any[] {`,
     )
     .replace(
       "export default function memoryLaneCliBridge(pi: any) {",
-      `export default function memoryLaneCliBridge(pi: any) {
+      () => {
+        deferredFactoryCount += 1
+        return `export default function memoryLaneCliBridge(pi: any) {
   const deferredPreCompact = new Map<string, { turnId?: string; trigger: "manual" | "auto" }>()
-  const deferralKey = (ctx: any) => piSessionId(ctx) ?? "cwd:" + String(ctx?.cwd ?? process.cwd())`,
+  const deferralKey = (ctx: any) => piSessionId(ctx) ?? "cwd:" + String(ctx?.cwd ?? process.cwd())`
+      },
     )
     .replace(
       "    try {\n      const messages = sessionMessagesFromPiCompactionEvent(event, ctx)",
-      `    try {
+      () => {
+        deferralBranchCount += 1
+        return `    try {
       const key = deferralKey(ctx)
       if (compactionWouldDiscardSplitTurnEvidence(event)) {
         deferredPreCompact.delete(key)
@@ -418,11 +426,14 @@ function sessionMessagesFromPiCompactionEvent(event: any, ctx: any): any[] {`,
         return undefined
       }
       deferredPreCompact.delete(key)
-      const messages = sessionMessagesFromPiCompactionEvent(event, ctx)`,
+      const messages = sessionMessagesFromPiCompactionEvent(event, ctx)`
+      },
     )
     .replace(
       `\n  pi.on("before_agent_start", async (event: any, ctx: any) => {`,
-      `
+      () => {
+        deferredHandlerBlockCount += 1
+        return `
   pi.on("session_compact", async (event: any, ctx: any) => {
     if (bridgeTaskSession(ctx)) return undefined
     const key = deferralKey(ctx)
@@ -452,12 +463,16 @@ function sessionMessagesFromPiCompactionEvent(event: any, ctx: any): any[] {`,
   pi.on("session_switch", async (_event: any, ctx: any) => { deferredPreCompact.delete(deferralKey(ctx)); return undefined })
   pi.on("session_shutdown", async () => { deferredPreCompact.clear(); return undefined })
 
-  pi.on("before_agent_start", async (event: any, ctx: any) => {`,
+  pi.on("before_agent_start", async (event: any, ctx: any) => {`
+      },
     )
   if (!base.includes("    const separatorChars = selected.length ? 1 : 0\n")) {
     throw new Error("Generated Pi CLI bridge is missing rendered memory separator budgeting")
   }
   if (taskGuardCount !== 2) throw new Error(`Generated Pi CLI bridge expected 2 task guards; inserted ${taskGuardCount}`)
+  if (deferredFactoryCount !== 1) throw new Error(`Generated Pi CLI bridge expected 1 deferred pre-compact factory injection; inserted ${deferredFactoryCount}`)
+  if (deferralBranchCount !== 1) throw new Error(`Generated Pi CLI bridge expected 1 session_before_compact deferral branch; inserted ${deferralBranchCount}`)
+  if (deferredHandlerBlockCount !== 1) throw new Error(`Generated Pi CLI bridge expected 1 deferred lifecycle handler block; inserted ${deferredHandlerBlockCount}`)
   const closing = base.lastIndexOf("}\n")
   if (closing < 0) throw new Error("Generated Pi CLI bridge is missing its factory closing brace")
   const lifecycleHandlers = `
