@@ -885,8 +885,8 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     }
   })
 
-  pi.on("session_switch", async (_event, _ctx) => {
-    clearDeferredPreCompact()
+  pi.on("session_switch", async (_event, ctx) => {
+    clearDeferredPreCompact(ctx)
     return undefined
   })
 

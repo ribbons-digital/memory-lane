@@ -487,7 +487,7 @@ function isMatchingPreCompletionHandoff(memory: MemoryRecord, references: Set<st
 }
 
 export function saveSessionSummaryCandidates(engine: MemoryEngine, candidates: SessionEndCandidate[]): SaveResult[] {
-  const existing = engine.list({ all: true })
+  const existing = engine.list()
   const results = candidates.map((candidate) => engine.save({
     text: candidate.text,
     category: candidate.category,

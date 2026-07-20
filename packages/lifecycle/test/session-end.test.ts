@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { test } from "node:test"
 import assert from "node:assert"
 import { MemoryEngine } from "@memory-lane/core"
@@ -671,6 +673,62 @@ test("saving a completion checkpoint supersedes matching pending pre-merge hando
   const superseded = engine.list({ all: true }).find((memory) => memory.id === old.memory.id)
   assert.ok(superseded?.revision?.supersededBy)
   assert.equal(superseded?.revision?.revisedBy, "lifecycle")
+})
+
+test("completion supersession ignores matching handoffs outside the current project scope", () => {
+  const dir = mkdtempSync(join(tmpdir(), "memory-lane-cross-scope-"))
+  try {
+    const projectA = join(dir, "project-a")
+    const projectB = join(dir, "project-b")
+    mkdirSync(projectA, { recursive: true })
+    mkdirSync(projectB, { recursive: true })
+    writeFileSync(join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "project-a" }), "utf8")
+    writeFileSync(join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "project-b" }), "utf8")
+    const engine = new MemoryEngine({
+      memoryPath: join(dir, "memory.jsonl"),
+      embeddingsPath: join(dir, "embeddings.jsonl"),
+      configPath: join(dir, "config.json"),
+    })
+
+    engine.refreshScope(projectA)
+    const outOfScope = engine.save({
+      text: "PR #214 is awaiting merge on branch project-a-work.",
+      category: "project",
+      scopeType: "project",
+      status: "pending",
+      source: "session-summary",
+      kind: "session_summary",
+    })
+    engine.refreshScope(projectB)
+    const inScope = engine.save({
+      text: "PR #214 is awaiting review on branch project-b-work.",
+      category: "project",
+      scopeType: "project",
+      status: "pending",
+      source: "session-summary",
+      kind: "session_summary",
+    })
+    assert.equal(outOfScope.status, "saved")
+    assert.equal(inScope.status, "saved")
+    if (outOfScope.status !== "saved" || inScope.status !== "saved") return
+
+    const saved = saveSessionSummaryCandidates(engine, [{
+      text: "PR #214 merged after review completed.",
+      category: "project",
+      scopeType: "project",
+      status: "pending",
+      source: "session-summary",
+      kind: "project_checkpoint",
+      provenance: { adapter: "test", lifecycleEvent: "session_end", sessionId: "completion" },
+    }])
+
+    assert.equal(saved[0]?.status, "saved")
+    const memories = engine.list({ all: true })
+    assert.equal(memories.find((memory) => memory.id === inScope.memory.id)?.revision?.supersededBy, saved[0]?.status === "saved" ? saved[0].memory.id : undefined)
+    assert.equal(memories.find((memory) => memory.id === outOfScope.memory.id)?.revision, undefined)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test("pending summary review units have bounded sections, bullets, and characters", async () => {

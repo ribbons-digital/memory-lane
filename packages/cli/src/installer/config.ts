@@ -449,7 +449,7 @@ function sessionMessagesFromPiCompactionEvent(event: any, ctx: any): any[] {`,
     return undefined
   })
 
-  pi.on("session_switch", async () => { deferredPreCompact.clear(); return undefined })
+  pi.on("session_switch", async (_event: any, ctx: any) => { deferredPreCompact.delete(deferralKey(ctx)); return undefined })
   pi.on("session_shutdown", async () => { deferredPreCompact.clear(); return undefined })
 
   pi.on("before_agent_start", async (event: any, ctx: any) => {`,

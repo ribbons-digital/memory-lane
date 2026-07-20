@@ -307,6 +307,50 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
     assert.doesNotMatch(entries[0].stdin, /RAW_COMMAND|RAW_OUTPUT/u)
   })
 
+  it("generated pi CLI bridge keeps deferred compaction isolated across session switch", () => {
+    const { nativeBinary, logPath } = writeNativeMemoryLaneStub("switched-precompact-calls.jsonl", `if (args[0] === "pi" && args[1] === "pre-compact") {
+  console.log(JSON.stringify({ ok: true, data: { saved: 1 } }));
+} else {
+  console.log(JSON.stringify({ data: {} }));
+}`)
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const notifications = [];
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const context = (id) => ({
+        cwd: "/tmp/pi-generated-bridge-project",
+        ui: { notify(message, level) { notifications.push({ message, level }); } },
+        sessionManager: { getSessionFile() { return "/tmp/" + id + ".json"; } },
+      });
+      const ctxA = context("session-a");
+      const ctxB = context("session-b");
+      const lossy = (turnId) => ({
+        reason: "threshold",
+        turnId,
+        preparation: { messagesToSummarize: [{ role: "assistant", content: [{ type: "toolCall", name: "bash" }] }] },
+      });
+      await handlers.session_before_compact(lossy("turn-a"), ctxA);
+      await handlers.session_before_compact(lossy("turn-b"), ctxB);
+      await handlers.session_switch({}, ctxA);
+      await handlers.session_compact({ compactionEntry: { summary: "SESSION_B_COMPLETE" } }, ctxB);
+      await handlers.session_compact({ compactionEntry: { summary: "SESSION_A_MUST_NOT_SAVE" } }, ctxA);
+      const started = Date.now();
+      while (!notifications.length && Date.now() - started < 1000) await new Promise((resolve) => setTimeout(resolve, 10));
+      if (!notifications.length) throw new Error("expected session B deferred precompact notification");
+    `)
+
+    const entries = readJsonlEntries(logPath)
+    assert.equal(entries.length, 1)
+    const payload = JSON.parse(entries[0].stdin)
+    assert.equal(payload.session_id, "/tmp/session-b.json")
+    assert.equal(payload.turn_id, "turn-b")
+    assert.deepEqual(payload.messages, [{ role: "assistant", content: "SESSION_B_COMPLETE" }])
+  })
+
   it("generated pi CLI bridge forwards input turn_end and tool_result with OMP normalization", () => {
     const { nativeBinary, logPath } = writeNativeMemoryLaneStub("lifecycle-calls.jsonl", "console.log(JSON.stringify({ data: { saved: 1 } }));")
     const piExt = installPiCliBridge(nativeBinary)
