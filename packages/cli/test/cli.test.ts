@@ -2169,6 +2169,24 @@ describe("CLI integration", () => {
     assert.deepEqual(signaled.provenance, records[0].provenance)
   })
 
+  it("review precomputes legacy project-root scope keys for deterministic quality analysis", () => {
+    const project = tempDir()
+    const otherProject = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "quality-root-project" }))
+    fs.writeFileSync(path.join(otherProject, ".memory-lane-scope"), JSON.stringify({ id: "quality-root-other" }))
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    writeMemoryRecords(memFile, [
+      { id: "same-root", text: "Prefer concise status updates.", category: "preference", scope: { type: "global" }, status: "pending", source: "agent-suggested", kind: "preference", project: { cwd: project, root: project }, createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" },
+      { id: "other-root", text: "Prefer detailed status updates.", category: "preference", scope: { type: "global" }, status: "pending", source: "agent-suggested", kind: "preference", project: { cwd: otherProject, root: otherProject }, createdAt: "2026-07-01T00:00:01.000Z", updatedAt: "2026-07-01T00:00:01.000Z" },
+    ])
+
+    const result = runProcess(["review", "--json"], { env, cwd: project })
+    assert.equal(result.status, 0, result.stderr)
+    const memories = JSON.parse(result.stdout).data.memories
+    assert.deepEqual(memories.find((memory: MemoryRecord) => memory.id === "same-root").qualitySignals, [])
+    assert.deepEqual(memories.find((memory: MemoryRecord) => memory.id === "other-root").qualitySignals.map((signal: any) => signal.code), ["cross-project-global-candidate"])
+  })
+
   it("review human output shows concise quality labels alongside candidate text and provenance", () => {
     const project = tempDir()
     fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "quality-human-project" }))
@@ -2187,7 +2205,7 @@ describe("CLI integration", () => {
 
     const output = runProcess(["review"], { env, cwd: project })
     assert.equal(output.status, 0, output.stderr)
-    assert.match(output.stdout, /Quality signals: \[contains-question\] \[ambiguous-reference\]/u)
+    assert.match(output.stdout, /Quality signals: \[question\] \[ambiguous reference\]/u)
     assert.match(output.stdout, /Quality signals are advisory and never mutate memories automatically\./u)
     assert.match(output.stdout, /Should we keep it\?/u)
     assert.match(output.stdout, /codex\/turn_stop/u)

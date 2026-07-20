@@ -507,6 +507,29 @@ test("memory_review includes advisory quality signals and filters by one or more
   assert.deepEqual(filtered.data.memories.map((memory: any) => memory.text), ["Should we keep it?"])
 })
 
+test("memory_review precomputes legacy project-root scope keys", async () => {
+  const storage = tempDir()
+  const project = tempDir()
+  const otherProject = tempDir()
+  fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "mcp-root-project" }))
+  fs.writeFileSync(path.join(otherProject, ".memory-lane-scope"), JSON.stringify({ id: "mcp-root-other" }))
+  const records = [
+    { id: "same-root", text: "Prefer concise status updates.", category: "preference", scope: { type: "global" }, status: "pending", source: "agent-suggested", kind: "preference", project: { cwd: project, root: project }, createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" },
+    { id: "other-root", text: "Prefer detailed status updates.", category: "preference", scope: { type: "global" }, status: "pending", source: "agent-suggested", kind: "preference", project: { cwd: otherProject, root: otherProject }, createdAt: "2026-07-01T00:00:01.000Z", updatedAt: "2026-07-01T00:00:01.000Z" },
+  ]
+  fs.writeFileSync(path.join(storage, "memory.jsonl"), records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
+  const engine = new MemoryEngine({
+    memoryPath: path.join(storage, "memory.jsonl"),
+    embeddingsPath: path.join(storage, "embeddings.jsonl"),
+    configPath: path.join(storage, "config.json"),
+  })
+  engine.refreshScope(project)
+
+  const result = parseToolResult(await handleMemoryReview(engine, {}))
+  assert.deepEqual(result.data.memories.find((memory: any) => memory.id === "same-root").qualitySignals, [])
+  assert.deepEqual(result.data.memories.find((memory: any) => memory.id === "other-root").qualitySignals.map((signal: any) => signal.code), ["cross-project-global-candidate"])
+})
+
 test("memory_review filters pending memories by kind source and provenance", async () => {
   const projectA = tempDir()
   fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "review-filter-project" }))

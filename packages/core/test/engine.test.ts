@@ -1521,6 +1521,39 @@ describe("MemoryEngine", () => {
     assert.equal(e.getByIdFresh(saved.memory.id)?.status, "approved")
   })
 
+  it("approve and reject clone fresh persisted records while preserving deleted status validation", () => {
+    const e = engine()
+    const approveSource = e.save({ text: "Cached approve candidate", status: "pending", scopeType: "global" })
+    const rejectSource = e.save({ text: "Cached reject candidate", status: "pending", scopeType: "global" })
+    const deletedSource = e.save({ text: "Cached deleted candidate", status: "pending", scopeType: "global" })
+    if (approveSource.status !== "saved" || rejectSource.status !== "saved" || deletedSource.status !== "saved") throw new Error("expected saved")
+
+    assert.equal(e.reviewPending().length, 3)
+    const memoryFile = path.join(dir, "mem.jsonl")
+    const before = fs.statSync(memoryFile)
+    const externalRecords: MemoryRecord[] = [
+      { ...approveSource.memory, text: "Fresh rejected approve candidate", status: "rejected", kind: "decision", updatedAt: "2099-01-01T00:00:00.000Z" },
+      { ...rejectSource.memory, text: "Fresh approved reject candidate", status: "approved", kind: "project_fact", updatedAt: "2099-01-01T00:00:01.000Z" },
+      { ...deletedSource.memory, text: "Fresh deleted candidate", status: "deleted", updatedAt: "2099-01-01T00:00:02.000Z" },
+    ]
+    fs.appendFileSync(memoryFile, externalRecords.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8")
+    fs.utimesSync(memoryFile, before.atime, new Date(before.mtimeMs - 1_000))
+
+    assert.equal(e.getById(approveSource.memory.id)?.text, "Cached approve candidate")
+    const approved = e.approve(approveSource.memory.id)
+    assert.equal(approved?.status, "approved")
+    assert.equal(approved?.text, "Fresh rejected approve candidate")
+    assert.equal(approved?.kind, "decision")
+
+    const rejected = e.reject(rejectSource.memory.id)
+    assert.equal(rejected?.status, "rejected")
+    assert.equal(rejected?.text, "Fresh approved reject candidate")
+    assert.equal(rejected?.kind, "project_fact")
+
+    assert.equal(e.approve(deletedSource.memory.id), undefined)
+    assert.equal(e.reject(deletedSource.memory.id), undefined)
+  })
+
   it("reviewPending with no project scope returns globals only unless all is requested", () => {
     const e = engine()
     const { projectA } = projectScopes()
