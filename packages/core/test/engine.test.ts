@@ -2853,8 +2853,11 @@ You are continuing the same subagent session. Before this run can be accepted, c
     const result = await e.reindexEmbeddings()
 
     const expectedBatchCount = Math.ceil(recordCount / batchSize)
+    const expectedBatchSizes = [...Array(19).fill(128), 68]
     assert.deepEqual(result, { embedded: recordCount, skippedExisting: 0, skippedSecrets: 0 })
     assert.equal(providerBatchSizes.length, expectedBatchCount)
+    assert.deepEqual(providerBatchSizes, expectedBatchSizes)
+    assert.deepEqual(storageBatchSizes, expectedBatchSizes)
     assert.deepEqual(storageBatchSizes, providerBatchSizes)
     assert.equal(singleWrites, 0)
     assert.equal(readJsonl(embeddingsPath).length, recordCount)
