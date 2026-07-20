@@ -1,5 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { createRequire, syncBuiltinESMExports } from "node:module"
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { contentHash } from "../src/engine-helpers.js"
@@ -205,6 +206,59 @@ describe("MemoryEngineStorage two-tier facade", () => {
     assert.equal(fs.existsSync(project.memoryPath), false)
     assert.ok(fs.readFileSync(home.embeddingsPath, "utf8").includes("home-origin"))
     assert.equal(fs.existsSync(project.embeddingsPath), false)
+  })
+
+  it("groups a mixed embedding batch into one atomic rewrite per owning store", () => {
+    const dir = tempDir()
+    const home = homePathsFor(path.join(dir, "home", ".memory-lane"))
+    const project = projectLocalPaths(path.join(dir, "project"))
+    const storage = createTwoTierEngineStorage(home, project, "scope-key")
+    storage.appendMemories([
+      rec({ id: "home-a", scope: { type: "global" }, project: undefined }),
+      rec({ id: "home-b", scope: { type: "global" }, project: undefined }),
+      rec({ id: "project-a", scope: { type: "project", key: "scope-key" }, project: { cwd: project.root, root: project.root, key: "scope-key" } }),
+      rec({ id: "project-b", scope: { type: "project", key: "scope-key" }, project: { cwd: project.root, root: project.root, key: "scope-key" } }),
+    ])
+
+    const record = (memoryId: string) => ({
+      memoryId,
+      memoryUpdatedAt: "2026-01-01T00:00:00.000Z",
+      contentHash: contentHash(memoryId),
+      profileName: "default",
+      model: "test-model",
+      dimensions: 1,
+      vector: [1],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    })
+    const renameTargets: string[] = []
+    const mutableFs = createRequire(import.meta.url)("node:fs") as typeof fs
+    const originalRenameSync = mutableFs.renameSync
+    mutableFs.renameSync = ((oldPath: fs.PathLike, newPath: fs.PathLike) => {
+      renameTargets.push(String(newPath))
+      originalRenameSync(oldPath, newPath)
+    }) as typeof fs.renameSync
+    syncBuiltinESMExports()
+    try {
+      storage.appendEmbeddings([
+        record("home-a"),
+        record("project-a"),
+        record("home-b"),
+        record("project-b"),
+      ])
+    } finally {
+      mutableFs.renameSync = originalRenameSync
+      syncBuiltinESMExports()
+    }
+
+    assert.deepEqual(renameTargets.sort(), [home.embeddingsPath, project.embeddingsPath].sort())
+    assert.deepEqual(
+      fs.readFileSync(home.embeddingsPath, "utf8").trim().split("\n").map((line) => JSON.parse(line).memoryId),
+      ["home-a", "home-b"],
+    )
+    assert.deepEqual(
+      fs.readFileSync(project.embeddingsPath, "utf8").trim().split("\n").map((line) => JSON.parse(line).memoryId),
+      ["project-a", "project-b"],
+    )
   })
 
   it("compacts active home and project stores", () => {
