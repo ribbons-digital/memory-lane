@@ -22,7 +22,10 @@ export { memoryDescriptorPreview, structuredDescriptorText, hasSecretDescriptorM
 export { isMetaTaskPromptText } from "./meta-task-filter.js"
 export {
   analyzeSummaryHygiene,
+  classifySummaryClaims,
   withReviewHygiene,
+  type SummaryClaim,
+  type SummaryClaimClassification,
   type SummaryHygieneAnalysis,
   type ReviewHygieneMetadata,
   type MemoryRecordWithReviewHygiene,

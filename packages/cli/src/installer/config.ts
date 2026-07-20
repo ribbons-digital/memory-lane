@@ -380,6 +380,80 @@ export function piCliBridgeSource(binaryPath: string): string {
         "    chars += separatorChars + renderedAutomaticMemoryLength(fitted)",
       ].join("\n"),
     )
+    .replace(
+      "function sessionMessagesFromPiCompactionEvent(event: any, ctx: any): any[] {",
+      `function compactionWouldDiscardSplitTurnEvidence(event: any): boolean {
+  const preparation = event?.preparation
+  const values = [
+    ...(Array.isArray(preparation?.messagesToSummarize) ? preparation.messagesToSummarize : []),
+    ...(Array.isArray(preparation?.turnPrefixMessages) ? preparation.turnPrefixMessages : []),
+    ...(Array.isArray(event?.messages) ? event.messages : []),
+    ...(Array.isArray(event?.branchEntries) ? event.branchEntries : []),
+  ]
+  return values.some((value) => {
+    if (!value || typeof value !== "object") return false
+    const role = typeof value.role === "string" ? value.role : typeof value.message?.role === "string" ? value.message.role : undefined
+    if (role === "toolResult" || role === "tool_result") return true
+    const content = value.content ?? value.message?.content
+    return Array.isArray(content) && content.some((part) => part && typeof part === "object" && part.type !== "text")
+  })
+}
+
+function sessionMessagesFromPiCompactionEvent(event: any, ctx: any): any[] {`,
+    )
+    .replace(
+      "export default function memoryLaneCliBridge(pi: any) {",
+      `export default function memoryLaneCliBridge(pi: any) {
+  const deferredPreCompact = new Map<string, { turnId?: string; trigger: "manual" | "auto" }>()
+  const deferralKey = (ctx: any) => piSessionId(ctx) ?? "cwd:" + String(ctx?.cwd ?? process.cwd())`,
+    )
+    .replace(
+      "    try {\n      const messages = sessionMessagesFromPiCompactionEvent(event, ctx)",
+      `    try {
+      const key = deferralKey(ctx)
+      if (compactionWouldDiscardSplitTurnEvidence(event)) {
+        deferredPreCompact.delete(key)
+        deferredPreCompact.set(key, { turnId: typeof event?.turnId === "string" ? event.turnId : undefined, trigger: piPreCompactTrigger(event) })
+        while (deferredPreCompact.size > 32) deferredPreCompact.delete(deferredPreCompact.keys().next().value as string)
+        return undefined
+      }
+      deferredPreCompact.delete(key)
+      const messages = sessionMessagesFromPiCompactionEvent(event, ctx)`,
+    )
+    .replace(
+      `\n  pi.on("before_agent_start", async (event: any, ctx: any) => {`,
+      `
+  pi.on("session_compact", async (event: any, ctx: any) => {
+    if (bridgeTaskSession(ctx)) return undefined
+    const key = deferralKey(ctx)
+    const deferred = deferredPreCompact.get(key)
+    if (!deferred) return undefined
+    deferredPreCompact.delete(key)
+    const summary = typeof event?.compactionEntry?.summary === "string" ? event.compactionEntry.summary.trim() : ""
+    if (!summary) return undefined
+    const payload = {
+      cwd: ctx?.cwd ?? process.cwd(),
+      session_id: piSessionId(ctx),
+      turn_id: deferred.turnId,
+      trigger: deferred.trigger,
+      messages: [{ role: "assistant", content: summary }],
+    }
+    void runMemoryLaneWithInput(["pi", "pre-compact", "--json"], JSON.stringify(payload), ctx)
+      .then((stdout) => {
+        const saved = Number(parseJson(stdout)?.data?.saved ?? 0)
+        if (saved > 0) notify(ctx, "Memory Lane suggested " + saved + " pending pre-compact summar" + (saved === 1 ? "y" : "ies") + " for review. Run /memory review to inspect.", "info")
+      })
+      .catch((error) => {
+        if (piHookDebugEnabled()) notify(ctx, error instanceof Error ? "Deferred pre-compact summary failed: " + error.message : "Deferred pre-compact summary failed", "warning")
+      })
+    return undefined
+  })
+
+  pi.on("session_switch", async () => { deferredPreCompact.clear(); return undefined })
+  pi.on("session_shutdown", async () => { deferredPreCompact.clear(); return undefined })
+
+  pi.on("before_agent_start", async (event: any, ctx: any) => {`,
+    )
   if (!base.includes("    const separatorChars = selected.length ? 1 : 0\n")) {
     throw new Error("Generated Pi CLI bridge is missing rendered memory separator budgeting")
   }

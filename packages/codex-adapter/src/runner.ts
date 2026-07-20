@@ -1,7 +1,7 @@
 import {
   appendHookDebugLog, hookDebugEnabled, loadConfig, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
-import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, lifecycleDebugCounts, shouldCaptureLifecycleTrace, type LifecycleResult, type SessionEndInput, type SessionMessage, type StopInput, type TraceFidelity } from "@memory-lane/lifecycle"
+import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, lifecycleDebugCounts, saveSessionSummaryCandidates, shouldCaptureLifecycleTrace, type LifecycleResult, type SessionEndInput, type SessionMessage, type StopInput, type TraceFidelity } from "@memory-lane/lifecycle"
 import { additionalContextOutput, lifecycleNoopOutput, noopOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseCodexPayload, type CodexCommand } from "./payloads.js"
 import { readLatestTurnFromTranscript, readSessionMessagesFromTranscript } from "./transcript.js"
@@ -82,16 +82,7 @@ function sessionEndInputFromStop(input: StopInput, transcriptPath?: string): { i
 
 function saveSessionEndCandidates(engine: MemoryEngine, candidates: Awaited<ReturnType<typeof handleSessionEnd>>): LifecycleResult {
   return {
-    saved: candidates.map((candidate) => engine.save({
-      text: candidate.text,
-      category: candidate.category,
-      scopeType: candidate.scopeType,
-      status: candidate.status,
-      source: candidate.source,
-      kind: candidate.kind,
-      provenance: { ...candidate.provenance, adapter: "codex" },
-      freshness: candidate.freshness,
-    })),
+    saved: saveSessionSummaryCandidates(engine, candidates),
     discarded: [],
   }
 }

@@ -1,7 +1,7 @@
 import {
   appendHookDebugLog, hookDebugEnabled, loadConfig, type HookDebugLogStatus, type MemoryEngine,
 } from "@memory-lane/core"
-import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, lifecycleDebugCounts, shouldCaptureLifecycleTrace, type LifecycleResult, type PreCompactInput, type SessionEndInput, type SessionMessage } from "@memory-lane/lifecycle"
+import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleSessionStart, handleStop, handleUserPromptSubmit, lifecycleDebugCounts, saveSessionSummaryCandidates, shouldCaptureLifecycleTrace, type LifecycleResult, type PreCompactInput, type SessionEndInput, type SessionMessage } from "@memory-lane/lifecycle"
 import { lifecycleNoopOutput, noopOutput, sessionStartOutput, userPromptSubmitOutput } from "./outputs.js"
 import { parseClaudePayload, type ClaudeCommand } from "./payloads.js"
 import { readLatestTurnFromTranscript, readSessionMessagesFromTranscript } from "./transcript.js"
@@ -72,16 +72,7 @@ function captureClaudeLifecycleTrace(
 
 function saveSessionEndCandidates(engine: MemoryEngine, candidates: Awaited<ReturnType<typeof handleSessionEnd>>): LifecycleResult {
   return {
-    saved: candidates.map((candidate) => engine.save({
-      text: candidate.text,
-      category: candidate.category,
-      scopeType: candidate.scopeType,
-      status: candidate.status,
-      source: candidate.source,
-      kind: candidate.kind,
-      provenance: { ...candidate.provenance, adapter: "claude" },
-      freshness: candidate.freshness,
-    })),
+    saved: saveSessionSummaryCandidates(engine, candidates),
     discarded: [],
   }
 }
