@@ -261,6 +261,9 @@ export async function handleInit(argv: string[]): Promise<InitCommandResult> {
   const only = flagValue(argv, "only")
   const all = hasFlag(argv, "all")
   const recommended = hasFlag(argv, "recommended")
+  if (json && !yes && !listOnly) {
+    throw new Error("JSON init requires --yes for non-interactive setup. Use --list --json to inspect integrations.")
+  }
   const projectMode = argv.includes("--project")
   const projectPathFlag = argv[argv.indexOf("--project") + 1]
   const projectPath = projectMode && projectPathFlag && !projectPathFlag.startsWith("-") ? projectPathFlag : process.cwd()
