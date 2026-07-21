@@ -279,13 +279,14 @@ export function isLocalBaseUrl(url: string): boolean {
 
 // ── Write helpers ────────────────────────────────────────────
 
-/** Write a config file, merging the given partial config with defaults. */
+/** Write a config file, preserving only explicit user overrides. */
 export function writeConfig(configPath: string, partial: unknown): void {
   const existing = fs.existsSync(configPath) ? parseConfigFile(configPath) : {}
-  const merged = deepMergeConfig(DEFAULT_CONFIG, deepMergeConfig(existing, partial)) as SemanticMemoryConfig
-  validateConfig(structuredClone(merged))
+  const overrides = deepMergeConfig(existing, partial)
+  const runtimeConfig = deepMergeConfig(DEFAULT_CONFIG, overrides) as SemanticMemoryConfig
+  validateConfig(structuredClone(runtimeConfig))
   fs.mkdirSync(path.dirname(configPath), { recursive: true })
-  fs.writeFileSync(configPath, JSON.stringify(merged, null, 2) + "\n", "utf8")
+  fs.writeFileSync(configPath, JSON.stringify(overrides, null, 2) + "\n", "utf8")
 }
 
 /** Read raw config JSON (without validation) for editing. */
