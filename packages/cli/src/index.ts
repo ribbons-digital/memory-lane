@@ -2,7 +2,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { MemoryEngine, EmbeddingProviderDiagnosticError, analyzeReviewQuality, qualitySignalCodes, resolveReviewProjectScopeKeys, readRawConfig, writeConfig, getDefaultConfigPath, DEFAULT_CONFIG, loadConfig, deepMergeConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type ReviewQualitySignalCode, type WorkflowArea } from "@memory-lane/core"
+import { MemoryEngine, EmbeddingProviderDiagnosticError, analyzeReviewQuality, qualitySignalCodes, resolveReviewProjectScopeKeys, writeConfig, getDefaultConfigPath, loadConfig, createOpenAIEmbeddingProvider, createSingleStoreEngineStorage, createTwoTierEngineStorage, initProjectLocalStorage, isMetaTaskPromptText, resolveEngineStoragePaths, resolveWritableEngineStoragePaths, isWorkflowArea, type MemoryPaths, type EngineStoragePaths, type ReviewQualitySignalCode, type WorkflowArea } from "@memory-lane/core"
 import { runClaudeHookCommand, type ClaudeCommand } from "@memory-lane/claude-adapter"
 import { runCodexHookCommand, type CodexCommand } from "@memory-lane/codex-adapter"
 import { classifyPromptRoute, createLearningEventSink, handleSessionEnd, createOpenAICompatibleProvider, purgeTraces, traceStatus, type TraceStatus } from "@memory-lane/lifecycle"
@@ -765,13 +765,13 @@ async function handleReindex(ctx: CliContext): Promise<void> {
 }
 
 function showConfig(ctx: ConfigContext): void {
-  const raw = readRawConfig(ctx.configPath)
-  if (!raw) {
+  if (!fs.existsSync(ctx.configPath)) {
     console.log(formatError("No config file found.", ctx.json))
     return
   }
-  if (ctx.json) console.log(JSON.stringify(raw, null, 2))
-  else console.log(`Config: ${ctx.configPath}\n` + JSON.stringify(raw, null, 2))
+  const config = loadConfig(ctx.configPath)
+  if (ctx.json) console.log(JSON.stringify(config, null, 2))
+  else console.log(`Config: ${ctx.configPath}\n` + JSON.stringify(config, null, 2))
 }
 
 function setSemanticEnabled(ctx: ConfigContext, enabled: boolean): void {
@@ -790,10 +790,9 @@ function setConfigValue(ctx: ConfigContext): void {
     process.exit(2)
   }
   const value = ctx.rest.slice(2).join(" ")
-  const existing = (readRawConfig(ctx.configPath) as Record<string, unknown>) || {}
-  const merged = deepMergeConfig(DEFAULT_CONFIG, existing) as Record<string, unknown>
-  setByPath(merged, key, parseConfigValue(value))
-  writeConfig(ctx.configPath, merged)
+  const partial: Record<string, unknown> = {}
+  setByPath(partial, key, parseConfigValue(value))
+  writeConfig(ctx.configPath, partial)
   console.log(ctx.json ? JSON.stringify({ ok: true, path: key }) : `Set ${key}`)
 }
 

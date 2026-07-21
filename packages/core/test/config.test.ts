@@ -72,6 +72,35 @@ describe("writeConfig", () => {
   let dir: string
   beforeEach(() => { dir = tempDir() })
 
+  it("persists only explicitly provided overrides while loading runtime defaults", () => {
+    const f = path.join(dir, "c.json")
+
+    writeConfig(f, { semantic: { enabled: true } })
+
+    assert.deepEqual(readRawConfig(f), { semantic: { enabled: true } })
+    const cfg = loadConfig(f)
+    assert.equal(cfg.semantic.enabled, true)
+    assert.equal(cfg.semantic.retrieval.topK, DEFAULT_CONFIG.semantic.retrieval.topK)
+    assert.equal(cfg.memory?.contextPolicy?.mode, DEFAULT_CONFIG.memory?.contextPolicy?.mode)
+  })
+
+  it("applies changed runtime defaults to an older minimal config", () => {
+    const f = path.join(dir, "c.json")
+    writeConfig(f, { semantic: { enabled: true } })
+    const originalTopK = DEFAULT_CONFIG.semantic.retrieval.topK
+
+    try {
+      DEFAULT_CONFIG.semantic.retrieval.topK = originalTopK + 5
+
+      const cfg = loadConfig(f)
+      assert.equal(cfg.semantic.enabled, true)
+      assert.equal(cfg.semantic.retrieval.topK, originalTopK + 5)
+      assert.deepEqual(readRawConfig(f), { semantic: { enabled: true } })
+    } finally {
+      DEFAULT_CONFIG.semantic.retrieval.topK = originalTopK
+    }
+  })
+
   it("preserves existing semantic embedding profiles when writing partial semantic updates", () => {
     const f = path.join(dir, "c.json")
     fs.writeFileSync(f, JSON.stringify({
@@ -102,6 +131,22 @@ describe("writeConfig", () => {
       model: "nomic-embed-text",
     })
     assert.equal(cfg.semantic.retrieval.topK, 3)
+    assert.deepEqual(readRawConfig(f), {
+      semantic: {
+        enabled: true,
+        activeEmbeddingProfile: "local-profile",
+        embeddings: {
+          profiles: {
+            "local-profile": {
+              provider: "openai-compatible-embeddings",
+              baseUrl: "http://localhost:11434/v1",
+              model: "nomic-embed-text",
+            },
+          },
+        },
+        retrieval: { topK: 3 },
+      },
+    })
   })
 
   it("rejects invalid merged config without changing existing file", () => {

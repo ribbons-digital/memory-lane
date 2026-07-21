@@ -1,7 +1,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { DEFAULT_CONFIG, writeConfig } from "./config.js"
+import { writeConfig } from "./config.js"
 import { resolveProjectScope } from "./project-scope.js"
 
 export type MemoryStorageKind = "environment" | "project-local" | "home"
@@ -136,7 +136,7 @@ export function ensureProjectLocalStorageFiles(root: string, scopeId?: string): 
 export function initProjectLocalStorage(cwd = process.cwd()): InitProjectLocalStorageResult {
   const root = path.resolve(cwd)
   const paths = ensureProjectLocalStorageFiles(root, root)
-  if (!fs.existsSync(paths.configPath)) writeConfig(paths.configPath, DEFAULT_CONFIG)
+  if (!fs.existsSync(paths.configPath)) writeConfig(paths.configPath, {})
 
   return {
     root,

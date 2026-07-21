@@ -158,6 +158,50 @@ describe("config command", () => {
     return { env, configPath }
   }
 
+  it("persists only the requested config path", () => {
+    const { env, configPath } = configFixture()
+
+    const result = runProcess(["config", "set", "semantic.retrieval.topK", "12"], { env })
+
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /Set semantic\.retrieval\.topK/u)
+    assert.deepEqual(JSON.parse(fs.readFileSync(configPath, "utf8")), {
+      semantic: { retrieval: { topK: 12 } },
+    })
+  })
+
+  it("preserves unrelated explicit overrides without materializing defaults", () => {
+    const { env, configPath } = configFixture()
+    fs.writeFileSync(configPath, JSON.stringify({ memory: { contextPolicy: { includePending: true } } }, null, 2) + "\n")
+
+    const result = runProcess(["config", "set", "semantic.retrieval.topK", "12"], { env })
+
+    assert.equal(result.status, 0)
+    assert.deepEqual(JSON.parse(fs.readFileSync(configPath, "utf8")), {
+      memory: { contextPolicy: { includePending: true } },
+      semantic: { retrieval: { topK: 12 } },
+    })
+  })
+
+  it("shows the effective config while keeping persisted overrides minimal", () => {
+    const { env, configPath } = configFixture()
+    fs.writeFileSync(configPath, JSON.stringify({ semantic: { retrieval: { topK: 12 } } }, null, 2) + "\n")
+
+    const result = runProcess(["config", "show", "--json"], { env })
+
+    assert.equal(result.status, 0)
+    const shown = JSON.parse(result.stdout) as {
+      semantic: { enabled: boolean; retrieval: { topK: number } }
+      memory: { handoffMode: string }
+    }
+    assert.equal(shown.semantic.enabled, false)
+    assert.equal(shown.semantic.retrieval.topK, 12)
+    assert.equal(shown.memory.handoffMode, "manual")
+    assert.deepEqual(JSON.parse(fs.readFileSync(configPath, "utf8")), {
+      semantic: { retrieval: { topK: 12 } },
+    })
+  })
+
   it("rejects invalid numeric writes without changing the config file", () => {
     const { env, configPath } = configFixture()
     const original = JSON.stringify({ semantic: { retrieval: { topK: 8 } } }, null, 2) + "\n"
