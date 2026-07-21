@@ -1223,6 +1223,39 @@ esac
     assert.doesNotMatch(result.stderr, /Done\. Memory Lane is ready\./u)
   })
 
+  it("rejects bare JSON init before interactive prompts", () => {
+    const result = runWithStatus(["init", "--json"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    }, undefined, "none\nn\n")
+
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, "")
+    const payload = JSON.parse(result.stderr)
+    assert.equal(payload.ok, false)
+    assert.match(payload.error, /JSON init requires --yes/u)
+    assert.doesNotMatch(result.stdout + result.stderr, /Select integrations|Enable local learning/u)
+  })
+
+  it("rejects JSON init before an existing-integration overwrite prompt", () => {
+    const configPath = path.join(home, ".codex/config.toml")
+    const original = '[mcp_servers.memory-lane]\ncommand = "old-memory-lane"\n'
+    fs.writeFileSync(configPath, original, "utf8")
+
+    const result = runWithStatus(["init", "--only", "codex-desktop", "--json"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    }, undefined, "n\n")
+
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, "")
+    const payload = JSON.parse(result.stderr)
+    assert.equal(payload.ok, false)
+    assert.match(payload.error, /JSON init requires --yes/u)
+    assert.doesNotMatch(result.stdout + result.stderr, /already has a Memory Lane configuration|Overwrite/u)
+    assert.equal(fs.readFileSync(configPath, "utf8"), original)
+  })
+
   it("writes one JSON error payload for partial integration failures", () => {
     const configPath = path.join(home, ".claude/settings.json")
     const agentDir = path.join(tempDir(), "json-partial-agent")
