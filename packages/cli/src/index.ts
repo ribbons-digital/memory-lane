@@ -1058,7 +1058,16 @@ async function main(): Promise<void> {
         handleInitCommand(argv, json)
       } else {
         const result = await handleInit(argv)
-        if (result.failedIntegrations.length) process.exit(1)
+        if (result.failedIntegrations.length) {
+          if (json) {
+            console.error(formatError("Memory Lane init completed with errors.", true, {
+              dataDir: result.dataDir,
+              failedIntegrations: result.failedIntegrations.map(({ harness, message }) => ({ harness, message })),
+            }))
+          }
+          process.exit(1)
+        }
+        if (json) console.log(JSON.stringify({ ok: true, data: result }, null, 2))
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)

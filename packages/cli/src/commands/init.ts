@@ -252,9 +252,12 @@ async function runInteractive(options: InitOptions, harnesses: DetectedHarness[]
   return parseHarnessTokens(normalized, harnesses)
 }
 
-export async function handleInit(argv: string[]): Promise<InitResult> {
+export type InitCommandResult = InitResult & { availableIntegrations?: DetectedHarness[] }
+
+export async function handleInit(argv: string[]): Promise<InitCommandResult> {
   const yes = hasFlag(argv, "yes")
   const listOnly = hasFlag(argv, "list")
+  const json = hasFlag(argv, "json")
   const only = flagValue(argv, "only")
   const all = hasFlag(argv, "all")
   const recommended = hasFlag(argv, "recommended")
@@ -279,9 +282,11 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
 
   const harnesses = detectHarnesses({ homeDir, env: process.env })
   if (listOnly) {
-    console.log("Memory Lane integrations:")
-    console.log(renderHarnessList(harnesses))
-    return { binaryPath, dataDir, integrations: [], failedIntegrations: [] }
+    if (!json) {
+      console.log("Memory Lane integrations:")
+      console.log(renderHarnessList(harnesses))
+    }
+    return { binaryPath, dataDir, integrations: [], failedIntegrations: [], availableIntegrations: harnesses }
   }
   const existingManifest = readInstallManifest(dataDir)
   if (existingManifest.status === "malformed" || existingManifest.status === "partial") {
@@ -312,18 +317,20 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
           const ok = await confirm(`${harnessName(harness)} already has a Memory Lane configuration. Overwrite?`, true)
           if (!ok) {
             integrations.push({ harness, configured: false, skipped: true, message: INIT_SKIPPED_BY_USER })
-            console.log(`  - ${harnessName(harness)} skipped`)
+            if (!json) console.log(`  - ${harnessName(harness)} skipped`)
             continue
           }
         }
         const result = installHarness(harness, options)
         integrations.push(result)
-        console.log(`  ✓ ${harnessName(harness)} configured`)
-        if (result.message) console.log(`    ${result.message}`)
+        if (!json) {
+          console.log(`  ✓ ${harnessName(harness)} configured`)
+          if (result.message) console.log(`    ${result.message}`)
+        }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
         integrations.push({ harness, configured: false, message })
-        console.error(`  ✗ ${harnessName(harness)} failed: ${message}`)
+        if (!json) console.error(`  ✗ ${harnessName(harness)} failed: ${message}`)
       }
     }
 
@@ -331,15 +338,19 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
     const result: InitResult = { binaryPath, dataDir, integrations, failedIntegrations }
     persistInstallManifest(options, result, previousIntegrations)
     if (failedIntegrations.length) {
-      console.error("\nMemory Lane init completed with errors.")
-      console.error(`Failed integrations: ${failedIntegrations.map((integration) => harnessName(integration.harness)).join(", ")}`)
-      console.error(`Data directory: ${dataDir}`)
+      if (!json) {
+        console.error("\nMemory Lane init completed with errors.")
+        console.error(`Failed integrations: ${failedIntegrations.map((integration) => harnessName(integration.harness)).join(", ")}`)
+        console.error(`Data directory: ${dataDir}`)
+      }
       return result
     }
 
-    console.log("\nDone. Memory Lane is ready.")
-    console.log(`Data directory: ${dataDir}`)
-    console.log("Try: memory-lane save \"always use pnpm\" --status approved")
+    if (!json) {
+      console.log("\nDone. Memory Lane is ready.")
+      console.log(`Data directory: ${dataDir}`)
+      console.log("Try: memory-lane save \"always use pnpm\" --status approved")
+    }
     return result
   } finally {
     closePromptInterface()
