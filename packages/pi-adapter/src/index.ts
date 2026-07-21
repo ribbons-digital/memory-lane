@@ -502,7 +502,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
       notify(ctx, "No durable session summary was generated.", "info")
       return
     }
-    notify(ctx, `Saved ${saved.length} pending session summary${saved.length === 1 ? "" : "ies"}. Run /memory review to inspect.`, "info")
+    notify(ctx, `Saved ${saved.length} pending session summar${saved.length === 1 ? "y" : "ies"}. Run /memory review to inspect.`, "info")
   }
 
   pi.registerCommand("remember", {
