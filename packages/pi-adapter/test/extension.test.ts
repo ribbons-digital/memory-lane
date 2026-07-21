@@ -1100,6 +1100,35 @@ test("memory session-summary saves pending pi session summary without raw branch
     assert.equal(mem.provenance.lifecycleEvent, "session_end")
     assert.equal(mem.provenance.sessionId, path.join(env.dir, ".pi-session.jsonl"))
     assert.match(mem.text, /Provider summary survived/)
-    assert.ok(notifications.some((n) => n.message.includes("Saved 1 pending session summary")))
+    assert.ok(notifications.some((n) => n.message === "Saved 1 pending session summary. Run /memory review to inspect."))
+  })
+})
+
+test("memory session-summary pluralizes multiple pending pi session summaries", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  await withMockSummaryServer("## Decisions made\n- First provider summary survived.\n- Second provider summary survived.", async (baseUrl) => {
+    fs.writeFileSync(path.join(env.dir, "config.json"), JSON.stringify({
+      semantic: { enabled: false },
+      memory: { sessionEndSummary: { enabled: true, baseUrl, model: "mock-summary" } },
+    }))
+    const pi = createFakePi()
+    memoryLaneExtension(pi)
+    const notifications: FakeNotification[] = []
+    const ctx = ctxWithUi(env.dir, {
+      confirmResult: true,
+      notifications,
+      branch: [
+        { type: "message", message: { role: "user", content: [{ type: "text", text: "Summarize both durable decisions." }] } },
+        { type: "message", message: { role: "assistant", content: [{ type: "text", text: "Both decisions are ready to summarize." }] } },
+      ],
+    })
+
+    await runMemoryCommand(pi, "session-summary", ctx)
+
+    const records = fs.readFileSync(path.join(env.dir, "memory.jsonl"), "utf8").trim().split("\n")
+    assert.equal(records.length, 2)
+    assert.ok(notifications.some((n) => n.message === "Saved 2 pending session summaries. Run /memory review to inspect."))
+    assert.ok(notifications.every((n) => !n.message.includes("summaryies")))
   })
 })
