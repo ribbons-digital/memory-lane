@@ -1223,6 +1223,63 @@ esac
     assert.doesNotMatch(result.stderr, /Done\. Memory Lane is ready\./u)
   })
 
+  it("writes one JSON error payload for partial integration failures", () => {
+    const configPath = path.join(home, ".claude/settings.json")
+    const agentDir = path.join(tempDir(), "json-partial-agent")
+    fs.mkdirSync(path.dirname(configPath), { recursive: true })
+    fs.writeFileSync(configPath, "{bad json", "utf8")
+
+    const result = runWithStatus(["init", "--only", "claude-code-cli,pi", "--yes", "--json"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+      PI_CODING_AGENT_DIR: agentDir,
+    })
+
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, "")
+    assert.doesNotMatch(result.stderr, /[✓✗]/u)
+    const payload = JSON.parse(result.stderr)
+    assert.equal(payload.ok, false)
+    assert.equal(payload.error, "Memory Lane init completed with errors.")
+    assert.equal(payload.data.dataDir, path.join(home, ".memory-lane"))
+    assert.deepEqual(payload.data.failedIntegrations.map((integration: { harness: string }) => integration.harness), ["claude-code-cli"])
+    assert.match(payload.data.failedIntegrations[0].message, /Could not parse JSON config/u)
+    assert.ok(fs.existsSync(path.join(home, ".pi", "agent", "extensions", "memory-lane", "index.ts")))
+  })
+
+  it("writes one JSON success payload for init", () => {
+    const agentDir = path.join(tempDir(), "json-success-agent")
+    const result = runWithStatus(["init", "--only", "pi", "--yes", "--json"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+      PI_CODING_AGENT_DIR: agentDir,
+    })
+
+    assert.equal(result.status, 0)
+    assert.equal(result.stderr, "")
+    assert.doesNotMatch(result.stdout, /✓|Done\. Memory Lane is ready\./u)
+    const payload = JSON.parse(result.stdout)
+    assert.equal(payload.ok, true)
+    assert.equal(payload.data.dataDir, path.join(home, ".memory-lane"))
+    assert.deepEqual(payload.data.integrations.map((integration: { harness: string }) => integration.harness), ["pi"])
+    assert.deepEqual(payload.data.failedIntegrations, [])
+  })
+
+  it("writes a JSON integration list without human prose", () => {
+    const result = runWithStatus(["init", "--list", "--json"], {
+      HOME: home,
+      MEMORY_LANE_INSTALL_BINARY: binaryPath,
+    })
+
+    assert.equal(result.status, 0)
+    assert.equal(result.stderr, "")
+    assert.doesNotMatch(result.stdout, /Memory Lane integrations:/u)
+    const payload = JSON.parse(result.stdout)
+    assert.equal(payload.ok, true)
+    assert.ok(Array.isArray(payload.data.availableIntegrations))
+    assert.ok(payload.data.availableIntegrations.some((integration: { harness: string }) => integration.harness === "claude-code-cli"))
+  })
+
   it("leaves non-object JSON hook config untouched", () => {
     const configPath = path.join(home, ".claude/settings.json")
     fs.mkdirSync(path.dirname(configPath), { recursive: true })
