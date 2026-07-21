@@ -1340,6 +1340,34 @@ describe("upgrade", () => {
     assert.equal(persisted.manifest.binaryPath, binaryPath)
   })
 
+  it("writes per-harness reapply failures to stderr without changing ordinary upgrade success", () => {
+    const home = tempDir()
+    const dataDir = path.join(home, ".memory-lane")
+    const binaryPath = path.join(home, ".local", "bin", "memory-lane")
+    fs.mkdirSync(dataDir, { recursive: true })
+    fs.mkdirSync(path.dirname(binaryPath), { recursive: true })
+    fs.writeFileSync(binaryPath, "binary sentinel", "utf8")
+    fs.writeFileSync(path.join(home, ".pi"), "blocks the Pi config directory", "utf8")
+    writeInstallManifest(dataDir, {
+      version: "0.1.0",
+      installedAt: "2026-01-01T00:00:00.000Z",
+      binaryPath,
+      dataDir,
+      integrations: [{ harness: "pi", configPath: path.join(home, ".pi", "agent", "extensions", "memory-lane", "index.ts") }],
+    })
+
+    const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist/index.js")
+    const result = spawnSync(process.execPath, [cli, "upgrade", "--reapply-install-manifest", "--yes"], {
+      encoding: "utf8",
+      env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: undefined },
+    })
+
+    assert.equal(result.status, 0)
+    assert.doesNotMatch(result.stdout, /pi failed/u)
+    assert.match(result.stderr, /pi failed/u)
+    assert.match(result.stdout, /No previous harness configs were reapplied/u)
+  })
+
   it("enforces strict failures only for transactional Windows reapply", () => {
     const home = tempDir()
     const dataDir = path.join(home, ".memory-lane")
@@ -1441,7 +1469,8 @@ describe("upgrade", () => {
     })
 
     assert.equal(result.status, 1)
-    assert.match(result.stdout, /Refusing to manage an unexpected OMP extension path/u)
+    assert.equal(result.stdout, "")
+    assert.match(result.stderr, /Refusing to manage an unexpected OMP extension path/u)
     assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest)
     assert.equal(fs.readFileSync(unsafePath, "utf8"), "target sentinel")
   })

@@ -19,7 +19,7 @@ export async function handleMcp(ctx?: CliCommandContext): Promise<void> {
     config = loadConfig(resolveMcpConfigPath())
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.log(formatError(`Failed to load config: ${msg}`, ctx?.json ?? false))
+    console.error(formatError(`Failed to load config: ${msg}`, ctx?.json ?? false))
     process.exit(1)
   }
   const bundledPlugins = config.plugins?.length

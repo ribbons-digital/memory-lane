@@ -176,7 +176,7 @@ function createEngine(paths: MemoryPaths | EngineStoragePaths, projPath?: string
 function requireText(ctx: CliContext, message: string): string {
   const text = ctx.rest.join(" ")
   if (!text) {
-    console.log(formatError(message, ctx.json))
+    console.error(formatError(message, ctx.json))
     process.exit(1)
   }
   return text
@@ -185,7 +185,7 @@ function requireText(ctx: CliContext, message: string): string {
 function requireId(ctx: CliContext, action: string): string {
   const id = ctx.rest[0]
   if (!id) {
-    console.log(formatError(`ID required: memory-lane ${action} <id>`, ctx.json))
+    console.error(formatError(`ID required: memory-lane ${action} <id>`, ctx.json))
     process.exit(1)
   }
   return id
@@ -199,7 +199,7 @@ function optionalTextArg(ctx: CliContext): string | undefined {
 
 function requireYesForMultiple(ctx: CliContext, ids: string[], action: string): void {
   if (ids.length <= 1 || hasFlag(ctx.argv, "yes") || hasFlag(ctx.argv, "dry-run")) return
-  console.log(formatError(`${action} with multiple old memories requires --yes or --dry-run`, ctx.json))
+  console.error(formatError(`${action} with multiple old memories requires --yes or --dry-run`, ctx.json))
   process.exit(1)
 }
 
@@ -241,7 +241,7 @@ function handleSuggest(ctx: CliContext): void {
 
 async function handleRecall(ctx: CliContext): Promise<void> {
   if (hasFlag(ctx.argv, "id")) {
-    console.log(formatError("Unsupported recall flag: --id. Recall is query search; use `memory-lane show <id>` for exact-id lookup.", ctx.json))
+    console.error(formatError("Unsupported recall flag: --id. Recall is query search; use `memory-lane show <id>` for exact-id lookup.", ctx.json))
     process.exit(1)
   }
   const topK = optionalPositiveInteger(ctx.argv, "top-k", true)
@@ -253,8 +253,12 @@ function handleShow(ctx: CliContext): void {
   const id = requireId(ctx, "show")
   const all = hasFlag(ctx.argv, "all")
   const memory = ctx.engine.getById(id, { all })
-  console.log(formatMemoryGet(id, memory, ctx.json, all))
-  if (!memory) process.exit(1)
+  const output = formatMemoryGet(id, memory, ctx.json, all)
+  if (!memory) {
+    console.error(output)
+    process.exit(1)
+  }
+  console.log(output)
 }
 
 function handleList(ctx: CliContext): void {
@@ -273,7 +277,7 @@ function handleDelete(ctx: CliContext): void {
   const id = requireId(ctx, "delete")
   const mem = ctx.engine.delete(id, { all: hasFlag(ctx.argv, "all"), actor: "cli" })
   if (!mem) {
-    console.log(formatError(`Memory not found: ${id}`, ctx.json))
+    console.error(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
   }
   console.log(formatMutationResult("Deleted", mem, ctx.json))
@@ -283,7 +287,7 @@ function handleApprove(ctx: CliContext): void {
   const id = requireId(ctx, "approve")
   const mem = ctx.engine.approve(id, { all: hasFlag(ctx.argv, "all"), actor: "cli" })
   if (!mem) {
-    console.log(formatError(`Memory not found: ${id}`, ctx.json))
+    console.error(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
   }
   console.log(formatMutationResult("Approved", mem, ctx.json))
@@ -293,7 +297,7 @@ function handleReject(ctx: CliContext): void {
   const id = requireId(ctx, "reject")
   const mem = ctx.engine.reject(id, { all: hasFlag(ctx.argv, "all"), actor: "cli" })
   if (!mem) {
-    console.log(formatError(`Memory not found: ${id}`, ctx.json))
+    console.error(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
   }
   console.log(formatMutationResult("Rejected", mem, ctx.json))
@@ -303,11 +307,11 @@ function handleRescope(ctx: CliContext): void {
   const id = requireId(ctx, "rescope")
   const scopeType = flag(ctx.argv, "scope")
   if (scopeType !== "global" && scopeType !== "project") {
-    console.log(formatError("Usage: memory-lane rescope <id> --scope global|project [--project <path>] [--dry-run|--yes] [--all]", ctx.json))
+    console.error(formatError("Usage: memory-lane rescope <id> --scope global|project [--project <path>] [--dry-run|--yes] [--all]", ctx.json))
     process.exit(1)
   }
   if (!hasFlag(ctx.argv, "dry-run") && !hasFlag(ctx.argv, "yes")) {
-    console.log(formatError("rescope requires --yes or --dry-run", ctx.json))
+    console.error(formatError("rescope requires --yes or --dry-run", ctx.json))
     process.exit(1)
   }
   const all = hasFlag(ctx.argv, "all")
@@ -315,7 +319,7 @@ function handleRescope(ctx: CliContext): void {
     ? ctx.engine.previewRescope(id, { scopeType, projectPath: flag(ctx.argv, "project"), dryRun: true, all })
     : ctx.engine.rescope(id, { scopeType, projectPath: flag(ctx.argv, "project"), all })
   if (!result) {
-    console.log(formatError(`Memory not found: ${id}`, ctx.json))
+    console.error(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
   }
   console.log(formatRescopeResult(result, ctx.json))
@@ -340,13 +344,13 @@ async function handleUpdate(ctx: CliContext): Promise<void> {
   }
   const hasPatch = text !== undefined || Boolean(category) || Boolean(kind) || Boolean(status)
   if (!hasPatch) {
-    console.log(formatError("At least one update field is required: --text/--stdin, --category, --kind, or --status", ctx.json))
+    console.error(formatError("At least one update field is required: --text/--stdin, --category, --kind, or --status", ctx.json))
     process.exit(1)
   }
   if (hasFlag(ctx.argv, "dry-run")) {
     const preview = ctx.engine.previewUpdate(id, patch, { all: hasFlag(ctx.argv, "all") })
     if (!preview) {
-      console.log(formatError(`Memory not found: ${id}`, ctx.json))
+      console.error(formatError(`Memory not found: ${id}`, ctx.json))
       process.exit(1)
     }
     console.log(formatUpdatePreview(preview, ctx.json))
@@ -354,7 +358,7 @@ async function handleUpdate(ctx: CliContext): Promise<void> {
   }
   const mem = ctx.engine.update(id, patch, { all: hasFlag(ctx.argv, "all"), actor: "cli" })
   if (!mem) {
-    console.log(formatError(`Memory not found: ${id}`, ctx.json))
+    console.error(formatError(`Memory not found: ${id}`, ctx.json))
     process.exit(1)
   }
   console.log(formatMutationResult("Updated", mem, ctx.json))
@@ -363,7 +367,7 @@ async function handleUpdate(ctx: CliContext): Promise<void> {
 function handleSupersede(ctx: CliContext): void {
   const [newId, ...oldIds] = ctx.rest
   if (!newId || !oldIds.length) {
-    console.log(formatError("Usage: memory-lane supersede <new-id> <old-id...> [--reason <reason>] [--dry-run] [--yes] [--all]", ctx.json))
+    console.error(formatError("Usage: memory-lane supersede <new-id> <old-id...> [--reason <reason>] [--dry-run] [--yes] [--all]", ctx.json))
     process.exit(1)
   }
   requireYesForMultiple(ctx, oldIds, "supersede")
@@ -379,7 +383,7 @@ function handleSupersede(ctx: CliContext): void {
 async function handleReplace(ctx: CliContext): Promise<void> {
   const oldIds = ctx.rest
   if (!oldIds.length) {
-    console.log(formatError("Usage: memory-lane replace <old-id...> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run] [--yes] [--all]", ctx.json))
+    console.error(formatError("Usage: memory-lane replace <old-id...> --text <text>|--stdin [--category <category>] [--kind <kind>] [--status pending|approved] [--reason <reason>] [--dry-run] [--yes] [--all]", ctx.json))
     process.exit(1)
   }
   requireYesForMultiple(ctx, oldIds, "replace")
@@ -387,7 +391,7 @@ async function handleReplace(ctx: CliContext): Promise<void> {
   const textFromFlag = optionalTextArg(ctx)
   const text = fromStdin ? await readStdin() : textFromFlag
   if (text === undefined) {
-    console.log(formatError("Replacement text required: use --text <text> or --stdin", ctx.json))
+    console.error(formatError("Replacement text required: use --text <text> or --stdin", ctx.json))
     process.exit(1)
   }
   const result = ctx.engine.replace(oldIds, {
@@ -500,11 +504,16 @@ function handleReview(ctx: CliContext): void {
         ? ctx.engine.approve(id, { all: allScope, actor: "cli" })
         : ctx.engine.reject(id, { all: allScope, actor: "cli" }),
     })
-    console.log(formatReviewMutation({
+    const output = formatReviewMutation({
       ...preview,
       ...mutation,
-    }, ctx.json))
-    if (mutation.status === "partial") process.exitCode = 1
+    }, ctx.json)
+    if (mutation.status === "partial") {
+      console.error(output)
+      process.exitCode = 1
+    } else {
+      console.log(output)
+    }
     return
   }
 
@@ -612,7 +621,7 @@ function handleStatus(ctx: CliContext): void {
 function handleTuneup(ctx: CliContext): void {
   const subCmd = ctx.rest[0]?.toLowerCase()
   if (subCmd && subCmd !== "purge") {
-    console.log(formatError("Usage: memory-lane tuneup [purge] [--json]", ctx.json))
+    console.error(formatError("Usage: memory-lane tuneup [purge] [--json]", ctx.json))
     process.exit(2)
   }
   if (subCmd === "purge") {
@@ -666,16 +675,16 @@ async function handleSessionEndCommand(ctx: CliContext): Promise<void> {
   const cfg = loadConfig(ctx.configPath)
   const summaryConfig = cfg.memory?.sessionEndSummary
   if (!summaryConfig?.enabled) {
-    console.log(formatError("Session-end summarization is not enabled. Set memory.sessionEndSummary.enabled in config.", ctx.json))
+    console.error(formatError("Session-end summarization is not enabled. Set memory.sessionEndSummary.enabled in config.", ctx.json))
     process.exit(1)
   }
   if (!summaryConfig.baseUrl || !summaryConfig.model) {
-    console.log(formatError("Session-end summarization requires memory.sessionEndSummary.baseUrl and model.", ctx.json))
+    console.error(formatError("Session-end summarization requires memory.sessionEndSummary.baseUrl and model.", ctx.json))
     process.exit(1)
   }
   const confirmed = hasFlag(ctx.argv, "confirm")
   if (summaryConfig.requireConfirmation && !confirmed) {
-    console.log(formatError("Session-end summarization requires confirmation. Run with --confirm or configure requireConfirmation: false.", ctx.json))
+    console.error(formatError("Session-end summarization requires confirmation. Run with --confirm or configure requireConfirmation: false.", ctx.json))
     process.exit(1)
   }
 
@@ -684,17 +693,17 @@ async function handleSessionEndCommand(ctx: CliContext): Promise<void> {
   try {
     payload = JSON.parse(payloadText)
   } catch {
-    console.log(formatError("Invalid JSON on stdin. Expected { messages: [...], sessionId? }", ctx.json))
+    console.error(formatError("Invalid JSON on stdin. Expected { messages: [...], sessionId? }", ctx.json))
     process.exit(2)
   }
   if (!Array.isArray(payload.messages)) {
-    console.log(formatError("Missing messages array in stdin payload.", ctx.json))
+    console.error(formatError("Missing messages array in stdin payload.", ctx.json))
     process.exit(2)
   }
 
   const provider = createSummaryProvider(cfg)
   if (!provider) {
-    console.log(formatError("Failed to create summary provider.", ctx.json))
+    console.error(formatError("Failed to create summary provider.", ctx.json))
     process.exit(1)
   }
 
@@ -737,7 +746,7 @@ async function handleSessionEndCommand(ctx: CliContext): Promise<void> {
 
 function handleInitCommand(argv: string[], json: boolean): void {
   if (!hasFlag(argv, "project-local")) {
-    console.log(formatError("Usage: memory-lane init --project-local [--project <path>]", json))
+    console.error(formatError("Usage: memory-lane init --project-local [--project <path>]", json))
     process.exit(2)
   }
   const result = initProjectLocalStorage(flag(argv, "project") ?? process.cwd())
@@ -766,8 +775,8 @@ async function handleReindex(ctx: CliContext): Promise<void> {
 
 function showConfig(ctx: ConfigContext): void {
   if (!fs.existsSync(ctx.configPath)) {
-    console.log(formatError("No config file found.", ctx.json))
-    return
+    console.error(formatError("No config file found.", ctx.json))
+    process.exit(1)
   }
   const config = loadConfig(ctx.configPath)
   if (ctx.json) console.log(JSON.stringify(config, null, 2))
@@ -786,7 +795,7 @@ function setSemanticEnabled(ctx: ConfigContext, enabled: boolean): void {
 function setConfigValue(ctx: ConfigContext): void {
   const key = ctx.rest[1]
   if (!key || ctx.rest.length < 3) {
-    console.log(formatError("Usage: memory-lane config set <json-path> <value>", ctx.json))
+    console.error(formatError("Usage: memory-lane config set <json-path> <value>", ctx.json))
     process.exit(2)
   }
   const value = ctx.rest.slice(2).join(" ")
@@ -808,7 +817,7 @@ function handleConfig(ctx: ConfigContext): void {
   const handler = configHandlers[subCmd]
   if (handler) handler(ctx)
   else {
-    console.log(formatError("Usage: memory-lane config [show | enable-semantic | disable-semantic | set <key> <value>]", ctx.json))
+    console.error(formatError("Usage: memory-lane config [show | enable-semantic | disable-semantic | set <key> <value>]", ctx.json))
     process.exit(2)
   }
 }
@@ -816,7 +825,7 @@ function handleConfig(ctx: ConfigContext): void {
 function handleMigrate(ctx: CliContext): void {
   const subCmd = ctx.rest[0]?.toLowerCase()
   if (subCmd !== "project-local") {
-    console.log(formatError("Usage: memory-lane migrate project-local --dry-run [--write-plan <path>] [--json] [--project <path>]", ctx.json))
+    console.error(formatError("Usage: memory-lane migrate project-local --dry-run [--write-plan <path>] [--json] [--project <path>]", ctx.json))
     process.exit(2)
   }
   const applyPlanPath = flag(ctx.argv, "apply-plan")
@@ -826,12 +835,12 @@ function handleMigrate(ctx: CliContext): void {
     try {
       raw = JSON.parse(fs.readFileSync(applyPlanPath, "utf8"))
     } catch {
-      console.log(formatError("Invalid project-local migration plan file.", ctx.json))
+      console.error(formatError("Invalid project-local migration plan file.", ctx.json))
       process.exit(1)
     }
     const plan = raw?.planVersion ? raw : undefined
     if (!plan?.planVersion) {
-      console.log(formatError("Invalid project-local migration plan file.", ctx.json))
+      console.error(formatError("Invalid project-local migration plan file.", ctx.json))
       process.exit(1)
     }
     const applyEngine = plan?.projectRoot
@@ -843,20 +852,24 @@ function handleMigrate(ctx: CliContext): void {
         const preview = JSON.parse(formatLegacyProjectMemoryMigrationPreview(applyEngine.doctor().legacyProjectMemories as any, true, plan, applyPlanPath))
         preview.ok = false
         preview.error = message
-        console.log(JSON.stringify(preview, null, 2))
+        console.error(JSON.stringify(preview, null, 2))
       } else {
-        console.log(formatLegacyProjectMemoryMigrationPreview(applyEngine.doctor().legacyProjectMemories as any, false, plan))
-        console.log(formatError(message, false))
+        console.error(formatLegacyProjectMemoryMigrationPreview(applyEngine.doctor().legacyProjectMemories as any, false, plan))
+        console.error(formatError(message, false))
       }
       process.exit(1)
     }
     const result = applyEngine.applyLegacyProjectMigrationPlan(plan)
-    console.log(formatLegacyProjectMemoryMigrationApply(result, ctx.json))
-    if (result.blocked) process.exit(1)
+    const output = formatLegacyProjectMemoryMigrationApply(result, ctx.json)
+    if (result.blocked) {
+      console.error(output)
+      process.exit(1)
+    }
+    console.log(output)
     return
   }
   if (!hasFlag(ctx.argv, "dry-run")) {
-    console.log(formatError("Mutating project-local migration requires an explicit reviewed plan. Run `memory-lane migrate project-local --dry-run --write-plan <path>` first, review it, then run `memory-lane migrate project-local --apply-plan <path> --yes`.", ctx.json))
+    console.error(formatError("Mutating project-local migration requires an explicit reviewed plan. Run `memory-lane migrate project-local --dry-run --write-plan <path>` first, review it, then run `memory-lane migrate project-local --apply-plan <path> --yes`.", ctx.json))
     process.exit(1)
   }
   const report = ctx.engine.doctor().legacyProjectMemories as any
@@ -878,7 +891,7 @@ const piHookCommands: Record<PiCommand, true> = { input: true, "turn-end": true,
 async function handleCodex(ctx: CliContext): Promise<void> {
   const event = ctx.rest[0]
   if (!codexHookCommands.has(event)) {
-    console.log(formatError("Unknown Codex hook event. Usage: memory-lane codex user-prompt-submit|stop|post-tool-use|session-start|session-end|pre-compact", ctx.json))
+    console.error(formatError("Unknown Codex hook event. Usage: memory-lane codex user-prompt-submit|stop|post-tool-use|session-start|session-end|pre-compact", ctx.json))
     process.exit(2)
   }
   const payloadText = await readStdin()
@@ -894,7 +907,7 @@ async function handleCodex(ctx: CliContext): Promise<void> {
 async function handleClaude(ctx: CliContext): Promise<void> {
   const event = ctx.rest[0]
   if (!claudeHookCommands.has(event)) {
-    console.log(formatError("Unknown Claude hook event. Usage: memory-lane claude user-prompt-submit|stop|post-tool-use|session-start|session-end|pre-compact", ctx.json))
+    console.error(formatError("Unknown Claude hook event. Usage: memory-lane claude user-prompt-submit|stop|post-tool-use|session-start|session-end|pre-compact", ctx.json))
     process.exit(2)
   }
   const payloadText = await readStdin()
@@ -910,7 +923,7 @@ async function handleClaude(ctx: CliContext): Promise<void> {
 async function handlePi(ctx: CliContext): Promise<void> {
   const event = ctx.rest[0]
   if (!Object.hasOwn(piHookCommands, event)) {
-    console.log(formatError("Unknown Pi hook event. Usage: memory-lane pi input|turn-end|post-tool-use|pre-compact", ctx.json))
+    console.error(formatError("Unknown Pi hook event. Usage: memory-lane pi input|turn-end|post-tool-use|pre-compact", ctx.json))
     process.exit(2)
   }
   const payloadText = await readStdin()
@@ -1011,7 +1024,7 @@ const commandHandlers: Record<string, CommandHandler> = {
 async function dispatch(command: string, ctx: CliContext): Promise<void> {
   const handler = commandHandlers[command]
   if (!handler) {
-    console.log(formatError(`Unknown command: ${command}. Run 'memory-lane help' for usage.`, ctx.json))
+    console.error(formatError(`Unknown command: ${command}. Run 'memory-lane help' for usage.`, ctx.json))
     process.exit(2)
   }
   await handler(ctx)
@@ -1049,7 +1062,7 @@ async function main(): Promise<void> {
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      console.log(formatError(msg, json))
+      console.error(formatError(msg, json))
       process.exit(1)
     }
     process.exit(0)
@@ -1060,7 +1073,7 @@ async function main(): Promise<void> {
       await handleUninstall(argv)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      console.log(formatError(msg, json))
+      console.error(formatError(msg, json))
       process.exit(1)
     }
     process.exit(0)
@@ -1071,7 +1084,7 @@ async function main(): Promise<void> {
       await handleUpgrade(argv)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      console.log(formatError(msg, json))
+      console.error(formatError(msg, json))
       process.exit(1)
     }
     process.exit(0)
@@ -1088,7 +1101,7 @@ async function main(): Promise<void> {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     if (isHookInvocation(command)) failSafeHookInitialization(msg)
-    console.log(formatError(`Failed to resolve storage paths: ${msg}`, json))
+    console.error(formatError(`Failed to resolve storage paths: ${msg}`, json))
     process.exit(1)
   }
   const configPath = paths.configPath || resolveConfigPath()
@@ -1098,7 +1111,7 @@ async function main(): Promise<void> {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       const message = err instanceof SyntaxError ? `Invalid config file ${configPath}: ${msg}` : msg
-      console.log(formatError(message, json))
+      console.error(formatError(message, json))
       process.exit(1)
     }
     process.exit(0)
@@ -1110,7 +1123,7 @@ async function main(): Promise<void> {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     if (isHookInvocation(command)) failSafeHookInitialization(msg)
-    console.log(formatError(`Failed to initialize engine: ${msg}`, json))
+    console.error(formatError(`Failed to initialize engine: ${msg}`, json))
     process.exit(1)
   }
 
@@ -1120,7 +1133,7 @@ async function main(): Promise<void> {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     if (isHookInvocation(command)) failSafeHookInitialization(msg)
-    console.log(formatError(`Failed to load config: ${msg}`, json))
+    console.error(formatError(`Failed to load config: ${msg}`, json))
     process.exit(1)
   }
 
@@ -1137,7 +1150,7 @@ async function main(): Promise<void> {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     if (isHookInvocation(command)) failSafeHookInitialization(msg)
-    console.log(formatError(`Failed to load plugins: ${msg}`, json))
+    console.error(formatError(`Failed to load plugins: ${msg}`, json))
     process.exit(1)
   }
 
@@ -1163,7 +1176,7 @@ async function main(): Promise<void> {
     const details = err instanceof EmbeddingProviderDiagnosticError
       ? { embeddingProviderHealth: err.diagnostic }
       : undefined
-    console.log(formatError(msg, json, details))
+    console.error(formatError(msg, json, details))
     process.exit(1)
   }
   // Force clean exit in case any dependency leaves handles alive (e.g. compiled binary).

@@ -6,7 +6,7 @@ import * as http from "node:http"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import { tempDir } from "../../core/test/helpers.js"
 import { MemoryEngine, type ContinuityMemoryPreview, type ContinuityReadModel, type MemoryRecord } from "@memory-lane/core"
 import { formatContinuityReadModel, formatMemoryGet } from "../src/formatters.ts"
@@ -202,6 +202,28 @@ describe("config command", () => {
     })
   })
 
+  it("reports a missing config on stderr with a non-zero exit", () => {
+    const { env } = configFixture()
+
+    const result = runProcess(["config", "show"], { env })
+
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, "")
+    assert.equal(result.stderr, "Error: No config file found.\n")
+  })
+
+  it("reports a missing config as JSON on stderr with a non-zero exit", () => {
+    const { env } = configFixture()
+
+    const result = runProcess(["config", "show", "--json"], { env })
+
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, "")
+    const payload = JSON.parse(result.stderr)
+    assert.equal(payload.ok, false)
+    assert.equal(payload.error, "No config file found.")
+  })
+
   it("rejects invalid numeric writes without changing the config file", () => {
     const { env, configPath } = configFixture()
     const original = JSON.stringify({ semantic: { retrieval: { topK: 8 } } }, null, 2) + "\n"
@@ -210,7 +232,8 @@ describe("config command", () => {
     const result = runProcess(["config", "set", "semantic.retrieval.topK", "banana"], { env })
 
     assert.equal(result.status, 1)
-    assert.match(result.stdout, /semantic\.retrieval\.topK must be finite number/u)
+    assert.equal(result.stdout, "")
+    assert.match(result.stderr, /semantic\.retrieval\.topK must be finite number/u)
     assert.equal(fs.readFileSync(configPath, "utf8"), original)
   })
 
@@ -222,7 +245,8 @@ describe("config command", () => {
     const result = runProcess(["config", "set", "semantic.privacy.allowRemoteEmbeddings", "maybe"], { env })
 
     assert.equal(result.status, 1)
-    assert.match(result.stdout, /semantic\.privacy\.allowRemoteEmbeddings must be boolean/u)
+    assert.equal(result.stdout, "")
+    assert.match(result.stderr, /semantic\.privacy\.allowRemoteEmbeddings must be boolean/u)
     assert.equal(fs.readFileSync(configPath, "utf8"), original)
   })
 
@@ -234,7 +258,8 @@ describe("config command", () => {
     const result = runProcess(["config", "set", "semantic.retrieval", "{\"topK\":\"bad\"}"], { env })
 
     assert.equal(result.status, 1)
-    assert.match(result.stdout, /semantic\.retrieval\.topK must be finite number/u)
+    assert.equal(result.stdout, "")
+    assert.match(result.stderr, /semantic\.retrieval\.topK must be finite number/u)
     assert.equal(fs.readFileSync(configPath, "utf8"), original)
   })
 
@@ -244,7 +269,8 @@ describe("config command", () => {
     const result = runProcess(["config", "set", "semantic.retrieval.minSimilarity"], { env })
 
     assert.equal(result.status, 2)
-    assert.match(result.stdout, /Usage: memory-lane config set <json-path> <value>/u)
+    assert.equal(result.stdout, "")
+    assert.match(result.stderr, /Usage: memory-lane config set <json-path> <value>/u)
     assert.equal(fs.existsSync(configPath), false)
   })
 
@@ -267,8 +293,9 @@ describe("config command", () => {
     const result = runProcess(["config", "show"], { env })
 
     assert.equal(result.status, 1)
-    assert.match(result.stdout, new RegExp(escapeRegExp(configPath), "u"))
-    assert.match(result.stdout, /Expected property name|JSON/u)
+    assert.equal(result.stdout, "")
+    assert.match(result.stderr, new RegExp(escapeRegExp(configPath), "u"))
+    assert.match(result.stderr, /Expected property name|JSON/u)
   })
 })
 
@@ -496,6 +523,74 @@ describe("CLI integration", () => {
       assert.equal(result.stdout.trim(), "9.8.7")
       assert.equal(result.stderr, "")
     }
+  })
+
+  it("writes human-readable failures to stderr without contaminating stdout", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+      NO_COLOR: "1",
+    }
+
+    const result = runProcess(["show", "missing-id"], { env })
+
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, "")
+    assert.equal(result.stderr, [
+      "Memory not found: missing-id",
+      "Use --all to search across projects and deleted/rejected memories.",
+      "",
+    ].join("\n"))
+  })
+
+  it("writes JSON failures to stderr as parseable payloads", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const result = runProcess(["recall", "--top-k", "0", "--json"], { env })
+
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, "")
+    const payload = JSON.parse(result.stderr)
+    assert.equal(payload.ok, false)
+    assert.equal(payload.error, "Invalid --top-k: 0. Expected a positive integer.")
+  })
+
+  it("keeps successful JSON output on stdout", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const result = runProcess(["list", "--json"], { env })
+
+    assert.equal(result.status, 0)
+    assert.equal(result.stderr, "")
+    const payload = JSON.parse(result.stdout)
+    assert.equal(payload.ok, true)
+    assert.deepEqual(payload.data.memories, [])
+  })
+
+  it("writes startup JSON failures to stderr without partial stdout", () => {
+    const env = {
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+    fs.writeFileSync(cfgFile, "{not-json", "utf8")
+
+    const result = runProcess(["list", "--json"], { env })
+
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, "")
+    const payload = JSON.parse(result.stderr)
+    assert.equal(payload.ok, false)
+    assert.match(payload.error, /Failed to (?:initialize engine|load config)/u)
   })
 
   it("save and list", () => {
@@ -732,7 +827,8 @@ describe("CLI integration", () => {
     const result = runProcess(["save", "Bad stale days", "--stale-after-days", "0", "--json"], { env })
 
     assert.notEqual(result.status, 0)
-    assert.match(result.stdout, /Invalid --stale-after-days/u)
+    assert.equal(result.stdout, "")
+    assert.match(result.stderr, /Invalid --stale-after-days/u)
   })
 
   it("save rejects freshness timestamp flags without values", () => {
@@ -744,7 +840,8 @@ describe("CLI integration", () => {
     const result = runProcess(["save", "Missing expiration", "--expires-at", "--json"], { env })
 
     assert.notEqual(result.status, 0)
-    assert.match(result.stdout, /Invalid --expires-at: missing value/u)
+    assert.equal(result.stdout, "")
+    assert.match(result.stderr, /Invalid --expires-at: missing value/u)
   })
 
   it("human list and review output show compact freshness labels", () => {
@@ -864,7 +961,8 @@ describe("CLI integration", () => {
     }
     for (const [command, result] of Object.entries(refused)) {
       assert.notEqual(result.status, 0, `${command} unexpectedly succeeded`)
-      const payload = JSON.parse(result.stdout)
+      assert.equal(result.stdout, "", command)
+      const payload = JSON.parse(result.stderr)
       assert.equal(payload.ok, false, command)
       assert.match(payload.error, /Memory not found/u, command)
     }
@@ -1024,7 +1122,8 @@ describe("CLI integration", () => {
     }
     for (const [command, result] of Object.entries(denied)) {
       assert.notEqual(result.status, 0, `${command} unexpectedly succeeded`)
-      const payload = JSON.parse(result.stdout)
+      assert.equal(result.stdout, "", command)
+      const payload = JSON.parse(result.stderr)
       assert.equal(payload.ok, false, command)
       assert.match(payload.error, /memory not found/u, command)
     }
@@ -1238,11 +1337,13 @@ describe("CLI integration", () => {
     assert.ok(fs.existsSync(planPath))
     assert.match(plan.stdout, /Warning: the plan file may contain memory text/u)
     assert.notEqual(applyWithoutYes.status, 0)
-    assert.match(applyWithoutYes.stdout + applyWithoutYes.stderr, /requires --yes/u)
-    assert.match(applyWithoutYes.stdout, /2 active home-stored candidate\(s\) for project migration-scope/u)
-    assert.doesNotMatch(applyWithoutYes.stdout, /Wrote review plan/u)
+    assert.equal(applyWithoutYes.stdout, "")
+    assert.match(applyWithoutYes.stderr, /requires --yes/u)
+    assert.match(applyWithoutYes.stderr, /2 active home-stored candidate\(s\) for project migration-scope/u)
+    assert.doesNotMatch(applyWithoutYes.stderr, /Wrote review plan/u)
     assert.notEqual(applyJsonWithoutYes.status, 0)
-    const applyJsonPreview = JSON.parse(applyJsonWithoutYes.stdout)
+    assert.equal(applyJsonWithoutYes.stdout, "")
+    const applyJsonPreview = JSON.parse(applyJsonWithoutYes.stderr)
     assert.equal(applyJsonPreview.ok, false)
     assert.match(applyJsonPreview.error, /requires --yes/u)
     assert.equal(applyJsonPreview.data.legacyProjectMemories.totalLegacyCandidateCount, 2)
@@ -2326,11 +2427,13 @@ describe("CLI integration", () => {
 
     const mismatched = runProcess(["review", "--all", "--signal", "contains-question", "--action", "reject", "--confirm-ids", "local-question", "--yes", "--confirm-global"], { env, cwd: project })
     assert.equal(mismatched.status, 1)
-    assert.match(mismatched.stdout, /does not match the exact filtered memory IDs/u)
+    assert.equal(mismatched.stdout, "")
+    assert.match(mismatched.stderr, /does not match the exact filtered memory IDs/u)
 
     const missingBroadConfirmation = runProcess(["review", "--all", "--signal", "contains-question", "--action", "reject", "--confirm-ids", plan.confirmationIds, "--yes"], { env, cwd: project })
     assert.equal(missingBroadConfirmation.status, 1)
-    assert.match(missingBroadConfirmation.stdout, /requires --confirm-global/u)
+    assert.equal(missingBroadConfirmation.stdout, "")
+    assert.match(missingBroadConfirmation.stderr, /requires --confirm-global/u)
 
     const before = JSON.parse(runProcess(["list", "--status", "pending", "--all", "--json"], { env, cwd: project }).stdout)
     assert.equal(before.data.memories.length, 3)
@@ -2340,6 +2443,52 @@ describe("CLI integration", () => {
     assert.equal(JSON.parse(applied.stdout).data.reviewMutation.status, "applied")
     const rejected = JSON.parse(runProcess(["list", "--status", "rejected", "--all", "--json"], { env, cwd: project }).stdout)
     assert.deepEqual(rejected.data.memories.map((memory: MemoryRecord) => memory.id), plan.memoryIds)
+  })
+
+  it("writes partially applied grouped review failures only to stderr", () => {
+    const project = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "partial-mutation-project" }))
+    const env = { MEMORY_LANE_FILE: memFile, MEMORY_LANE_EMBEDDINGS_FILE: embFile, MEMORY_LANE_CONFIG: cfgFile }
+    writeMemoryRecords(memFile, [
+      { id: "partial-first", text: "Should we keep the first choice?", category: "project", scope: { type: "project", key: "partial-mutation-project" }, status: "pending", source: "agent-suggested", kind: "project_fact", createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" },
+      { id: "partial-second", text: "Should we keep the second choice?", category: "project", scope: { type: "project", key: "partial-mutation-project" }, status: "pending", source: "agent-suggested", kind: "project_fact", createdAt: "2026-07-01T00:00:01.000Z", updatedAt: "2026-07-01T00:00:01.000Z" },
+      { id: "partial-third", text: "Should we keep the third choice?", category: "project", scope: { type: "project", key: "partial-mutation-project" }, status: "pending", source: "agent-suggested", kind: "project_fact", createdAt: "2026-07-01T00:00:02.000Z", updatedAt: "2026-07-01T00:00:02.000Z" },
+    ])
+    const preloadPath = path.join(tempDir(), "fail-second-review-rejection.mjs")
+    const coreUrl = pathToFileURL(path.resolve(__dirname, "../../core/dist/index.js")).href
+    fs.writeFileSync(preloadPath, [
+      `import { MemoryEngine } from ${JSON.stringify(coreUrl)}`,
+      "const originalReject = MemoryEngine.prototype.reject",
+      "let rejectionCount = 0",
+      "MemoryEngine.prototype.reject = function (...args) {",
+      "  rejectionCount += 1",
+      "  if (rejectionCount === 2) throw new Error('simulated grouped review storage failure')",
+      "  return originalReject.apply(this, args)",
+      "}",
+      "",
+    ].join("\n"), "utf8")
+    const confirmationIds = "partial-first,partial-second,partial-third"
+
+    const result = runProcess([
+      "review", "--signal", "contains-question", "--action", "reject",
+      "--confirm-ids", confirmationIds, "--yes", "--json",
+    ], {
+      env: {
+        ...env,
+        NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${pathToFileURL(preloadPath).href}`.trim(),
+      },
+      cwd: project,
+    })
+
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, "")
+    const payload = JSON.parse(result.stderr)
+    assert.equal(payload.ok, false)
+    assert.equal(payload.data.reviewMutation.status, "partial")
+    assert.deepEqual(payload.data.reviewMutation.appliedMemoryIds, ["partial-first"])
+    assert.deepEqual(payload.data.reviewMutation.uncertainMemoryIds, ["partial-second"])
+    assert.deepEqual(payload.data.reviewMutation.remainingMemoryIds, ["partial-third"])
+    assert.match(payload.data.reviewMutation.error, /simulated grouped review storage failure/u)
   })
 
   it("grouped review mutation applies a confirmed current-project approval without broad-scope confirmation", () => {
@@ -2889,7 +3038,6 @@ describe("CLI integration", () => {
       ["list", "--json"],
       ["search", "nothing", "--json"],
       ["review", "--json"],
-      ["config", "show", "--json"],
       ["obsidian", "status", "--json"],
       ["mcp"],
     ]
@@ -2898,6 +3046,11 @@ describe("CLI integration", () => {
       const result = runProcess([...args, "--project", project], { env })
       assert.equal(result.status, 0, `${args[0]} stderr=${result.stderr} stdout=${result.stdout}`)
     }
+
+    const config = runProcess(["config", "show", "--json", "--project", project], { env })
+    assert.equal(config.status, 1, `config stderr=${config.stderr} stdout=${config.stdout}`)
+    assert.equal(config.stdout, "")
+    assert.equal(JSON.parse(config.stderr).error, "No config file found.")
 
     assert.equal(fs.existsSync(path.join(project, ".memory-lane")), false)
     assert.equal(fs.existsSync(path.join(project, ".gitignore")), false)
@@ -3124,7 +3277,8 @@ describe("CLI integration", () => {
 
       const reindex = await runProcessAsync(["reindex", "--json"], { env })
       assert.equal(reindex.status, 1, reindex.stderr || reindex.stdout)
-      const reindexPayload = JSON.parse(reindex.stdout)
+      assert.equal(reindex.stdout, "")
+      const reindexPayload = JSON.parse(reindex.stderr)
       assert.equal(reindexPayload.ok, false)
       assert.equal(reindexPayload.data.embeddingProviderHealth.failure.class, "authentication-failure")
       assert.equal(reindexPayload.data.embeddingProviderHealth.failure.httpStatus, 401)
@@ -3135,7 +3289,7 @@ describe("CLI integration", () => {
       const doctorPayload = JSON.parse(doctorResult.stdout)
       assert.deepEqual(doctorPayload.data.embeddingProviderHealth, reindexPayload.data.embeddingProviderHealth)
 
-      const combined = reindex.stdout + doctorResult.stdout
+      const combined = reindex.stderr + doctorResult.stdout
       assert.doesNotMatch(combined, /SUPER_SECRET_API_KEY|SENSITIVE_PROVIDER_RESPONSE_BODY|Authorization|Bearer/u)
     })
   })
@@ -3173,7 +3327,8 @@ describe("CLI integration", () => {
 
     const result = runProcess(["reindex", "--json"], { env })
     assert.equal(result.status, 1, result.stderr || result.stdout)
-    const payload = JSON.parse(result.stdout)
+    assert.equal(result.stdout, "")
+    const payload = JSON.parse(result.stderr)
     assert.equal(payload.data.embeddingProviderHealth.failure.class, "connection-refused")
     assert.equal(payload.data.embeddingProviderHealth.endpoint, baseUrl)
     assert.match(payload.data.embeddingProviderHealth.recoveryAction, /Start the configured local embedding service/u)
@@ -4378,8 +4533,9 @@ describe("CLI integration", () => {
 
     const hidden = runProcess(["get", idB, "--json", "--project", projectA], { env })
     assert.equal(hidden.status, 1)
-    assert.match(hidden.stdout, /not_found/u)
-    assert.match(hidden.stdout, /--all/u)
+    assert.equal(hidden.stdout, "")
+    assert.match(hidden.stderr, /not_found/u)
+    assert.match(hidden.stderr, /--all/u)
 
     const shownAll = JSON.parse(run(["get", idB, "--all", "--json", "--project", projectA], env))
     assert.equal(shownAll.data.memory.text, "Project B show text")
@@ -4388,8 +4544,9 @@ describe("CLI integration", () => {
   it("rejects recall --id and suggests show", () => {
     const result = runProcess(["recall", "--id", "abc123", "--json"])
     assert.equal(result.status, 1)
-    assert.match(result.stdout, /Unsupported recall flag: --id/u)
-    assert.match(result.stdout, /memory-lane show <id>/u)
+    assert.equal(result.stdout, "")
+    assert.match(result.stderr, /Unsupported recall flag: --id/u)
+    assert.match(result.stderr, /memory-lane show <id>/u)
   })
 
   it("rescopes exact ids with dry-run and --yes while preserving the same id", () => {
@@ -4405,7 +4562,8 @@ describe("CLI integration", () => {
 
     const missingConfirmation = runProcess(["rescope", id, "--scope", "project", "--project", projectB, "--json"], { env })
     assert.equal(missingConfirmation.status, 1)
-    assert.match(missingConfirmation.stdout, /requires --yes or --dry-run/u)
+    assert.equal(missingConfirmation.stdout, "")
+    assert.match(missingConfirmation.stderr, /requires --yes or --dry-run/u)
 
     const preview = JSON.parse(run(["move", id, "--scope", "project", "--project", projectB, "--dry-run", "--json"], env))
     assert.equal(preview.data.dryRun, true)

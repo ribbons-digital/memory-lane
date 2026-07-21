@@ -209,7 +209,7 @@ function installPreviouslyConfigured(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       results.push({ harness, configured: false, message })
-      console.log(`  ✗ ${harness} failed: ${message}`)
+      console.error(`  ✗ ${harness} failed: ${message}`)
     }
   }
   return { results, replacements }

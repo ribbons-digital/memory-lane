@@ -323,7 +323,7 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
         integrations.push({ harness, configured: false, message })
-        console.log(`  ✗ ${harnessName(harness)} failed: ${message}`)
+        console.error(`  ✗ ${harnessName(harness)} failed: ${message}`)
       }
     }
 
@@ -331,9 +331,9 @@ export async function handleInit(argv: string[]): Promise<InitResult> {
     const result: InitResult = { binaryPath, dataDir, integrations, failedIntegrations }
     persistInstallManifest(options, result, previousIntegrations)
     if (failedIntegrations.length) {
-      console.log("\nMemory Lane init completed with errors.")
-      console.log(`Failed integrations: ${failedIntegrations.map((integration) => harnessName(integration.harness)).join(", ")}`)
-      console.log(`Data directory: ${dataDir}`)
+      console.error("\nMemory Lane init completed with errors.")
+      console.error(`Failed integrations: ${failedIntegrations.map((integration) => harnessName(integration.harness)).join(", ")}`)
+      console.error(`Data directory: ${dataDir}`)
       return result
     }
 
