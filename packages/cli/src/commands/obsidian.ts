@@ -40,7 +40,7 @@ function obsidianConfigRequiredMessage(): string {
 function requireConfiguredObsidian(ctx: CliContext): ObsidianConfig & { vaultPath: string } {
   const cfg = configuredObsidian(ctx)
   if (cfg.enabled && cfg.vaultPath) return cfg as ObsidianConfig & { vaultPath: string }
-  console.log(formatError(obsidianConfigRequiredMessage(), ctx.json))
+  console.error(formatError(obsidianConfigRequiredMessage(), ctx.json))
   process.exit(1)
 }
 
@@ -168,7 +168,7 @@ function handleObsidianStatus(ctx: CliContext): void {
 function requireVaultArg(ctx: CliContext): string {
   const vault = flag(ctx.argv, "vault")
   if (vault && vault !== "true") return vault
-  console.log(formatError("Usage: memory-lane obsidian init --vault <path> [--folder <folder>]", ctx.json))
+  console.error(formatError("Usage: memory-lane obsidian init --vault <path> [--folder <folder>]", ctx.json))
   process.exit(2)
 }
 
@@ -191,14 +191,18 @@ function handleObsidianInit(ctx: CliContext): void {
   const folder = flag(ctx.argv, "folder") ?? "Memory Lane"
   const init = initObsidianMirror({ vaultPath, folder })
   if (!init.ok) {
-    console.log(formatError(failedInitMessage(init.warnings), ctx.json))
+    console.error(formatError(failedInitMessage(init.warnings), ctx.json))
     process.exit(1)
   }
 
   writeConfig(ctx.configPath, { obsidian: { enabled: true, vaultPath, folder, mode: "mirror" } })
   const sync = syncObsidianMirror({ vaultPath, folder }, ctx.engine.list({ all: true }))
-  console.log(formatObsidianInitSync(init, sync, ctx.json))
-  if (!sync.ok) process.exit(1)
+  const output = formatObsidianInitSync(init, sync, ctx.json)
+  if (!sync.ok) {
+    console.error(output)
+    process.exit(1)
+  }
+  console.log(output)
 }
 
 function syncLabel(dryRun: boolean, pastLabel: string, futureLabel: string): string {
@@ -221,8 +225,12 @@ function handleObsidianSync(ctx: CliContext): void {
   const cfg = requireConfiguredObsidian(ctx)
   const dryRun = hasFlag(ctx.argv, "dry-run")
   const result = syncObsidianMirror({ vaultPath: cfg.vaultPath, folder: cfg.folder }, ctx.engine.list({ all: true }), { dryRun })
-  console.log(formatObsidianSync(result, dryRun, ctx.json))
-  if (!result.ok) process.exit(1)
+  const output = formatObsidianSync(result, dryRun, ctx.json)
+  if (!result.ok) {
+    console.error(output)
+    process.exit(1)
+  }
+  console.log(output)
 }
 
 async function handleObsidianImport(ctx: CliContext): Promise<void> {
@@ -261,6 +269,6 @@ export async function handleObsidian(ctx: CliContext): Promise<void> {
     return
   }
 
-  console.log(formatError("Usage: memory-lane obsidian init|status|sync|import", ctx.json))
+  console.error(formatError("Usage: memory-lane obsidian init|status|sync|import", ctx.json))
   process.exit(2)
 }

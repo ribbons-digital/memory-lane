@@ -68,6 +68,13 @@ memory-lane mcp                   Run the bundled stdio MCP server (used by inst
 All commands support `--json` for machine-readable output and `--project <path>` to set the project scope.
 `memory-lane save` accepts `--kind` to override text-based kind inference; valid values are `preference`, `personal_context`, `project_fact`, `project_checkpoint`, `workflow_rule`, `decision`, `correction`, `procedure`, `session_summary`, and `misc`.
 
+## Output streams
+
+Successful command output is written to stdout, including successful `--json` payloads.
+Failure output is written to stderr so stdout remains safe for scripts and pipelines.
+With `--json`, a failure writes its machine-readable `{ "ok": false, ... }` payload to stderr and leaves stdout empty.
+Callers should use the process exit status to distinguish success from failure, then parse JSON from stdout on success or stderr on failure.
+
 ## Upgrade and uninstall behavior
 
 `memory-lane upgrade` preserves memory data and reapplies manifest-recorded integrations with the newly installed binary.

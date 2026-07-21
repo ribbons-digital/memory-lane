@@ -1098,7 +1098,8 @@ esac
       PI_CODING_AGENT_DIR: agentDir,
     })
     assert.equal(result.status, 1)
-    assert.match(result.stdout, /Invalid JSON in install manifest/u)
+    assert.equal(result.stdout, "")
+    assert.match(result.stderr, /Invalid JSON in install manifest/u)
     assert.equal(fs.existsSync(path.join(agentDir, "extensions", "memory-lane", "index.ts")), false)
     assert.equal(fs.readFileSync(path.join(dataDir, "install.json"), "utf8"), "{")
   })
@@ -1199,8 +1200,8 @@ esac
     assert.equal(fs.readFileSync(configPath, "utf8"), "{bad json")
     assert.equal(fs.existsSync(`${configPath}.memory-lane.bak`), false)
     assert.equal(result.status, 1)
-    assert.match(result.stdout, /Claude Code CLI failed: Could not parse JSON config/u)
-    assert.match(result.stdout, /Memory Lane init completed with errors/u)
+    assert.match(result.stderr, /Claude Code CLI failed: Could not parse JSON config/u)
+    assert.match(result.stderr, /Memory Lane init completed with errors/u)
     assert.doesNotMatch(result.stdout, /Done\. Memory Lane is ready\./u)
   })
 
@@ -1215,9 +1216,11 @@ esac
     })
 
     assert.equal(result.status, 1)
-    assert.match(result.stdout, /Claude Code CLI failed: Could not parse JSON config/u)
-    assert.match(result.stdout, /Memory Lane init completed with errors/u)
-    assert.doesNotMatch(result.stdout, /Done\. Memory Lane is ready\./u)
+    assert.equal(result.stdout, "")
+    assert.match(result.stderr, /Claude Code CLI failed: Could not parse JSON config/u)
+    assert.match(result.stderr, /Memory Lane init completed with errors/u)
+    assert.match(result.stderr, /Failed integrations: Claude Code CLI/u)
+    assert.doesNotMatch(result.stderr, /Done\. Memory Lane is ready\./u)
   })
 
   it("leaves non-object JSON hook config untouched", () => {
@@ -1233,8 +1236,8 @@ esac
     assert.equal(fs.readFileSync(configPath, "utf8"), "null")
     assert.equal(fs.existsSync(`${configPath}.memory-lane.bak`), false)
     assert.equal(result.status, 1)
-    assert.match(result.stdout, /Claude Code CLI failed: Could not parse JSON config/u)
-    assert.match(result.stdout, /Memory Lane init completed with errors/u)
+    assert.match(result.stderr, /Claude Code CLI failed: Could not parse JSON config/u)
+    assert.match(result.stderr, /Memory Lane init completed with errors/u)
     assert.doesNotMatch(result.stdout, /Done\. Memory Lane is ready\./u)
   })
 
