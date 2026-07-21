@@ -64,9 +64,15 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Test Windows config paths and deferred uninstall identity
-        run: node --test --import tsx packages/cli/test/mcp.test.ts packages/cli/test/uninstall-binary.test.ts
+      - name: Test Windows config paths, cleanup retries, and deferred uninstall identity
+        run: node --test --import tsx packages/cli/test/mcp.test.ts packages/cli/test/uninstall-binary.test.ts packages/cli/test/windows-smoke-cleanup.test.ts
 
-      - name: Exercise running executable replacement and removal
-        timeout-minutes: 10
-        run: node --import tsx scripts/windows-self-maintenance-smoke.ts
+      - name: Exercise running executable replacement and removal repeatedly
+        timeout-minutes: 30
+        shell: pwsh
+        run: |
+          for ($attempt = 1; $attempt -le 2; $attempt++) {
+            Write-Host "Windows self-maintenance smoke attempt $attempt of 2"
+            node --import tsx scripts/windows-self-maintenance-smoke.ts
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }

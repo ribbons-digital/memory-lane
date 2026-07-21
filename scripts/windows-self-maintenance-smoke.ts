@@ -15,6 +15,7 @@ import {
   WINDOWS_COMMITTED_CLEANUP_TIMEOUT_MS,
   WINDOWS_INSTALLER_HANDSHAKE_TIMEOUT_MS,
 } from "../packages/cli/src/commands/windows-upgrade.js"
+import { runWithWindowsSmokeCleanup } from "./windows-smoke-cleanup.js"
 
 interface ProcessResult {
   code: number | null
@@ -191,7 +192,7 @@ async function main(): Promise<void> {
   fs.writeFileSync(invalidSource, "if (process.argv.includes('--smoke-test')) process.exit(7)\n", "utf8")
 
   let runningOldBinary: ChildProcess | undefined
-  try {
+  await runWithWindowsSmokeCleanup(root, async () => {
     run("bun", ["build", "--compile", "--target", "bun-windows-x64", oldSource, "--outfile", installPath], { cwd: repo })
     run("bun", ["build", "--compile", "--target", "bun-windows-x64", invalidSource, "--outfile", invalidReplacementPath], { cwd: repo })
     run("bun", [
@@ -379,15 +380,16 @@ async function main(): Promise<void> {
       },
     })
     assert.equal(spawnSync(path.join(standaloneDir, "memory-lane.exe"), ["--smoke-test"]).status, 0)
-    console.log("Windows self-maintenance smoke passed")
-  } finally {
-    if (runningOldBinary && runningOldBinary.exitCode === null && runningOldBinary.signalCode === null) {
-      const exited = waitForExit(runningOldBinary)
-      runningOldBinary.kill()
-      await exited
-    }
-    fs.rmSync(root, { recursive: true, force: true })
-  }
+  }, {
+    beforeRemove: async () => {
+      if (runningOldBinary && runningOldBinary.exitCode === null && runningOldBinary.signalCode === null) {
+        const exited = waitForExit(runningOldBinary)
+        runningOldBinary.kill()
+        await exited
+      }
+    },
+  })
+  console.log("Windows self-maintenance smoke passed")
 }
 
 main().catch((error) => {
