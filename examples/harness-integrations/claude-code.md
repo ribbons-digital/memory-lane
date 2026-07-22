@@ -24,7 +24,7 @@ When `init` writes JSON config, it preserves unrelated settings and hooks, repla
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup",
+        "matcher": "startup|resume|clear|compact|fork",
         "hooks": [
           {
             "type": "command",
@@ -134,7 +134,7 @@ For isolated testing, prefer absolute temp paths in hook commands, for example `
 
 ## What each hook does
 
-`SessionStart` injects compact session-opening context when a new Claude Code session begins.
+`SessionStart` injects compact session-opening context for new, resumed, cleared, post-compaction, and forked Claude Code sessions.
 In `selective` mode, it can include tiny always-on memory bodies plus `Memory Index` descriptor cards that point to exact `memory-lane show|get <id>` inspection; descriptor cards use stored metadata when present and generated previews otherwise.
 Tiny memory bodies are XML-escaped and rendered as nested Markdown blockquotes, and descriptor fields are compacted to one escaped line.
 It uses a stricter rendered-context budget than `UserPromptSubmit` and does not dump the full project history.

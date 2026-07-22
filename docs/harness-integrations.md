@@ -165,6 +165,7 @@ memory-lane claude pre-compact
 ```
 
 `SessionStart` injects a compact session-opening context when allowed by `memory.contextPolicy.mode`: tiny always-on bodies plus `Memory Index` descriptor cards in `selective` mode, and guidance without memory bodies in `policy-only` mode.
+The installed Claude Code matcher runs this baseline injection for new, resumed, cleared, post-compaction, and forked sessions.
 `UserPromptSubmit` follows the same context policy: `off` suppresses injection, `policy-only` emits guidance without memory bodies, and `selective` injects a small relevant-memory block for ordinary or topic-specific prompts while suppressing ordinary recall bodies for broad `project-position` and `next-work` continuity prompts.
 When memory bodies are injected, they use the escaped nested-blockquote renderer described above.
 `Stop`, `PreCompact`, and `PostToolUse` save useful memories externally and remain quiet when nothing pending was suggested.
