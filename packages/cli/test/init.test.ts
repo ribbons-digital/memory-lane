@@ -1162,6 +1162,10 @@ esac
       JSON.stringify({
         theme: "dark",
         hooks: {
+          SessionStart: [
+            { matcher: "resume", hooks: [{ type: "command", command: "echo keep-session-start" }] },
+            { matcher: "startup", hooks: [{ type: "command", command: `/old/path/bin/memory-lane claude session-start` }] },
+          ],
           Stop: [
             { hooks: [{ type: "command", command: "echo keep-me" }] },
             { hooks: [{ type: "command", command: `/old/path/bin/memory-lane claude stop` }] },
@@ -1179,6 +1183,10 @@ esac
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"))
     assert.equal(config.theme, "dark")
     assert.ok(config.hooks.UserPromptSubmit)
+    assert.equal(config.hooks.SessionStart.length, 2)
+    assert.equal(config.hooks.SessionStart[0].hooks[0].command, "echo keep-session-start")
+    assert.equal(config.hooks.SessionStart[1].matcher, "startup|resume|clear|compact|fork")
+    assert.equal(config.hooks.SessionStart[1].hooks[0].command, `${binaryPath} claude session-start`)
     assert.equal(config.hooks.Stop.length, 2)
     assert.equal(config.hooks.Stop[0].hooks[0].command, "echo keep-me")
     assert.equal(config.hooks.Stop[1].hooks[0].command, `${binaryPath} claude stop`)
@@ -1345,6 +1353,7 @@ esac
     assert.ok(config.hooks.UserPromptSubmit)
     assert.ok(config.hooks.Stop)
     assert.ok(config.hooks.PostToolUse)
+    assert.deepEqual(config.hooks.SessionStart[0].matcher.split("|"), ["startup", "resume", "clear", "compact", "fork"])
     assert.ok(config.hooks.SessionStart[0].hooks[0].command.includes(`${binaryPath} claude session-start`))
   })
 

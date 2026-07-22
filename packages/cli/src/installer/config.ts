@@ -136,11 +136,12 @@ function mergeHooks(existing: Record<string, unknown>, harness: "claude" | "code
   const isClaude = harness === "claude"
   const timeoutKey = isClaude ? "timeout" : "timeoutSec"
   const postToolMatcher = isClaude ? "Bash" : "Bash|shell:*"
+  const sessionStartMatcher = isClaude ? "startup|resume|clear|compact|fork" : "startup"
 
   const hooks = {
     SessionStart: [
       {
-        matcher: "startup",
+        matcher: sessionStartMatcher,
         hooks: [
           {
             type: "command",

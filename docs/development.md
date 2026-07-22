@@ -227,7 +227,7 @@ Merge this `hooks` object into any existing settings:
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup",
+        "matcher": "startup|resume|clear|compact|fork",
         "hooks": [
           {
             "type": "command",
@@ -305,6 +305,7 @@ Merge this `hooks` object into any existing settings:
 ```
 
 Use `/hooks` in Claude Code to verify which settings file supplied the hooks.
+The `SessionStart` matcher loads baseline memory for new, resumed, cleared, post-compaction, and forked Claude Code sessions.
 `SessionEnd` only saves summaries when `memory.sessionEndSummary` is enabled and provider-configured; by default it still requires confirmation unless `requireConfirmation` is set to `false`.
 `PreCompact` uses the same provider config and saves pending summaries before context compaction only when `memory.sessionEndSummary.requireConfirmation` is `false` and `memory.preCompactSummary.enabled` is omitted or not `false`; set `memory.preCompactSummary.enabled` to `false` to opt out.
 
