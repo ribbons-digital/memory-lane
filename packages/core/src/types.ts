@@ -34,6 +34,8 @@ export interface MemoryRevision {
   reason?: string
   revisedAt: string
   revisedBy: MemoryRevisionActor
+  /** Number of explicit automatic same-ID pending revisions. Optional for backward compatibility. */
+  automaticReviewAttempts?: number
 }
 
 export interface MemoryFreshness {

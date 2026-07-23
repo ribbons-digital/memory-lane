@@ -108,6 +108,8 @@ function hasValidRevision(value: Record<string, unknown>): boolean {
     && isOptionalString(revision.reason)
     && isValidIsoTimestamp(revision.revisedAt)
     && isEnumValue(revision.revisedBy, VALID_REVISION_ACTORS)
+    && (revision.automaticReviewAttempts === undefined
+      || (Number.isInteger(revision.automaticReviewAttempts) && (revision.automaticReviewAttempts as number) >= 0))
 }
 
 function hasAnyFreshnessField(freshness: MemoryFreshness): boolean {
