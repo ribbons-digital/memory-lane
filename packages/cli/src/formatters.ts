@@ -2,7 +2,7 @@ import ansis from "ansis"
 import boxen from "boxen"
 import Table from "cli-table3"
 import figures from "figures"
-import { analyzeReviewQuality, buildContinuityHints, buildContinuityWarningRenderPlan, continuityWarningInspectionActions, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryRecord, type MemoryRecordWithReviewHygiene, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type ReviewQualityContext, type ReviewQualitySignal, type UpdatePreview, type RescopeResult, type SupersedeResult, type ReplaceResult, type LegacyProjectMemoryDiagnostics, type LegacyProjectMigrationApplyResult, type LegacyProjectMigrationPlan } from "@memory-lane/core"
+import { analyzeReviewQuality, buildContinuityHints, buildContinuityWarningRenderPlan, continuityWarningInspectionActions, classifyCheckpointCandidate, groupReviewMemories, isMetaTaskPromptText, revisionLabel, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryRecord, type MemoryRecordWithReviewHygiene, type RecallResult, type SaveResult, type MemoryMutationResult, type CompactReport, type FreshnessStatus, type ContinuityHintSummary, type ContinuityReadModel, type OperatingAgreementList, type OperatingAgreementSummary, type PreferenceDiagnostics, type ReviewQualityContext, type ReviewQualitySignal, type TargetedReviewReceipt, type UpdatePreview, type RescopeResult, type SupersedeResult, type ReplaceResult, type LegacyProjectMemoryDiagnostics, type LegacyProjectMigrationApplyResult, type LegacyProjectMigrationPlan } from "@memory-lane/core"
 import type { ObsidianImportPlan, ObsidianImportResult } from "@memory-lane/obsidian-import"
 import { VERSION } from "./version.js"
 export { VERSION }
@@ -596,14 +596,53 @@ export function formatReplaceResult(result: ReplaceResult, json: boolean): strin
   ].join("\n")
 }
 
-export function formatSaveResult(result: SaveResult, json: boolean): string {
+function targetedReviewScope(receipt: TargetedReviewReceipt): string {
+  return receipt.scope.key ? `${receipt.scope.type}:${receipt.scope.key}` : receipt.scope.type
+}
+
+export function formatTargetedReviewReceipt(receipt: TargetedReviewReceipt, json: boolean): string {
+  if (json) return JSON.stringify({ ok: true, data: { targetedReview: receipt }, meta: meta() }, null, 2)
+
+  const signalLines = receipt.qualitySignals.length
+    ? receipt.qualitySignals.map((signal) => `  - ${signal.code} (${signal.label}): ${signal.reason}`)
+    : ["  - none"]
+  const lines = [
+    "Targeted suggestion review:",
+    `ID: ${receipt.id}`,
+    `Current text: ${receipt.currentText}`,
+    `Scope: ${targetedReviewScope(receipt)}`,
+    `Kind: ${receipt.kind}`,
+    "Quality signals:",
+    ...signalLines,
+    `Reasons: ${receipt.reasons.length ? receipt.reasons.join(" | ") : "none"}`,
+    `Suggested action: ${receipt.suggestedAction}`,
+    `Attempt state: ${receipt.attemptState.revisionAttempts}/${receipt.attemptState.maxRevisionAttempts} revisions used; ${receipt.attemptState.remainingRevisionAttempts} remaining`,
+    `Outcome: ${receipt.outcome}`,
+  ]
+  if (receipt.outcome === "revise") {
+    lines.push(
+      `Host LLM: revise this same ID and rerun targeted review with: memory-lane revise-suggestion ${receipt.id} --text <revised-text>`,
+      "Do not approve or reject automatically.",
+    )
+  } else if (receipt.outcome === "clean") {
+    lines.push("Clean: ready for user approval.", "Do not approve or reject automatically.")
+  } else {
+    lines.push("Needs human review: automatic revision attempts are exhausted.", "Do not approve or reject automatically.")
+  }
+  return lines.join("\n")
+}
+
+export function formatSaveResult(result: SaveResult, json: boolean, targetedReview?: TargetedReviewReceipt): string {
   if (result.status === "saved") {
     if (json) {
       const data: Record<string, unknown> = { saved: result.memory }
+      if (targetedReview) data.targetedReview = targetedReview
       if (result.warnings?.length) data.warnings = result.warnings
       return JSON.stringify({ ok: true, data, meta: meta() }, null, 2)
     }
-    const formatted = formatResult("Saved", result.memory, false)
+    const formatted = targetedReview
+      ? [formatResult("Saved", result.memory, false), formatTargetedReviewReceipt(targetedReview, false)].join("\n")
+      : formatResult("Saved", result.memory, false)
     if (!result.warnings?.length) return formatted
     return [formatted, ...result.warnings.map((warning) => `Warning: ${warning}`)].join("\n")
   }
@@ -1112,7 +1151,10 @@ export function usage(pluginCommands: PluginUsageCommand[] = []): string {
 
 Commands:
   save <text> [--scope global|project] [--category preference|personal|project] [--kind preference|personal_context|project_fact|project_checkpoint|workflow_rule|decision|correction|procedure|session_summary|misc] [--status approved|pending]
-  suggest <text> [--scope global|project] [--category preference|personal|project]
+  suggest <text> [--scope global|project] [--category preference|personal|project] [--status pending|approved]
+                  Save pending suggestions and immediately return a targeted review receipt; explicit approved suggestions are not reviewed
+  revise-suggestion <id> --text <text>|--stdin [--reason <reason>] [--all]
+                  Revise exactly one pending suggestion with the same id and rerun targeted review
   recall [query] [--top-k <n>]
   show|get <id> [--all]
                   Show one memory by exact id
