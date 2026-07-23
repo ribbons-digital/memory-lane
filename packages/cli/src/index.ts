@@ -22,7 +22,7 @@ import type { SemanticMemoryConfig } from "@memory-lane/core"
 
 import { resolveBundledPlugin } from "./plugins.js"
 import {
-  formatMemories, formatReviewMemories, formatReviewMutation, formatRecall, formatSaveResult, formatResult, formatMutationResult,
+  formatMemories, formatReviewMemories, formatReviewMutation, formatRecall, formatSaveResult, formatTargetedReviewReceipt, formatResult, formatMutationResult,
   formatCompact, formatDashboard, formatDoctor, formatFreshnessSummary, formatPreferenceDiagnosticsSummary, formatOperatingAgreements, formatContinuityReadModel, formatError, formatMemoryGet, formatUpdatePreview, formatRescopeResult, formatSupersedeResult, formatReplaceResult, formatLegacyProjectMemorySummary, formatLegacyProjectMemoryMigrationPreview, formatLegacyProjectMemoryMigrationApply, usage,
   VERSION,
 } from "./formatters.js"
@@ -236,7 +236,36 @@ function handleSuggest(ctx: CliContext): void {
     flag(ctx.argv, "status") as any,
     optionalFreshness(ctx.argv),
   )
-  console.log(formatSaveResult(result, ctx.json))
+  const targetedReview = result.status === "saved" && result.memory.status === "pending"
+    ? ctx.engine.reviewSuggestion(result.memory.id)
+    : undefined
+  console.log(formatSaveResult(result, ctx.json, targetedReview))
+}
+
+async function handleReviseSuggestion(ctx: CliContext): Promise<void> {
+  const id = requireId(ctx, "revise-suggestion")
+  const fromStdin = hasFlag(ctx.argv, "stdin")
+  const textFromFlag = optionalTextArg(ctx)
+  if (fromStdin && hasFlag(ctx.argv, "text")) {
+    console.error(formatError("Use exactly one revision text source: --text <text> or --stdin", ctx.json))
+    process.exit(1)
+  }
+  const text = fromStdin ? await readStdin() : textFromFlag
+  if (text === undefined) {
+    console.error(formatError("Revision text required: memory-lane revise-suggestion <id> --text <text>|--stdin", ctx.json))
+    process.exit(1)
+  }
+  const receipt = ctx.engine.revisePendingSuggestion(id, {
+    text,
+    reason: flag(ctx.argv, "reason"),
+    revisedBy: "cli",
+    all: hasFlag(ctx.argv, "all"),
+  })
+  if (!receipt) {
+    console.error(formatError(`Pending suggestion not found: ${id}`, ctx.json))
+    process.exit(1)
+  }
+  console.log(formatTargetedReviewReceipt(receipt, ctx.json))
 }
 
 async function handleRecall(ctx: CliContext): Promise<void> {
@@ -995,6 +1024,7 @@ async function settleEngineForCommand(command: string, engine: MemoryEngine): Pr
 const commandHandlers: Record<string, CommandHandler> = {
   save: handleSave,
   suggest: handleSuggest,
+  "revise-suggestion": handleReviseSuggestion,
   recall: handleRecall,
   show: handleShow,
   get: handleShow,
