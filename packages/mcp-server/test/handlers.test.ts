@@ -14,6 +14,7 @@ import {
   handleMemoryRecall,
   handleMemoryReject,
   handleMemoryReview,
+  handleMemoryReviseSuggestion,
   handleMemorySave,
   handleMemoryStatus,
   handleMemorySuggest,
@@ -140,13 +141,81 @@ test("memory_save rejects empty freshness timestamps", async () => {
   assert.match(result.error, /Invalid freshness\.expiresAt/u)
 })
 
-test("memory_suggest defaults to pending and can approve explicitly", async () => {
+test("memory_suggest returns a targeted receipt for only the new pending candidate", async () => {
   const engine = engineInTemp()
-  const pending = parseToolResult(await handleMemorySuggest(engine, { text: "Review docs before implementation" }))
-  const approved = parseToolResult(await handleMemorySuggest(engine, { text: "This project uses pnpm", status: "approved", category: "project", scope: "global" }))
+  const unrelated = engine.suggest("```sh\npnpm test\n```")
+  assert.equal(unrelated.status, "saved")
 
-  assert.equal(pending.data.memory.status, "pending")
+  const raw = await handleMemorySuggest(engine, { text: "What should we do with this?" })
+  const result = parseToolResult(raw)
+
+  assert.deepEqual(raw.structuredContent, result)
+  assert.equal(result.data.memory.status, "pending")
+  assert.equal(result.data.targetedReviewReceipt.id, result.data.memory.id)
+  assert.equal(result.data.targetedReviewReceipt.currentText, "What should we do with this?")
+  assert.equal(result.data.targetedReviewReceipt.outcome, "revise")
+  assert.equal(JSON.stringify(result.data).includes(unrelated.memory.id), false)
+  assert.match(raw.content[1]?.text ?? "", new RegExp(result.data.memory.id, "u"))
+  assert.match(raw.content[1]?.text ?? "", /revise the same ID.*memory_revise/iu)
+  assert.match(raw.content[1]?.text ?? "", /never approve or reject automatically/iu)
+})
+
+test("memory_suggest clean receipt stops the automatic loop while approved keeps existing semantics", async () => {
+  const engine = engineInTemp()
+  const pendingRaw = await handleMemorySuggest(engine, { text: "Across all projects, prefer concise status updates.", category: "preference", scope: "global", kind: "preference" })
+  const pending = parseToolResult(pendingRaw)
+  const approvedRaw = await handleMemorySuggest(engine, { text: "This project uses pnpm", status: "approved", category: "project", scope: "global" })
+  const approved = parseToolResult(approvedRaw)
+
+  assert.equal(pending.data.targetedReviewReceipt.outcome, "clean")
+  assert.match(pendingRaw.content[1]?.text ?? "", /stop the automatic review loop/iu)
   assert.equal(approved.data.memory.status, "approved")
+  assert.equal(approved.data.targetedReviewReceipt, undefined)
+  assert.equal(approvedRaw.content.length, 1)
+})
+
+test("memory_revise revises the same pending ID and preserves metadata", async () => {
+  const engine = engineInTemp()
+  const provenance = { adapter: "mcp-host", lifecycleEvent: "turn_stop" as const, sessionId: "session-1" }
+  const saved = engine.save({ text: "What should we do with this?", status: "pending", category: "preference", scopeType: "global", kind: "preference", source: "agent-suggested", provenance })
+  assert.equal(saved.status, "saved")
+
+  const raw = await handleMemoryReviseSuggestion(engine, { id: saved.memory.id, text: "Across all projects, prefer pnpm for package installation.", reason: "remove ambiguity" })
+  const result = parseToolResult(raw)
+
+  assert.equal(result.data.status, "updated")
+  assert.equal(result.data.memory.id, saved.memory.id)
+  assert.equal(result.data.memory.status, "pending")
+  assert.deepEqual(result.data.memory.provenance, provenance)
+  assert.deepEqual(result.data.memory.scope, { type: "global" })
+  assert.equal(result.data.memory.revision.revisedBy, "mcp")
+  assert.equal(result.data.memory.revision.reason, "remove ambiguity")
+  assert.equal(result.data.targetedReviewReceipt.id, saved.memory.id)
+  assert.equal(result.data.targetedReviewReceipt.outcome, "clean")
+  assert.match(raw.content[1]?.text ?? "", /stop the automatic review loop/iu)
+  assert.equal(engine.list({ status: "approved" }).length, 0)
+})
+
+test("memory_revise reports exhaustion and preserves scope boundaries", async () => {
+  const projectA = tempDir()
+  const projectB = tempDir()
+  fs.writeFileSync(path.join(projectA, ".memory-lane-scope"), JSON.stringify({ id: "mcp-targeted-a" }))
+  fs.writeFileSync(path.join(projectB, ".memory-lane-scope"), JSON.stringify({ id: "mcp-targeted-b" }))
+  const engine = engineInTemp(projectA)
+  const saved = engine.save({ text: "What should we do with this?", status: "pending", category: "project", scopeType: "project" })
+  assert.equal(saved.status, "saved")
+
+  const hidden = parseToolResult(await handleMemoryReviseSuggestion(engine, { id: saved.memory.id, text: "What should we do with this task 1?", projectPath: projectB }))
+  assert.deepEqual(hidden.data, { status: "not_found", id: saved.memory.id })
+
+  const first = parseToolResult(await handleMemoryReviseSuggestion(engine, { id: saved.memory.id, text: "What should we do with this task 1?", projectPath: projectB, all: true }))
+  const exhaustedRaw = await handleMemoryReviseSuggestion(engine, { id: saved.memory.id, text: "What should we do with this task 2?", projectPath: projectB, all: true })
+  const exhausted = parseToolResult(exhaustedRaw)
+  assert.equal(first.data.targetedReviewReceipt.outcome, "revise")
+  assert.equal(exhausted.data.targetedReviewReceipt.outcome, "needs-human-review")
+  assert.equal(exhausted.data.targetedReviewReceipt.attemptState.remainingRevisionAttempts, 0)
+  assert.match(exhaustedRaw.content[1]?.text ?? "", /surface.*needs-human-review/iu)
+  assert.match(exhaustedRaw.content[1]?.text ?? "", /never approve or reject automatically/iu)
 })
 
 test("memory_recall returns memories and semantic metadata", async () => {

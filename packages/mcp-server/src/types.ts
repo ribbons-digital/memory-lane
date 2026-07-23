@@ -29,6 +29,13 @@ export interface SuggestToolInput extends SaveToolInput {
   status?: Extract<MemoryStatus, "pending" | "approved">
 }
 
+export interface ReviseSuggestionToolInput extends ProjectPathInput {
+  id: string
+  text: string
+  reason?: string
+  all?: boolean
+}
+
 export interface RecallToolInput extends ProjectPathInput {
   query?: string
 }

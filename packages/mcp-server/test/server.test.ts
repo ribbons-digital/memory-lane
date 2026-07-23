@@ -134,6 +134,7 @@ test("exports status review-complete and continuity MCP tool names", () => {
   assert.deepEqual(MEMORY_LANE_TOOL_NAMES, [
     "memory_save",
     "memory_suggest",
+    "memory_revise",
     "memory_recall",
     "memory_status",
     "memory_list",
@@ -242,10 +243,20 @@ test("registers status review-complete and continuity tools on the MCP server", 
     "memory_recall",
     "memory_reject",
     "memory_review",
+    "memory_revise",
     "memory_save",
     "memory_status",
     "memory_suggest",
   ])
+
+  const suggestTool = registeredTool(server, "memory_suggest")
+  assert.match(suggestTool.description, /targeted review receipt/u)
+  assert.match(suggestTool.description, /revise the same ID/u)
+  assert.match(suggestTool.description, /Never approve or reject automatically/u)
+  const reviseTool = registeredTool(server, "memory_revise")
+  assert.match(reviseTool.description, /same pending suggestion ID/u)
+  assert.match(reviseTool.description, /needs-human-review/u)
+  assert.match(reviseTool.description, /Never approve or reject automatically/u)
 
   const continuityTool = registeredTool(server, "memory_continuity")
   assert.match(continuityTool.description, /Use this before memory_recall for continuity questions/u)
