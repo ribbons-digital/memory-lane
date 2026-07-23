@@ -9,7 +9,8 @@ The MCP server exposes explicit tools only.
 When local learning capture is enabled, `memory_review` records content-free suggestion exposure events and mutation tools record their review outcome events.
 
 - `memory_save` - save an approved memory
-- `memory_suggest` - queue a pending suggestion, or save approved when `status: "approved"`
+- `memory_suggest` - queue a pending suggestion and return its candidate-specific targeted review receipt, or save approved when `status: "approved"`
+- `memory_revise` - revise the same pending suggestion ID and return its rerun targeted review receipt
 - `memory_recall` - recall relevant memories for a specific topic or fact query
 - `memory_continuity` - canonical continuity read model for broad prior-work, project resumption, last-worked-on, accomplished, next-action, project-status, resume, and handoff-style questions; accepts optional `query` for read-only workstream discovery
 - `memory_status` - read Memory Lane counts, config paths, project scope, legacy project-memory diagnostics, and integration diagnostics
@@ -34,6 +35,27 @@ This empty-query path does not invoke semantic search and reports `semantic.used
 Use `memory_status` from MCP clients when you want the same kind of read-only setup/status overview that `memory-lane doctor` provides in a terminal.
 It reports counts and diagnostics only; it does not return raw memory text or run lifecycle hooks, except that legacy project-memory diagnostics may include bounded sample previews when legacy candidates exist.
 Use filtered `memory_review` calls when you want an MCP client to inspect only pending session summaries or continuity candidates from a specific adapter/event before approving or rejecting them.
+
+## Candidate-specific suggestion review
+
+A pending `memory_suggest` call creates one candidate and immediately runs deterministic quality analysis on that exact ID.
+It does not analyze or mutate the broader pending backlog returned by `memory_review`.
+The tool returns the normal save result plus `targetedReviewReceipt`, both in the JSON text content and structured result, followed by host guidance for the receipt outcome.
+If `status: "approved"` is explicit, `memory_suggest` keeps direct-approved semantics and returns no targeted receipt.
+
+The receipt includes `id`, `currentText`, `scope`, `kind`, `qualitySignals`, `reasons`, `suggestedAction`, `attemptState`, and `outcome`.
+`attemptState` reports revisions used, the maximum of two, and revisions remaining.
+A `clean` outcome means no quality signals remain, so the pending candidate is ready for explicit human approval or rejection.
+It never means automatic approval.
+A `revise` outcome asks the host LLM to call the canonical `memory_revise` tool with revised text and the same ID, then follow the rerun receipt.
+A `needs-human-review` outcome stops the automatic rewrite loop and leaves the candidate pending for a human decision.
+
+`memory_revise` preserves the same pending ID and scope, increments the automatic review attempt count, and analyzes only that revised candidate.
+The host may make at most two explicit automatic revisions after the initial suggestion.
+If fixable signals remain after the second revision, the receipt settles on `needs-human-review`, and further automatic revision calls are refused.
+Findings that text rewriting cannot fix, such as a cross-project global scope concern, go directly to `needs-human-review` without consuming a revision attempt.
+Soft or ambiguous signals may recommend a rewrite, but they never approve or reject a candidate automatically.
+Only an explicit human decision through `memory_approve` or `memory_reject` changes the pending review status.
 
 **Tip for Claude Desktop and Codex Desktop:** if you ask the model to save or recall a memory without mentioning the MCP, it may first try the `memory-lane` CLI, fail because the sandbox cannot write to `~/.memory-lane`, and then fall back to MCP.
 To skip that error turn, explicitly say "use the Memory Lane MCP" in your request.

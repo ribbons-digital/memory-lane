@@ -63,6 +63,9 @@ Use `suggest` when something should be reviewed before it becomes durable memory
 Use `continuity` when you want broad project state such as "what changed?", "where did we leave off?", or "what should we do next?".
 
 New memories flow through an explicit lifecycle: suggestions stay `pending` until approved, and approved memories can later be revised, superseded, or soft-deleted with full history preserved.
+A pending `memory_suggest` call creates one candidate and immediately runs deterministic quality analysis on that exact candidate, not on the broader pending backlog.
+The resulting targeted receipt can ask the host to revise the same ID at most twice, but it never approves or rejects the candidate automatically.
+A clean candidate is ready for explicit human approval or rejection, while unresolved or non-text-fixable findings remain pending for human review.
 The [CLI reference](./docs/cli.md) documents every command, including review, revision, freshness, continuity, and Obsidian workflows.
 
 ## Installation
@@ -103,7 +106,7 @@ Run `memory-lane init` to auto-detect and configure supported harnesses, or see 
 - [OMP (Oh My Pi)](./examples/harness-integrations/omp.md)
 
 Hooks and adapters provide automatic, low-noise lifecycle behavior: bounded context injection at session start and prompt time, plus review-first capture of durable statements, corrections, procedures, and checkpoints.
-The MCP server provides explicit tools such as `memory_save`, `memory_recall`, `memory_continuity`, and `memory_review` for clients that ask for them.
+The MCP server provides explicit tools such as `memory_save`, `memory_suggest`, `memory_revise`, `memory_recall`, `memory_continuity`, and `memory_review` for clients that ask for them.
 See [Harness integrations](./docs/harness-integrations.md) and [MCP server](./docs/mcp.md) for behavior details, and [Configuration](./docs/configuration.md) for context policy and summarization options.
 
 ## Plugins

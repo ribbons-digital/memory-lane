@@ -29,8 +29,27 @@ Named-profile auto-discovery remains unsupported; use an absolute `PI_CODING_AGE
 
 ## pi adapter
 
-The pi adapter supports manual Memory Lane tools and commands (`memory_save`, `memory_suggest`, `memory_continuity`, `memory_recall`, and `/memory ...`).
+The handwritten pi adapter supports manual Memory Lane tools and commands (`memory_save`, `memory_suggest`, `memory_revise`, `memory_continuity`, `memory_recall`, and `/memory ...`).
 It performs read-only lifecycle context injection through pi's documented `before_agent_start` event: broad continuity prompts route to canonical Memory Lane continuity, memory-management prompts route to list/status/review guidance, and other relevant approved memories may be injected as hidden `memory-lane` context before the agent starts.
+
+### Targeted suggestion review in pi and OMP
+
+In the handwritten adapter, a pending `memory_suggest` creates one candidate and immediately analyzes only that exact ID, not the broader pending backlog.
+Its receipt reports `id`, `currentText`, `scope`, `kind`, `qualitySignals`, `reasons`, `suggestedAction`, `attemptState`, and `outcome`.
+On `revise`, the host calls the canonical `memory_revise` tool with revised text and the same ID, then follows the rerun receipt.
+The loop permits at most two explicit automatic revisions after the initial suggestion.
+On `clean`, the candidate remains pending and is ready for explicit human approval or rejection.
+On `needs-human-review`, automatic rewriting stops, the pending candidate remains stable for a human decision, and further automatic revision attempts are refused.
+Soft or ambiguous signals never auto-reject a candidate.
+A non-text-fixable finding such as a cross-project global scope concern goes directly to `needs-human-review` without consuming a rewrite attempt.
+An explicit `status: "approved"` keeps direct-approved behavior and does not start the pending review loop.
+
+Release-style generated Pi and OMP bridges invoke the CLI for their Memory Lane tools and commands.
+Their `memory_suggest` tool therefore creates and analyzes the exact pending candidate through `memory-lane suggest`, but its compact tool result exposes only the queued ID rather than the targeted receipt, and the generated bridge does not register `memory_revise` as a host tool.
+Use `/memory suggest <text>` to see the CLI receipt and `/memory revise-suggestion <id> --text <revised-text>` to follow its same-ID loop, or run those CLI commands directly.
+Generated bridge suggestions with explicit approved status keep the CLI's direct-approved behavior and do not start targeted review.
+The handwritten adapter provides the full host-tool loop directly through `memory_suggest` and `memory_revise`.
+Neither surface automatically approves or rejects a candidate.
 
 Both the repo-local pi adapter and release-style generated pi bridge write memories through low-noise lifecycle events:
 
