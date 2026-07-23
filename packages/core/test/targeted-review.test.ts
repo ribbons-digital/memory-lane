@@ -56,6 +56,41 @@ test("targeted review returns flagged structured output and excludes unrelated p
   assert.equal(receipt?.outcome, "revise")
 })
 
+test("targeted review routes non-text-fixable rescoping signals directly to human review", () => {
+  const { engine: e } = engine()
+  e.refreshScope(tempDir())
+  const rescopingOnlyId = savedId(e.save({
+    text: "The project uses pnpm for package installation.",
+    status: "pending",
+    category: "project",
+    kind: "project_fact",
+    source: "agent-suggested",
+    scopeType: "global",
+  }))
+  const mixedId = savedId(e.save({
+    text: "What should we do with this project?",
+    status: "pending",
+    category: "project",
+    kind: "project_fact",
+    source: "agent-suggested",
+    scopeType: "global",
+  }))
+
+  const rescopingOnly = e.reviewSuggestion(rescopingOnlyId)
+  assert.deepEqual(rescopingOnly?.qualitySignals.map((signal) => [signal.code, signal.suggestedAction]), [
+    ["cross-project-global-candidate", "consider-rescoping"],
+  ])
+  assert.equal(rescopingOnly?.attemptState.remainingRevisionAttempts, TARGETED_REVIEW_MAX_REVISION_ATTEMPTS)
+  assert.equal(rescopingOnly?.outcome, "needs-human-review")
+  assert.equal(rescopingOnly?.suggestedAction, "request-human-review")
+
+  const mixed = e.reviewSuggestion(mixedId)
+  assert.ok(mixed?.qualitySignals.some((signal) => signal.suggestedAction === "inspect"))
+  assert.ok(mixed?.qualitySignals.some((signal) => signal.suggestedAction === "consider-rescoping"))
+  assert.equal(mixed?.outcome, "needs-human-review")
+  assert.equal(mixed?.suggestedAction, "request-human-review")
+})
+
 test("same-id pending revision preserves provenance and scope, records attempts, and never approves", () => {
   const { engine: e } = engine()
   const provenance = { adapter: "claude-code", lifecycleEvent: "turn_stop" as const, sessionId: "session-1" }
