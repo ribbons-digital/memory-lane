@@ -113,7 +113,12 @@ function sessionSummaryPreview(text: string, max = 180): string {
   return compactPreview(cleaned || text, max)
 }
 
-export function buildDashboardSummary(memories: MemoryRecord[], projectScope = "none", lifecycleMode: "off" | "conservative" | "aggressive" = "conservative"): DashboardSummary {
+export function buildDashboardSummary(
+  memories: MemoryRecord[],
+  projectScope = "none",
+  lifecycleMode: "off" | "conservative" | "aggressive" = "conservative",
+  automaticPendingWritesEnabled = false,
+): DashboardSummary {
   const pending = memories.filter((memory) => memory.status === "pending")
   const sessionSummaries = pending.filter((memory) => memory.kind === "session_summary")
   const suspectMeta = pending.filter((memory) => isMetaTaskPromptText(memory.text))
@@ -159,7 +164,7 @@ export function buildDashboardSummary(memories: MemoryRecord[], projectScope = "
     lifecycleCapture: {
       mode: lifecycleMode,
       automaticPendingWriteCapability: lifecycleMode !== "off",
-      automaticPendingWritesEnabled: lifecycleMode !== "off",
+      automaticPendingWritesEnabled,
       automaticPendingBacklog,
     },
     continuityHints,
@@ -169,7 +174,8 @@ export function buildDashboardSummary(memories: MemoryRecord[], projectScope = "
 
 export function formatDashboard(memories: MemoryRecord[], json: boolean, extraMeta?: Record<string, unknown>): string {
   const lifecycleMode = extraMeta?.lifecycleCaptureMode === "off" || extraMeta?.lifecycleCaptureMode === "aggressive" ? extraMeta.lifecycleCaptureMode : "conservative"
-  const summary = buildDashboardSummary(memories, typeof extraMeta?.projectScope === "string" ? extraMeta.projectScope : "none", lifecycleMode)
+  const automaticPendingWritesEnabled = typeof extraMeta?.automaticPendingWritesEnabled === "boolean" ? extraMeta.automaticPendingWritesEnabled : false
+  const summary = buildDashboardSummary(memories, typeof extraMeta?.projectScope === "string" ? extraMeta.projectScope : "none", lifecycleMode, automaticPendingWritesEnabled)
   if (json) {
     return JSON.stringify({ ok: true, data: summary, meta: meta({ count: memories.length, ...extraMeta }) }, null, 2)
   }

@@ -528,10 +528,12 @@ function handleReview(ctx: CliContext): void {
 function handleDashboard(ctx: CliContext): void {
   const allScope = hasFlag(ctx.argv, "all")
   const memories = ctx.engine.list({ all: allScope })
+  const lifecycleDiagnostics = ctx.engine.doctor()
   console.log(formatDashboard(memories, ctx.json, {
     all: allScope,
     projectScope: ctx.engine.getProjectScope()?.key ?? "none",
-    lifecycleCaptureMode: ctx.engine.getLifecycleCaptureConfig().mode,
+    lifecycleCaptureMode: lifecycleDiagnostics.lifecycleCaptureMode,
+    automaticPendingWritesEnabled: lifecycleDiagnostics.automaticPendingWritesEnabled,
   }))
 }
 

@@ -495,9 +495,21 @@ function isMatchingPreCompletionHandoff(memory: MemoryRecord, references: Set<st
 
 export type GovernedSessionSummarySaveResults = SaveResult[] & { capture: LifecycleCaptureResult }
 
+function governedCandidateKey(candidate: { kind?: MemoryKind; text: string }): string {
+  const normalizedText = candidate.text.toLocaleLowerCase().replace(/\s+/gu, " ").trim()
+  return `${candidate.kind ?? "misc"}\u0000${normalizedText}`
+}
+
 export function saveSessionSummaryCandidates(engine: MemoryEngine, candidates: SessionEndCandidate[]): GovernedSessionSummarySaveResults {
   const existing = engine.list()
-  const originals = new Map(candidates.map((candidate) => [`${candidate.kind}\u0000${candidate.text}`, candidate]))
+  const originals = new Map<string, SessionEndCandidate[]>()
+  for (const candidate of candidates) {
+    const key = governedCandidateKey(candidate)
+    const matches = originals.get(key) ?? []
+    matches.push(candidate)
+    originals.set(key, matches)
+  }
+  const savedOriginals = new Map<string, SessionEndCandidate>()
   const first = candidates[0]
   const input = {
     cwd: engine.getProjectScope()?.cwd ?? process.cwd(),
@@ -519,9 +531,9 @@ export function saveSessionSummaryCandidates(engine: MemoryEngine, candidates: S
       source: candidate.source,
     })),
     save(candidate) {
-      const original = originals.get(`${candidate.kind}\u0000${candidate.text}`)
-      if (!original) return { status: "skipped", reason: "empty" }
-      return engine.save({
+      const original = originals.get(governedCandidateKey(candidate))?.shift()
+      if (!original) return { status: "skipped", reason: "metadata unavailable" }
+      const result = engine.save({
         text: original.text,
         category: original.category,
         scopeType: original.scopeType,
@@ -531,13 +543,15 @@ export function saveSessionSummaryCandidates(engine: MemoryEngine, candidates: S
         provenance: original.provenance,
         freshness: original.freshness,
       })
+      if (result.status === "saved") savedOriginals.set(result.memory.id, original)
+      return result
     },
   })
   const results = Object.assign(governed.saved, { capture: governed.capture })
 
   for (const result of results) {
     if (result.status !== "saved") continue
-    const savedCandidate = originals.get(`${result.memory.kind}\u0000${result.memory.text}`)
+    const savedCandidate = savedOriginals.get(result.memory.id)
     const references = savedCandidate ? completedCandidateReferences(savedCandidate) : new Set<string>()
     if (references.size === 0) continue
     const oldIds = existing.filter((memory) => isMatchingPreCompletionHandoff(memory, references)).map((memory) => memory.id)

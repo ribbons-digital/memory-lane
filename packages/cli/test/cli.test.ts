@@ -2515,6 +2515,7 @@ describe("CLI integration", () => {
     const project = tempDir()
     fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "dashboard-project" }))
     const env = {
+      HOME: tempDir(),
       MEMORY_LANE_FILE: memFile,
       MEMORY_LANE_EMBEDDINGS_FILE: embFile,
       MEMORY_LANE_CONFIG: cfgFile,
@@ -2561,7 +2562,54 @@ describe("CLI integration", () => {
     assert.match(payload.data.recent.sessionSummaries[0].preview, /Codex has no real SessionEnd hook/u)
     assert.doesNotMatch(payload.data.recent.sessionSummaries[0].preview, /## Session Summary/u)
     assert.doesNotMatch(JSON.stringify(payload), /Hidden private tail/u)
+    assert.deepEqual(payload.data.lifecycleCapture, {
+      mode: "conservative",
+      automaticPendingWriteCapability: true,
+      automaticPendingWritesEnabled: false,
+      automaticPendingBacklog: 1,
+    })
     assert.ok(payload.data.suggestedActions.includes("memory-lane review"))
+  })
+
+  it("dashboard, status, and doctor report integration-derived lifecycle write enablement", () => {
+    const project = tempDir()
+    const home = tempDir()
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "lifecycle-surface-project" }))
+    const env = {
+      HOME: home,
+      MEMORY_LANE_FILE: memFile,
+      MEMORY_LANE_EMBEDDINGS_FILE: embFile,
+      MEMORY_LANE_CONFIG: cfgFile,
+    }
+
+    const dashboardWithoutHooks = JSON.parse(runProcess(["dashboard", "--json"], { env, cwd: project }).stdout)
+    const statusWithoutHooks = JSON.parse(runProcess(["status", "--json"], { env, cwd: project }).stdout)
+    const doctorWithoutHooks = JSON.parse(runProcess(["doctor", "--json"], { env, cwd: project }).stdout)
+    assert.deepEqual(dashboardWithoutHooks.data.lifecycleCapture, {
+      mode: "conservative",
+      automaticPendingWriteCapability: true,
+      automaticPendingWritesEnabled: false,
+      automaticPendingBacklog: 0,
+    })
+    for (const output of [statusWithoutHooks, doctorWithoutHooks]) {
+      assert.equal(output.data.lifecycleCaptureMode, "conservative")
+      assert.equal(output.data.automaticPendingWriteCapability, true)
+      assert.equal(output.data.automaticPendingWritesEnabled, false)
+      assert.equal(output.data.automaticPendingBacklog, 0)
+    }
+
+    const hookPath = path.join(project, ".codex", "hooks.json")
+    fs.mkdirSync(path.dirname(hookPath), { recursive: true })
+    fs.writeFileSync(hookPath, JSON.stringify({
+      hooks: { Stop: [{ hooks: [{ command: "memory-lane codex stop" }] }] },
+    }))
+
+    const dashboardWithHooks = JSON.parse(runProcess(["dashboard", "--json"], { env, cwd: project }).stdout)
+    const statusWithHooks = JSON.parse(runProcess(["status", "--json"], { env, cwd: project }).stdout)
+    const doctorWithHooks = JSON.parse(runProcess(["doctor", "--json"], { env, cwd: project }).stdout)
+    assert.equal(dashboardWithHooks.data.lifecycleCapture.automaticPendingWritesEnabled, true)
+    assert.equal(statusWithHooks.data.automaticPendingWritesEnabled, true)
+    assert.equal(doctorWithHooks.data.automaticPendingWritesEnabled, true)
   })
 
   it("route --json classifies broad next-work prompts", () => {
