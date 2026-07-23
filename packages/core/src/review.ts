@@ -28,6 +28,30 @@ export interface ReviewQualityContext {
   projectScopeKeysByRoot?: ReadonlyMap<string, string>
 }
 
+export const TARGETED_REVIEW_MAX_REVISION_ATTEMPTS = 2
+
+export type TargetedReviewOutcome = "clean" | "revise" | "needs-human-review"
+export type TargetedReviewSuggestedAction = "none" | "revise" | "request-human-review"
+
+export interface TargetedReviewAttemptState {
+  revisionAttempts: number
+  maxRevisionAttempts: number
+  remainingRevisionAttempts: number
+}
+
+/** Stable single-candidate contract for automatic advisory review. It never implies approval or rejection. */
+export interface TargetedReviewReceipt {
+  id: string
+  currentText: string
+  scope: MemoryRecord["scope"]
+  kind: NonNullable<MemoryRecord["kind"]>
+  qualitySignals: ReviewQualitySignal[]
+  reasons: string[]
+  suggestedAction: TargetedReviewSuggestedAction
+  attemptState: TargetedReviewAttemptState
+  outcome: TargetedReviewOutcome
+}
+
 export interface ReviewGroup {
   key: string
   label: string
@@ -161,6 +185,34 @@ export function analyzeReviewQuality(memory: MemoryRecord, context: ReviewQualit
   })
 
   return signals
+}
+
+/** Build a deterministic receipt for exactly the supplied candidate. No storage is read or written. */
+export function buildTargetedReviewReceipt(memory: MemoryRecord, context: ReviewQualityContext = {}): TargetedReviewReceipt {
+  const qualitySignals = analyzeReviewQuality(memory, context)
+  const revisionAttempts = Math.max(0, Math.min(
+    memory.revision?.automaticReviewAttempts ?? 0,
+    TARGETED_REVIEW_MAX_REVISION_ATTEMPTS,
+  ))
+  const remainingRevisionAttempts = TARGETED_REVIEW_MAX_REVISION_ATTEMPTS - revisionAttempts
+  const outcome: TargetedReviewOutcome = qualitySignals.length === 0
+    ? "clean"
+    : remainingRevisionAttempts > 0 ? "revise" : "needs-human-review"
+  return {
+    id: memory.id,
+    currentText: memory.text,
+    scope: memory.scope,
+    kind: memory.kind ?? "misc",
+    qualitySignals,
+    reasons: qualitySignals.map((signal) => signal.reason),
+    suggestedAction: outcome === "clean" ? "none" : outcome === "revise" ? "revise" : "request-human-review",
+    attemptState: {
+      revisionAttempts,
+      maxRevisionAttempts: TARGETED_REVIEW_MAX_REVISION_ATTEMPTS,
+      remainingRevisionAttempts,
+    },
+    outcome,
+  }
 }
 
 export function reviewProjectScope(memory: MemoryRecord): string {

@@ -28,6 +28,12 @@ import {
   hasRealUpdateChange, revisionForSuccessor, revisionForSuperseded, revisionWarnings, sameIdRevision,
 } from "./revisions.js"
 import { isMetaTaskPromptText } from "./meta-task-filter.js"
+import {
+  buildTargetedReviewReceipt,
+  resolveReviewProjectScopeKeys,
+  TARGETED_REVIEW_MAX_REVISION_ATTEMPTS,
+  type TargetedReviewReceipt,
+} from "./review.js"
 import { buildFreshnessStatus, classifyFreshness, isStrictIsoTimestamp } from "./freshness.js"
 import { buildContinuityHints } from "./continuity-hints.js"
 import {
@@ -695,6 +701,65 @@ export class MemoryEngine {
     return this.storage.listMemories().filter((memory) =>
       memory.status === "pending" && this.visibleByScope(memory, opts),
     )
+  }
+
+  private targetedReviewReceipt(memory: MemoryRecord, records: MemoryRecord[], opts?: { all?: boolean }): TargetedReviewReceipt {
+    const relevantRecords = records.filter((candidate) => this.visibleByScope(candidate, opts))
+    return buildTargetedReviewReceipt(memory, {
+      rejectedMemories: relevantRecords.filter((candidate) => candidate.status === "rejected"),
+      activeProjectScope: this.scope?.key,
+      projectScopeKeysByRoot: resolveReviewProjectScopeKeys([...relevantRecords, memory]),
+    })
+  }
+
+  /** Analyze exactly one current pending suggestion without writing or changing review status. */
+  reviewSuggestion(id: string, opts?: { all?: boolean }): TargetedReviewReceipt | undefined {
+    const records = this.storage.listMemoriesFresh()
+    const memory = this.findScopedMemory(id, (candidate) => candidate.status === "pending", opts, records)
+    return memory ? this.targetedReviewReceipt(memory, records, opts) : undefined
+  }
+
+  /**
+   * Revise one active pending suggestion in place and return its new targeted receipt.
+   * Automatic revisions remain pending and stop after the finite exported attempt limit.
+   */
+  revisePendingSuggestion(id: string, input: {
+    text: string
+    reason?: string
+    revisedBy?: MemoryRevisionActor
+    all?: boolean
+  }): TargetedReviewReceipt | undefined {
+    validateRevisionOptions(input)
+    validateSaveInput({ text: input.text })
+    const text = input.text.trim()
+    if (!text) throw new Error("Invalid text: memory text cannot be empty")
+    if (containsLikelySecret(text)) throw new Error("Invalid text: memory text contains a likely secret")
+
+    const records = this.storage.listMemoriesFresh()
+    const memory = this.findScopedMemory(id, (candidate) => candidate.status === "pending", input, records)
+    if (!memory) return undefined
+    const attempts = memory.revision?.automaticReviewAttempts ?? 0
+    if (attempts >= TARGETED_REVIEW_MAX_REVISION_ATTEMPTS) {
+      throw new Error(`Automatic revision attempt limit reached for pending suggestion: ${id}`)
+    }
+    if (text === memory.text) throw new Error("No changes to apply")
+
+    const updated: MemoryRecord = {
+      ...memory,
+      text,
+      status: "pending",
+      updatedAt: timestamp(),
+      revision: {
+        ...memory.revision,
+        reason: input.reason ?? memory.revision?.reason,
+        revisedAt: timestamp(),
+        revisedBy: input.revisedBy ?? "manual",
+        automaticReviewAttempts: attempts + 1,
+      },
+    }
+    this.storage.appendMemory(updated)
+    this.invalidateEmbedding(id, "updated")
+    return this.targetedReviewReceipt(updated, [...records.filter((candidate) => candidate.id !== id), updated], input)
   }
 
   private invalidateEmbedding(memoryId: string, reason: "updated" | "deleted" | "stale"): void {

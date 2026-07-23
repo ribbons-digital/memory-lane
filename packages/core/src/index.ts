@@ -32,8 +32,10 @@ export {
 } from "./summary-hygiene.js"
 export {
   analyzeReviewQuality,
+  buildTargetedReviewReceipt,
   groupReviewMemories,
   qualitySignalCodes,
+  TARGETED_REVIEW_MAX_REVISION_ATTEMPTS,
   resolveReviewProjectScopeKeys,
   reviewProjectScope,
   reviewProvenance,
@@ -42,6 +44,10 @@ export {
   type ReviewQualitySignal,
   type ReviewQualitySignalCode,
   type ReviewQualitySuggestedAction,
+  type TargetedReviewAttemptState,
+  type TargetedReviewOutcome,
+  type TargetedReviewReceipt,
+  type TargetedReviewSuggestedAction,
 } from "./review.js"
 export {
   inferCategory, inferMemoryKind, effectiveMemoryKind,
