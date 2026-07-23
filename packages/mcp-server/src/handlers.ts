@@ -1,6 +1,6 @@
-import { analyzeReviewQuality, classifyCheckpointCandidate, groupReviewMemories, resolveReviewProjectScopeKeys, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryEngine, type MemoryMutationResult, type MemoryRecord, type MemoryRecordWithReviewHygiene, type ReviewQualitySignal, type RecallResult, type SaveResult } from "@memory-lane/core"
+import { analyzeReviewQuality, classifyCheckpointCandidate, groupReviewMemories, resolveReviewProjectScopeKeys, withReviewHygiene, type CheckpointCandidateMetadata, type MemoryEngine, type MemoryMutationResult, type MemoryRecord, type MemoryRecordWithReviewHygiene, type ReviewQualitySignal, type RecallResult, type SaveResult, type TargetedReviewReceipt } from "@memory-lane/core"
 import type {
-  ContinuityToolInput, ListToolInput, MemoryGetToolInput, MemoryIdToolInput, RecallToolInput, ReviewFilters, ReviewToolInput, SaveToolInput, StatusToolInput, SuggestToolInput, ToolEnvelope,
+  ContinuityToolInput, ListToolInput, MemoryGetToolInput, MemoryIdToolInput, RecallToolInput, ReviewFilters, ReviewToolInput, ReviseSuggestionToolInput, SaveToolInput, StatusToolInput, SuggestToolInput, ToolEnvelope,
 } from "./types.js"
 
 type ToolResult<T> = {
@@ -24,6 +24,29 @@ export function jsonContent<T>(payload: ToolEnvelope<T>): ToolResult<T> {
   return {
     content: [{ type: "text", text: JSON.stringify(payload) }],
     structuredContent: payload,
+  }
+}
+
+function targetedReviewGuidance(receipt: TargetedReviewReceipt): string {
+  const prefix = `Targeted review for pending suggestion ${receipt.id}: ${receipt.outcome}.`
+  if (receipt.outcome === "clean") {
+    return `${prefix} Stop the automatic review loop and leave the suggestion pending for a human decision. Never approve or reject automatically.`
+  }
+  if (receipt.outcome === "revise") {
+    return `${prefix} Revise the same ID with memory_revise and use its rerun targeted review receipt. Never approve or reject automatically.`
+  }
+  return `${prefix} Revision attempts are exhausted; stop the automatic review loop and surface the needs-human-review outcome. Never approve or reject automatically.`
+}
+
+function targetedReviewContent<T>(payload: ToolEnvelope<T>, receipt: TargetedReviewReceipt): ToolResult<T> {
+  const serialized = JSON.stringify(payload)
+  const structuredContent = JSON.parse(serialized) as ToolEnvelope<T>
+  return {
+    content: [
+      { type: "text", text: serialized },
+      { type: "text", text: targetedReviewGuidance(receipt) },
+    ],
+    structuredContent,
   }
 }
 
@@ -93,7 +116,33 @@ export async function handleMemorySuggest(engine: MemoryEngine, input: SuggestTo
   try {
     applyProjectPath(engine, input.projectPath)
     const result = engine.suggest(input.text, input.category, input.scope, input.kind, input.status, inputFreshness(input))
-    return jsonContent(envelope(engine, saveData(result)))
+    const saved = saveData(result)
+    if (saved.status !== "saved" || saved.memory.status !== "pending") return jsonContent(envelope(engine, saved))
+    const targetedReviewReceipt = engine.reviewSuggestion(saved.memory.id)
+    if (!targetedReviewReceipt) throw new Error(`Unable to review newly pending suggestion: ${saved.memory.id}`)
+    const payload = envelope(engine, { ...saved, targetedReviewReceipt })
+    return targetedReviewContent(payload, targetedReviewReceipt)
+  } catch (error) {
+    return jsonContent(errorEnvelope(error))
+  }
+}
+
+export async function handleMemoryReviseSuggestion(engine: MemoryEngine, input: ReviseSuggestionToolInput) {
+  try {
+    applyProjectPath(engine, input.projectPath)
+    const targetedReviewReceipt = engine.revisePendingSuggestion(input.id, {
+      text: input.text,
+      reason: input.reason,
+      revisedBy: "mcp",
+      all: input.all ?? false,
+    })
+    if (!targetedReviewReceipt) {
+      return jsonContent(envelope(engine, { status: "not_found" as const, id: input.id }))
+    }
+    const memory = engine.getById(input.id, { all: input.all ?? false })
+    if (!memory) throw new Error(`Unable to read revised pending suggestion: ${input.id}`)
+    const payload = envelope(engine, { status: "updated" as const, memory, targetedReviewReceipt })
+    return targetedReviewContent(payload, targetedReviewReceipt)
   } catch (error) {
     return jsonContent(errorEnvelope(error))
   }

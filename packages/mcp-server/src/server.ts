@@ -12,6 +12,7 @@ import {
   handleMemoryRecall,
   handleMemoryReject,
   handleMemoryReview,
+  handleMemoryReviseSuggestion,
   handleMemorySave,
   handleMemoryStatus,
   handleMemorySuggest,
@@ -20,6 +21,7 @@ import {
 export const MEMORY_LANE_TOOL_NAMES = [
   "memory_save",
   "memory_suggest",
+  "memory_revise",
   "memory_recall",
   "memory_status",
   "memory_list",
@@ -121,7 +123,7 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
     "memory_suggest",
     {
       title: "Suggest Memory",
-      description: "Queue a pending Memory Lane suggestion, or approve it when status is approved.",
+      description: "Queue a pending Memory Lane suggestion and receive its single-candidate targeted review receipt. When the receipt outcome is revise, revise the same ID with memory_revise and use the rerun receipt; when clean, stop the automatic review loop; on needs-human-review, surface it to a human. Never approve or reject automatically. Explicit status=approved keeps the existing direct-approved semantics and does not start a pending review loop.",
       inputSchema: {
         text: z.string().min(1),
         category: categorySchema.optional(),
@@ -135,6 +137,22 @@ export function createMemoryLaneMcpServer(options: CreateMemoryLaneMcpServerOpti
       },
     },
     async (input) => runWithEngine(input.projectPath, {}, (requestEngine) => handleMemorySuggest(requestEngine, input)),
+  )
+
+  server.registerTool(
+    "memory_revise",
+    {
+      title: "Revise Pending Suggestion",
+      description: "Revise the same pending suggestion ID in place and receive its rerun targeted review receipt. If the outcome remains revise, revise that same ID again only while attempts remain; when clean, stop the automatic review loop; on needs-human-review or exhaustion, stop and surface it to a human. Never approve or reject automatically. Respects current project visibility unless all=true is explicitly requested for cross-project maintenance.",
+      inputSchema: {
+        id: memoryId,
+        text: z.string().min(1).describe("Replacement text for the same pending suggestion"),
+        reason: z.string().min(1).optional().describe("Optional reason recorded in revision metadata"),
+        all: z.boolean().optional(),
+        projectPath,
+      },
+    },
+    async (input) => runWithEngine(input.projectPath, {}, (requestEngine) => handleMemoryReviseSuggestion(requestEngine, input)),
   )
 
   server.registerTool(
