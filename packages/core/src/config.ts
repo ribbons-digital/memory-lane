@@ -1,7 +1,26 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import type { SemanticMemoryConfig } from "./types.js"
+import type { EffectiveLifecycleCaptureConfig, LifecycleCaptureConfig, LifecycleCaptureMode, SemanticMemoryConfig } from "./types.js"
+
+export const LIFECYCLE_CAPTURE_LIMITS: Readonly<Record<Exclude<LifecycleCaptureMode, "off">, Readonly<EffectiveLifecycleCaptureConfig["limits"]>>> = Object.freeze({
+  conservative: Object.freeze({ perTurn: 2, perSession: 8, pendingBacklog: 20 }),
+  aggressive: Object.freeze({ perTurn: 5, perSession: 30, pendingBacklog: 100 }),
+})
+
+export function resolveLifecycleCaptureConfig(config?: LifecycleCaptureConfig): EffectiveLifecycleCaptureConfig {
+  const mode = config?.mode ?? "conservative"
+  const defaults = mode === "aggressive" ? LIFECYCLE_CAPTURE_LIMITS.aggressive : LIFECYCLE_CAPTURE_LIMITS.conservative
+  if (mode === "off") return { mode, limits: { perTurn: 0, perSession: 0, pendingBacklog: 0 } }
+  return {
+    mode,
+    limits: {
+      perTurn: config?.limits?.perTurn ?? defaults.perTurn,
+      perSession: config?.limits?.perSession ?? defaults.perSession,
+      pendingBacklog: config?.limits?.pendingBacklog ?? defaults.pendingBacklog,
+    },
+  }
+}
 
 export const DEFAULT_CONFIG: SemanticMemoryConfig = {
   semantic: {
@@ -29,6 +48,9 @@ export const DEFAULT_CONFIG: SemanticMemoryConfig = {
     },
     preCompactSummary: {
       enabled: undefined,
+    },
+    lifecycleCapture: {
+      mode: "conservative",
     },
     contextPolicy: {
       mode: "selective",
@@ -148,6 +170,7 @@ export function validateConfig(config: unknown): SemanticMemoryConfig {
   validateContextPolicyConfig(memory?.contextPolicy)
   validateSessionEndSummaryConfig(memory?.sessionEndSummary)
   validatePreCompactSummaryConfig(memory?.preCompactSummary)
+  validateLifecycleCaptureConfig(memory?.lifecycleCapture)
   validatePluginsConfig(root.plugins, root.pluginConfig)
   validateLearningConfig(root.learning)
   return config as SemanticMemoryConfig
@@ -219,6 +242,20 @@ function validateSessionEndSummaryConfig(v: unknown): void {
   if (o.timeoutMs !== undefined) positiveNonZeroInt(o.timeoutMs, "memory.sessionEndSummary.timeoutMs")
   if (o.requireConfirmation !== undefined) bool(o.requireConfirmation, "memory.sessionEndSummary.requireConfirmation")
   if (o.includeToolOutputs !== undefined) bool(o.includeToolOutputs, "memory.sessionEndSummary.includeToolOutputs")
+}
+
+function validateLifecycleCaptureConfig(v: unknown): void {
+  if (v === undefined) return
+  const o = obj(v, "memory.lifecycleCapture")
+  if (o.mode !== undefined && o.mode !== "off" && o.mode !== "conservative" && o.mode !== "aggressive") {
+    throw new ConfigError("memory.lifecycleCapture.mode must be off, conservative, or aggressive")
+  }
+  if (o.limits !== undefined) {
+    const limits = obj(o.limits, "memory.lifecycleCapture.limits")
+    if (limits.perTurn !== undefined) positiveNonZeroInt(limits.perTurn, "memory.lifecycleCapture.limits.perTurn")
+    if (limits.perSession !== undefined) positiveNonZeroInt(limits.perSession, "memory.lifecycleCapture.limits.perSession")
+    if (limits.pendingBacklog !== undefined) positiveNonZeroInt(limits.pendingBacklog, "memory.lifecycleCapture.limits.pendingBacklog")
+  }
 }
 
 function validatePreCompactSummaryConfig(v: unknown): void {

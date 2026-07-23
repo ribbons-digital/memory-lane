@@ -135,13 +135,17 @@ If any selected record is global or belongs to a project other than the active r
 `memory-lane review`, `memory-lane review --json`, and MCP `memory_review` label pending memories that look like high-value project progress, such as merged PRs, releases, verification milestones, docs syncs, major fixes, or roadmap decisions.
 These labels are review-first: approve a checkpoint candidate only if it should become durable project continuity.
 
-Memory Lane can also suggest pending checkpoint candidates from strong lifecycle evidence, such as a successful release command, merged PR command, or explicit completed-progress statement.
-These inferred checkpoints are pending by default, deduplicated against nearby pending/approved project checkpoints, and do not affect approved continuity until reviewed.
-Repeated recognized checkpoint events, such as the same release, PR merge, or verification checkpoint, are skipped before writing another pending review item.
-When a hook saves a pending checkpoint candidate, Memory Lane emits the existing compact pending-review reminder where the hook transport supports it; Claude/Codex hook output uses the count-only reminder, while pi uses the same shared lifecycle capture policy and renders lifecycle-save notifications through the pi UI.
+Memory Lane can also suggest pending checkpoint candidates from context-rich lifecycle evidence that explains a durable completed outcome.
+Bare release and merge events and previously rejected equivalents are suppressed before persistence by the same deterministic quality definitions used during review.
+These inferred checkpoints are pending, deduplicated against nearby pending or approved project checkpoints, and do not affect approved continuity until reviewed.
+Repeated recognized checkpoint events, such as the same release, pull request merge, or verification checkpoint, are skipped before another pending write.
+The `memory.lifecycleCapture` configuration controls automatic admission with `off`, default `conservative`, and opt-in `aggressive` modes.
+Default conservative limits are 2 automatic candidates per turn, 8 per session, and 20 automatic pending candidates per project.
+Status, doctor, and dashboard JSON add the effective mode, automatic pending-write capability, and current automatic pending backlog.
+When a hook queues one or more pending candidates, supported transports emit one batched count-only review notice without candidate or source content.
 MCP clients do not run lifecycle hooks, but they see the same pending state through `memory_review`, `memory_status`, and `memory_continuity`.
 
-No new command, MCP tool, config flag, or explicit memory API is required for checkpoint capture.
+No new command or MCP tool is required for checkpoint capture.
 Review with `memory-lane review` or MCP `memory_review`, approve/reject through the existing review flow, and inspect continuity with `memory-lane continuity` or MCP `memory_continuity`.
 Checkpoint capture does not automatically approve memories, dump transcripts, change recall ranking, or perform exact thread/workstream lookup.
 

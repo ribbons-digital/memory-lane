@@ -3,7 +3,8 @@ import { analyzeSummaryHygiene, classifySummaryClaims, containsLikelySecret, nor
 import { extractCheckpointCandidatesFromStop, inspectCheckpointCandidates } from "./checkpoint-capture.js"
 import { createOpenAICompatibleProvider } from "./llm-provider.js"
 import { captureLifecycleTrace } from "./trace-capture.js"
-import type { LLMProvider, PreCompactInput, PreCompactOptions, SessionEndInput, SessionEndOptions } from "./types.js"
+import { persistGovernedLifecycleCandidates } from "./automatic-capture.js"
+import type { LifecycleCaptureResult, LLMProvider, MemoryCandidate, PreCompactInput, PreCompactOptions, SessionEndInput, SessionEndOptions } from "./types.js"
 
 export const DEFAULT_SESSION_END_PROMPT = `You are summarizing an AI-assisted coding session for a memory system.
 Read the session transcript and produce a concise, structured summary.
@@ -492,22 +493,52 @@ function isMatchingPreCompletionHandoff(memory: MemoryRecord, references: Set<st
   return [...claimReferences(claim)].some((reference) => references.has(reference))
 }
 
-export function saveSessionSummaryCandidates(engine: MemoryEngine, candidates: SessionEndCandidate[]): SaveResult[] {
-  const existing = engine.list()
-  const results = candidates.map((candidate) => engine.save({
-    text: candidate.text,
-    category: candidate.category,
-    scopeType: candidate.scopeType,
-    status: candidate.status,
-    source: candidate.source,
-    kind: candidate.kind,
-    provenance: candidate.provenance,
-    freshness: candidate.freshness,
-  }))
+export type GovernedSessionSummarySaveResults = SaveResult[] & { capture: LifecycleCaptureResult }
 
-  for (const [index, result] of results.entries()) {
+export function saveSessionSummaryCandidates(engine: MemoryEngine, candidates: SessionEndCandidate[]): GovernedSessionSummarySaveResults {
+  const existing = engine.list()
+  const originals = new Map(candidates.map((candidate) => [`${candidate.kind}\u0000${candidate.text}`, candidate]))
+  const first = candidates[0]
+  const input = {
+    cwd: engine.getProjectScope()?.cwd ?? process.cwd(),
+    sessionId: first?.provenance.sessionId,
+    turnId: first?.provenance.turnId,
+    lastAssistantMessage: undefined,
+  }
+  const governed = persistGovernedLifecycleCandidates({
+    engine,
+    input,
+    candidates: candidates.map((candidate): MemoryCandidate => ({
+      text: candidate.text,
+      category: candidate.category,
+      scopeType: candidate.scopeType,
+      kind: candidate.kind,
+      confidence: 1,
+      decision: "save-pending",
+      reason: "generated lifecycle session summary",
+      source: candidate.source,
+    })),
+    save(candidate) {
+      const original = originals.get(`${candidate.kind}\u0000${candidate.text}`)
+      if (!original) return { status: "skipped", reason: "empty" }
+      return engine.save({
+        text: original.text,
+        category: original.category,
+        scopeType: original.scopeType,
+        status: "pending",
+        source: original.source,
+        kind: original.kind,
+        provenance: original.provenance,
+        freshness: original.freshness,
+      })
+    },
+  })
+  const results = Object.assign(governed.saved, { capture: governed.capture })
+
+  for (const result of results) {
     if (result.status !== "saved") continue
-    const references = completedCandidateReferences(candidates[index])
+    const savedCandidate = originals.get(`${result.memory.kind}\u0000${result.memory.text}`)
+    const references = savedCandidate ? completedCandidateReferences(savedCandidate) : new Set<string>()
     if (references.size === 0) continue
     const oldIds = existing.filter((memory) => isMatchingPreCompletionHandoff(memory, references)).map((memory) => memory.id)
     if (oldIds.length === 0) continue

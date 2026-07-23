@@ -18,6 +18,13 @@ Eleven packages in a monorepo:
 
 ## Memory lifecycle
 
+Automatic lifecycle ownership is split deliberately.
+Harness adapters normalize events, `@memory-lane/lifecycle` extracts and prioritizes candidates, and shared core review-quality analysis identifies deterministic capture blockers before storage.
+The lifecycle admission layer applies the effective mode plus per-turn, per-session, and current-project automatic pending-backlog limits.
+Only admitted automatic candidates reach `MemoryEngine.save`, and admission forces them to pending status.
+Explicit user saves and explicit suggestions bypass automatic admission and preserve their existing semantics.
+Adapters receive privacy-safe pending, approved, suppressed, backlog, and advisory counts so notifications never need candidate text or event payloads.
+
 ```
 user/agent → suggest() → pending  → approve() → approved
                                   → reject()  → rejected → approve() → approved

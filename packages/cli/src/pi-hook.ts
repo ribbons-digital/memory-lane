@@ -1,7 +1,7 @@
 import {
   appendHookDebugLog, hookDebugEnabled, loadConfig, parseExplicitMemoryRequest, skippedSecretCount, type HookDebugLogStatus, type MemoryEngine, type SaveResult,
 } from "@memory-lane/core"
-import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleStop, saveSessionSummaryCandidates as persistSessionSummaryCandidates, shouldCaptureLifecycleTrace, type PostToolUseInput, type SessionMessage } from "@memory-lane/lifecycle"
+import { captureLifecycleTrace, classifyTraceFidelity, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleStop, saveSessionSummaryCandidates as persistSessionSummaryCandidates, shouldCaptureLifecycleTrace, type GovernedSessionSummarySaveResults, type LifecycleCaptureResult, type PostToolUseInput, type SessionMessage } from "@memory-lane/lifecycle"
 
 export interface RunPiHookOptions {
   engine: MemoryEngine
@@ -197,20 +197,43 @@ function preCompactSummaryEnabled(config: ReturnType<typeof loadConfig>): boolea
   return config.memory?.sessionEndSummary?.enabled === true && config.memory?.preCompactSummary?.enabled !== false
 }
 
-function saveSessionSummaryCandidates(engine: MemoryEngine, candidates: Awaited<ReturnType<typeof handlePreCompact>>): SaveResult[] {
+function saveSessionSummaryCandidates(engine: MemoryEngine, candidates: Awaited<ReturnType<typeof handlePreCompact>>): GovernedSessionSummarySaveResults {
   return persistSessionSummaryCandidates(engine, candidates)
 }
 
-function output(data: { saved?: number; skipped?: number; discarded?: number; reason?: string; message?: string }): string {
-  return JSON.stringify({ ok: true, data: { saved: 0, skipped: 0, discarded: 0, ...data } })
+interface PiHookOutput {
+  saved?: number
+  pending?: number
+  approved?: number
+  suppressed?: number
+  skipped?: number
+  skippedSecret?: number
+  discarded?: number
+  automaticPendingBacklog?: number
+  advisory?: LifecycleCaptureResult["advisory"]
+  reviewAction?: "memory-lane review"
+  reason?: string
+  message?: string
 }
 
-function counts(saved: SaveResult[], discarded = 0): { saved: number; skipped: number; skippedSecret?: number; discarded: number } {
+function output(data: PiHookOutput): string {
+  return JSON.stringify({ ok: true, data: { saved: 0, pending: 0, approved: 0, suppressed: 0, skipped: 0, discarded: 0, ...data } })
+}
+
+function counts(saved: SaveResult[], discarded = 0, capture?: LifecycleCaptureResult): PiHookOutput {
+  const written = saved.filter((result): result is Extract<SaveResult, { status: "saved" }> => result.status === "saved")
+  const pending = capture?.pendingWritten ?? written.filter((result) => result.memory.status === "pending").length
+  const approved = capture?.approvedWritten ?? written.filter((result) => result.memory.status === "approved").length
   return {
-    saved: saved.filter((result) => result.status === "saved").length,
+    saved: written.length,
+    pending,
+    approved,
+    suppressed: capture?.suppressed ?? discarded,
     skipped: saved.filter((result) => result.status === "skipped").length,
     skippedSecret: skippedSecretCount(saved),
     discarded,
+    ...(capture ? { automaticPendingBacklog: capture.automaticPendingBacklog } : {}),
+    ...(capture?.advisory ? { advisory: capture.advisory, reviewAction: capture.advisory.reviewAction } : {}),
   }
 }
 
@@ -260,7 +283,7 @@ export async function runPiHookCommand(command: PiCommand, options: RunPiHookOpt
         turnId: parsed.input.turnId ?? parsed.input.sessionId,
         lastUserMessage: text,
       }, { adapter: "pi" })
-      const resultCounts = counts(result.saved, result.discarded.length)
+      const resultCounts = counts(result.saved, result.discarded.length, result.capture)
       log("ok", { ...resultCounts, additionalContext: false, warningCount: 0 })
       return output(resultCounts)
     }
@@ -274,7 +297,7 @@ export async function runPiHookCommand(command: PiCommand, options: RunPiHookOpt
         lastUserMessage: parsed.input.lastUserMessage,
         lastAssistantMessage: parsed.input.lastAssistantMessage,
       }, { adapter: "pi" })
-      const resultCounts = counts(result.saved, result.discarded.length)
+      const resultCounts = counts(result.saved, result.discarded.length, result.capture)
       log("ok", { ...resultCounts, additionalContext: false, warningCount: 0 })
       return output(resultCounts)
     }
@@ -290,7 +313,7 @@ export async function runPiHookCommand(command: PiCommand, options: RunPiHookOpt
         toolResponse: parsed.input.toolResponse,
       }
       const result = handlePostToolUse(options.engine, input, { adapter: "pi" })
-      const resultCounts = counts(result.saved, result.discarded.length)
+      const resultCounts = counts(result.saved, result.discarded.length, result.capture)
       log("ok", { ...resultCounts, additionalContext: false, warningCount: 0 })
       return output(resultCounts)
     }
@@ -353,7 +376,7 @@ export async function runPiHookCommand(command: PiCommand, options: RunPiHookOpt
     }, options.env)
 
     const savedResults = saveSessionSummaryCandidates(options.engine, candidates)
-    const resultCounts = counts(savedResults)
+    const resultCounts = counts(savedResults, 0, savedResults.capture)
     log("ok", { ...resultCounts, additionalContext: false, warningCount: 0 })
     return output(resultCounts)
   } catch (error) {

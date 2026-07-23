@@ -13,8 +13,9 @@ Lifecycle autosave intentionally filters transient reviewer, subagent, and task 
 Those operational prompts are not durable memory.
 Explicit memory requests remain supported and authoritative: use `memory-lane save ...` or phrases like “Remember that ...” for durable workflow rules, preferences, or project facts.
 
-Shared lifecycle handlers can also queue compact `project_checkpoint` candidates from strong Stop/PostToolUse evidence such as completed release statements, successful release commands, or merged PR commands.
-These inferred captures are pending by default, deduplicated before saving, and never change approved continuity until the existing review flow approves them; no new CLI or MCP command is required.
+Shared lifecycle handlers can queue compact `project_checkpoint` candidates from context-rich Stop evidence about completed releases, merged pull requests, and other durable outcomes.
+Bare successful release and merge commands are suppressed before persistence because an artifact identifier alone does not explain a durable outcome.
+Eligible inferred captures remain pending, are deduplicated before saving, and never change approved continuity until the existing review flow approves them.
 PostToolUse handlers may also queue pending `procedure` candidates when bounded recent tool evidence shows a failed action followed by a successful safe recovery; the saved text is template-derived and omits raw tool output.
 
 ## OMP installation and maintenance
@@ -35,11 +36,17 @@ Both the repo-local pi adapter and release-style generated pi bridge write memor
 
 - `input` - explicit memory requests only ("Remember that..."); ordinary prompt submissions are ignored to avoid noisy memory queues.
 - `turn_end` - the last user and assistant messages are evaluated for memory-worthy candidates and strong completed-progress checkpoint evidence after a turn completes.
-- `tool_result` - successful shell workflow commands such as `pnpm test`, `pnpm build`, and `pnpm install` are captured as project workflow rules; successful release/merge commands may queue pending checkpoint candidates.
+- `tool_result` - successful shell workflow commands such as `pnpm test`, `pnpm build`, and `pnpm install` may become pending project workflow suggestions; bare successful release and merge commands stay suppressed.
 
-Automatic writes route through the shared CLI lifecycle policy, skip secrets, avoid transient imperatives and reviewer/subagent meta-prompts, deduplicate within a turn, and keep inferred candidates pending for review.
+Automatic writes route through the shared lifecycle capture policy, skip secrets, run shared deterministic quality analysis, deduplicate within a turn, and keep every inferred candidate pending for review.
+The default conservative policy admits at most 2 candidates per turn, 8 per session, and 20 automatic pending candidates per project.
+The explicit aggressive policy admits at most 5 per turn, 30 per session, and 100 pending per project, while `off` disables automatic capture.
+Explicit memory requests and `memory_suggest` are exempt from these limits.
+When the project ceiling is reached, the adapter emits one review advisory rather than growing the queue.
 On OMP, automatic lifecycle capture is suppressed only when both nested session-file ownership and the delegated-worker system role identify a task session.
-Inferred checkpoint candidates stay pending until review; use `/memory review` in pi or the normal CLI/MCP review surfaces to approve or reject them.
+Inferred candidates stay pending until review; use `/memory review` in pi or the normal CLI/MCP review surfaces to approve or reject them.
+Pi and OMP batch successful lifecycle writes into at most one count-only notice per turn window, such as `Memory Lane queued 2 pending memory suggestions for review. Run /memory review to inspect.`
+No notice includes candidate text, prompts, transcripts, or tool output, and events with no writes stay quiet.
 Repo-local pi `/memory review` and `/memory delete <id>` respect current-project visibility by default, return not-found behavior without memory text for out-of-scope ids, and require `--all` for deliberate cross-project review or delete.
 Set `MEMORY_LANE_DEBUG=1` to append privacy-safe debug records to `~/.memory-lane/pi-debug.jsonl` (no prompts or tool outputs are logged).
 

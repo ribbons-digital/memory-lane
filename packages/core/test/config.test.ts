@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
-import { loadConfig, DEFAULT_CONFIG, isLocalBaseUrl, validateConfig, ConfigError, writeConfig, readRawConfig } from "../src/config.js"
+import { loadConfig, DEFAULT_CONFIG, isLocalBaseUrl, resolveLifecycleCaptureConfig, validateConfig, ConfigError, writeConfig, readRawConfig } from "../src/config.js"
 import { tempDir } from "./helpers.js"
 
 function assertMalformedConfigError(action: () => unknown, configPath: string): void {
@@ -28,6 +28,26 @@ describe("loadConfig", () => {
     assert.equal(cfg.semantic.retrieval.topK, 8)
     assert.equal(DEFAULT_CONFIG.obsidian?.enabled, false)
     assert.equal(cfg.obsidian?.enabled, false)
+    assert.deepEqual(cfg.memory?.lifecycleCapture, { mode: "conservative" })
+  })
+
+  it("validates all lifecycle capture modes and deterministic limit overrides", () => {
+    for (const mode of ["off", "conservative", "aggressive"] as const) {
+      const config = structuredClone(DEFAULT_CONFIG)
+      config.memory!.lifecycleCapture = {
+        mode,
+        limits: { perTurn: 3, perSession: 9, pendingBacklog: 30 },
+      }
+      assert.equal(validateConfig(config).memory?.lifecycleCapture?.mode, mode)
+    }
+
+    assert.deepEqual(resolveLifecycleCaptureConfig({ mode: "conservative" }).limits, { perTurn: 2, perSession: 8, pendingBacklog: 20 })
+    assert.deepEqual(resolveLifecycleCaptureConfig({ mode: "aggressive" }).limits, { perTurn: 5, perSession: 30, pendingBacklog: 100 })
+    assert.deepEqual(resolveLifecycleCaptureConfig({ mode: "off" }).limits, { perTurn: 0, perSession: 0, pendingBacklog: 0 })
+
+    const invalid = structuredClone(DEFAULT_CONFIG) as any
+    invalid.memory.lifecycleCapture.mode = "unbounded"
+    assert.throws(() => validateConfig(invalid), /memory\.lifecycleCapture\.mode/u)
   })
 
   it("includes the config path and parse details for malformed JSON", () => {

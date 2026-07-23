@@ -41,6 +41,32 @@ Values:
 `memory-lane doctor`, `memory-lane doctor --json`, `memory-lane status --json`, and MCP `memory_status` report `handoffMode`, `handoffModeBehaviorActive`, `handoffModeNote`, and text-free `automaticHandoffDiagnostics` without memory bodies or proposal previews.
 Human `memory-lane status` stays compact; use `status --json` for the full handoff-mode diagnostic fields.
 
+## Lifecycle capture governance
+
+`memory.lifecycleCapture` controls automatic candidates from lifecycle write hooks independently from explicit `save`, `memory_save`, explicit remember requests, and `memory_suggest`.
+The default mode is `conservative`.
+
+```json
+{
+  "memory": {
+    "lifecycleCapture": {
+      "mode": "conservative"
+    }
+  }
+}
+```
+
+- `off` disables automatic lifecycle candidates while leaving explicit memory operations unchanged.
+- `conservative` applies all deterministic quality blockers and admits at most 2 automatic candidates per turn, 8 per session, and 20 automatic pending candidates per project.
+- `aggressive` is an explicit opt-in that keeps hard bare-checkpoint and rejected-equivalent blockers while admitting at most 5 candidates per turn, 30 per session, and 100 automatic pending candidates per project.
+
+The optional positive integer fields `limits.perTurn`, `limits.perSession`, and `limits.pendingBacklog` override the selected mode's limits.
+Corrections and procedures are admitted before generic project facts and checkpoints when a budget applies.
+Automatic lifecycle evidence is always stored as pending and never approved by admission.
+Bare release and merge events, rejected equivalents, and other deterministic conservative-mode quality blockers are suppressed before persistence.
+Context-rich checkpoints remain eligible when they include a durable outcome, decision, invariant, correction, procedure, or next action.
+At the project backlog ceiling, automatic capture pauses and returns one advisory directing the user to `memory-lane review`.
+
 ## Local learning capture
 
 Local learning is opt-in and disabled unless `learning.capture` is set to `"on"`.

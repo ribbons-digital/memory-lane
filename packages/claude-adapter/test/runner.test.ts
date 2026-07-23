@@ -293,7 +293,7 @@ test("post-tool-use saves with claude tool provenance", async () => {
   assert.equal(saved[0].provenance?.toolName, "Bash")
 })
 
-test("post-tool-use remains quiet without debug when only approved memory is saved", async () => {
+test("post-tool-use reports automatic workflow evidence as pending instead of approved", async () => {
   const engine = engineInTemp()
 
   const output = await runClaudeHookCommand("post-tool-use", {
@@ -302,10 +302,11 @@ test("post-tool-use remains quiet without debug when only approved memory is sav
     payloadText: postToolUsePayload(),
   })
 
-  assert.equal(output, "{}")
+  const payload = JSON.parse(output)
+  assert.match(payload.systemMessage, /suggested 1 pending memory for review/u)
   const saved = engine.list({ all: true })
   assert.equal(saved.length, 1)
-  assert.equal(saved[0].status, "approved")
+  assert.equal(saved[0].status, "pending")
 })
 
 test("session-end returns no-op when summarization is disabled", async () => {

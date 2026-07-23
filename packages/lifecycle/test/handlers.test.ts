@@ -1029,7 +1029,7 @@ test("stop skips duplicate postmortem learning candidate when approved workflow 
   assert.equal(result.saved.length, 0)
 })
 
-test("post-tool-use captures successful release command as pending checkpoint", () => {
+test("post-tool-use suppresses successful bare release evidence before persistence", () => {
   const project = tempDir()
   const engine = engineInTemp(project)
 
@@ -1040,18 +1040,9 @@ test("post-tool-use captures successful release command as pending checkpoint", 
     toolResponse: { stdout: "https://github.com/ribbons-digital/memory-lane/releases/tag/v0.2.12", exit_code: 0 },
   }, { adapter: "test" })
 
-  assert.equal(result.saved.length, 1)
-  assert.equal(result.saved[0]?.status, "saved")
-  if (result.saved[0]?.status !== "saved") throw new Error("expected saved checkpoint")
-  assert.equal(result.saved[0].memory.text, "Released v0.2.12.")
-  assert.equal(result.saved[0].memory.status, "pending")
-  assert.equal(result.saved[0].memory.kind, "project_checkpoint")
-  assert.equal(result.saved[0].memory.category, "project")
-  assert.equal(result.saved[0].memory.scope.type, "project")
-  assert.equal(result.saved[0].memory.source, "agent-suggested")
-  assert.equal(result.saved[0].memory.provenance?.adapter, "test")
-  assert.equal(result.saved[0].memory.provenance?.lifecycleEvent, "post_tool_use")
-  assert.equal(result.saved[0].memory.provenance?.toolName, "Bash")
+  assert.equal(result.saved.length, 0)
+  assert.equal(result.capture?.qualitySuppressed, 1)
+  assert.equal(engine.reviewPending().length, 0)
 })
 
 test("post-tool-use suppresses a successful bare merge command without durable context", () => {
@@ -1286,4 +1277,63 @@ test("post-tool-use skips recovery-backed procedure when pending correction alre
   })
 
   assert.equal(result.saved.filter((entry) => entry.status === "saved" && entry.memory.kind === "procedure").length, 0)
+})
+
+test("default lifecycle governance suppresses bare release evidence before pending persistence", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handlePostToolUse(engine, {
+    cwd: project,
+    sessionId: "session-release",
+    turnId: "turn-release",
+    toolName: "bash",
+    toolInput: { command: "gh release create v2.3.4" },
+    toolResponse: { exit_code: 0, stdout: "https://example.invalid/releases/tag/v2.3.4" },
+  }, { adapter: "pi" })
+
+  assert.equal(engine.reviewPending().length, 0)
+  assert.equal(result.saved.length, 0)
+  assert.equal(result.capture?.mode, "conservative")
+  assert.equal(result.capture?.suppressed, 1)
+  assert.equal(result.capture?.pendingWritten, 0)
+})
+
+test("context-rich release remains eligible but automatic lifecycle evidence stays pending", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project)
+
+  const result = handleStop(engine, {
+    cwd: project,
+    sessionId: "session-rich",
+    turnId: "turn-rich",
+    lastAssistantMessage: "Released v2.3.4 with the retry fix, preventing duplicate uploads in the publish workflow.",
+  }, { adapter: "pi" })
+
+  assert.equal(result.capture?.pendingWritten, 1)
+  assert.equal(result.capture?.approvedWritten, 0)
+  assert.equal(engine.reviewPending()[0]?.status, "pending")
+})
+
+test("off lifecycle capture blocks automatic candidates but exempts explicit user memory requests", () => {
+  const project = tempDir()
+  const engine = engineInTemp(project, { lifecycleCapture: { mode: "off" } })
+
+  const automatic = handleStop(engine, {
+    cwd: project,
+    sessionId: "session-off",
+    turnId: "turn-auto",
+    lastAssistantMessage: "Merged PR #42 with the durable cache invalidation fix.",
+  })
+  const explicit = handleStop(engine, {
+    cwd: project,
+    sessionId: "session-off",
+    turnId: "turn-explicit",
+    lastUserMessage: "Remember that this project requires signed release tags.",
+  })
+
+  assert.equal(automatic.capture?.pendingWritten, 0)
+  assert.equal(automatic.capture?.suppressed, 1)
+  assert.equal(explicit.saved.filter((save) => save.status === "saved").length, 1)
+  assert.equal(engine.list({ status: "approved" }).length, 1)
 })

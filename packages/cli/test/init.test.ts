@@ -209,7 +209,7 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
 
   it("generated pi CLI bridge forwards session_before_compact to pi pre-compact", () => {
     const { nativeBinary, logPath } = writeNativeMemoryLaneStub("precompact-calls.jsonl", `if (args[0] === "pi" && args[1] === "pre-compact") {
-  console.log(JSON.stringify({ ok: true, data: { saved: 1 } }));
+  console.log(JSON.stringify({ ok: true, data: { saved: 1, pending: 1 } }));
 } else {
   console.log(JSON.stringify({ data: {} }));
 }`)
@@ -242,10 +242,10 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
       });
       if (result !== undefined) throw new Error("expected precompact bridge to leave host compaction untouched");
       const started = Date.now();
-      while (!notifications.some((item) => item.message.includes("pending pre-compact summary") && item.level === "info") && Date.now() - started < 1000) {
+      while (!notifications.some((item) => item.message.includes("pending memory suggestion") && item.level === "info") && Date.now() - started < 1000) {
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
-      if (!notifications.some((item) => item.message.includes("pending pre-compact summary") && item.level === "info")) throw new Error("expected pending summary notification");
+      if (!notifications.some((item) => item.message.includes("pending memory suggestion") && item.level === "info")) throw new Error("expected pending summary notification");
     `)
 
     const entries = readJsonlEntries(logPath)
@@ -265,7 +265,7 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
 
   it("generated pi CLI bridge defers lossy split turns to session_compact summary", () => {
     const { nativeBinary, logPath } = writeNativeMemoryLaneStub("deferred-precompact-calls.jsonl", `if (args[0] === "pi" && args[1] === "pre-compact") {
-  console.log(JSON.stringify({ ok: true, data: { saved: 1 } }));
+  console.log(JSON.stringify({ ok: true, data: { saved: 1, pending: 1 } }));
 } else {
   console.log(JSON.stringify({ data: {} }));
 }`)
@@ -309,7 +309,7 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
 
   it("generated pi CLI bridge keeps deferred compaction isolated across session switch", () => {
     const { nativeBinary, logPath } = writeNativeMemoryLaneStub("switched-precompact-calls.jsonl", `if (args[0] === "pi" && args[1] === "pre-compact") {
-  console.log(JSON.stringify({ ok: true, data: { saved: 1 } }));
+  console.log(JSON.stringify({ ok: true, data: { saved: 1, pending: 1 } }));
 } else {
   console.log(JSON.stringify({ data: {} }));
 }`)
@@ -351,8 +351,8 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
     assert.deepEqual(payload.messages, [{ role: "assistant", content: "SESSION_B_COMPLETE" }])
   })
 
-  it("generated pi CLI bridge forwards input turn_end and tool_result with OMP normalization", () => {
-    const { nativeBinary, logPath } = writeNativeMemoryLaneStub("lifecycle-calls.jsonl", "console.log(JSON.stringify({ data: { saved: 1 } }));")
+  it("generated pi CLI bridge forwards lifecycle events and batches parsed pending-write notices", () => {
+    const { nativeBinary, logPath } = writeNativeMemoryLaneStub("lifecycle-calls.jsonl", "console.log(JSON.stringify({ data: { saved: 1, pending: 1, approved: 0, suppressed: 0 } }));")
     const piExt = installPiCliBridge(nativeBinary)
     runPiBridgeSmoke(piExt, `
       const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
@@ -360,8 +360,10 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
       const handlers = {};
       const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
       fn(pi);
+      const notifications = [];
       const ctx = {
         cwd: "/tmp/pi-generated-bridge-project",
+        ui: { notify(message, level) { notifications.push({ message, level }); } },
         sessionManager: {
           getSessionFile() { return "/tmp/pi-session.json" },
           getBranch() {
@@ -381,6 +383,7 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
       }, ctx);
       if (turnResult !== undefined) throw new Error("turn_end must not override OMP");
       const toolResult = await handlers.tool_result({
+        turnIndex: 7,
         toolName: "shell:memory-lane-contract",
         toolCallId: "call-live",
         input: { command: "pnpm test" },
@@ -389,6 +392,11 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
         isError: false,
       }, ctx);
       if (toolResult !== undefined) throw new Error("tool_result must not override OMP");
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const notices = notifications.filter((item) => item.message.includes("pending memory suggestion"));
+      if (notices.length !== 1) throw new Error("expected one coalesced pending notice, got " + JSON.stringify(notifications));
+      if (!notices[0].message.includes("queued 2 pending memory suggestions for review")) throw new Error("expected accurate batched count");
+      if (/pnpm|Latest OMP|Current assistant/u.test(notices[0].message)) throw new Error("notification leaked lifecycle content");
     `)
 
     const entries = readJsonlEntries(logPath)
@@ -409,6 +417,22 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
     assert.deepEqual(toolResult.tool_input, { command: "pnpm test" })
     assert.equal(toolResult.tool_response.text, "OMP_CONTRACT_TOOL_TEST_PASSED")
     assert.equal(toolResult.tool_response.exitCode, 0)
+  })
+
+  it("generated pi CLI bridge stays quiet for successful lifecycle output with no pending writes", () => {
+    const { nativeBinary } = writeNativeMemoryLaneStub("quiet-lifecycle.jsonl", "console.log(JSON.stringify({ data: { saved: 0, pending: 0, suppressed: 1 } }));")
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const notifications = [];
+      fn({ registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } });
+      const ctx = { cwd: "/tmp/quiet", ui: { notify(message) { notifications.push(message); } }, sessionManager: { getSessionFile() { return "/tmp/quiet-session"; }, getBranch() { return []; } } };
+      await handlers.turn_end({ turnIndex: 1, message: { role: "assistant", content: "done" } }, ctx);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (notifications.length) throw new Error("no-write lifecycle event must stay quiet: " + JSON.stringify(notifications));
+    `)
   })
 
   it("generated pi CLI bridge suppresses lifecycle handlers only for proven OMP task sessions", () => {

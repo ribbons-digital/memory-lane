@@ -36,8 +36,11 @@ test("reports missing integration configs without creating files", () => {
   assert.equal(report.ompExtension.exists, false)
   assert.equal(report.ompExtension.detected, false)
   assert.equal(report.summary.mcpExplicitToolsOnly, true)
-  assert.equal(report.summary.hooksAutomaticLifecycle, true)
+  assert.equal(report.summary.hooksAutomaticLifecycle, false)
   assert.equal(report.summary.piAutosaveEnabled, false)
+  assert.equal(report.summary.lifecycleCaptureMode, "conservative")
+  assert.equal(report.summary.automaticPendingWritesEnabled, false)
+  assert.equal(report.summary.automaticPendingBacklog, 0)
   assert.ok(report.notes.some((note) => note.includes("MCP provides explicit")))
   assert.equal(fs.existsSync(path.dirname(report.claudeDesktopMcp.checkedPath)), false)
 })
@@ -86,6 +89,19 @@ test("detects Codex and Claude Code hook commands", () => {
   assert.deepEqual(report.codexHooks.warnings, [])
   assert.deepEqual(report.claudeCodeHooks.user.commands, { userPromptSubmit: true, stop: true, postToolUse: false })
   assert.deepEqual(report.claudeCodeHooks.project.commands, { userPromptSubmit: false, stop: false, postToolUse: true })
+  assert.equal(report.summary.hooksAutomaticLifecycle, true)
+  assert.equal(report.summary.automaticPendingWritesEnabled, true)
+
+  const disabled = diagnoseIntegrations({
+    cwd: project,
+    lifecycleCaptureMode: "off",
+    automaticPendingBacklog: 7,
+    paths: { codexProjectHooks: codexProject },
+  })
+  assert.equal(disabled.summary.lifecycleCaptureMode, "off")
+  assert.equal(disabled.summary.hooksAutomaticLifecycle, false)
+  assert.equal(disabled.summary.automaticPendingWritesEnabled, false)
+  assert.equal(disabled.summary.automaticPendingBacklog, 7)
 })
 
 test("warns when Codex user and project hooks both run the same Memory Lane command", () => {

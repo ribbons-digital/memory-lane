@@ -51,8 +51,8 @@ export {
 } from "./search.js"
 export { resolveProjectScope } from "./project-scope.js"
 export {
-  loadConfig, DEFAULT_CONFIG, getDefaultConfigPath, isLocalBaseUrl, validateConfig,
-  writeConfig, readRawConfig, deepMergeConfig,
+  loadConfig, DEFAULT_CONFIG, LIFECYCLE_CAPTURE_LIMITS, getDefaultConfigPath, isLocalBaseUrl, validateConfig,
+  writeConfig, readRawConfig, deepMergeConfig, resolveLifecycleCaptureConfig,
 } from "./config.js"
 export { createEmbeddingStore, foldEmbeddings, type EmbeddingLine } from "./embedding-store.js"
 export {

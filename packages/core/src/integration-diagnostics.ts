@@ -1,6 +1,7 @@
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
+import type { LifecycleCaptureMode } from "./types.js"
 
 export interface HookCommandStatus {
   userPromptSubmit: boolean
@@ -51,8 +52,11 @@ export const OMP_CONTRACT_DIAGNOSTIC: Readonly<OmpContractDiagnostic> = Object.f
 export interface IntegrationDiagnostics {
   summary: {
     mcpExplicitToolsOnly: true
-    hooksAutomaticLifecycle: true
+    hooksAutomaticLifecycle: boolean
     piAutosaveEnabled: false
+    lifecycleCaptureMode: LifecycleCaptureMode
+    automaticPendingWritesEnabled: boolean
+    automaticPendingBacklog: number
   }
   claudeDesktopMcp: {
     checkedPath: string
@@ -93,6 +97,8 @@ export interface DiagnoseIntegrationsOptions {
   warnings?: IntegrationDiagnosticWarnings
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>
   homeDir?: string
+  lifecycleCaptureMode?: LifecycleCaptureMode
+  automaticPendingBacklog?: number
 }
 
 const emptyCommands = (): HookCommandStatus => ({ userPromptSubmit: false, stop: false, postToolUse: false })
@@ -260,8 +266,26 @@ export function diagnoseIntegrations(options: DiagnoseIntegrationsOptions = {}):
   const paths = mergePaths(options.cwd, options.paths, env, homeDir)
   const codexUserHooks = diagnoseJsonHookFile(paths.codexUserHooks, "codex")
   const codexProjectHooks = diagnoseJsonHookFile(paths.codexProjectHooks, "codex")
+  const claudeUserHooks = diagnoseJsonHookFiles(paths.claudeCodeUserSettings, "claude")
+  const claudeProjectHooks = diagnoseJsonHookFile(paths.claudeCodeProjectSettings, "claude")
+  const piExtension = diagnoseExtension(paths.piExtension, options.warnings?.piExtension) as IntegrationDiagnostics["piExtension"]
+  const ompExtension = diagnoseExtension(paths.ompExtension, options.warnings?.ompExtension)
+  const lifecycleCaptureMode = options.lifecycleCaptureMode ?? "conservative"
+  const writeHooksDetected = codexUserHooks.commands.stop || codexUserHooks.commands.postToolUse
+    || codexProjectHooks.commands.stop || codexProjectHooks.commands.postToolUse
+    || claudeUserHooks.commands.stop || claudeUserHooks.commands.postToolUse
+    || claudeProjectHooks.commands.stop || claudeProjectHooks.commands.postToolUse
+    || piExtension.detected || ompExtension.detected
+  const automaticPendingWritesEnabled = lifecycleCaptureMode !== "off" && writeHooksDetected
   return {
-    summary: { mcpExplicitToolsOnly: true, hooksAutomaticLifecycle: true, piAutosaveEnabled: false },
+    summary: {
+      mcpExplicitToolsOnly: true,
+      hooksAutomaticLifecycle: automaticPendingWritesEnabled,
+      piAutosaveEnabled: false,
+      lifecycleCaptureMode,
+      automaticPendingWritesEnabled,
+      automaticPendingBacklog: options.automaticPendingBacklog ?? 0,
+    },
     claudeDesktopMcp: diagnoseClaudeDesktopMcp(paths.claudeDesktopConfig),
     codexHooks: {
       user: codexUserHooks,
@@ -269,12 +293,12 @@ export function diagnoseIntegrations(options: DiagnoseIntegrationsOptions = {}):
       warnings: duplicateCodexHookWarnings(codexUserHooks, codexProjectHooks),
     },
     claudeCodeHooks: {
-      user: diagnoseJsonHookFiles(paths.claudeCodeUserSettings, "claude"),
-      project: diagnoseJsonHookFile(paths.claudeCodeProjectSettings, "claude"),
+      user: claudeUserHooks,
+      project: claudeProjectHooks,
     },
-    piExtension: diagnoseExtension(paths.piExtension, options.warnings?.piExtension) as IntegrationDiagnostics["piExtension"],
+    piExtension,
     ompExtension: {
-      ...diagnoseExtension(paths.ompExtension, options.warnings?.ompExtension),
+      ...ompExtension,
       contract: OMP_CONTRACT_DIAGNOSTIC,
     },
     notes: [

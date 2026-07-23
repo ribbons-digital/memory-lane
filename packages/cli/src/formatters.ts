@@ -75,6 +75,12 @@ export interface DashboardSummary {
   recent: {
     sessionSummaries: Array<{ id: string; createdAt: string; status: MemoryRecord["status"]; provenance: string; preview: string }>
   }
+  lifecycleCapture: {
+    mode: "off" | "conservative" | "aggressive"
+    automaticPendingWriteCapability: boolean
+    automaticPendingWritesEnabled: boolean
+    automaticPendingBacklog: number
+  }
   continuityHints: ContinuityHintSummary
   suggestedActions: string[]
 }
@@ -107,11 +113,18 @@ function sessionSummaryPreview(text: string, max = 180): string {
   return compactPreview(cleaned || text, max)
 }
 
-export function buildDashboardSummary(memories: MemoryRecord[], projectScope = "none"): DashboardSummary {
+export function buildDashboardSummary(memories: MemoryRecord[], projectScope = "none", lifecycleMode: "off" | "conservative" | "aggressive" = "conservative"): DashboardSummary {
   const pending = memories.filter((memory) => memory.status === "pending")
   const sessionSummaries = pending.filter((memory) => memory.kind === "session_summary")
   const suspectMeta = pending.filter((memory) => isMetaTaskPromptText(memory.text))
   const continuityHints = buildContinuityHints(memories, { projectScopeKey: projectScope === "none" ? undefined : projectScope })
+  const automaticPendingBacklog = pending.filter((memory) => {
+    if (projectScope === "none") return false
+    if ((memory.scope.key ?? memory.project?.key ?? memory.project?.root) !== projectScope) return false
+    if (memory.source !== "agent-suggested" && memory.source !== "session-summary") return false
+    const event = memory.provenance?.lifecycleEvent
+    return event === "turn_stop" || event === "post_tool_use" || event === "pre_compact" || event === "session_end"
+  }).length
   const suggestedActions: string[] = []
   if (pending.length) suggestedActions.push("memory-lane review")
   if (suspectMeta.length) suggestedActions.push("memory-lane review --suspect-meta")
@@ -143,13 +156,20 @@ export function buildDashboardSummary(memories: MemoryRecord[], projectScope = "
         preview: sessionSummaryPreview(memory.text),
       })),
     },
+    lifecycleCapture: {
+      mode: lifecycleMode,
+      automaticPendingWriteCapability: lifecycleMode !== "off",
+      automaticPendingWritesEnabled: lifecycleMode !== "off",
+      automaticPendingBacklog,
+    },
     continuityHints,
     suggestedActions: [...new Set(suggestedActions)],
   }
 }
 
 export function formatDashboard(memories: MemoryRecord[], json: boolean, extraMeta?: Record<string, unknown>): string {
-  const summary = buildDashboardSummary(memories, typeof extraMeta?.projectScope === "string" ? extraMeta.projectScope : "none")
+  const lifecycleMode = extraMeta?.lifecycleCaptureMode === "off" || extraMeta?.lifecycleCaptureMode === "aggressive" ? extraMeta.lifecycleCaptureMode : "conservative"
+  const summary = buildDashboardSummary(memories, typeof extraMeta?.projectScope === "string" ? extraMeta.projectScope : "none", lifecycleMode)
   if (json) {
     return JSON.stringify({ ok: true, data: summary, meta: meta({ count: memories.length, ...extraMeta }) }, null, 2)
   }
@@ -159,6 +179,7 @@ export function formatDashboard(memories: MemoryRecord[], json: boolean, extraMe
     `${colorize("Project", "gray")}: ${summary.projectScope}`,
     `${figures.pointerSmall} Approved ${counts.approved}   Pending ${counts.pending}   Total ${counts.total}`,
     `${figures.pointerSmall} Global ${counts.global}   Project ${counts.project}`,
+    `${figures.pointerSmall} Lifecycle capture ${summary.lifecycleCapture.mode}   Automatic pending ${summary.lifecycleCapture.automaticPendingBacklog}`,
   ].join("\n")
   const box = boxen(header, {
     title: "Memory Lane Dashboard",

@@ -2077,7 +2077,7 @@ describe("CLI integration", () => {
         transcript_path: null,
         model: "gpt-5-codex",
         permission_mode: "default",
-        last_user_message: "Released v0.2.12.",
+        last_user_message: "Released v0.2.12 with the retry invariant documented for future deploys.",
         last_assistant_message: "Done.",
       }),
     })
@@ -4189,7 +4189,9 @@ describe("CLI integration", () => {
       const durationMs = Date.now() - startedAt
 
       assert.equal(result.status, 0, result.stderr)
-      assert.equal(result.stdout.trim(), "{}")
+      const hookOutput = JSON.parse(result.stdout)
+      assert.match(hookOutput.systemMessage, /suggested 1 pending memory for review/u)
+      assert.doesNotMatch(hookOutput.systemMessage, /pnpm|tests passed/iu)
       assert.ok(durationMs < 5_000, `hook took ${durationMs}ms`)
     })
   })
