@@ -69,7 +69,46 @@ describe("generated CLI-backed Pi/OMP targeted review bridge", () => {
     assert.match(revise.description, /same ID/iu)
     assert.match(revise.description, /needs-human-review/iu)
     assert.match(revise.description, /never automatically approve or reject/iu)
-    assert.deepEqual(Object.keys(revise.parameters.properties), ["id", "text"])
+    assert.deepEqual(Object.keys(revise.parameters.properties), ["id", "text", "all"])
+  })
+
+  it("returns structured missing and scoped-not-found results and supports explicit all-scope revision", async () => {
+    const { extension, project, root } = setupBridge()
+    const otherProject = path.join(root, "other-project")
+    fs.mkdirSync(path.join(otherProject, ".git"), { recursive: true })
+    fs.writeFileSync(path.join(project, ".memory-lane-scope"), JSON.stringify({ id: "bridge-project-a" }))
+    fs.writeFileSync(path.join(otherProject, ".memory-lane-scope"), JSON.stringify({ id: "bridge-project-b" }))
+    const tools = await loadTools(extension)
+    const suggest = tools.get("memory_suggest")!
+    const revise = tools.get("memory_revise")!
+
+    const missingId = "mem_missing_generated_bridge"
+    const missing = await execute(revise, { id: missingId, text: "The project retains durable release decisions." }, project)
+    assert.deepEqual(missing.details, { id: missingId, error: "pending-memory-not-found" })
+    assert.match(missing.content[0].text, new RegExp(missingId, "u"))
+    assert.match(missing.content[0].text, /pending memory not found/iu)
+
+    const created = await execute(suggest, { text: "Should we retain this?", category: "project" }, project)
+    const scoped = await execute(revise, { id: created.details.id, text: "The project retains durable release decisions." }, otherProject)
+    assert.deepEqual(scoped.details, { id: created.details.id, error: "pending-memory-not-found" })
+    assert.match(scoped.content[0].text, /current project scope/iu)
+    assert.match(scoped.content[0].text, /all.*true/iu)
+
+    const revised = await execute(revise, { id: created.details.id, text: "The project retains durable release decisions.", all: true }, otherProject)
+    assert.equal(revised.details.id, created.details.id)
+    assert.equal(revised.details.review.outcome, "clean")
+  })
+
+  it("does not classify other CLI revision failures as not found", async () => {
+    const { extension, project } = setupBridge()
+    const tools = await loadTools(extension)
+    const created = await execute(tools.get("memory_suggest")!, { text: "Should we retain this?", category: "project" }, project)
+    const failed = await execute(tools.get("memory_revise")!, { id: created.details.id, text: "" }, project)
+
+    assert.equal(failed.details.id, created.details.id)
+    assert.equal(failed.details.error, "pending-memory-revision-failed")
+    assert.notEqual(failed.details.error, "pending-memory-not-found")
+    assert.match(failed.content[0].text, /revision failed/iu)
   })
 
   it("returns candidate-only clean and flagged receipts, then revises the same ID to clean", async () => {
