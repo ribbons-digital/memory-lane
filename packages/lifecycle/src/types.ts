@@ -1,4 +1,4 @@
-import type { ContinuityHintCode, MemoryLifecycleEvent, MemoryRecord, MemorySource, ResolvedContinuityBaseline, SaveResult } from "@memory-lane/core"
+import type { ContinuityHintCode, LifecycleCaptureLimits, LifecycleCaptureMode, MemoryLifecycleEvent, MemoryRecord, MemorySource, ResolvedContinuityBaseline, SaveResult } from "@memory-lane/core"
 
 export interface LifecycleContext {
   cwd: string
@@ -87,6 +87,25 @@ export interface MemoryContextDecision {
   }
 }
 
+export interface LifecycleCaptureAdvisory {
+  code: "automatic-pending-backlog-full"
+  message: string
+  reviewAction: "memory-lane review"
+}
+
+export interface LifecycleCaptureResult {
+  mode: LifecycleCaptureMode
+  limits: LifecycleCaptureLimits
+  pendingWritten: number
+  approvedWritten: number
+  explicitWritten: number
+  suppressed: number
+  qualitySuppressed: number
+  limitSuppressed: number
+  automaticPendingBacklog: number
+  advisory?: LifecycleCaptureAdvisory
+}
+
 export interface LifecycleResult {
   additionalContext?: string
   saved: SaveResult[]
@@ -95,6 +114,8 @@ export interface LifecycleResult {
   discarded: Array<{ text: string; reason: string }>
   skippedSecret?: number
   contextDecision?: MemoryContextDecision
+  /** Privacy-safe automatic capture admission and write counts. */
+  capture?: LifecycleCaptureResult
 }
 
 export type CandidateDecision = "save-approved" | "save-pending" | "discard"

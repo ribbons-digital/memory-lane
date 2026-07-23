@@ -884,7 +884,7 @@ test("session_before_compact saves pending pi summary without overriding compact
     assert.equal(mem.provenance.lifecycleEvent, "pre_compact")
     assert.equal(mem.provenance.turnId, "turn-compact")
     assert.match(mem.text, /Pi pre-compact summary survived/)
-    assert.ok(notifications.some((n) => n.message.includes("pending pre-compact summary")))
+    assert.ok(notifications.some((n) => n.message.includes("pending memory suggestion")))
 
     await runEvent(pi, "session_compact", { compactionEntry: { summary: "SHOULD_NOT_DUPLICATE" } }, ctx)
     assert.equal(prompts.length, 1)
@@ -1131,4 +1131,49 @@ test("memory session-summary pluralizes multiple pending pi session summaries", 
     assert.ok(notifications.some((n) => n.message === "Saved 2 pending session summaries. Run /memory review to inspect."))
     assert.ok(notifications.every((n) => !n.message.includes("summaryies")))
   })
+})
+
+test("automatic lifecycle writes emit one batched count-only pending-review notification", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const notifications: FakeNotification[] = []
+  const ctx = ctxWithUi(env.dir, { notifications })
+
+  await runEvent(pi, "turn_end", {
+    turnId: "notice-turn",
+    lastUserMessage: "This project released v4.5.6 with the durable retry invariant documented for future deploys.",
+  }, ctx)
+  await runEvent(pi, "tool_result", {
+    turnId: "notice-turn",
+    toolName: "bash",
+    toolInput: { command: "pnpm test" },
+    toolResponse: { exit_code: 0, stdout: "passing" },
+  }, ctx)
+  await new Promise((resolve) => setTimeout(resolve, 100))
+
+  const notices = notifications.filter((item) => item.message.includes("pending memory suggestion"))
+  assert.equal(notices.length, 1)
+  assert.match(notices[0]?.message ?? "", /queued 2 pending memory suggestions for review/u)
+  assert.match(notices[0]?.message ?? "", /\/memory review/u)
+  assert.doesNotMatch(notices[0]?.message ?? "", /released|pnpm|Auto-saved/iu)
+})
+
+test("suppressed automatic lifecycle candidates stay notification-quiet", async () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+  memoryLaneExtension(pi)
+  const notifications: FakeNotification[] = []
+  const ctx = ctxWithUi(env.dir, { notifications })
+
+  await runEvent(pi, "tool_result", {
+    turnId: "quiet-turn",
+    toolName: "bash",
+    toolInput: { command: "gh release create v4.5.6" },
+    toolResponse: { exit_code: 0, stdout: "created" },
+  }, ctx)
+  await new Promise((resolve) => setTimeout(resolve, 100))
+  assert.equal(notifications.length, 0)
 })

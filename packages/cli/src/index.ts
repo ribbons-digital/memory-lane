@@ -528,7 +528,11 @@ function handleReview(ctx: CliContext): void {
 function handleDashboard(ctx: CliContext): void {
   const allScope = hasFlag(ctx.argv, "all")
   const memories = ctx.engine.list({ all: allScope })
-  console.log(formatDashboard(memories, ctx.json, { all: allScope, projectScope: ctx.engine.getProjectScope()?.key ?? "none" }))
+  console.log(formatDashboard(memories, ctx.json, {
+    all: allScope,
+    projectScope: ctx.engine.getProjectScope()?.key ?? "none",
+    lifecycleCaptureMode: ctx.engine.getLifecycleCaptureConfig().mode,
+  }))
 }
 
 function handleAgreements(ctx: CliContext): void {

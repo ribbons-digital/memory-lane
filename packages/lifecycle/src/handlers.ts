@@ -5,13 +5,14 @@ import { checkpointKeyFromText, extractCheckpointCandidatesFromPostToolUse, extr
 import { correctionKeyFromText, extractCorrectionCandidatesFromStop, filterDuplicateCorrectionCandidates, filterSameTurnCorrectionCandidates } from "./correction-capture.js"
 import { extractPostmortemLearningCandidatesFromStop, filterDuplicatePostmortemLearningCandidates, filterSameTurnPostmortemLearningCandidates, postmortemLearningKeyFromText } from "./postmortem-learning.js"
 import { filterDuplicateProcedureCandidates, summarizeToolOutcome } from "./tool-outcomes.js"
-import type { AutomaticHandoffContextDecision, LifecycleResult, MemoryCandidate, MemoryContextDecision, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
+import { persistGovernedLifecycleCandidates } from "./automatic-capture.js"
+import type { AutomaticHandoffContextDecision, LifecycleCaptureResult, LifecycleResult, MemoryCandidate, MemoryContextDecision, PostToolUseInput, SessionStartInput, StopInput, UserPromptInput } from "./types.js"
 
 function createResult(additionalContext?: string, contextDecision?: MemoryContextDecision): LifecycleResult {
   return { additionalContext, saved: [], discarded: [], contextDecision }
 }
 
-function lifecycleResult(saved: SaveResult[], discarded: LifecycleResult["discarded"], skippedSecret?: number, revised?: MemoryRecord[]): LifecycleResult {
+function lifecycleResult(saved: SaveResult[], discarded: LifecycleResult["discarded"], skippedSecret?: number, revised?: MemoryRecord[], capture?: LifecycleCaptureResult): LifecycleResult {
   const saveSkippedSecret = saved.filter((result) => result.status === "skipped" && result.reason === "secret").length
   const totalSkippedSecret = (skippedSecret ?? 0) + saveSkippedSecret
   return {
@@ -19,6 +20,7 @@ function lifecycleResult(saved: SaveResult[], discarded: LifecycleResult["discar
     discarded,
     ...(revised?.length ? { revised } : {}),
     ...(totalSkippedSecret > 0 ? { skippedSecret: totalSkippedSecret } : {}),
+    ...(capture ? { capture } : {}),
   }
 }
 
@@ -183,28 +185,25 @@ function persistCandidates(
   lifecycleEvent: "turn_stop" | "post_tool_use",
   options?: LifecycleHandlerOptions,
 ): LifecycleResult {
-  const saved: SaveResult[] = []
-  const discarded: LifecycleResult["discarded"] = []
+  const result = persistGovernedLifecycleCandidates({
+    engine,
+    candidates,
+    input,
+    save(candidate) {
+      return engine.save({
+        text: candidate.text,
+        category: candidate.category,
+        scopeType: candidate.scopeType,
+        kind: candidate.kind,
+        status: candidate.decision === "save-approved" ? "approved" : "pending",
+        source: candidateSource(candidate, "agent-suggested"),
+        provenance: provenance(input, lifecycleEvent, "toolName" in input ? input.toolName : undefined, options?.adapter),
+        learningTriggerContext: candidateTriggerContext(input),
+      })
+    },
+  })
 
-  for (const candidate of candidates) {
-    if (candidate.decision === "discard") {
-      discarded.push({ text: candidate.text, reason: candidate.reason })
-      continue
-    }
-
-    saved.push(engine.save({
-      text: candidate.text,
-      category: candidate.category,
-      scopeType: candidate.scopeType,
-      kind: candidate.kind,
-      status: candidate.decision === "save-approved" ? "approved" : "pending",
-      source: candidateSource(candidate, "agent-suggested"),
-      provenance: provenance(input, lifecycleEvent, "toolName" in input ? input.toolName : undefined, options?.adapter),
-      learningTriggerContext: candidateTriggerContext(input),
-    }))
-  }
-
-  return lifecycleResult(saved, discarded)
+  return lifecycleResult(result.saved, result.discarded, undefined, undefined, result.capture)
 }
 
 export async function handleUserPromptSubmit(
@@ -423,6 +422,7 @@ export function handleStop(engine: MemoryEngine, input: StopInput, options?: Lif
     result.discarded,
     inputHasLikelySecret(input.lastUserMessage, input.lastAssistantMessage) ? 1 : undefined,
     checkpointResolution.revised,
+    result.capture,
   )
 }
 
@@ -439,5 +439,6 @@ export function handlePostToolUse(engine: MemoryEngine, input: PostToolUseInput,
     result.discarded,
     inputHasLikelySecret(input.toolInput, input.toolResponse) ? 1 : undefined,
     checkpointResolution.revised,
+    result.capture,
   )
 }

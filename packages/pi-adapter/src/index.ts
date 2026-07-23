@@ -1,7 +1,7 @@
 import * as path from "node:path"
 import { Type } from "typebox"
 import { classifyPromptRoute, createLearningEventSink, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy, saveSessionSummaryCandidates as persistSessionSummaryCandidates } from "@memory-lane/lifecycle"
-import type { PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
+import type { GovernedSessionSummarySaveResults, LifecycleCaptureResult, PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
 import {
   MemoryEngine, buildContinuityWarningRenderPlan, continuityWarningInspectionActions, createSingleStoreEngineStorage, createTwoTierEngineStorage, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableEngineStoragePaths, type SaveResult,
 } from "@memory-lane/core"
@@ -420,7 +420,34 @@ function piPreCompactTrigger(event: any): "manual" | "auto" {
 
 export default function memoryLaneExtension(pi: ExtensionAPI) {
   const deferredPreCompact = new Map<string, { turnId?: string; trigger: "manual" | "auto" }>()
+  const lifecycleNotices = new Map<string, { pending: number; advisory?: LifecycleCaptureResult["advisory"]; ctx: ExtensionContext; timer: ReturnType<typeof setTimeout> }>()
   const maxDeferredSessions = 32
+
+  function flushLifecycleNotice(key: string): void {
+    const notice = lifecycleNotices.get(key)
+    if (!notice) return
+    clearTimeout(notice.timer)
+    lifecycleNotices.delete(key)
+    if (notice.pending > 0) {
+      notify(notice.ctx, `Memory Lane queued ${notice.pending} pending memory suggestion${notice.pending === 1 ? "" : "s"} for review.${notice.advisory ? ` ${notice.advisory.message}` : ""} Run /memory review to inspect.`, "info")
+    } else if (notice.advisory) {
+      notify(notice.ctx, `${notice.advisory.message} Run ${notice.advisory.reviewAction}.`, "warning")
+    }
+  }
+
+  function queueLifecycleNotice(ctx: ExtensionContext, turnId: string | undefined, pending: number, advisory?: LifecycleCaptureResult["advisory"]): void {
+    if (pending <= 0 && !advisory) return
+    const key = `${sessionDeferralKey(ctx)}\n${turnId ?? "event"}`
+    const existing = lifecycleNotices.get(key)
+    if (existing) {
+      existing.pending += Math.max(0, pending)
+      existing.advisory = existing.advisory ?? advisory
+      return
+    }
+    const notice = { pending: Math.max(0, pending), advisory, ctx, timer: undefined as unknown as ReturnType<typeof setTimeout> }
+    notice.timer = setTimeout(() => flushLifecycleNotice(key), 75)
+    lifecycleNotices.set(key, notice)
+  }
 
   function sessionDeferralKey(ctx: ExtensionContext): string {
     return piSessionId(ctx) ?? `cwd:${path.resolve(ctx.cwd)}`
@@ -499,7 +526,8 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     const saved = saveSessionSummaryCandidates(e, candidates)
 
     if (!saved.length) {
-      notify(ctx, "No durable session summary was generated.", "info")
+      if (saved.capture.advisory) notify(ctx, `${saved.capture.advisory.message} Run /memory review to inspect.`, "warning")
+      else notify(ctx, "No durable session summary was generated.", "info")
       return
     }
     notify(ctx, `Saved ${saved.length} pending session summar${saved.length === 1 ? "y" : "ies"}. Run /memory review to inspect.`, "info")
@@ -748,7 +776,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
     eventName: string,
     ctx: ExtensionContext,
     turnId: string | undefined,
-    result: { saved: SaveResult[]; discarded: Array<{ text: string; reason: string }> },
+    result: { saved: SaveResult[]; discarded: Array<{ text: string; reason: string }>; capture?: LifecycleCaptureResult },
   ): Promise<void> {
     resetTurnState(turnId)
 
@@ -765,14 +793,16 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
       })
     }
 
-    for (const save of newlySaved) {
-      notify(ctx, `Auto-saved memory: ${formatMemory(save.memory)}`, "info")
-    }
+    const pendingWritten = newlySaved.filter((save) => save.memory.status === "pending").length
+    queueLifecycleNotice(ctx, turnId, pendingWritten, result.capture?.advisory)
   }
 
-  function saveSessionSummaryCandidates(e: MemoryEngine, candidates: Awaited<ReturnType<typeof handleSessionEnd>>): Array<Extract<SaveResult, { status: "saved" }>> {
-    return persistSessionSummaryCandidates(e, candidates)
-      .filter((result): result is Extract<SaveResult, { status: "saved" }> => result.status === "saved")
+  function saveSessionSummaryCandidates(e: MemoryEngine, candidates: Awaited<ReturnType<typeof handleSessionEnd>>): Array<Extract<SaveResult, { status: "saved" }>> & Pick<GovernedSessionSummarySaveResults, "capture"> {
+    const results = persistSessionSummaryCandidates(e, candidates)
+    return Object.assign(
+      results.filter((result): result is Extract<SaveResult, { status: "saved" }> => result.status === "saved"),
+      { capture: results.capture },
+    )
   }
 
   // ── Pre-compaction summary handler ───────────────────────
@@ -829,7 +859,9 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
       }, memoryEnv())
       const saved = saveSessionSummaryCandidates(e, candidates)
       if (saved.length) {
-        notify(ctx, `Memory Lane suggested ${saved.length} pending pre-compact summar${saved.length === 1 ? "y" : "ies"} for review. Run /memory review to inspect.`, "info")
+        notify(ctx, `Memory Lane queued ${saved.length} pending memory suggestion${saved.length === 1 ? "" : "s"} for review.${saved.capture.advisory ? ` ${saved.capture.advisory.message}` : ""} Run /memory review to inspect.`, "info")
+      } else if (saved.capture.advisory) {
+        notify(ctx, `${saved.capture.advisory.message} Run /memory review to inspect.`, "warning")
       }
       return undefined
     } catch (err) {
@@ -877,7 +909,8 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         trigger: deferred.trigger,
       }, memoryEnv())
       const saved = saveSessionSummaryCandidates(e, candidates)
-      if (saved.length) notify(ctx, `Memory Lane suggested ${saved.length} pending pre-compact summar${saved.length === 1 ? "y" : "ies"} for review. Run /memory review to inspect.`, "info")
+      if (saved.length) notify(ctx, `Memory Lane queued ${saved.length} pending memory suggestion${saved.length === 1 ? "" : "s"} for review.${saved.capture.advisory ? ` ${saved.capture.advisory.message}` : ""} Run /memory review to inspect.`, "info")
+      else if (saved.capture.advisory) notify(ctx, `${saved.capture.advisory.message} Run /memory review to inspect.`, "warning")
       return undefined
     } catch (err) {
       if (isPiDebugEnabled()) notify(ctx, err instanceof Error ? `Deferred pre-compact summary failed: ${err.message}` : "Deferred pre-compact summary failed", "warning")
@@ -892,6 +925,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
 
   pi.on("session_shutdown", async (_event, _ctx) => {
     clearDeferredPreCompact()
+    for (const key of [...lifecycleNotices.keys()]) flushLifecycleNotice(key)
     return undefined
   })
 

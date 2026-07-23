@@ -10,7 +10,7 @@ import {
 } from "./search.js"
 import { containsLikelySecret } from "./secret-detection.js"
 import { resolveProjectScope } from "./project-scope.js"
-import { loadConfig, getDefaultConfigPath } from "./config.js"
+import { loadConfig, getDefaultConfigPath, resolveLifecycleCaptureConfig } from "./config.js"
 import { createSingleStoreEngineStorage, type MemoryEngineStorage } from "./storage-facade.js"
 import { defaultHookDebugLogPath, hookDebugEnabled } from "./hook-debug-log.js"
 import { retrieveSemanticMemories } from "./retrieval.js"
@@ -195,6 +195,24 @@ export class MemoryEngine {
   /** Shared context-injection policy loaded from config. */
   getContextPolicy(): MemoryContextPolicyConfig | undefined {
     return this.config.memory?.contextPolicy
+  }
+
+  /** Effective automatic lifecycle capture mode and deterministic admission limits. */
+  getLifecycleCaptureConfig() {
+    return resolveLifecycleCaptureConfig(this.config.memory?.lifecycleCapture)
+  }
+
+  /** Current-project pending records created by automatic lifecycle events. */
+  getAutomaticPendingBacklogCount(): number {
+    const projectScope = this.scope?.key
+    if (!projectScope) return 0
+    return this.storage.listMemories().filter((memory) => {
+      if (memory.status !== "pending") return false
+      if ((memory.scope.key ?? memory.project?.key ?? memory.project?.root) !== projectScope) return false
+      if (memory.source !== "agent-suggested" && memory.source !== "session-summary") return false
+      const event = memory.provenance?.lifecycleEvent
+      return event === "turn_stop" || event === "post_tool_use" || event === "pre_compact" || event === "session_end"
+    }).length
   }
 
   /** Configured cross-session handoff posture. */
@@ -1121,6 +1139,16 @@ export class MemoryEngine {
       ...operatingAgreements.primary.map((selection) => selection.memory.id),
       ...operatingAgreements.relatedCandidates.map((selection) => selection.memory.id),
     ])
+    const lifecycleCapture = this.getLifecycleCaptureConfig()
+    const automaticPendingBacklog = this.getAutomaticPendingBacklogCount()
+    const integrations = diagnoseIntegrations({
+      cwd: this.scope?.cwd ?? null,
+      paths: this.integrationPaths,
+      warnings: this.integrationWarnings,
+      env: this.env,
+      lifecycleCaptureMode: lifecycleCapture.mode,
+      automaticPendingBacklog,
+    })
 
     return {
       configFile: this.configPath,
@@ -1136,12 +1164,12 @@ export class MemoryEngine {
       deadWeightRatio: total ? mems.filter((m) => m.status === "deleted" || m.status === "rejected").length / total : 0,
       activeProfileName: config.activeEmbeddingProfile,
       projectScope: this.scope?.key ?? "none",
-      integrations: diagnoseIntegrations({
-        cwd: this.scope?.cwd ?? null,
-        paths: this.integrationPaths,
-        warnings: this.integrationWarnings,
-        env: this.env,
-      }),
+      lifecycleCaptureMode: lifecycleCapture.mode,
+      lifecycleCaptureLimits: lifecycleCapture.limits,
+      automaticPendingWriteCapability: lifecycleCapture.mode !== "off",
+      automaticPendingWritesEnabled: integrations.summary.automaticPendingWritesEnabled,
+      automaticPendingBacklog,
+      integrations,
       freshness: this.freshnessStatus({ since: opts?.freshnessSince }),
       continuityHints: this.continuityHints({ since: opts?.freshnessSince }),
       continuityBaseline: this.continuityBaselineDoctor(),

@@ -742,6 +742,26 @@ export interface SessionEndSummaryConfig {
   includeToolOutputs?: boolean
 }
 
+export type LifecycleCaptureMode = "off" | "conservative" | "aggressive"
+
+export interface LifecycleCaptureLimits {
+  perTurn: number
+  perSession: number
+  pendingBacklog: number
+}
+
+export interface LifecycleCaptureConfig {
+  /** Conservative by default. Aggressive is an explicit opt-in with larger deterministic budgets. */
+  mode?: LifecycleCaptureMode
+  /** Optional positive integer overrides for the selected mode's deterministic budgets. */
+  limits?: Partial<LifecycleCaptureLimits>
+}
+
+export interface EffectiveLifecycleCaptureConfig {
+  mode: LifecycleCaptureMode
+  limits: LifecycleCaptureLimits
+}
+
 export interface PreCompactSummaryConfig {
   /**
    * Controls pre-compact session summaries.
@@ -783,6 +803,7 @@ export interface SemanticMemoryConfig {
     sessionEndSummary?: SessionEndSummaryConfig
     preCompactSummary?: PreCompactSummaryConfig
     contextPolicy?: MemoryContextPolicyConfig
+    lifecycleCapture?: LifecycleCaptureConfig
   }
 }
 
