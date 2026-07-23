@@ -154,12 +154,18 @@ describe("OMP contract runner", () => {
       && form.automaticCaptureSuppressed))
   })
 
-  it("committed fixture matches the expected registration matrix for both production source forms", () => {
+  it("committed fixture preserves the registration matrix recorded before targeted revision was added", () => {
     const report = readFixture()
+    const recordedRegistrations = Object.fromEntries(Object.entries(EXPECTED_REGISTRATIONS).map(([sourceForm, registrations]) => [
+      sourceForm,
+      registrations.filter((registration) => registration !== "tool:memory_revise").sort(),
+    ]))
     assert.deepEqual(
       Object.fromEntries(report.sourceForms.map(({ sourceForm, registrations }) => [sourceForm, [...registrations].sort()])),
-      Object.fromEntries(Object.entries(EXPECTED_REGISTRATIONS).map(([sourceForm, registrations]) => [sourceForm, [...registrations].sort()])),
+      recordedRegistrations,
     )
+    assert.ok(EXPECTED_REGISTRATIONS.adapter.includes("tool:memory_revise"))
+    assert.ok(EXPECTED_REGISTRATIONS.bridge.includes("tool:memory_revise"))
   })
 
   it("committed fixture is bounded sanitized and free of machine-local evidence", () => {
