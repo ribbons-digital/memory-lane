@@ -5,7 +5,9 @@ Full command list and command-behavior reference for the `memory-lane` CLI.
 ```
 memory-lane save <text> [--kind <kind>]
                                   Save an approved memory with optional explicit kind
-memory-lane suggest <text>        Queue a pending suggestion for review
+memory-lane suggest <text>        Queue a pending suggestion and return its targeted review receipt
+memory-lane revise-suggestion <id> --text <text>|--stdin [--reason <reason>] [--all]
+                                  Revise the same pending suggestion id and rerun targeted review
 memory-lane recall [query] [--top-k <n>] Recall memories (semantic or lexical) with an optional positive per-command result limit
 memory-lane show|get <id> [--all] Show one memory by exact id, including descriptor metadata when present
 memory-lane list [--status ...]   List memories
@@ -122,6 +124,31 @@ Use `--signal <code[,code...]>` to filter for candidates matching any listed sig
 Quality signals are advisory.
 They never approve, reject, rescope, hide, or otherwise mutate a memory automatically.
 A signal is a prompt for user inspection, not a model-generated score or an automatic rejection decision.
+
+## Targeted suggestion review
+
+`memory-lane suggest` creates a pending candidate and immediately analyzes only that exact candidate.
+It does not scan or process the broader pending backlog shown by `memory-lane review`.
+Human output prints the targeted review receipt after the saved record, and `--json` returns it as `data.targetedReview`.
+An explicit `--status approved` suggestion keeps the direct-approved behavior and does not start this pending review loop.
+
+The receipt contains `id`, `currentText`, `scope`, `kind`, `qualitySignals`, `reasons`, `suggestedAction`, `attemptState`, and `outcome`.
+`attemptState` reports revisions used, the maximum of two, and revisions remaining.
+The outcomes mean:
+
+- `clean` has no quality signals and is ready for explicit human approval or rejection.
+- `revise` asks the host LLM to rewrite the same candidate with `memory-lane revise-suggestion <id> --text <revised-text>` and use the new receipt.
+- `needs-human-review` stops the automatic rewrite loop and leaves the candidate pending for a human decision.
+
+`revise-suggestion` updates the same pending ID in place, preserves pending status, increments the automatic review attempt count, and reruns analysis only for that candidate.
+The host may make at most two explicit automatic revisions after the initial suggestion.
+If fixable signals remain after the second revision, the receipt settles on `needs-human-review`, and further automatic revision calls are refused.
+Scope findings such as `cross-project-global-candidate` cannot be fixed by changing only the text, so they go directly to `needs-human-review` without consuming rewrite attempts.
+
+A `clean` outcome never approves the memory automatically.
+Use `memory-lane approve <id>` or `memory-lane reject <id>` only for an explicit human decision.
+Soft or ambiguous signals such as questions, code fences, and ambiguous references can recommend revision, but they never cause automatic rejection.
+The broad `memory-lane review` command remains the explicit human backlog review surface and is separate from this candidate-specific automatic analysis.
 
 Grouped review mutation is an explicit preview-and-confirm flow.
 For example, `memory-lane review --signal contains-question --action reject` prints the exact selected memory IDs without changing them.
