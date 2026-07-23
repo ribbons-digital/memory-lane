@@ -42,6 +42,23 @@ function persist(engine: MemoryEngine, input: StopInput, candidates: MemoryCandi
   })
 }
 
+test("governed persistence derives admission state from one shared memory list", () => {
+  const { engine, cwd } = engineFor("conservative")
+  const originalList = engine.list.bind(engine)
+  let listCalls = 0
+  engine.list = ((options) => {
+    listCalls += 1
+    return originalList(options)
+  }) as typeof engine.list
+
+  const result = persist(engine, { cwd, sessionId: "shared-list-session", turnId: "shared-list-turn" }, [
+    candidate("The durable shared-list outcome is verified.", "project_fact"),
+  ])
+
+  assert.equal(result.capture.pendingWritten, 1)
+  assert.equal(listCalls, 1)
+})
+
 test("conservative and aggressive modes apply stable quality behavior", () => {
   const conservative = engineFor("conservative")
   const aggressive = engineFor("aggressive")
