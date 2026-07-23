@@ -44,12 +44,13 @@ Soft or ambiguous signals never auto-reject a candidate.
 A non-text-fixable finding such as a cross-project global scope concern goes directly to `needs-human-review` without consuming a rewrite attempt.
 An explicit `status: "approved"` keeps direct-approved behavior and does not start the pending review loop.
 
-Release-style generated Pi and OMP bridges invoke the CLI for their Memory Lane tools and commands.
-Their `memory_suggest` tool therefore creates and analyzes the exact pending candidate through `memory-lane suggest`, but its compact tool result exposes only the queued ID rather than the targeted receipt, and the generated bridge does not register `memory_revise` as a host tool.
-Use `/memory suggest <text>` to see the CLI receipt and `/memory revise-suggestion <id> --text <revised-text>` to follow its same-ID loop, or run those CLI commands directly.
-Generated bridge suggestions with explicit approved status keep the CLI's direct-approved behavior and do not start targeted review.
-The handwritten adapter provides the full host-tool loop directly through `memory_suggest` and `memory_revise`.
-Neither surface automatically approves or rejects a candidate.
+Release-style generated Pi and OMP bridges invoke the CLI for their Memory Lane tools and commands and register both `memory_suggest` and `memory_revise` as host tools.
+For a pending suggestion, generated `memory_suggest` creates and analyzes only the exact candidate through `memory-lane suggest` and returns the full targeted receipt in tool details as `{ id, review }`.
+Generated `memory_revise` updates that same pending ID through `memory-lane revise-suggestion`, reruns targeted review, and returns the rerun receipt in the same `{ id, review }` shape.
+The generated host-tool loop has the same bound as the handwritten adapter: at most two explicit automatic revisions after the initial suggestion, followed by `needs-human-review` if revision remains necessary.
+A clean result remains pending for explicit human approval or rejection, and `needs-human-review` stops automatic rewriting without changing the candidate's pending status.
+A generated bridge suggestion with explicit `status: "approved"` uses direct-approved behavior, returns the saved ID without a targeted review receipt, and does not start the pending review loop.
+Neither the handwritten adapter nor the generated bridge automatically approves or rejects a candidate.
 
 Both the repo-local pi adapter and release-style generated pi bridge write memories through low-noise lifecycle events:
 
