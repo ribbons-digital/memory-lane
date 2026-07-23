@@ -6,6 +6,7 @@ import {
   MemoryEngine, buildContinuityWarningRenderPlan, continuityWarningInspectionActions, createSingleStoreEngineStorage, createTwoTierEngineStorage, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableEngineStoragePaths, type SaveResult,
 } from "@memory-lane/core"
 import { isPiDebugEnabled, piDebugPath, writePiDebugLog } from "./debug.js"
+import { lifecyclePendingWritten } from "./lifecycle-notice.js"
 
 // ── pi ExtensionAPI / ExtensionContext interfaces (shim) ──────
 // These are the interfaces we expect from the pi harness. The adapter
@@ -793,7 +794,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
       })
     }
 
-    const pendingWritten = newlySaved.filter((save) => save.memory.status === "pending").length
+    const pendingWritten = lifecyclePendingWritten(newlySaved, result.capture)
     queueLifecycleNotice(ctx, turnId, pendingWritten, result.capture?.advisory)
   }
 

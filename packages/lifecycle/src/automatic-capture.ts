@@ -32,14 +32,19 @@ function projectIdentity(memory: MemoryRecord): string | undefined {
   return memory.scope.key ?? memory.project?.key ?? memory.project?.root
 }
 
-export function automaticPendingBacklogCount(engine: MemoryEngine): number {
-  const projectScope = engine.getProjectScope()?.key
+function automaticPendingBacklogCountFromRecords(records: MemoryRecord[], projectScope: string | undefined): number {
   if (!projectScope) return 0
-  return engine.list({ all: true }).filter((memory) =>
+  return records.filter((memory) =>
     memory.status === "pending"
     && automaticLifecycleMemory(memory)
     && projectIdentity(memory) === projectScope,
   ).length
+}
+
+export function automaticPendingBacklogCount(engine: MemoryEngine): number {
+  const projectScope = engine.getProjectScope()?.key
+  if (!projectScope) return 0
+  return automaticPendingBacklogCountFromRecords(engine.list({ all: true }), projectScope)
 }
 
 function priority(candidate: MemoryCandidate): number {
@@ -84,18 +89,17 @@ function captureState(config: EffectiveLifecycleCaptureConfig, backlog: number):
   }
 }
 
-function admittedCounts(engine: MemoryEngine, input: StopInput | PostToolUseInput): { turn: number; session: number } {
-  const projectScope = engine.getProjectScope()?.key
-  const records = engine.list({ all: true }).filter((memory) =>
+function admittedCounts(records: MemoryRecord[], projectScope: string | undefined, input: StopInput | PostToolUseInput): { turn: number; session: number } {
+  const scopedRecords = records.filter((memory) =>
     automaticLifecycleMemory(memory)
     && (!projectScope || projectIdentity(memory) === projectScope),
   )
   return {
-    turn: input.turnId ? records.filter((memory) =>
+    turn: input.turnId ? scopedRecords.filter((memory) =>
       memory.provenance?.turnId === input.turnId
       && (!input.sessionId || memory.provenance?.sessionId === input.sessionId),
     ).length : 0,
-    session: input.sessionId ? records.filter((memory) => memory.provenance?.sessionId === input.sessionId).length : 0,
+    session: input.sessionId ? scopedRecords.filter((memory) => memory.provenance?.sessionId === input.sessionId).length : 0,
   }
 }
 
@@ -114,7 +118,9 @@ export function persistGovernedLifecycleCandidates(options: PersistAutomaticCapt
 } {
   const { engine, input } = options
   const config = engine.getLifecycleCaptureConfig()
-  const initialBacklog = automaticPendingBacklogCount(engine)
+  const projectScope = engine.getProjectScope()?.key
+  const records = engine.list({ all: true })
+  const initialBacklog = automaticPendingBacklogCountFromRecords(records, projectScope)
   const capture = captureState(config, initialBacklog)
   const saved: SaveResult[] = []
   const discarded: LifecycleResult["discarded"] = []
@@ -147,9 +153,9 @@ export function persistGovernedLifecycleCandidates(options: PersistAutomaticCapt
     }
   }
 
-  let admitted = admittedCounts(engine, input)
-  let backlog = automaticPendingBacklogCount(engine)
-  const rejected = engine.list({ all: true }).filter((memory) => memory.status === "rejected")
+  let admitted = admittedCounts(records, projectScope, input)
+  let backlog = initialBacklog
+  const rejected = records.filter((memory) => memory.status === "rejected")
   const blockerCodes = config.mode === "aggressive" ? AGGRESSIVE_QUALITY_BLOCKERS : CONSERVATIVE_QUALITY_BLOCKERS
 
   for (const originalCandidate of automatic) {

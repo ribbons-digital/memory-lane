@@ -57,7 +57,8 @@ The default mode is `conservative`.
 ```
 
 - `off` disables automatic lifecycle candidates while leaving explicit memory operations unchanged.
-- `conservative` applies all deterministic quality blockers and admits at most 2 automatic candidates per turn, 8 per session, and 20 automatic pending candidates per project.
+- `conservative` applies all deterministic quality blockers to general candidates and admits at most 2 automatic candidates per turn, 8 per session, and 20 automatic pending candidates per project.
+  Correction, procedure, and session-summary-sourced candidates use only the smaller bare-checkpoint and rejected-equivalent blocker set, so question marks or code fences in those candidates may still be admitted.
 - `aggressive` is an explicit opt-in that keeps hard bare-checkpoint and rejected-equivalent blockers while admitting at most 5 candidates per turn, 30 per session, and 100 automatic pending candidates per project.
 
 The optional positive integer fields `limits.perTurn`, `limits.perSession`, and `limits.pendingBacklog` override the selected mode's limits.
