@@ -419,6 +419,31 @@ if (!(args[0] === "pi" && args[1] === "pre-compact")) setImmediate(finish);
     assert.equal(toolResult.tool_response.exitCode, 0)
   })
 
+  it("generated pi CLI bridge flushes queued lifecycle notices on session shutdown", () => {
+    const { nativeBinary } = writeNativeMemoryLaneStub("shutdown-lifecycle.jsonl", "console.log(JSON.stringify({ data: { saved: 1, pending: 1, suppressed: 0 } }));")
+    const piExt = installPiCliBridge(nativeBinary)
+    runPiBridgeSmoke(piExt, `
+      const mod = await import("file://" + process.env.PI_EXTENSION_FILE);
+      const fn = typeof mod.default === "function" ? mod.default : mod.default?.default;
+      const handlers = {};
+      const notifications = [];
+      const pi = { registerCommand() {}, registerTool() {}, on(name, handler) { handlers[name] = handler } };
+      fn(pi);
+      const ctx = {
+        cwd: "/tmp/pi-generated-bridge-project",
+        ui: { notify(message, level) { notifications.push({ message, level }); } },
+        sessionManager: { getSessionFile() { return "/tmp/pi-shutdown-session.json"; }, getBranch() { return []; } },
+      };
+      await handlers.turn_end({ turnIndex: 8, message: { role: "assistant", content: "Shutdown summary" } }, ctx);
+      if (notifications.length !== 0) throw new Error("expected lifecycle notice to remain queued before shutdown");
+      await handlers.session_shutdown({}, ctx);
+      const notices = notifications.filter((item) => item.message.includes("pending memory suggestion"));
+      if (notices.length !== 1) throw new Error("expected shutdown to flush one lifecycle notice, got " + JSON.stringify(notifications));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (notifications.length !== 1) throw new Error("expected shutdown flush to cancel the queued timer");
+    `)
+  })
+
   it("generated pi CLI bridge stays quiet for successful lifecycle output with no pending writes", () => {
     const { nativeBinary } = writeNativeMemoryLaneStub("quiet-lifecycle.jsonl", "console.log(JSON.stringify({ data: { saved: 0, pending: 0, suppressed: 1 } }));")
     const piExt = installPiCliBridge(nativeBinary)

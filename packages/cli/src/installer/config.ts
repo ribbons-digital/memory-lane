@@ -412,7 +412,15 @@ function sessionMessagesFromPiCompactionEvent(event: any, ctx: any): any[] {`,
         return `export default function memoryLaneCliBridge(pi: any) {
   const deferredPreCompact = new Map<string, { turnId?: string; trigger: "manual" | "auto" }>()
   const deferralKey = (ctx: any) => piSessionId(ctx) ?? "cwd:" + String(ctx?.cwd ?? process.cwd())
-  const lifecycleNotices = new Map<string, { pending: number; advisory?: string; reviewAction?: string; timer: ReturnType<typeof setTimeout> }>()
+  const lifecycleNotices = new Map<string, { pending: number; advisory?: string; reviewAction?: string; ctx: any; timer: ReturnType<typeof setTimeout> }>()
+  const flushLifecycleNotice = (key: string) => {
+    const notice = lifecycleNotices.get(key)
+    if (!notice) return
+    clearTimeout(notice.timer)
+    lifecycleNotices.delete(key)
+    if (notice.pending > 0) notify(notice.ctx, "Memory Lane queued " + notice.pending + " pending memory suggestion" + (notice.pending === 1 ? "" : "s") + " for review." + (notice.advisory ? " " + notice.advisory : "") + " Run /memory review to inspect.", "info")
+    else if (notice.advisory) notify(notice.ctx, notice.advisory + " Run " + (notice.reviewAction ?? "memory-lane review") + ".", "warning")
+  }
   const queueLifecycleNotice = (stdout: string, ctx: any, turnId?: string) => {
     const data = parseJson(stdout)?.data
     const pending = Number(data?.pending ?? 0)
@@ -426,12 +434,8 @@ function sessionMessagesFromPiCompactionEvent(event: any, ctx: any): any[] {`,
       existing.reviewAction = existing.reviewAction ?? data?.reviewAction
       return
     }
-    const notice = { pending: Math.max(0, pending), advisory, reviewAction: data?.reviewAction, timer: undefined as unknown as ReturnType<typeof setTimeout> }
-    notice.timer = setTimeout(() => {
-      lifecycleNotices.delete(key)
-      if (notice.pending > 0) notify(ctx, "Memory Lane queued " + notice.pending + " pending memory suggestion" + (notice.pending === 1 ? "" : "s") + " for review." + (notice.advisory ? " " + notice.advisory : "") + " Run /memory review to inspect.", "info")
-      else if (notice.advisory) notify(ctx, notice.advisory + " Run " + (notice.reviewAction ?? "memory-lane review") + ".", "warning")
-    }, 75)
+    const notice = { pending: Math.max(0, pending), advisory, reviewAction: data?.reviewAction, ctx, timer: undefined as unknown as ReturnType<typeof setTimeout> }
+    notice.timer = setTimeout(() => flushLifecycleNotice(key), 75)
     lifecycleNotices.set(key, notice)
   }`
       },
@@ -483,7 +487,11 @@ function sessionMessagesFromPiCompactionEvent(event: any, ctx: any): any[] {`,
   })
 
   pi.on("session_switch", async (_event: any, ctx: any) => { deferredPreCompact.delete(deferralKey(ctx)); return undefined })
-  pi.on("session_shutdown", async () => { deferredPreCompact.clear(); return undefined })
+  pi.on("session_shutdown", async () => {
+    deferredPreCompact.clear()
+    for (const key of [...lifecycleNotices.keys()]) flushLifecycleNotice(key)
+    return undefined
+  })
 
   pi.on("before_agent_start", async (event: any, ctx: any) => {`
       },

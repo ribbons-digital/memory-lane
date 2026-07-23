@@ -546,7 +546,7 @@ export interface UpdateInput {
 
 export type SaveResult =
   | { status: "saved"; memory: MemoryRecord; warnings?: string[] }
-  | { status: "skipped"; reason: "empty" | "secret" | "duplicate" | "meta task prompt"; warnings?: string[] }
+  | { status: "skipped"; reason: "empty" | "secret" | "duplicate" | "meta task prompt" | "metadata unavailable"; warnings?: string[] }
 
 export type MemoryMutationResult = MemoryRecord & { warnings?: string[] }
 

@@ -749,6 +749,67 @@ test("saving a completion checkpoint supersedes matching pending pre-merge hando
   assert.equal(superseded?.revision?.revisedBy, "lifecycle")
 })
 
+test("completion supersession survives persistence text trimming", () => {
+  const engine = makeEngine()
+  engine.refreshScope("/tmp")
+  const old = engine.save({
+    text: "PR #215 is awaiting merge on branch fix/trimmed-completion.",
+    category: "project",
+    scopeType: "global",
+    status: "pending",
+    source: "session-summary",
+    kind: "session_summary",
+  })
+  assert.equal(old.status, "saved")
+  if (old.status !== "saved") return
+
+  const saved = saveSessionSummaryCandidates(engine, [{
+    text: "  PR #215 merged after verification completed.  ",
+    category: "project",
+    scopeType: "global",
+    status: "pending",
+    source: "session-summary",
+    kind: "project_checkpoint",
+    provenance: { adapter: "test", lifecycleEvent: "session_end", sessionId: "trimmed-completion" },
+  }])
+
+  assert.equal(saved[0]?.status, "saved")
+  const memories = engine.list({ all: true })
+  assert.equal(memories.find((memory) => memory.id === old.memory.id)?.revision?.supersededBy, saved[0]?.status === "saved" ? saved[0].memory.id : undefined)
+})
+
+test("governed persistence keeps the first original for duplicate candidates", () => {
+  const engine = makeEngine()
+  engine.refreshScope("/tmp")
+  const text = "PR #216 merged after duplicate candidate verification completed."
+
+  const saved = saveSessionSummaryCandidates(engine, [
+    {
+      text,
+      category: "project",
+      scopeType: "global",
+      status: "pending",
+      source: "session-summary",
+      kind: "project_checkpoint",
+      provenance: { adapter: "test", lifecycleEvent: "session_end", sessionId: "first-original" },
+    },
+    {
+      text,
+      category: "project",
+      scopeType: "global",
+      status: "pending",
+      source: "session-summary",
+      kind: "project_checkpoint",
+      provenance: { adapter: "test", lifecycleEvent: "session_end", sessionId: "duplicate-original" },
+    },
+  ])
+
+  assert.equal(saved.length, 1)
+  assert.equal(saved[0]?.status, "saved")
+  if (saved[0]?.status !== "saved") return
+  assert.equal(saved[0].memory.provenance?.sessionId, "first-original")
+})
+
 test("completion supersession ignores matching handoffs outside the current project scope", () => {
   const dir = mkdtempSync(join(tmpdir(), "memory-lane-cross-scope-"))
   try {
