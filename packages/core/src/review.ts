@@ -195,9 +195,10 @@ export function buildTargetedReviewReceipt(memory: MemoryRecord, context: Review
     TARGETED_REVIEW_MAX_REVISION_ATTEMPTS,
   ))
   const remainingRevisionAttempts = TARGETED_REVIEW_MAX_REVISION_ATTEMPTS - revisionAttempts
+  const requiresNonTextReview = qualitySignals.some((signal) => signal.suggestedAction === "consider-rescoping")
   const outcome: TargetedReviewOutcome = qualitySignals.length === 0
     ? "clean"
-    : remainingRevisionAttempts > 0 ? "revise" : "needs-human-review"
+    : requiresNonTextReview || remainingRevisionAttempts === 0 ? "needs-human-review" : "revise"
   return {
     id: memory.id,
     currentText: memory.text,
