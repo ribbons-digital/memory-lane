@@ -3,7 +3,7 @@ import { Type } from "typebox"
 import { classifyPromptRoute, createLearningEventSink, createOpenAICompatibleProvider, handlePostToolUse, handlePreCompact, handleSessionEnd, handleStop, handleUserPromptSubmit, resolveContextPolicy, saveSessionSummaryCandidates as persistSessionSummaryCandidates } from "@memory-lane/lifecycle"
 import type { GovernedSessionSummarySaveResults, LifecycleCaptureResult, PostToolUseInput, SessionMessage } from "@memory-lane/lifecycle"
 import {
-  MemoryEngine, buildContinuityWarningRenderPlan, continuityWarningInspectionActions, createSingleStoreEngineStorage, createTwoTierEngineStorage, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableEngineStoragePaths, type SaveResult,
+  MemoryEngine, buildContinuityWarningRenderPlan, continuityWarningInspectionActions, createSingleStoreEngineStorage, createTwoTierEngineStorage, inferMemoryKind, initProjectLocalStorage, loadConfig, parseExplicitMemoryRequest, resolveWritableEngineStoragePaths, type SaveResult, type TargetedReviewReceipt,
 } from "@memory-lane/core"
 import { isPiDebugEnabled, piDebugPath, writePiDebugLog } from "./debug.js"
 import { lifecyclePendingWritten } from "./lifecycle-notice.js"
@@ -263,6 +263,34 @@ function formatMemory(m: { id: string; scope: { type: string }; category: string
 function formatSaveResult(r: SaveResult): string {
   if (r.status === "saved") return `Saved memory ${formatMemory(r.memory)}`
   return `Memory not saved: ${r.reason}`
+}
+
+function formatTargetedReview(receipt: TargetedReviewReceipt, verb: "Queued" | "Updated"): string {
+  const heading = `${verb} pending memory ${receipt.id}.`
+  if (receipt.outcome === "clean") {
+    return [
+      heading,
+      "Automatic targeted review is clean: no quality signals were found.",
+      "The memory remains pending and is ready for explicit user approval or rejection. Never automatically approve or reject it.",
+    ].join("\n")
+  }
+  const signals = receipt.qualitySignals.flatMap((signal) => [
+    `Signal: ${signal.code}`,
+    `Reason: ${signal.reason}`,
+  ])
+  if (receipt.outcome === "needs-human-review") {
+    return [
+      heading,
+      ...signals,
+      "Outcome: needs-human-review. Automatic revision attempts are exhausted; request human review for explicit approval or rejection. Never automatically approve or reject it.",
+    ].join("\n")
+  }
+  return [
+    heading,
+    ...signals,
+    `Revision is recommended. Revise the same pending memory ID (${receipt.id}) by calling memory_revise with revised text; it preserves the same ID and reruns targeted review.`,
+    "Keep it pending for explicit user approval or rejection. Never automatically approve or reject it.",
+  ].join("\n")
 }
 
 type PiBranchEntry = NonNullable<ExtensionContext["sessionManager"]> extends { getBranch?: () => infer Entries }
@@ -624,7 +652,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   pi.registerTool({
     name: "memory_suggest",
     label: "Suggest Memory",
-    description: "Queue a durable project-specific memory suggestion for user review. Use when you proactively identify something worth remembering. For pending suggestions. When the user explicitly asks you to remember something, use memory_save instead.",
+    description: "Queue a durable project-specific memory suggestion and immediately review only that candidate. If revision is recommended, call memory_revise with the same pending memory ID and revised text; memory_revise preserves the ID and reruns targeted review. A clean result remains pending and ready for explicit user approval or rejection. Never automatically approve or reject. When the user explicitly asks you to remember something, use memory_save instead.",
     parameters: memorySuggestSchema,
     async execute(_id, params, _signal, _onUpdate, ctx) {
       try {
@@ -633,11 +661,20 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         const status = params.status === "approved" ? "approved" as const : "pending" as const
         const result = e.suggest(params.text, cat as any, "project", undefined, status)
         if (result.status === "saved") {
-          const reviewMsg = status === "pending" ? " Run /memory review." : ""
-          notify(ctx, `Memory ${result.memory.id} ${status === "approved" ? "saved" : "suggested"}${reviewMsg}`)
+          if (status === "approved") {
+            notify(ctx, `Memory ${result.memory.id} saved`)
+            return {
+              content: [{ type: "text", text: `Memory ${result.memory.id} saved` }],
+              details: { id: result.memory.id },
+            }
+          }
+          const receipt = e.reviewSuggestion(result.memory.id)
+          if (!receipt) throw new Error(`Pending memory unavailable for targeted review: ${result.memory.id}`)
+          const text = formatTargetedReview(receipt, "Queued")
+          notify(ctx, text)
           return {
-            content: [{ type: "text", text: `Memory ${result.memory.id} ${status === "approved" ? "saved" : "queued"}${reviewMsg}` }],
-            details: { id: result.memory.id },
+            content: [{ type: "text", text }],
+            details: { id: receipt.id, review: receipt },
           }
         }
         return {
@@ -646,6 +683,42 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
         }
       } catch (err) {
         return { content: [{ type: "text", text: storageGuidance(err) }], details: { error: "storage-unavailable" } }
+      }
+    },
+  })
+
+  const memoryReviseSchema = Type.Object({
+    id: Type.String({ description: "ID of the same pending memory suggestion to revise" }),
+    text: Type.String({ description: "Revised memory text" }),
+  })
+
+  pi.registerTool({
+    name: "memory_revise",
+    label: "Revise Pending Memory",
+    description: "Revise the same pending memory ID in place and rerun targeted review. Use when memory_suggest or a prior memory_revise receipt recommends revision. On another revise outcome, revise the same ID and rerun with this tool. On clean, leave it pending for explicit user approval or rejection. On needs-human-review, stop automatic revision and request human review. Never automatically approve or reject.",
+    parameters: memoryReviseSchema,
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      try {
+        const receipt = getEngine(ctx.cwd).revisePendingSuggestion(params.id, {
+          text: params.text,
+          reason: "targeted review revision",
+          revisedBy: "lifecycle",
+        })
+        if (!receipt) {
+          return {
+            content: [{ type: "text", text: `Pending memory not found: ${params.id}` }],
+            details: { id: params.id, error: "pending-memory-not-found" },
+          }
+        }
+        const text = formatTargetedReview(receipt, "Updated")
+        notify(ctx, text, receipt.outcome === "needs-human-review" ? "warning" : "info")
+        return {
+          content: [{ type: "text", text }],
+          details: { id: receipt.id, review: receipt },
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        return { content: [{ type: "text", text: `Memory revision failed: ${message}` }], details: { id: params.id, error: message } }
       }
     },
   })
