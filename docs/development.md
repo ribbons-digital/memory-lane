@@ -76,22 +76,27 @@ Before release:
 
 For pi specifically, `before_agent_start` must return a custom message object such as `{ message: { customType, content, display, details? } }`; returning a raw string is invalid even if the extension loads successfully.
 
-For OMP compatibility work, run both real-runtime gates against the repository-pinned OMP version before releasing changes to the pi adapter, generated extension sources, or OMP installer:
+For OMP compatibility work, run the authoritative real-runtime gate before releasing changes to the pi adapter, generated extension sources, or OMP installer:
 
 ```bash
+OMP_BIN=/absolute/path/to/official-omp-17.1.0
+PI_BIN=/absolute/path/to/pi-0.81.1
 pnpm --filter @memory-lane/pi-adapter build
 pnpm --filter @memory-lane/cli build
-pnpm --filter @memory-lane/cli eval:omp-discovery
-pnpm --filter @memory-lane/cli eval:omp-contract -- --as-of YYYY-MM-DD --manual-input --out test/fixtures/omp-contract-16.4.8.json
+pnpm --filter @memory-lane/cli eval:omp-contract -- --omp "$OMP_BIN" --as-of 2026-07-24 --manual-input --out test/fixtures/omp-contract-17.1.0.json
+pnpm --filter @memory-lane/cli eval:omp-discovery -- --omp "$OMP_BIN"
+pnpm --filter @memory-lane/cli eval:pi-compatibility -- --pi "$PI_BIN"
 ```
 
-The discovery gate requires OMP `17.1.0`, while the lifecycle contract remains pinned to OMP `16.4.8` and additionally requires a genuine interactive terminal for the two prompted `input` submissions.
-The discovery gate installs the source-checkout CLI bridge into isolated default and `PI_CODING_AGENT_DIR` roots, launches real OMP without `--extension`, and verifies expected commands and tools through OMP's normal loader.
-The lifecycle gate uses a credential-free loopback provider for deterministic tool execution, loads both contract source forms through real `omp --extension` scratch profiles, records sanitized per-event evidence, and exits non-zero when any expected registration is missing, any lifecycle event remains unverified, or any lifecycle event fails.
-Neither gate needs a network-dependent model call or touches the real user profile or memory store.
-The tested lifecycle version and date live in `packages/cli/test/fixtures/omp-contract-16.4.8.json`.
-The current committed lifecycle contract was tested against OMP `16.4.8` on `2026-07-13` and reports `overallPass: true`.
-The committed report must keep `overallPass: true`.
+The OMP gates require the unmodified official OMP `17.1.0` binary.
+The lifecycle command requires a genuine terminal for both stdin and stdout and separately certifies RPC input absence and real-TTY editor submission for both source forms.
+The discovery gate installs the source-checkout CLI bridge into isolated default and overridden `PI_CODING_AGENT_DIR` roots, launches real OMP without `--extension`, and verifies expected commands and tools through OMP's normal loader.
+The lifecycle gate uses a credential-free loopback provider for deterministic main-session and delegated-child execution, loads development and release bridges through real `omp --extension` scratch profiles, and verifies lifecycle delivery, deferred compaction, essential tool exposure without an extension-defined startup allowlist, completed child-task output, exact delegated-worker role detection, and automatic capture suppression.
+The Pi gate requires installed Pi `0.81.1` and invokes the essential `memory_save` tool through the real Pi RPC runtime for both production source forms.
+These gates avoid network-dependent model calls and do not touch the real user profile or memory store.
+The tested OMP version and date live in `packages/cli/test/fixtures/omp-contract-17.1.0.json`.
+The current committed lifecycle contract was tested against OMP `17.1.0` on `2026-07-24` and reports `overallPass: true`.
+The committed report must remain bounded, sanitized, and keep `overallPass: true`.
 
 Windows self-maintenance changes also require the `windows-latest` CI smoke.
 It runs the focused deferred-uninstall process-identity test and `scripts/windows-self-maintenance-smoke.ts` against real Windows executable locking to cover failed-upgrade rollback, successful running-executable replacement, post-exit transaction cleanup, self-uninstall, and default memory-data retention.
@@ -194,6 +199,8 @@ Omit `--yes` when you want confirmation before replacing an existing OMP extensi
 By default, init writes `~/.omp/agent/extensions/memory-lane/index.ts` and records that exact path in the install manifest.
 Set `PI_CODING_AGENT_DIR` to an absolute agent directory for an explicit OMP profile before running init and before launching OMP.
 The generated source-checkout extension invokes `packages/cli/dist/index.js` through Node, so `node` must remain available on OMP's `PATH`.
+Inside compiled OMP, extension code observes the OMP binary as `process.execPath`, not a Node executable.
+The development bridge therefore resolves a separate Node runtime before launching the JavaScript CLI, while a compiled release bridge launches the native Memory Lane executable directly.
 
 Start OMP from the project you want to use:
 

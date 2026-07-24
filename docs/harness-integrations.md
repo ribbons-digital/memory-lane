@@ -27,6 +27,14 @@ When the install manifest records OMP, doctor, upgrade, and uninstall inspect th
 Without a recorded OMP integration, doctor checks the shared resolver's default or `PI_CODING_AGENT_DIR` path without creating files.
 Named-profile auto-discovery remains unsupported; use an absolute `PI_CODING_AGENT_DIR` during init or configure the profile's `extensions:` list manually.
 
+The authoritative compatibility gate certifies unmodified official OMP `17.1.0` in both Node-backed development-bridge and compiled release-bridge forms.
+It treats RPC and real-TTY input as distinct behaviors: RPC prompts must not emit interactive `input`, while a separate genuine terminal run must observe the exact editor submission and accepted pass-through result.
+The gate also verifies lifecycle delivery, deferred compaction, essential Memory Lane tool exposure without adding extension-defined tools to OMP's startup allowlist, deterministic completed child-task output, the exact delegated-worker role sentinel, and automatic child-session capture suppression.
+A companion discovery run verifies both OMP's default agent root and an explicit `PI_CODING_AGENT_DIR` override through normal extension loading.
+The maintained cross-host gate also invokes the essential `memory_save` tool through installed Pi `0.81.1`.
+Inside compiled OMP, extension code sees the OMP executable as `process.execPath`.
+The development bridge resolves Node separately to run the JavaScript CLI, while a compiled release bridge can execute the native Memory Lane binary directly.
+
 ## pi adapter
 
 The handwritten pi adapter supports manual Memory Lane tools and commands (`memory_save`, `memory_suggest`, `memory_revise`, `memory_continuity`, `memory_recall`, and `/memory ...`).

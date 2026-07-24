@@ -9,6 +9,14 @@ function tempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-integrations-"))
 }
 
+test("reports the committed OMP 17.1.0 contract certification", () => {
+  assert.deepEqual(OMP_CONTRACT_DIAGNOSTIC, {
+    testedVersion: "17.1.0",
+    testedAt: "2026-07-24",
+    overallPass: true,
+  })
+})
+
 test("reports missing integration configs without creating files", () => {
   const root = tempDir()
   const project = path.join(root, "project")
