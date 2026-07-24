@@ -317,7 +317,7 @@ describe("production Pi and OMP extension source equivalence", () => {
     assert.equal(fs.readFileSync(result.configPath!, "utf8"), piCliBridgeSource(binaryPath))
   })
 
-  it("installOmp writes byte-identical adapter-import source for a development checkout", () => {
+  it("installOmp writes a CLI bridge for a development checkout while Pi keeps the adapter import", () => {
     const root = tempDir()
     const homeDir = path.join(root, "home")
     const agentDir = path.join(root, "omp-agent")
@@ -326,13 +326,16 @@ describe("production Pi and OMP extension source equivalence", () => {
     fs.mkdirSync(path.dirname(adapterPath), { recursive: true })
     fs.writeFileSync(adapterPath, "export default function () {}\n", "utf8")
 
-    const result = installOmp({
+    const piResult = installPi(installOptions(homeDir, binaryPath))
+    const ompResult = installOmp({
       ...installOptions(homeDir, binaryPath),
       env: { PI_CODING_AGENT_DIR: agentDir },
     })
 
-    assert.equal(result.configPath, path.join(agentDir, "extensions", "memory-lane", "index.ts"))
-    assert.equal(fs.readFileSync(result.configPath!, "utf8"), piAdapterImportSource(adapterPath))
+    assert.equal(ompResult.configPath, path.join(agentDir, "extensions", "memory-lane", "index.ts"))
+    assert.equal(fs.readFileSync(piResult.configPath!, "utf8"), piAdapterImportSource(adapterPath))
+    assert.equal(fs.readFileSync(ompResult.configPath!, "utf8"), piCliBridgeSource(binaryPath))
+    assert.equal(fs.readFileSync(ompResult.configPath!, "utf8").includes("pi-adapter/dist/index.js"), false)
   })
 
   it("installOmp writes byte-identical CLI bridge source for a release binary", () => {

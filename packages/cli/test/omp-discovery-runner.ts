@@ -4,15 +4,19 @@ import * as fs from "node:fs"
 import * as http from "node:http"
 import * as os from "node:os"
 import * as path from "node:path"
-import { fileURLToPath, pathToFileURL } from "node:url"
-import { installOmp, piAdapterImportSource, piCliBridgeSource } from "../src/installer/config.js"
+import { fileURLToPath } from "node:url"
+import { piCliBridgeSource } from "../src/installer/config.js"
 import { isolatedOmpEnvironment } from "./omp-contract-runner.js"
 
 export const DISCOVERY_OMP_VERSION = "17.1.0"
-export const DISCOVERY_EXPECTED_TOOLS = {
-  adapter: ["memory_suggest", "memory_revise", "memory_save", "memory_continuity", "memory_recall"],
-  bridge: ["memory_save", "memory_suggest", "memory_revise", "memory_continuity", "memory_recall", "memory_get"],
-} as const
+export const DISCOVERY_EXPECTED_TOOLS = [
+  "memory_save",
+  "memory_suggest",
+  "memory_revise",
+  "memory_continuity",
+  "memory_recall",
+  "memory_get",
+] as const
 const DISCOVERY_MEMORY_TEXT = "OMP 17.1.0 ordinary discovery executed memory_save."
 
 type RpcFrame = Record<string, unknown> & { id?: string; type?: string; command?: string; success?: boolean }
@@ -32,8 +36,8 @@ function parseFlag(name: string): string | undefined {
   return index >= 0 ? process.argv[index + 1] : undefined
 }
 
-function commandOutput(command: string, args: string[]): string {
-  const result = spawnSync(command, args, { encoding: "utf8" })
+function commandOutput(command: string, args: string[], env: NodeJS.ProcessEnv = process.env): string {
+  const result = spawnSync(command, args, { encoding: "utf8", env })
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} failed: ${result.stderr.trim()}`)
   return result.stdout.trim()
 }
@@ -262,16 +266,15 @@ class RpcSession {
 
 
 async function runDiscoveryCase(options: {
-  form: "adapter" | "bridge"
+  form: "source-default" | "source-override"
   executable: string
   root: string
   baseUrl: string
   providerLog: string
   cliPath: string
-  adapterPath: string
   override: boolean
 }): Promise<{
-  sourceForm: "adapter" | "bridge"
+  sourceForm: "cli-bridge"
   installMode: "default" | "override"
   commands: string[]
   tools: string[]
@@ -299,14 +302,8 @@ async function runDiscoveryCase(options: {
     ? fs.readFileSync(options.providerLog, "utf8").trim().split("\n").filter(Boolean).length
     : 0
 
-  let binaryPath = options.cliPath
-  let expectedSource = piAdapterImportSource(options.adapterPath)
-  if (options.form === "bridge") {
-    binaryPath = path.join(caseRoot, "bin", "memory-lane.mjs")
-    fs.mkdirSync(path.dirname(binaryPath), { recursive: true })
-    fs.writeFileSync(binaryPath, `#!/usr/bin/env node\nimport ${JSON.stringify(pathToFileURL(options.cliPath).href)}\n`, { mode: 0o755 })
-    expectedSource = piCliBridgeSource(binaryPath)
-  }
+  const binaryPath = options.cliPath
+  const expectedSource = piCliBridgeSource(binaryPath)
 
   const env = isolatedOmpEnvironment(process.env, {
     HOME: homeDir,
@@ -318,21 +315,15 @@ async function runDiscoveryCase(options: {
     PI_MEMORY_FILE: memoryPath,
     PI_MEMORY_EMBEDDINGS_FILE: embeddingsPath,
     PI_MEMORY_CONFIG_FILE: memoryConfigPath,
+    MEMORY_LANE_INSTALL_BINARY: options.cliPath,
   })
   if (options.override) env.PI_CODING_AGENT_DIR = agentDir
   else delete env.PI_CODING_AGENT_DIR
 
-  const installed = installOmp({
-    binaryPath,
-    dataDir: path.join(homeDir, ".memory-lane"),
-    projectMode: false,
-    yes: true,
-    homeDir,
-    env,
-  })
-  if (!installed.configPath) throw new Error("OMP discovery install returned no configPath")
-  if (installed.configPath !== path.join(agentDir, "extensions", "memory-lane", "index.ts")) throw new Error(`Unexpected OMP discovery path: ${installed.configPath}`)
-  if (fs.readFileSync(installed.configPath, "utf8") !== expectedSource) throw new Error(`${options.form} installed artifact differs from production source`)
+  commandOutput(process.execPath, [options.cliPath, "init", "--only", "omp", "--yes"], env)
+  const installedConfigPath = path.join(agentDir, "extensions", "memory-lane", "index.ts")
+  if (!fs.existsSync(installedConfigPath)) throw new Error(`OMP discovery init did not write ${installedConfigPath}`)
+  if (fs.readFileSync(installedConfigPath, "utf8") !== expectedSource) throw new Error(`${options.form} installed artifact differs from production source`)
 
   const plan = ompDiscoveryCommandPlan({ executable: options.executable, projectDir, sessionDir, configPath })
   for (const forbiddenFlag of ["--tools", "--extension", "--profile"]) {
@@ -362,7 +353,7 @@ async function runDiscoveryCase(options: {
   for (const command of ["memory", "remember"]) {
     if (!commands.includes(command)) throw new Error(`${options.form} discovery did not register /${command}`)
   }
-  for (const tool of DISCOVERY_EXPECTED_TOOLS[options.form]) {
+  for (const tool of DISCOVERY_EXPECTED_TOOLS) {
     if (!tools.includes(tool)) throw new Error(`${options.form} discovery did not expose ${tool}`)
   }
   if (!selectedTools.includes("memory_save")) throw new Error(`${options.form} provider did not select memory_save`)
@@ -371,7 +362,7 @@ async function runDiscoveryCase(options: {
   const persisted = persistedRecords.find((record) => record.text === DISCOVERY_MEMORY_TEXT && record.status === "approved")
   if (!persisted) throw new Error(`${options.form} memory_save did not persist the expected approved memory in isolated storage`)
   return {
-    sourceForm: options.form,
+    sourceForm: "cli-bridge",
     installMode: options.override ? "override" : "default",
     commands,
     tools,
@@ -384,18 +375,16 @@ async function main(): Promise<void> {
   const runtime = requireDiscoveryOmp()
   const currentFile = fileURLToPath(import.meta.url)
   const cliRoot = path.resolve(path.dirname(currentFile), "..")
-  const workspaceRoot = path.resolve(cliRoot, "../..")
   const cliPath = path.join(cliRoot, "dist", "index.js")
-  const adapterPath = path.join(workspaceRoot, "packages", "pi-adapter", "dist", "index.js")
-  if (!fs.existsSync(cliPath) || !fs.existsSync(adapterPath)) throw new Error("Build @memory-lane/cli and @memory-lane/pi-adapter before running OMP discovery")
+  if (!fs.existsSync(cliPath)) throw new Error("Build @memory-lane/cli before running OMP discovery")
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-omp-discovery-"))
   const providerLog = path.join(root, "provider.jsonl")
   const provider = await startLoopbackProvider(providerLog)
   try {
     const cases = [
-      await runDiscoveryCase({ form: "adapter", executable: runtime.executable, root, baseUrl: provider.baseUrl, providerLog, cliPath, adapterPath, override: false }),
-      await runDiscoveryCase({ form: "bridge", executable: runtime.executable, root, baseUrl: provider.baseUrl, providerLog, cliPath, adapterPath, override: true }),
+      await runDiscoveryCase({ form: "source-default", executable: runtime.executable, root, baseUrl: provider.baseUrl, providerLog, cliPath, override: false }),
+      await runDiscoveryCase({ form: "source-override", executable: runtime.executable, root, baseUrl: provider.baseUrl, providerLog, cliPath, override: true }),
     ]
     console.log(JSON.stringify({
       schemaVersion: 1,

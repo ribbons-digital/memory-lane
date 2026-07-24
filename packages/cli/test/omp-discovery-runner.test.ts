@@ -47,15 +47,8 @@ test("OMP discovery version gate is independent and exact", () => {
   )
 })
 
-test("OMP discovery regression gate expects every production memory tool", () => {
-  assert.deepEqual(DISCOVERY_EXPECTED_TOOLS.adapter, [
-    "memory_suggest",
-    "memory_revise",
-    "memory_save",
-    "memory_continuity",
-    "memory_recall",
-  ])
-  assert.deepEqual(DISCOVERY_EXPECTED_TOOLS.bridge, [
+test("OMP source-checkout discovery expects every generated bridge memory tool", () => {
+  assert.deepEqual(DISCOVERY_EXPECTED_TOOLS, [
     "memory_save",
     "memory_suggest",
     "memory_revise",

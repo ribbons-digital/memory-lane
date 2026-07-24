@@ -18,6 +18,16 @@ export const EXPECTED_PI_TOOLS: Record<PiSourceForm, readonly string[]> = {
   adapter: ["memory_suggest", "memory_revise", "memory_save", "memory_continuity", "memory_recall"],
   bridge: ["memory_save", "memory_suggest", "memory_revise", "memory_continuity", "memory_recall", "memory_get"],
 }
+export const EXPECTED_PI_LIFECYCLE_EVENTS = [
+  "before_agent_start",
+  "session_before_compact",
+  "session_compact",
+  "session_switch",
+  "session_shutdown",
+  "input",
+  "turn_end",
+  "tool_result",
+] as const
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T | PromiseLike<T>) => void; reject: (reason?: unknown) => void } {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -139,6 +149,10 @@ export default async function memoryLanePiCompatibility(api) {
       if (property === "registerTool") return (tool) => {
         record({ kind: "registration", name: tool?.name, loadMode: tool?.loadMode })
         return target.registerTool(tool)
+      }
+      if (property === "on") return (eventName, handler) => {
+        record({ kind: "lifecycle-registration", name: eventName })
+        return target.on(eventName, handler)
       }
       const value = Reflect.get(target, property, receiver)
       return typeof value === "function" ? value.bind(target) : value
@@ -327,6 +341,7 @@ function readJsonLines<T>(filePath: string): T[] {
 export function evaluatePiSourceForm(input: {
   form: PiSourceForm
   registrations: Registration[]
+  lifecycleRegistrations: string[]
   selections: Array<{ activeTools?: string[]; allTools?: string[]; selectedTools?: string[] }>
   providerRequests: ProviderRequest[]
   toolEvents: RpcFrame[]
@@ -336,6 +351,7 @@ export function evaluatePiSourceForm(input: {
   const checks = {
     productionDefinitionsLoaded: expected.every((name) => input.registrations.some((registration) => registration.name === name)),
     essentialDefinitionsPreserved: expected.every((name) => input.registrations.some((registration) => registration.name === name && registration.loadMode === "essential")),
+    lifecycleHooksLoaded: EXPECTED_PI_LIFECYCLE_EVENTS.every((name) => input.lifecycleRegistrations.includes(name)),
     allowlistSelectionPreserved: input.selections.some((selection) =>
       selection.activeTools?.length === 1
       && selection.activeTools[0] === "memory_save"
@@ -405,16 +421,20 @@ async function runSourceForm(options: {
 
   const extensionEntries = readJsonLines<Record<string, unknown>>(extensionLogPath)
   const registrations = extensionEntries.filter((entry) => entry.kind === "registration") as Registration[]
+  const lifecycleRegistrations = extensionEntries
+    .filter((entry) => entry.kind === "lifecycle-registration" && typeof entry.name === "string")
+    .map((entry) => entry.name as string)
   const selections = extensionEntries.filter((entry) => entry.kind === "selection") as Array<{ activeTools?: string[]; allTools?: string[]; selectedTools?: string[] }>
   const providerRequests = readJsonLines<ProviderRequest>(providerLogPath).slice(providerRequestStart)
   const listed = JSON.parse(commandOutput(process.execPath, [options.cliPath, "list", "--json", "--project", projectDir], { env, cwd: projectDir })) as {
     data?: { memories?: Array<{ text?: string }> }
   }
   const persistedTexts = listed.data?.memories?.map((memory) => memory.text).filter((text): text is string => typeof text === "string") ?? []
-  const evaluation = evaluatePiSourceForm({ form: options.form, registrations, selections, providerRequests, toolEvents, persistedTexts })
+  const evaluation = evaluatePiSourceForm({ form: options.form, registrations, lifecycleRegistrations, selections, providerRequests, toolEvents, persistedTexts })
   return {
     sourceForm: options.form,
     registrations,
+    lifecycleRegistrations,
     selection: selections.at(-1),
     providerRequests,
     toolExecution: toolEvents.filter((event) => event.type === "tool_execution_start" || event.type === "tool_execution_end"),
