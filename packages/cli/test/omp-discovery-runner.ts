@@ -153,6 +153,11 @@ function providerExtensionSource(baseUrl: string): string {
 `
 }
 
+export function prepareOmpDiscoveryCli(cliPath: string): void {
+  if (!fs.existsSync(cliPath)) throw new Error("Build @memory-lane/cli before running OMP discovery")
+  fs.chmodSync(cliPath, 0o755)
+}
+
 export function ompDiscoveryCommandPlan(options: {
   executable: string
   projectDir: string
@@ -376,7 +381,7 @@ async function main(): Promise<void> {
   const currentFile = fileURLToPath(import.meta.url)
   const cliRoot = path.resolve(path.dirname(currentFile), "..")
   const cliPath = path.join(cliRoot, "dist", "index.js")
-  if (!fs.existsSync(cliPath)) throw new Error("Build @memory-lane/cli before running OMP discovery")
+  prepareOmpDiscoveryCli(cliPath)
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-omp-discovery-"))
   const providerLog = path.join(root, "provider.jsonl")
