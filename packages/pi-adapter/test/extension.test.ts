@@ -202,6 +202,26 @@ test("registers pi commands tools input and before_agent_start handlers", () => 
   assert.equal(pi.events.get("session_shutdown")?.length, 1)
 })
 
+test("registers every handwritten Memory Lane tool as essential", () => {
+  const env = makeTempEnv()
+  cleanup = env.restore
+  const pi = createFakePi()
+
+  memoryLaneExtension(pi)
+
+  assert.deepEqual([...pi.tools.keys()], [
+    "memory_suggest",
+    "memory_revise",
+    "memory_save",
+    "memory_continuity",
+    "memory_recall",
+  ])
+  for (const tool of pi.tools.values()) {
+    assert.equal(tool.loadMode, "essential", `${tool.name} must load in essential mode`)
+    assert.equal(typeof tool.execute, "function")
+  }
+})
+
 test("before_agent_start returns nothing when no relevant memory exists", async () => {
   const env = makeTempEnv()
   cleanup = env.restore

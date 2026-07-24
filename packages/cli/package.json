@@ -11,7 +11,8 @@
     "build": "tsc",
     "test": "node --test --import tsx test/*.test.ts",
     "eval:omp-contract": "tsx test/omp-contract-runner.ts",
-    "eval:omp-discovery": "tsx test/omp-discovery-runner.ts"
+    "eval:omp-discovery": "tsx test/omp-discovery-runner.ts",
+    "eval:pi-compatibility": "tsx test/pi-compatibility-runner.ts"
   },
   "dependencies": {
     "@memory-lane/claude-adapter": "workspace:*",

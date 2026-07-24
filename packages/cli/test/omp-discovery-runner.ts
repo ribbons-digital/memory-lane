@@ -4,9 +4,16 @@ import * as fs from "node:fs"
 import * as http from "node:http"
 import * as os from "node:os"
 import * as path from "node:path"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import { installOmp, piAdapterImportSource, piCliBridgeSource } from "../src/installer/config.js"
-import { isolatedOmpEnvironment, PINNED_OMP_VERSION, validateOmpContract } from "./omp-contract-runner.js"
+import { isolatedOmpEnvironment } from "./omp-contract-runner.js"
+
+export const DISCOVERY_OMP_VERSION = "17.1.0"
+export const DISCOVERY_EXPECTED_TOOLS = {
+  adapter: ["memory_suggest", "memory_revise", "memory_save", "memory_continuity", "memory_recall"],
+  bridge: ["memory_save", "memory_suggest", "memory_revise", "memory_continuity", "memory_recall", "memory_get"],
+} as const
+const DISCOVERY_MEMORY_TEXT = "OMP 17.1.0 ordinary discovery executed memory_save."
 
 type RpcFrame = Record<string, unknown> & { id?: string; type?: string; command?: string; success?: boolean }
 
@@ -31,10 +38,17 @@ function commandOutput(command: string, args: string[]): string {
   return result.stdout.trim()
 }
 
-function requirePinnedOmp(): { executable: string; versionOutput: string } {
+export function validateOmpDiscoveryVersion(versionOutput: string): void {
+  const match = versionOutput.match(/(?:omp\/|omp v)(\d+\.\d+\.\d+)/u)
+  if (match?.[1] !== DISCOVERY_OMP_VERSION) {
+    throw new Error(`OMP discovery requires exactly ${DISCOVERY_OMP_VERSION}; received ${versionOutput || "no version output"}`)
+  }
+}
+
+function requireDiscoveryOmp(): { executable: string; versionOutput: string } {
   const executable = parseFlag("--omp") ?? "omp"
   const versionOutput = commandOutput(executable, ["--version"])
-  validateOmpContract(versionOutput, commandOutput(executable, ["--help"]))
+  validateOmpDiscoveryVersion(versionOutput)
   return { executable, versionOutput }
 }
 
@@ -66,7 +80,11 @@ async function startLoopbackProvider(logPath: string): Promise<{ baseUrl: string
         response.end(JSON.stringify({ error: "invalid discovery request" }))
         return
       }
-      fs.appendFileSync(logPath, `${JSON.stringify({ toolNames: toolNamesFromPayload(payload) })}\n`)
+      const toolNames = toolNamesFromPayload(payload)
+      const messages = Array.isArray(payload.messages) ? payload.messages.filter(isRecord) : []
+      const lastRole = typeof messages.at(-1)?.role === "string" ? messages.at(-1)?.role : undefined
+      const selectedTool = lastRole === "tool" ? undefined : "memory_save"
+      fs.appendFileSync(logPath, `${JSON.stringify({ toolNames, selectedTool, lastRole })}\n`)
       response.writeHead(200, { "content-type": "text/event-stream" })
       const frame = (delta: Record<string, unknown>, finishReason: string | null) => JSON.stringify({
         id: "chatcmpl-memory-lane-discovery",
@@ -76,8 +94,21 @@ async function startLoopbackProvider(logPath: string): Promise<{ baseUrl: string
         choices: [{ index: 0, delta, finish_reason: finishReason }],
         ...(finishReason ? { usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } } : {}),
       })
-      response.write(`data: ${frame({ role: "assistant", content: "Memory Lane discovery complete." }, null)}\n\n`)
-      response.write(`data: ${frame({}, "stop")}\n\n`)
+      if (selectedTool) {
+        response.write(`data: ${frame({
+          role: "assistant",
+          tool_calls: [{
+            index: 0,
+            id: "call_memory_lane_discovery_save",
+            type: "function",
+            function: { name: selectedTool, arguments: JSON.stringify({ text: DISCOVERY_MEMORY_TEXT, category: "project" }) },
+          }],
+        }, null)}\n\n`)
+        response.write(`data: ${frame({}, "tool_calls")}\n\n`)
+      } else {
+        response.write(`data: ${frame({ role: "assistant", content: "Memory Lane discovery and tool execution complete." }, null)}\n\n`)
+        response.write(`data: ${frame({}, "stop")}\n\n`)
+      }
       response.end("data: [DONE]\n\n")
     })
   })
@@ -239,7 +270,14 @@ async function runDiscoveryCase(options: {
   cliPath: string
   adapterPath: string
   override: boolean
-}): Promise<{ sourceForm: "adapter" | "bridge"; installMode: "default" | "override"; commands: string[]; tools: string[] }> {
+}): Promise<{
+  sourceForm: "adapter" | "bridge"
+  installMode: "default" | "override"
+  commands: string[]
+  tools: string[]
+  selectedTools: string[]
+  persistedMemory: string
+}> {
   const caseRoot = path.join(options.root, options.form)
   const homeDir = path.join(caseRoot, "home")
   const projectDir = path.join(caseRoot, "project")
@@ -253,7 +291,7 @@ async function runDiscoveryCase(options: {
   fs.mkdirSync(sessionDir, { recursive: true })
   fs.mkdirSync(agentDir, { recursive: true })
   fs.mkdirSync(path.join(agentDir, "extensions"), { recursive: true })
-  fs.writeFileSync(path.join(agentDir, "last-changelog-version"), PINNED_OMP_VERSION)
+  fs.writeFileSync(path.join(agentDir, "last-changelog-version"), DISCOVERY_OMP_VERSION)
   fs.writeFileSync(configPath, "setupVersion: 1\nstartup:\n  setupWizard: false\n  showSplash: false\n")
   fs.writeFileSync(memoryConfigPath, JSON.stringify({ semantic: { enabled: false } }))
   fs.writeFileSync(path.join(agentDir, "extensions", "00-memory-lane-discovery-provider.ts"), providerExtensionSource(options.baseUrl), { encoding: "utf8", flag: "w" })
@@ -264,9 +302,9 @@ async function runDiscoveryCase(options: {
   let binaryPath = options.cliPath
   let expectedSource = piAdapterImportSource(options.adapterPath)
   if (options.form === "bridge") {
-    binaryPath = path.join(caseRoot, "bin", "memory-lane.js")
+    binaryPath = path.join(caseRoot, "bin", "memory-lane.mjs")
     fs.mkdirSync(path.dirname(binaryPath), { recursive: true })
-    fs.copyFileSync(options.cliPath, binaryPath)
+    fs.writeFileSync(binaryPath, `#!/usr/bin/env node\nimport ${JSON.stringify(pathToFileURL(options.cliPath).href)}\n`, { mode: 0o755 })
     expectedSource = piCliBridgeSource(binaryPath)
   }
 
@@ -297,7 +335,9 @@ async function runDiscoveryCase(options: {
   if (fs.readFileSync(installed.configPath, "utf8") !== expectedSource) throw new Error(`${options.form} installed artifact differs from production source`)
 
   const plan = ompDiscoveryCommandPlan({ executable: options.executable, projectDir, sessionDir, configPath })
-  if (plan.args.includes("--extension")) throw new Error("OMP discovery plan must not pass --extension")
+  for (const forbiddenFlag of ["--tools", "--extension", "--profile"]) {
+    if (plan.args.includes(forbiddenFlag)) throw new Error(`OMP discovery plan must not pass ${forbiddenFlag}`)
+  }
   const rpc = new RpcSession(plan.command, plan.args, env)
   let commands: string[] = []
   try {
@@ -315,20 +355,33 @@ async function runDiscoveryCase(options: {
   }
 
   const providerEntries = fs.existsSync(options.providerLog)
-    ? fs.readFileSync(options.providerLog, "utf8").trim().split("\n").filter(Boolean).slice(providerEntryCount).map((line) => JSON.parse(line) as { toolNames?: unknown })
+    ? fs.readFileSync(options.providerLog, "utf8").trim().split("\n").filter(Boolean).slice(providerEntryCount).map((line) => JSON.parse(line) as { toolNames?: unknown; selectedTool?: unknown })
     : []
-  const tools = providerEntries.flatMap((entry) => Array.isArray(entry.toolNames) ? entry.toolNames.filter((name): name is string => typeof name === "string") : [])
+  const tools = [...new Set(providerEntries.flatMap((entry) => Array.isArray(entry.toolNames) ? entry.toolNames.filter((name): name is string => typeof name === "string") : []))]
+  const selectedTools = providerEntries.map((entry) => entry.selectedTool).filter((name): name is string => typeof name === "string")
   for (const command of ["memory", "remember"]) {
     if (!commands.includes(command)) throw new Error(`${options.form} discovery did not register /${command}`)
   }
-  for (const tool of ["memory_save", "memory_suggest", "memory_continuity", "memory_recall"]) {
+  for (const tool of DISCOVERY_EXPECTED_TOOLS[options.form]) {
     if (!tools.includes(tool)) throw new Error(`${options.form} discovery did not expose ${tool}`)
   }
-  return { sourceForm: options.form, installMode: options.override ? "override" : "default", commands, tools }
+  if (!selectedTools.includes("memory_save")) throw new Error(`${options.form} provider did not select memory_save`)
+  if (!fs.existsSync(memoryPath)) throw new Error(`${options.form} memory_save did not create isolated memory storage`)
+  const persistedRecords = fs.readFileSync(memoryPath, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as { text?: unknown; status?: unknown })
+  const persisted = persistedRecords.find((record) => record.text === DISCOVERY_MEMORY_TEXT && record.status === "approved")
+  if (!persisted) throw new Error(`${options.form} memory_save did not persist the expected approved memory in isolated storage`)
+  return {
+    sourceForm: options.form,
+    installMode: options.override ? "override" : "default",
+    commands,
+    tools,
+    selectedTools,
+    persistedMemory: DISCOVERY_MEMORY_TEXT,
+  }
 }
 
 async function main(): Promise<void> {
-  const runtime = requirePinnedOmp()
+  const runtime = requireDiscoveryOmp()
   const currentFile = fileURLToPath(import.meta.url)
   const cliRoot = path.resolve(path.dirname(currentFile), "..")
   const workspaceRoot = path.resolve(cliRoot, "../..")
@@ -347,9 +400,11 @@ async function main(): Promise<void> {
     console.log(JSON.stringify({
       schemaVersion: 1,
       host: "omp",
-      expectedVersion: PINNED_OMP_VERSION,
+      expectedVersion: DISCOVERY_OMP_VERSION,
       actualVersion: runtime.versionOutput,
       extensionFlag: false,
+      toolsFlag: false,
+      profileFlag: false,
       networkModelRequired: false,
       scratchHome: true,
       scratchAgentRoots: true,
