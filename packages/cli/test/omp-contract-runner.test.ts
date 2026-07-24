@@ -142,7 +142,7 @@ describe("OMP contract runner", () => {
     assert.equal(report.compiledHostRuntime.status, "pass")
     assert.equal(report.compiledHostRuntime.compiledOmpExecPathIsOmpExecutable, true)
     assert.ok(report.compiledHostRuntime.sourceForms.every((form) =>
-      form.ompExecutableObserved && form.execPaths.every((execPath) => execPath === "<official-omp-17.1.0-executable>")))
+      form.ompExecutableObserved && form.execPaths.every((execPath) => execPath === `<official-omp-${PINNED_OMP_VERSION}-executable>`)))
     assert.ok(report.harnessArtifacts.every((artifact) =>
       artifact.providerRegistered && artifact.contractToolRegisteredEssential && artifact.productionToolsRegisteredEssential))
     assert.equal(report.taskSessions.status, "pass")
@@ -199,10 +199,45 @@ describe("OMP contract runner", () => {
       assert.deepEqual(result.sourceForms[0].taskSignals, {
         nestedSessionFile,
         subagentRole,
-        workerRoleSentinel: OMP_WORKER_ROLE_SENTINEL,
+        workerRoleSentinel: subagentRole ? OMP_WORKER_ROLE_SENTINEL : "",
         parentLineageObserved: false,
       })
     }
+  })
+
+  it("reports and rejects a near-miss delegated-worker role sentinel", () => {
+    const nearMissSentinel = `${OMP_WORKER_ROLE_SENTINEL} extra`
+    const entries = ["before_agent_start", "turn_end", "tool_result"].map((name) => ({
+      kind: "event" as const,
+      name,
+      owner: "production" as const,
+      contextValues: {
+        taskSession: true,
+        nestedSessionFile: true,
+        subagentRole: true,
+        workerRoleSentinel: nearMissSentinel,
+        parentLineage: false,
+      },
+      resultShape: {},
+    }))
+
+    const result = taskSessionResult([{ form: "development-bridge", entries, memoryText: "" }])
+    assert.equal(result.status, "fail")
+    assert.equal(result.sourceForms[0].taskSignals.subagentRole, false)
+    assert.equal(result.sourceForms[0].taskSignals.workerRoleSentinel, nearMissSentinel)
+
+    const inconsistentEntries = entries.map((entry, index) => index === 0
+      ? { ...entry, contextValues: { ...entry.contextValues, workerRoleSentinel: OMP_WORKER_ROLE_SENTINEL } }
+      : entry)
+    const inconsistent = taskSessionResult([{ form: "development-bridge", entries: inconsistentEntries, memoryText: "" }])
+    assert.equal(inconsistent.sourceForms[0].taskSignals.workerRoleSentinel, "<inconsistent>")
+
+    const absentEntries = entries.map((entry) => ({
+      ...entry,
+      contextValues: { ...entry.contextValues, workerRoleSentinel: undefined },
+    }))
+    const absent = taskSessionResult([{ form: "development-bridge", entries: absentEntries, memoryText: "" }])
+    assert.equal(absent.sourceForms[0].taskSignals.workerRoleSentinel, "<not-observed>")
   })
 
   it("cannot certify suppression when the delegated task result failed", () => {
@@ -303,17 +338,24 @@ describe("OMP contract runner", () => {
     assert.equal(ompContractOverallPass(sourceForms), false)
   })
 
-  it("requires every expected command and tool registration when lifecycle events pass", () => {
+  it("requires every expected registration when lifecycle events pass", () => {
     const missingRegistrationCases = [
       { sourceForm: "development-bridge", registration: "command:remember" },
       { sourceForm: "release-bridge", registration: "tool:memory_get" },
+      { sourceForm: "development-bridge", registration: "session_switch" },
+      { sourceForm: "release-bridge", registration: "session_switch" },
+      { sourceForm: "development-bridge", registration: "session_shutdown" },
+      { sourceForm: "release-bridge", registration: "session_shutdown" },
     ] as const
 
     for (const { sourceForm, registration } of missingRegistrationCases) {
       const sourceForms = passingSourceForms()
       const result = sourceForms.find((candidate) => candidate.sourceForm === sourceForm)!
       result.registrations = result.registrations.filter((observed) => observed !== registration)
+      const missingRegistrations = EXPECTED_REGISTRATIONS[sourceForm]
+        .filter((expected) => !result.registrations.includes(expected))
 
+      assert.deepEqual(missingRegistrations, [registration])
       assert.equal(ompContractOverallPass(sourceForms), false, `${sourceForm} without ${registration}`)
     }
   })
@@ -401,7 +443,7 @@ describe("OMP contract runner", () => {
 
     const matching = compiledHostRuntimeResult(executable, [{ form: "development-bridge", entries: [matchingEntry] }])
     assert.equal(matching.status, "pass")
-    assert.deepEqual(matching.sourceForms[0].execPaths, ["<official-omp-17.1.0-executable>"])
+    assert.deepEqual(matching.sourceForms[0].execPaths, [`<official-omp-${PINNED_OMP_VERSION}-executable>`])
 
     const mismatched = compiledHostRuntimeResult(executable, [{ form: "development-bridge", entries: [mismatchedEntry] }])
     assert.equal(mismatched.status, "fail")
@@ -447,6 +489,27 @@ describe("OMP contract runner", () => {
     const verified = inputVerificationResult([registration], [registration, interactiveInput, manualEvidence], true)
     assert.equal(verified.rpc.status, "pass")
     assert.equal(verified.interactive.status, "pass")
+
+    const invalidInteractiveInput = {
+      ...interactiveInput,
+      resultValues: { action: "cancel" },
+    }
+    const invalidInteractive = inputVerificationResult(
+      [registration],
+      [registration, invalidInteractiveInput, manualEvidence],
+      true,
+    )
+    assert.equal(invalidInteractive.rpc.status, "pass")
+    assert.equal(invalidInteractive.interactive.status, "fail")
+
+    const rpcEraInput = { ...interactiveInput, contextValues: { taskSession: false } }
+    const offsetResult = inputVerificationResult(
+      [registration, rpcEraInput],
+      [registration, rpcEraInput, manualEvidence],
+      true,
+    )
+    assert.equal(offsetResult.rpc.status, "fail")
+    assert.equal(offsetResult.interactive.status, "fail")
   })
 
   it("constructs the isolated RPC launch plan without invoking OMP", () => {
