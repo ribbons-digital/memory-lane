@@ -52,5 +52,24 @@ Unsafe manifest-recorded OMP paths make doctor report a warning without inspecti
 Doctor also reports the pinned OMP lifecycle contract's tested version, test date, and aggregate pass status.
 Malformed or unsafe manifest paths stop upgrade or uninstall instead of falling back to a default path.
 
-For local adapter development and the tested rebuild-and-restart workflow, see [OMP: load and restart the local adapter](../../docs/development.md#omp-load-and-restart-the-local-adapter).
+## Local checkout development
+
+The source-checkout workflow is verified with the compiled OMP `17.1.0` macOS arm64 release.
+Build the checkout and run its CLI entrypoint so init records `packages/cli/dist/index.js` and generates the OMP-specific bridge:
+
+```bash
+cd /absolute/path/to/memory-lane
+pnpm build
+chmod +x packages/cli/dist/index.js
+MEMORY_LANE_INSTALL_BINARY="$PWD/packages/cli/dist/index.js" \
+  node packages/cli/dist/index.js init --only omp --yes
+```
+
+Confirm the local OMP binary reports `omp/17.1.0`, then start it from the project you want to use.
+After rebuilding Memory Lane, exit and restart OMP because `/reload-plugins` does not reload an already loaded extension module.
+Use `omp --continue` from the same project to resume after the restart.
+Do not replace the generated OMP bridge with a shim that imports `packages/pi-adapter/dist/index.js`.
+Compiled OMP uses the bridge to launch the JavaScript CLI through Node, so `node` must be available on OMP's `PATH`.
+
+See [OMP: install and restart a local checkout](../../docs/development.md#omp-install-and-restart-a-local-checkout) for the exact verified build, init, load, and restart commands.
 The adjacent development-docs section records the OMP-only APIs that Memory Lane intentionally does not use.

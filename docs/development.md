@@ -85,9 +85,9 @@ pnpm --filter @memory-lane/cli eval:omp-discovery
 pnpm --filter @memory-lane/cli eval:omp-contract -- --as-of YYYY-MM-DD --manual-input --out test/fixtures/omp-contract-16.4.8.json
 ```
 
-Both gates require OMP `16.4.8`; the lifecycle contract additionally requires a genuine interactive terminal for the two prompted `input` submissions.
-The discovery gate installs both production source forms into isolated default and `PI_CODING_AGENT_DIR` roots, launches real OMP without `--extension`, and verifies expected commands and tools through OMP's normal loader.
-The lifecycle gate uses a credential-free loopback provider for deterministic tool execution, loads both production extension forms through real `omp --extension` scratch profiles, records sanitized per-event evidence, and exits non-zero when any expected registration is missing, any lifecycle event remains unverified, or any lifecycle event fails.
+The discovery gate requires OMP `17.1.0`, while the lifecycle contract remains pinned to OMP `16.4.8` and additionally requires a genuine interactive terminal for the two prompted `input` submissions.
+The discovery gate installs the source-checkout CLI bridge into isolated default and `PI_CODING_AGENT_DIR` roots, launches real OMP without `--extension`, and verifies expected commands and tools through OMP's normal loader.
+The lifecycle gate uses a credential-free loopback provider for deterministic tool execution, loads both contract source forms through real `omp --extension` scratch profiles, records sanitized per-event evidence, and exits non-zero when any expected registration is missing, any lifecycle event remains unverified, or any lifecycle event fails.
 Neither gate needs a network-dependent model call or touches the real user profile or memory store.
 The tested lifecycle version and date live in `packages/cli/test/fixtures/omp-contract-16.4.8.json`.
 The current committed lifecycle contract was tested against OMP `16.4.8` on `2026-07-13` and reports `overallPass: true`.
@@ -169,33 +169,43 @@ The native pi adapter and release-style generated pi bridge also listen to `sess
 It does not automatically summarize on `agent_end` or `session_shutdown`.
 The release-style generated pi extension is intentionally a self-contained CLI bridge so pi never tries to import the native `memory-lane` binary as TypeScript.
 
-### OMP: load and restart the local adapter
+### OMP: install and restart a local checkout
 
-OMP `16.4.8` does not provide an in-session command that reloads an already loaded extension module from source.
-An isolated real-OMP smoke confirmed that `ctx.reload()` and `/reload-plugins` preserve existing registrations but do not pick up a rebuilt adapter behind an unchanged extension entrypoint.
-The reliable OMP development loop is therefore rebuild, exit OMP, and start or resume OMP again.
-
-Set the extension root to the default OMP agent directory or an explicit profile directory, then create the shim:
+The local development flow is verified with the compiled OMP `17.1.0` macOS arm64 release.
+Confirm the exact OMP build before installing the checkout:
 
 ```bash
-export PI_CODING_AGENT_DIR="${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}"
-mkdir -p "$PI_CODING_AGENT_DIR/extensions/memory-lane"
-cat > "$PI_CODING_AGENT_DIR/extensions/memory-lane/index.ts" <<'EOF'
-export default async function memoryLaneDevelopmentExtension(pi: any) {
-  const adapter = await import(
-    "file:///absolute/path/to/memory-lane/packages/pi-adapter/dist/index.js"
-  )
-  return adapter.default(pi)
-}
-EOF
+OMP_BIN=/absolute/path/to/omp-darwin-arm64
+"$OMP_BIN" --version
+# omp/17.1.0
 ```
 
-Replace `/absolute/path/to/memory-lane` with the absolute checkout path.
-Run `pnpm build`, start OMP, and confirm that `/memory`, `/remember`, `memory_save`, `memory_suggest`, `memory_continuity`, and `memory_recall` are available.
-After changing Memory Lane source, run `pnpm build` again, exit the active OMP process, and start OMP again.
-Use `omp --continue` from the same project when you want to resume the latest session after the restart.
+Build Memory Lane, make the generated CLI entrypoint executable, and let init generate the OMP-specific bridge:
+
+```bash
+cd /absolute/path/to/memory-lane
+pnpm build
+chmod +x packages/cli/dist/index.js
+MEMORY_LANE_INSTALL_BINARY="$PWD/packages/cli/dist/index.js" \
+  node packages/cli/dist/index.js init --only omp --yes
+```
+
+Omit `--yes` when you want confirmation before replacing an existing OMP extension.
+By default, init writes `~/.omp/agent/extensions/memory-lane/index.ts` and records that exact path in the install manifest.
+Set `PI_CODING_AGENT_DIR` to an absolute agent directory for an explicit OMP profile before running init and before launching OMP.
+The generated source-checkout extension invokes `packages/cli/dist/index.js` through Node, so `node` must remain available on OMP's `PATH`.
+
+Start OMP from the project you want to use:
+
+```bash
+"$OMP_BIN"
+```
+
+Confirm that `/memory`, `/remember`, `memory_save`, `memory_suggest`, `memory_revise`, `memory_continuity`, `memory_recall`, and `memory_get` are available.
+After changing Memory Lane source, run `pnpm build` again, exit the active OMP process, and start the same OMP binary again.
+Use `"$OMP_BIN" --continue` from the same project when you want to resume the latest session after the restart.
 OMP's `/reload-plugins` command refreshes plugin registries and related resources, but it does not reload the active Memory Lane extension source.
-Named OMP profiles are not guessed; set `PI_CODING_AGENT_DIR` to the profile's absolute agent directory before starting OMP or configure the profile's `extensions:` list manually.
+Do not replace the generated OMP bridge with the handwritten pi adapter shim, because compiled OMP does not provide the adapter's bundled runtime dependencies.
 
 ### OMP: intentionally unused host APIs
 

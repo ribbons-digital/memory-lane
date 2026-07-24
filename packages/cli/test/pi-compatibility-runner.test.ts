@@ -2,6 +2,7 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import {
   ESSENTIAL_TOOL_ALLOWLIST,
+  EXPECTED_PI_LIFECYCLE_EVENTS,
   EXPECTED_PI_TOOLS,
   PINNED_PI_VERSION,
   evaluatePiSourceForm,
@@ -83,6 +84,7 @@ describe("Pi 0.81.1 compatibility runner", () => {
       const passing = evaluatePiSourceForm({
         form,
         registrations: EXPECTED_PI_TOOLS[form].map((name) => ({ name, loadMode: "essential" })),
+        lifecycleRegistrations: [...EXPECTED_PI_LIFECYCLE_EVENTS],
         selections: [{ activeTools: ["memory_save"], allTools: ["memory_save"], selectedTools: ["memory_save"] }],
         providerRequests: [
           { toolNames: ["memory_save"], roles: ["system", "user"] },
@@ -97,6 +99,7 @@ describe("Pi 0.81.1 compatibility runner", () => {
       const missingAllowlist = evaluatePiSourceForm({
         form,
         registrations: EXPECTED_PI_TOOLS[form].map((name) => ({ name, loadMode: "essential" })),
+        lifecycleRegistrations: [...EXPECTED_PI_LIFECYCLE_EVENTS],
         selections: [{ activeTools: [], allTools: ["memory_save"], selectedTools: [] }],
         providerRequests: [],
         toolEvents: [],
