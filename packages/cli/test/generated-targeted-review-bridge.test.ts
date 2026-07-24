@@ -10,6 +10,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const cleanups: string[] = []
 
 type Tool = {
+  name: string
+  loadMode?: string
   description: string
   parameters: { properties: Record<string, unknown> }
   execute(id: string, params: any, signal?: AbortSignal, onUpdate?: unknown, ctx?: any): Promise<any>
@@ -55,6 +57,24 @@ afterEach(() => {
 })
 
 describe("generated CLI-backed Pi/OMP targeted review bridge", () => {
+  it("registers the exact generated Memory Lane tool set as essential", async () => {
+    const { extension } = setupBridge()
+    const tools = await loadTools(extension)
+
+    assert.deepEqual([...tools.keys()], [
+      "memory_save",
+      "memory_suggest",
+      "memory_revise",
+      "memory_continuity",
+      "memory_recall",
+      "memory_get",
+    ])
+    for (const tool of tools.values()) {
+      assert.equal(tool.loadMode, "essential", `${tool.name} must load in essential mode`)
+      assert.equal(typeof tool.execute, "function")
+    }
+  })
+
   it("registers first-class targeted suggestion review and same-ID revision guidance", async () => {
     const { extension } = setupBridge()
     const tools = await loadTools(extension)

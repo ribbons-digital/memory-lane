@@ -41,6 +41,7 @@ export interface ExtensionAPI {
   registerTool(tool: {
     name: string
     label: string
+    loadMode: "essential"
     description: string
     parameters: import("typebox").TObject<any>
     execute: (
@@ -652,6 +653,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   pi.registerTool({
     name: "memory_suggest",
     label: "Suggest Memory",
+    loadMode: "essential",
     description: "Queue a durable project-specific memory suggestion and immediately review only that candidate. If revision is recommended, call memory_revise with the same pending memory ID and revised text; memory_revise preserves the ID and reruns targeted review. A clean result remains pending and ready for explicit user approval or rejection. Never automatically approve or reject. When the user explicitly asks you to remember something, use memory_save instead.",
     parameters: memorySuggestSchema,
     async execute(_id, params, _signal, _onUpdate, ctx) {
@@ -696,6 +698,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   pi.registerTool({
     name: "memory_revise",
     label: "Revise Pending Memory",
+    loadMode: "essential",
     description: "Revise the same pending memory ID in place and rerun targeted review. Use when memory_suggest or a prior memory_revise receipt recommends revision. On another revise outcome, revise the same ID and rerun with this tool. On clean, leave it pending for explicit user approval or rejection. On needs-human-review, stop automatic revision and request human review. Never automatically approve or reject.",
     parameters: memoryReviseSchema,
     async execute(_id, params, _signal, _onUpdate, ctx) {
@@ -733,6 +736,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   pi.registerTool({
     name: "memory_save",
     label: "Save Memory",
+    loadMode: "essential",
     description: "Save an approved persistent memory directly. Use when the user explicitly asks you to remember something — bypasses the approval step.",
     parameters: memorySaveSchema,
     async execute(_id, params, _signal, _onUpdate, ctx) {
@@ -765,6 +769,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   pi.registerTool({
     name: "memory_continuity",
     label: "Memory Continuity",
+    loadMode: "essential",
     description: "Read canonical Memory Lane continuity state for broad prior-work, next-action, or project-status questions. Use before memory_recall for handoff-style prompts.",
     parameters: memoryContinuitySchema,
     async execute(_id, params, _signal, _onUpdate, ctx) {
@@ -792,6 +797,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   pi.registerTool({
     name: "memory_recall",
     label: "Recall Memory",
+    loadMode: "essential",
     description: "Recall approved persistent memories.",
     parameters: memoryRecallSchema,
     async execute(_id, params, _signal, _onUpdate, ctx) {
