@@ -52,6 +52,8 @@ const BRIDGE_REGISTRATIONS = [
   "tool:memory_get",
   "session_before_compact",
   "session_compact",
+  "session_switch",
+  "session_shutdown",
   "before_agent_start",
   "input",
   "turn_end",
@@ -879,6 +881,15 @@ export function taskSessionResult(results: Array<{ form: SourceForm; entries: Lo
     const missingEvents = requiredEvents.filter((event) => !observedEvents.includes(event))
     const nestedSessionFile = childEvents.length > 0
       && childEvents.every((entry) => entry.contextValues?.nestedSessionFile === true)
+    const observedWorkerRoleSentinels = childEvents
+      .map((entry) => entry.contextValues?.workerRoleSentinel)
+      .filter((value): value is string => typeof value === "string")
+    const unanimousWorkerRoleSentinel = childEvents.length > 0
+      && observedWorkerRoleSentinels.length === childEvents.length
+      && observedWorkerRoleSentinels.every((value) => value === observedWorkerRoleSentinels[0])
+    const workerRoleSentinel = unanimousWorkerRoleSentinel
+      ? observedWorkerRoleSentinels[0]
+      : observedWorkerRoleSentinels.length === 0 ? "<not-observed>" : "<inconsistent>"
     const exactWorkerRoleSentinel = childEvents.length > 0
       && childEvents.every((entry) => entry.contextValues?.subagentRole === true
         && entry.contextValues.workerRoleSentinel === OMP_WORKER_ROLE_SENTINEL)
@@ -911,7 +922,7 @@ export function taskSessionResult(results: Array<{ form: SourceForm; entries: Lo
         taskSignals: {
           nestedSessionFile,
           subagentRole: exactWorkerRoleSentinel,
-          workerRoleSentinel: OMP_WORKER_ROLE_SENTINEL,
+          workerRoleSentinel,
           parentLineageObserved: childEvents.some((entry) => entry.contextValues?.parentLineage === true),
         },
         taskResult: {
@@ -973,7 +984,7 @@ export function compiledHostRuntimeResult(
       try { return fs.realpathSync(value) === expected } catch { return path.resolve(value) === path.resolve(executable) }
     })
     const ompExecutableObserved = observedMatches.length > 0 && observedMatches.every(Boolean)
-    const execPaths = observed.map((value, index) => observedMatches[index] ? "<official-omp-17.1.0-executable>" : value)
+    const execPaths = observed.map((value, index) => observedMatches[index] ? `<official-omp-${PINNED_OMP_VERSION}-executable>` : value)
     return { sourceForm: result.form, execPaths, ompExecutableObserved }
   })
   return {
