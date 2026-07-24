@@ -44,8 +44,8 @@ export interface OmpContractDiagnostic {
 }
 
 export const OMP_CONTRACT_DIAGNOSTIC: Readonly<OmpContractDiagnostic> = Object.freeze({
-  testedVersion: "16.4.8",
-  testedAt: "2026-07-13",
+  testedVersion: "17.1.0",
+  testedAt: "2026-07-24",
   overallPass: true,
 })
 

@@ -1,0 +1,345 @@
+{
+  "schemaVersion": 1,
+  "host": "omp",
+  "expectedVersion": "17.1.0",
+  "actualVersion": "omp/17.1.0",
+  "testedAt": "2026-07-24",
+  "execution": {
+    "realRuntime": true,
+    "mode": "rpc",
+    "extensionFlag": true,
+    "scratchHome": true,
+    "scratchProfile": true,
+    "scratchAgentDir": true,
+    "manualRealTtyInput": true,
+    "compactionMechanism": "rpc compact",
+    "modelMechanism": "loopback OpenAI-compatible deterministic contract provider available to main and delegated child sessions"
+  },
+  "hostNotes": [
+    "OMP 17.1.0 RPC prompts correctly omit interactive input events; real-TTY editor input is reported independently.",
+    "Delegated tasks use the local zero-cost contract provider and require a completed result before suppression can certify."
+  ],
+  "sourceForms": [
+    {
+      "sourceForm": "development-bridge",
+      "registrations": [
+        "command:remember",
+        "command:memory",
+        "tool:memory_save",
+        "tool:memory_suggest",
+        "tool:memory_revise",
+        "tool:memory_continuity",
+        "tool:memory_recall",
+        "tool:memory_get",
+        "session_before_compact",
+        "session_compact",
+        "session_switch",
+        "session_shutdown",
+        "before_agent_start",
+        "input",
+        "turn_end",
+        "tool_result"
+      ],
+      "missingRegistrations": [],
+      "incompleteEvents": [],
+      "inputVerification": {
+        "rpc": {
+          "status": "pass",
+          "evidence": [
+            "input handler registered; RPC prompts correctly emitted no interactive input event"
+          ]
+        },
+        "interactive": {
+          "status": "pass",
+          "evidence": [
+            "genuine real-TTY input and accepted pass-through result were observed"
+          ]
+        }
+      },
+      "events": {
+        "input": {
+          "status": "pass",
+          "evidence": [
+            "input handler registered; RPC prompts correctly emitted no interactive input event"
+          ]
+        },
+        "before_agent_start": {
+          "status": "pass",
+          "evidence": [
+            "event={\"type\":\"string\",\"prompt\":\"string\",\"images\":\"undefined\",\"systemPrompt\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={\"message\":\"object\"} resultValues={}",
+            "event={\"type\":\"string\",\"prompt\":\"string\",\"images\":\"undefined\",\"systemPrompt\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={\"message\":\"object\"} resultValues={}",
+            "event={\"type\":\"string\",\"prompt\":\"string\",\"images\":\"undefined\",\"systemPrompt\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={\"message\":\"object\"} resultValues={}",
+            "event={\"type\":\"string\",\"prompt\":\"string\",\"images\":\"undefined\",\"systemPrompt\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={\"message\":\"object\"} resultValues={}"
+          ]
+        },
+        "turn_end": {
+          "status": "pass",
+          "evidence": [
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "raw payload omits legacy Pi fields consumed before normalization: turnId, lastUserMessage, lastAssistantMessage",
+            "configured lifecycle capture evidence was persisted"
+          ]
+        },
+        "tool_result": {
+          "status": "pass",
+          "evidence": [
+            "event={\"type\":\"string\",\"toolName\":\"string\",\"toolCallId\":\"string\",\"input\":\"object\",\"content\":\"array\",\"details\":\"object\",\"isError\":\"boolean\"} values={\"toolName\":\"shell:memory-lane-contract\",\"isError\":false,\"inputCommand\":\"pnpm test\",\"contentMatchesSentinel\":true} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"toolName\":\"string\",\"toolCallId\":\"string\",\"input\":\"object\",\"content\":\"array\",\"details\":\"undefined\",\"isError\":\"boolean\"} values={\"toolName\":\"shell:memory-lane-contract\",\"isError\":true,\"inputCommand\":\"pnpm test\",\"contentMatchesSentinel\":false} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"toolName\":\"string\",\"toolCallId\":\"string\",\"input\":\"object\",\"content\":\"array\",\"details\":\"object\",\"isError\":\"boolean\"} values={\"toolName\":\"task\",\"isError\":false,\"contentMatchesSentinel\":false,\"taskStatus\":\"completed\",\"taskResultCount\":1,\"taskExitCode\":0,\"taskAborted\":false,\"taskOutputMatchesSentinel\":true,\"taskResolvedModel\":\"memory-lane-contract/contract-model\",\"taskRequests\":1} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "raw payload omits legacy Pi fields consumed before normalization: turnId, toolInput, toolResponse",
+            "deterministic registered tool executed successfully before live tool_result delivery",
+            "configured lifecycle capture evidence was persisted"
+          ]
+        },
+        "session_before_compact": {
+          "status": "pass",
+          "evidence": [
+            "event={\"type\":\"string\",\"preparation\":\"object\",\"branchEntries\":\"array\",\"customInstructions\":\"string\",\"signal\":\"object\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "raw payload omits legacy Pi fields consumed before normalization: turnId",
+            "configured lifecycle capture evidence was persisted"
+          ]
+        }
+      }
+    },
+    {
+      "sourceForm": "release-bridge",
+      "registrations": [
+        "command:remember",
+        "command:memory",
+        "tool:memory_save",
+        "tool:memory_suggest",
+        "tool:memory_revise",
+        "tool:memory_continuity",
+        "tool:memory_recall",
+        "tool:memory_get",
+        "session_before_compact",
+        "session_compact",
+        "session_switch",
+        "session_shutdown",
+        "before_agent_start",
+        "input",
+        "turn_end",
+        "tool_result"
+      ],
+      "missingRegistrations": [],
+      "incompleteEvents": [],
+      "inputVerification": {
+        "rpc": {
+          "status": "pass",
+          "evidence": [
+            "input handler registered; RPC prompts correctly emitted no interactive input event"
+          ]
+        },
+        "interactive": {
+          "status": "pass",
+          "evidence": [
+            "genuine real-TTY input and accepted pass-through result were observed"
+          ]
+        }
+      },
+      "events": {
+        "input": {
+          "status": "pass",
+          "evidence": [
+            "input handler registered; RPC prompts correctly emitted no interactive input event"
+          ]
+        },
+        "before_agent_start": {
+          "status": "pass",
+          "evidence": [
+            "event={\"type\":\"string\",\"prompt\":\"string\",\"images\":\"undefined\",\"systemPrompt\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={\"message\":\"object\"} resultValues={}",
+            "event={\"type\":\"string\",\"prompt\":\"string\",\"images\":\"undefined\",\"systemPrompt\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={\"message\":\"object\"} resultValues={}",
+            "event={\"type\":\"string\",\"prompt\":\"string\",\"images\":\"undefined\",\"systemPrompt\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={\"message\":\"object\"} resultValues={}",
+            "event={\"type\":\"string\",\"prompt\":\"string\",\"images\":\"undefined\",\"systemPrompt\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={\"message\":\"object\"} resultValues={}"
+          ]
+        },
+        "turn_end": {
+          "status": "pass",
+          "evidence": [
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"turnIndex\":\"number\",\"message\":\"object\",\"toolResults\":\"array\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "raw payload omits legacy Pi fields consumed before normalization: turnId, lastUserMessage, lastAssistantMessage",
+            "configured lifecycle capture evidence was persisted"
+          ]
+        },
+        "tool_result": {
+          "status": "pass",
+          "evidence": [
+            "event={\"type\":\"string\",\"toolName\":\"string\",\"toolCallId\":\"string\",\"input\":\"object\",\"content\":\"array\",\"details\":\"object\",\"isError\":\"boolean\"} values={\"toolName\":\"shell:memory-lane-contract\",\"isError\":false,\"inputCommand\":\"pnpm test\",\"contentMatchesSentinel\":true} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"toolName\":\"string\",\"toolCallId\":\"string\",\"input\":\"object\",\"content\":\"array\",\"details\":\"undefined\",\"isError\":\"boolean\"} values={\"toolName\":\"shell:memory-lane-contract\",\"isError\":true,\"inputCommand\":\"pnpm test\",\"contentMatchesSentinel\":false} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "event={\"type\":\"string\",\"toolName\":\"string\",\"toolCallId\":\"string\",\"input\":\"object\",\"content\":\"array\",\"details\":\"object\",\"isError\":\"boolean\"} values={\"toolName\":\"task\",\"isError\":false,\"contentMatchesSentinel\":false,\"taskStatus\":\"completed\",\"taskResultCount\":1,\"taskExitCode\":0,\"taskAborted\":false,\"taskOutputMatchesSentinel\":true,\"taskResolvedModel\":\"memory-lane-contract/contract-model\",\"taskRequests\":1} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "raw payload omits legacy Pi fields consumed before normalization: turnId, toolInput, toolResponse",
+            "deterministic registered tool executed successfully before live tool_result delivery",
+            "configured lifecycle capture evidence was persisted"
+          ]
+        },
+        "session_before_compact": {
+          "status": "pass",
+          "evidence": [
+            "event={\"type\":\"string\",\"preparation\":\"object\",\"branchEntries\":\"array\",\"customInstructions\":\"string\",\"signal\":\"object\"} values={} context={\"ui\":\"object\",\"getContextUsage\":\"function\",\"compact\":\"function\",\"hasUI\":\"boolean\",\"cwd\":\"string\",\"sessionManager\":\"object\",\"modelRegistry\":\"object\",\"model\":\"object\",\"models\":\"object\",\"isIdle\":\"function\",\"abort\":\"function\",\"hasPendingMessages\":\"function\",\"shutdown\":\"function\",\"getSystemPrompt\":\"function\",\"localProtocolOptions\":\"object\",\"memory\":\"object\",\"setInterval\":\"function\",\"setTimeout\":\"function\",\"clearTimer\":\"function\",\"uiNotify\":\"function\",\"sessionFile\":\"function\",\"sessionBranch\":\"function\"} result={} resultValues={}",
+            "raw payload omits legacy Pi fields consumed before normalization: turnId",
+            "configured lifecycle capture evidence was persisted"
+          ]
+        }
+      }
+    }
+  ],
+  "harnessArtifacts": [
+    {
+      "sourceForm": "development-bridge",
+      "providerRegistered": true,
+      "contractToolRegisteredEssential": true,
+      "productionToolsRegisteredEssential": true
+    },
+    {
+      "sourceForm": "release-bridge",
+      "providerRegistered": true,
+      "contractToolRegisteredEssential": true,
+      "productionToolsRegisteredEssential": true
+    }
+  ],
+  "toolError": {
+    "status": "pass",
+    "sourceForms": [
+      {
+        "sourceForm": "development-bridge",
+        "executionFailed": true,
+        "eventDelivered": true
+      },
+      {
+        "sourceForm": "release-bridge",
+        "executionFailed": true,
+        "eventDelivered": true
+      }
+    ]
+  },
+  "deferredCompaction": {
+    "status": "pass",
+    "sourceForms": [
+      {
+        "sourceForm": "development-bridge",
+        "registered": true,
+        "delivered": true,
+        "persisted": true
+      },
+      {
+        "sourceForm": "release-bridge",
+        "registered": true,
+        "delivered": true,
+        "persisted": true
+      }
+    ]
+  },
+  "compiledHostRuntime": {
+    "status": "pass",
+    "compiledOmpExecPathIsOmpExecutable": true,
+    "developmentBridgeRuntime": "JavaScript bridge operations completed under compiled OMP; the exact Node selection seam is covered by omp-cli-bridge-runtime.test.ts",
+    "sourceForms": [
+      {
+        "sourceForm": "development-bridge",
+        "execPaths": [
+          "<official-omp-17.1.0-executable>",
+          "<official-omp-17.1.0-executable>",
+          "<official-omp-17.1.0-executable>"
+        ],
+        "ompExecutableObserved": true
+      },
+      {
+        "sourceForm": "release-bridge",
+        "execPaths": [
+          "<official-omp-17.1.0-executable>",
+          "<official-omp-17.1.0-executable>",
+          "<official-omp-17.1.0-executable>"
+        ],
+        "ompExecutableObserved": true
+      }
+    ]
+  },
+  "taskSessions": {
+    "status": "pass",
+    "policy": "Certify automatic capture suppression only after a completed delegated task, nested session-file ownership, and OMP's exact delegated-worker system-role sentinel are all observed.",
+    "sourceForms": [
+      {
+        "sourceForm": "development-bridge",
+        "observedEvents": [
+          "before_agent_start",
+          "session_shutdown",
+          "tool_result",
+          "turn_end"
+        ],
+        "missingEvents": [],
+        "taskSignals": {
+          "nestedSessionFile": true,
+          "subagentRole": true,
+          "workerRoleSentinel": "You are a worker agent for delegated tasks.",
+          "parentLineageObserved": false
+        },
+        "taskResult": {
+          "status": "completed",
+          "observedTaskResultEvents": 1,
+          "evidence": [
+            {
+              "isError": false,
+              "taskStatus": "completed",
+              "resultCount": 1,
+              "exitCode": 0,
+              "aborted": false,
+              "outputMatchesSentinel": true,
+              "resolvedModel": "memory-lane-contract/contract-model",
+              "requests": 1
+            }
+          ]
+        },
+        "automaticCaptureSuppressed": true
+      },
+      {
+        "sourceForm": "release-bridge",
+        "observedEvents": [
+          "before_agent_start",
+          "session_shutdown",
+          "tool_result",
+          "turn_end"
+        ],
+        "missingEvents": [],
+        "taskSignals": {
+          "nestedSessionFile": true,
+          "subagentRole": true,
+          "workerRoleSentinel": "You are a worker agent for delegated tasks.",
+          "parentLineageObserved": false
+        },
+        "taskResult": {
+          "status": "completed",
+          "observedTaskResultEvents": 1,
+          "evidence": [
+            {
+              "isError": false,
+              "taskStatus": "completed",
+              "resultCount": 1,
+              "exitCode": 0,
+              "aborted": false,
+              "outputMatchesSentinel": true,
+              "resolvedModel": "memory-lane-contract/contract-model",
+              "requests": 1
+            }
+          ]
+        },
+        "automaticCaptureSuppressed": true
+      }
+    ]
+  },
+  "decision": "OMP requires turn_end boundary normalization, and the Node-backed development bridge passed the normalized live contract. All registered live lifecycle contracts passed.",
+  "normalization": "OMP turn_end uses message/toolResults rather than legacy Pi last-message fields. OMP tool_result uses input/content/details/isError rather than legacy Pi toolInput/toolResponse. Both production forms normalize at their host boundary.",
+  "bridgeCapabilityGap": "Closed: the generated release bridge registers and exercises input, turn_end, and tool_result through shared Pi CLI lifecycle entry points.",
+  "overallPass": true
+}

@@ -65,8 +65,8 @@ test("OMP override install upgrade doctor and uninstall keep the recorded path",
     contract: OMP_CONTRACT_DIAGNOSTIC,
   })
   const humanDoctor = run(["doctor"], clearedEnv).stdout
-  assert.match(humanDoctor, /"testedVersion": "16\.4\.8"/u)
-  assert.match(humanDoctor, /"testedAt": "2026-07-13"/u)
+  assert.match(humanDoctor, /"testedVersion": "17\.1\.0"/u)
+  assert.match(humanDoctor, /"testedAt": "2026-07-24"/u)
   assert.match(humanDoctor, /"overallPass": true/u)
 
   run(["uninstall", "--only", "omp", "--yes"], clearedEnv)

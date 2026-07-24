@@ -4,23 +4,26 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import { piAdapterImportSource, piCliBridgeSource } from "../src/installer/config.js"
+import { piCliBridgeSource } from "../src/installer/config.js"
 
-export const PINNED_OMP_VERSION = "16.4.8"
+export const PINNED_OMP_VERSION = "17.1.0"
+export const CONTRACT_TOOL_LOAD_MODE = "essential" as const
+export const OMP_WORKER_ROLE_SENTINEL = "You are a worker agent for delegated tasks." as const
 export const REQUIRED_FLAGS = ["--extension", "--profile", "--mode", "--config", "--cwd", "--session-dir", "--no-skills", "--no-rules", "--tools", "--append-system-prompt", "--auto-approve", "--max-time"] as const
 export const CONTRACT_EVENTS = ["input", "before_agent_start", "turn_end", "tool_result", "session_before_compact"] as const
 export type ContractEvent = typeof CONTRACT_EVENTS[number]
-export type SourceForm = "adapter" | "bridge"
+export type SourceForm = "development-bridge" | "release-bridge"
 export type EventStatus = "pass" | "fail" | "not-registered-by-production-design"
 
-type LogEntry = {
+export type LogEntry = {
   kind: "registration" | "event" | "mechanism"
   name: string
   owner?: "production" | "harness"
+  loadMode?: string
   eventShape?: Record<string, string>
   eventValues?: Record<string, unknown>
   contextShape?: Record<string, string>
-  contextValues?: Record<string, boolean>
+  contextValues?: Record<string, boolean | string>
   resultShape?: Record<string, string>
   resultValues?: Record<string, unknown>
   note?: string
@@ -38,42 +41,31 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T | PromiseLike<
   return { promise, resolve, reject }
 }
 
+const BRIDGE_REGISTRATIONS = [
+  "command:remember",
+  "command:memory",
+  "tool:memory_save",
+  "tool:memory_suggest",
+  "tool:memory_revise",
+  "tool:memory_continuity",
+  "tool:memory_recall",
+  "tool:memory_get",
+  "session_before_compact",
+  "session_compact",
+  "before_agent_start",
+  "input",
+  "turn_end",
+  "tool_result",
+] as const
+
 export const EXPECTED_REGISTRATIONS: Record<SourceForm, readonly string[]> = {
-  adapter: [
-    "command:remember",
-    "command:memory",
-    "tool:memory_suggest",
-    "tool:memory_revise",
-    "tool:memory_save",
-    "tool:memory_continuity",
-    "tool:memory_recall",
-    "before_agent_start",
-    "session_before_compact",
-    "input",
-    "turn_end",
-    "tool_result",
-  ],
-  bridge: [
-    "command:remember",
-    "command:memory",
-    "tool:memory_save",
-    "tool:memory_suggest",
-    "tool:memory_revise",
-    "tool:memory_continuity",
-    "tool:memory_recall",
-    "tool:memory_get",
-    "session_before_compact",
-    "before_agent_start",
-    "input",
-    "turn_end",
-    "tool_result",
-  ],
+  "development-bridge": BRIDGE_REGISTRATIONS,
+  "release-bridge": BRIDGE_REGISTRATIONS,
 }
 
-
 const EXPECTED_EVENTS: Record<SourceForm, Record<ContractEvent, true>> = {
-  adapter: { input: true, before_agent_start: true, turn_end: true, tool_result: true, session_before_compact: true },
-  bridge: { input: true, before_agent_start: true, turn_end: true, tool_result: true, session_before_compact: true },
+  "development-bridge": { input: true, before_agent_start: true, turn_end: true, tool_result: true, session_before_compact: true },
+  "release-bridge": { input: true, before_agent_start: true, turn_end: true, tool_result: true, session_before_compact: true },
 }
 type AggregateSourceForm = {
   sourceForm: SourceForm
@@ -88,6 +80,13 @@ export function ompContractOverallPass(sourceForms: readonly AggregateSourceForm
       && CONTRACT_EVENTS.every((event) => result.events[event]?.status === "pass")
       && EXPECTED_REGISTRATIONS[sourceForm].every((registration) => result.registrations.includes(registration))
   })
+}
+
+export function manualInputVerificationPass(
+  manualInputRequested: boolean,
+  sourceForms: readonly { inputVerification: { interactive: { status: "pass" | "fail" | "not-run" } } }[],
+): boolean {
+  return !manualInputRequested || sourceForms.every((form) => form.inputVerification.interactive.status === "pass")
 }
 
 function parseFlag(name: string): string | undefined {
@@ -130,9 +129,10 @@ export function isolatedOmpEnvironment(base: NodeJS.ProcessEnv, overrides: NodeJ
   return env
 }
 
-function wrapperSource(targetPath: string, logPath: string, providerBaseUrl: string): string {
+export function ompContractWrapperSource(targetPath: string, logPath: string, providerBaseUrl: string): string {
   return `import * as fs from "node:fs"
 import * as path from "node:path"
+import importedMemoryLaneFactory from ${JSON.stringify(pathToFileURL(targetPath).href)}
 
 const TARGET = ${JSON.stringify(pathToFileURL(targetPath).href)}
 const LOG = ${JSON.stringify(logPath)}
@@ -158,9 +158,10 @@ function sessionSignals(ctx) {
     const nestedSessionFile = typeof sessionFile === "string"
       && typeof artifactsDir === "string"
       && path.resolve(path.dirname(sessionFile)) === path.resolve(artifactsDir)
+    const workerRoleSentinel = ${JSON.stringify(OMP_WORKER_ROLE_SENTINEL)}
     const subagentRole = Array.isArray(systemPrompt)
-      && systemPrompt.some((part) => typeof part === "string" && part.includes("You are a worker agent for delegated tasks."))
-    return { parentLineage, nestedSessionFile, subagentRole, taskSession: nestedSessionFile && subagentRole }
+      && systemPrompt.some((part) => typeof part === "string" && part.split("\\n").some((line) => line.trim() === workerRoleSentinel))
+    return { parentLineage, nestedSessionFile, subagentRole, workerRoleSentinel, taskSession: nestedSessionFile && subagentRole }
   } catch {
     return { parentLineage: false, nestedSessionFile: false, subagentRole: false, taskSession: false }
   }
@@ -170,11 +171,24 @@ function eventValues(name, event) {
   if (name === "input") return { source: event?.source, textMatchesSentinel: event?.text === "Remember that interactive OMP input preserves the contract sentinel." }
   if (name === "tool_result") {
     const content = Array.isArray(event?.content) ? event.content : []
+    const contentText = content.filter((item) => item?.type === "text" && typeof item.text === "string").map((item) => item.text).join("\\n")
+    const taskResults = Array.isArray(event?.details?.results) ? event.details.results : []
+    const taskResult = taskResults.length === 1 && taskResults[0] && typeof taskResults[0] === "object" ? taskResults[0] : undefined
+    const taskStatus = event?.toolName === "task" ? contentText.match(/<task-result\\b[^>]*\\bstatus="([^"]+)"/u)?.[1] : undefined
     return {
       toolName: event?.toolName,
       isError: event?.isError,
       inputCommand: event?.input?.command,
       contentMatchesSentinel: content.some((item) => item?.type === "text" && item.text === "OMP_CONTRACT_TEST_PASSED: \\\`pnpm test\\\` is the test command for this repo."),
+      ...(event?.toolName === "task" ? {
+        taskStatus,
+        taskResultCount: taskResults.length,
+        taskExitCode: taskResult?.exitCode,
+        taskAborted: taskResult?.aborted,
+        taskOutputMatchesSentinel: taskResult?.output === "\\\"TASK_SESSION_CONTRACT_OK\\\"",
+        taskResolvedModel: taskResult?.resolvedModel,
+        taskRequests: taskResult?.requests,
+      } : {}),
     }
   }
   return {}
@@ -184,7 +198,8 @@ function resultValues(name, result) {
   return name === "input" ? { action: result?.action } : {}
 }
 
-export default async function instrumentedMemoryLaneExtension(api) {
+export default function instrumentedMemoryLaneExtension(api) {
+  record({ kind: "mechanism", name: "host-runtime", owner: "harness", eventValues: { execPath: process.execPath } })
   api.registerProvider("memory-lane-contract", {
     baseUrl: PROVIDER_BASE_URL,
     apiKey: "MEMORY_LANE_CONTRACT_KEY",
@@ -202,9 +217,8 @@ export default async function instrumentedMemoryLaneExtension(api) {
   })
   record({ kind: "mechanism", name: "provider", owner: "harness", note: "loopback OpenAI-compatible contract provider registered" })
 
-  // Runtime-selected production artifact intentionally exercises OMP's real extension loader.
-  const mod = await import(TARGET + "?contract=" + Date.now())
-  const factory = typeof mod.default === "function" ? mod.default : mod.default?.default
+  // A static import ensures OMP 17 finishes loading the production artifact before invoking this extension.
+  const factory = typeof importedMemoryLaneFactory === "function" ? importedMemoryLaneFactory : importedMemoryLaneFactory?.default
   if (typeof factory !== "function") throw new Error("Memory Lane extension factory missing")
   const proxy = new Proxy(api, {
     get(target, property, receiver) {
@@ -232,18 +246,19 @@ export default async function instrumentedMemoryLaneExtension(api) {
         return target.registerCommand(name, command)
       }
       if (property === "registerTool") return (tool) => {
-        record({ kind: "registration", name: "tool:" + tool.name, owner: "production" })
+        record({ kind: "registration", name: "tool:" + tool.name, owner: "production", loadMode: tool.loadMode })
         return target.registerTool(tool)
       }
       const value = Reflect.get(target, property, receiver)
       return typeof value === "function" ? value.bind(target) : value
     },
   })
-  await factory(proxy)
+  factory(proxy)
 
   api.registerTool({
     name: "shell:memory-lane-contract",
     label: "Memory Lane Contract Tool",
+    loadMode: ${JSON.stringify(CONTRACT_TOOL_LOAD_MODE)},
     description: "Deterministic contract-only shell outcome tool.",
     parameters: {
       type: "object",
@@ -263,7 +278,7 @@ export default async function instrumentedMemoryLaneExtension(api) {
       }
     },
   })
-  record({ kind: "registration", name: "tool:shell:memory-lane-contract", owner: "harness" })
+  record({ kind: "registration", name: "tool:shell:memory-lane-contract", owner: "harness", loadMode: ${JSON.stringify(CONTRACT_TOOL_LOAD_MODE)} })
 }
 `
 }
@@ -416,7 +431,7 @@ async function runInteractiveInput(options: {
     "--extension", options.wrapperPath,
     "--auto-approve",
     "--model", "memory-lane-contract/contract-model",
-    "--tools", "shell:memory-lane-contract",
+    "--tools", "task",
     "--max-time", "60",
   ], { env: options.env, stdio: "inherit" })
   try {
@@ -444,6 +459,52 @@ async function runInteractiveInput(options: {
         resolve()
       })
     })
+  }
+}
+
+export function inputVerificationResult(
+  rpcEntries: readonly LogEntry[],
+  allEntries: readonly LogEntry[],
+  manualInputRequested: boolean,
+): {
+  rpc: { status: "pass" | "fail"; evidence: string[] }
+  interactive: { status: "pass" | "fail" | "not-run"; evidence: string[] }
+} {
+  const registered = rpcEntries.some((entry) => entry.kind === "registration" && entry.owner === "production" && entry.name === "input")
+  const rpcObservations = rpcEntries.filter((entry) => entry.kind === "event" && entry.owner === "production" && entry.name === "input" && entry.contextValues?.taskSession !== true)
+  const rpc = registered && rpcObservations.length === 0
+    ? { status: "pass" as const, evidence: ["input handler registered; RPC prompts correctly emitted no interactive input event"] }
+    : {
+        status: "fail" as const,
+        evidence: [
+          ...(registered ? [] : ["expected production input handler was not registered"]),
+          ...(rpcObservations.length ? [`RPC unexpectedly emitted ${rpcObservations.length} interactive input event(s)`] : []),
+        ],
+      }
+
+  if (!manualInputRequested) {
+    return {
+      rpc,
+      interactive: { status: "not-run", evidence: ["real-TTY input verification was not requested and is not inferred from RPC"] },
+    }
+  }
+  const rpcInputCount = rpcEntries.filter((entry) => entry.kind === "event" && entry.owner === "production" && entry.name === "input").length
+  const interactiveObservations = allEntries
+    .filter((entry) => entry.kind === "event" && entry.owner === "production" && entry.name === "input")
+    .slice(rpcInputCount)
+  const manualEvidence = allEntries.some((entry) =>
+    entry.kind === "mechanism"
+    && entry.name === "input"
+    && entry.note === "genuine real-TTY editor submission observed in this contract run")
+  const validObservation = interactiveObservations.some((entry) =>
+    entry.eventValues?.source === "interactive"
+    && entry.eventValues.textMatchesSentinel === true
+    && entry.resultValues?.action === "continue")
+  return {
+    rpc,
+    interactive: manualEvidence && validObservation
+      ? { status: "pass", evidence: ["genuine real-TTY input and accepted pass-through result were observed"] }
+      : { status: "fail", evidence: ["real-TTY input was requested but the interactive sentinel and pass-through result were not observed"] },
   }
 }
 
@@ -497,21 +558,6 @@ function eventResult(form: SourceForm, event: ContractEvent, entries: LogEntry[]
   const context = selected?.contextShape ?? {}
   const missingContext = ["cwd", "uiNotify", "sessionFile", "sessionBranch"].filter((key) => context[key] === "undefined")
   if (missingContext.length) return { status: "fail", evidence: [...evidence, `missing context surface: ${missingContext.join(", ")}`] }
-
-  if (event === "input") {
-    const manualEvidence = entries.some((entry) =>
-      entry.kind === "mechanism"
-      && entry.name === "input"
-      && entry.note === "genuine real-TTY editor submission observed in this contract run")
-    if (!manualEvidence) return { status: "fail", evidence: [...evidence, "noninteractive execution cannot verify physical OMP input"] }
-    if (selected?.eventValues?.source !== "interactive" || selected.eventValues.textMatchesSentinel !== true) {
-      return { status: "fail", evidence: [...evidence, "interactive input source or bounded sentinel did not match"] }
-    }
-    if (selected.resultValues?.action !== "continue") {
-      return { status: "fail", evidence: [...evidence, "OMP pass-through result was not { action: continue }"] }
-    }
-    evidence.push("genuine real-TTY input and accepted pass-through result were observed")
-  }
 
   if (event === "tool_result") {
     const successExecuted = entries.some((entry) => entry.kind === "mechanism" && entry.name === "contract-tool-execution" && entry.note === "success")
@@ -693,7 +739,7 @@ export function ompRpcCommandPlan(options: {
       "--extension", options.extensionPath,
       "--auto-approve",
       "--model", "memory-lane-contract/contract-model",
-      "--tools", "task,shell:memory-lane-contract",
+      "--tools", "task",
       "--append-system-prompt", "Memory Lane contract runtime. Follow the current user request exactly.",
       "--max-time", "180",
     ],
@@ -709,7 +755,13 @@ async function runSourceForm(options: {
   summaryBaseUrl: string
   cliPath: string
   manualInput: boolean
-}): Promise<{ form: SourceForm; entries: LogEntry[]; events: Record<ContractEvent, { status: EventStatus; evidence: string[] }>; memoryText: string }> {
+}): Promise<{
+  form: SourceForm
+  entries: LogEntry[]
+  events: Record<ContractEvent, { status: EventStatus; evidence: string[] }>
+  inputVerification: ReturnType<typeof inputVerificationResult>
+  memoryText: string
+}> {
   const formDir = path.join(options.root, options.form)
   const projectDir = path.join(formDir, "project")
   const agentDir = path.join(formDir, "agent")
@@ -741,7 +793,7 @@ async function runSourceForm(options: {
     },
   }))
   fs.writeFileSync(targetPath, options.targetSource)
-  fs.writeFileSync(wrapperPath, wrapperSource(targetPath, logPath, options.summaryBaseUrl))
+  fs.writeFileSync(wrapperPath, ompContractWrapperSource(targetPath, logPath, options.summaryBaseUrl))
 
   const env = isolatedOmpEnvironment(process.env, {
     HOME: homeDir,
@@ -781,6 +833,7 @@ async function runSourceForm(options: {
   } finally {
     await rpc.close()
   }
+  const rpcEntries = readLog(logPath)
   if (options.manualInput) {
     await runInteractiveInput({
       executable: options.executable,
@@ -798,16 +851,23 @@ async function runSourceForm(options: {
       kind: "mechanism",
       name: "input",
       owner: "harness",
-      note: "manual real-TTY input was not requested; noninteractive execution cannot pass input",
+      note: "manual real-TTY input was not requested; RPC input absence is evaluated independently",
     })}\n`)
   }
   const memoryText = fs.existsSync(memoryPath) ? fs.readFileSync(memoryPath, "utf8") : ""
   const entries = readLog(logPath)
+  const inputVerification = inputVerificationResult(rpcEntries, entries, options.manualInput)
   return {
     form: options.form,
     entries,
+    inputVerification,
     memoryText,
-    events: Object.fromEntries(CONTRACT_EVENTS.map((event) => [event, eventResult(options.form, event, entries, memoryText)])) as Record<ContractEvent, { status: EventStatus; evidence: string[] }>,
+    events: Object.fromEntries(CONTRACT_EVENTS.map((event) => [
+      event,
+      event === "input"
+        ? { status: inputVerification.rpc.status, evidence: inputVerification.rpc.evidence }
+        : eventResult(options.form, event, entries, memoryText),
+    ])) as Record<ContractEvent, { status: EventStatus; evidence: string[] }>,
   }
 }
 
@@ -819,37 +879,108 @@ export function taskSessionResult(results: Array<{ form: SourceForm; entries: Lo
     const missingEvents = requiredEvents.filter((event) => !observedEvents.includes(event))
     const nestedSessionFile = childEvents.length > 0
       && childEvents.every((entry) => entry.contextValues?.nestedSessionFile === true)
-    const subagentRole = childEvents.length > 0
-      && childEvents.every((entry) => entry.contextValues?.subagentRole === true)
-    const reliableTaskSignals = nestedSessionFile && subagentRole
+    const exactWorkerRoleSentinel = childEvents.length > 0
+      && childEvents.every((entry) => entry.contextValues?.subagentRole === true
+        && entry.contextValues.workerRoleSentinel === OMP_WORKER_ROLE_SENTINEL)
+    const reliableTaskSignals = nestedSessionFile && exactWorkerRoleSentinel
     const suppressedResults = requiredEvents.every((event) =>
       childEvents.filter((entry) => entry.name === event).every((entry) => Object.keys(entry.resultShape ?? {}).length === 0))
     const persistedTaskMemory = result.memoryText.includes("OMP task-session capture should be suppressed")
+    const taskResultEvents = result.entries.filter((entry) =>
+      entry.kind === "event"
+      && entry.owner === "production"
+      && entry.name === "tool_result"
+      && entry.contextValues?.taskSession !== true
+      && entry.eventValues?.toolName === "task")
+    const successfulTaskResult = taskResultEvents.length === 1
+      && taskResultEvents[0].eventValues?.isError === false
+      && taskResultEvents[0].eventValues.taskStatus === "completed"
+      && taskResultEvents[0].eventValues.taskResultCount === 1
+      && taskResultEvents[0].eventValues.taskExitCode === 0
+      && taskResultEvents[0].eventValues.taskAborted === false
+      && taskResultEvents[0].eventValues.taskOutputMatchesSentinel === true
+      && taskResultEvents[0].eventValues.taskResolvedModel === "memory-lane-contract/contract-model"
+      && taskResultEvents[0].eventValues.taskRequests === 1
     return {
       reliableTaskSignals,
+      successfulTaskResult,
       report: {
         sourceForm: result.form,
         observedEvents,
         missingEvents,
         taskSignals: {
           nestedSessionFile,
-          subagentRole,
+          subagentRole: exactWorkerRoleSentinel,
+          workerRoleSentinel: OMP_WORKER_ROLE_SENTINEL,
           parentLineageObserved: childEvents.some((entry) => entry.contextValues?.parentLineage === true),
         },
-        automaticCaptureSuppressed: suppressedResults && !persistedTaskMemory,
+        taskResult: {
+          status: successfulTaskResult ? "completed" : "failed",
+          observedTaskResultEvents: taskResultEvents.length,
+          evidence: taskResultEvents.slice(0, 1).map((entry) => ({
+            isError: entry.eventValues?.isError,
+            taskStatus: entry.eventValues?.taskStatus,
+            resultCount: entry.eventValues?.taskResultCount,
+            exitCode: entry.eventValues?.taskExitCode,
+            aborted: entry.eventValues?.taskAborted,
+            outputMatchesSentinel: entry.eventValues?.taskOutputMatchesSentinel,
+            resolvedModel: entry.eventValues?.taskResolvedModel,
+            requests: entry.eventValues?.taskRequests,
+          })),
+        },
+        automaticCaptureSuppressed: successfulTaskResult && reliableTaskSignals && suppressedResults && !persistedTaskMemory,
       },
     }
   })
-  const status = evaluatedForms.every(({ reliableTaskSignals, report }) =>
+  const status = evaluatedForms.every(({ reliableTaskSignals, successfulTaskResult, report }) =>
     report.missingEvents.length === 0
     && reliableTaskSignals
+    && successfulTaskResult
     && report.automaticCaptureSuppressed)
     ? "pass"
     : "fail"
   return {
     status,
-    policy: "Suppress automatic lifecycle capture only when nested session-file ownership and OMP's delegated-worker system role both identify a task session.",
+    policy: "Certify automatic capture suppression only after a completed delegated task, nested session-file ownership, and OMP's exact delegated-worker system-role sentinel are all observed.",
     sourceForms: evaluatedForms.map(({ report }) => report),
+  }
+}
+
+function deferredCompactionResult(results: Array<{ form: SourceForm; entries: LogEntry[]; memoryText: string }>) {
+  const sourceForms = results.map((result) => {
+    const registered = result.entries.some((entry) => entry.kind === "registration" && entry.owner === "production" && entry.name === "session_compact")
+    const delivered = result.entries.some((entry) => entry.kind === "event" && entry.owner === "production" && entry.name === "session_compact" && entry.contextValues?.taskSession !== true)
+    const persisted = result.memoryText.includes("OMP contract compaction summary")
+    return { sourceForm: result.form, registered, delivered, persisted }
+  })
+  return {
+    status: sourceForms.every((result) => result.registered && result.delivered && result.persisted) ? "pass" : "fail",
+    sourceForms,
+  }
+}
+
+export function compiledHostRuntimeResult(
+  executable: string,
+  results: Array<{ form: SourceForm; entries: LogEntry[] }>,
+) {
+  const expected = fs.realpathSync(executable)
+  const sourceForms = results.map((result) => {
+    const observed = result.entries
+      .filter((entry) => entry.kind === "mechanism" && entry.name === "host-runtime")
+      .map((entry) => entry.eventValues?.execPath)
+      .filter((value): value is string => typeof value === "string")
+    const observedMatches = observed.map((value) => {
+      try { return fs.realpathSync(value) === expected } catch { return path.resolve(value) === path.resolve(executable) }
+    })
+    const ompExecutableObserved = observedMatches.length > 0 && observedMatches.every(Boolean)
+    const execPaths = observed.map((value, index) => observedMatches[index] ? "<official-omp-17.1.0-executable>" : value)
+    return { sourceForm: result.form, execPaths, ompExecutableObserved }
+  })
+  return {
+    status: sourceForms.every((result) => result.ompExecutableObserved) ? "pass" : "fail",
+    compiledOmpExecPathIsOmpExecutable: sourceForms.every((result) => result.ompExecutableObserved),
+    developmentBridgeRuntime: "JavaScript bridge operations completed under compiled OMP; the exact Node selection seam is covered by omp-cli-bridge-runtime.test.ts",
+    sourceForms,
   }
 }
 
@@ -872,6 +1003,22 @@ function toolErrorResult(results: Array<{ form: SourceForm; entries: LogEntry[] 
   }
 }
 
+function buildContractReleaseBinary(workspaceRoot: string, root: string): string {
+  const binaryPath = path.join(root, process.platform === "win32" ? "memory-lane-contract.exe" : "memory-lane-contract")
+  const result = spawnSync("bun", [
+    "build",
+    "--compile",
+    path.join(workspaceRoot, "packages/cli/src/index.ts"),
+    "--outfile",
+    binaryPath,
+    "--define",
+    'process.env.MEMORY_LANE_VERSION="0.0.0-omp-contract"',
+  ], { cwd: workspaceRoot, encoding: "utf8" })
+  if (result.error) throw result.error
+  if (result.status !== 0) throw new Error(result.stderr.trim() || `bun build --compile exited with ${result.status}`)
+  return binaryPath
+}
+
 async function main(): Promise<void> {
   const asOf = parseFlag("--as-of") ?? new Date().toISOString().slice(0, 10)
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(asOf)) throw new Error("--as-of must use YYYY-MM-DD")
@@ -882,36 +1029,37 @@ async function main(): Promise<void> {
   const currentFile = fileURLToPath(import.meta.url)
   const cliRoot = path.resolve(path.dirname(currentFile), "..")
   const workspaceRoot = path.resolve(cliRoot, "../..")
-  const adapterPath = path.join(workspaceRoot, "packages/pi-adapter/dist/index.js")
   const cliPath = path.join(cliRoot, "dist/index.js")
-  if (!fs.existsSync(adapterPath) || !fs.existsSync(cliPath)) {
-    throw new Error("Build @memory-lane/pi-adapter and @memory-lane/cli before running the OMP contract smoke")
+  if (!fs.existsSync(cliPath)) {
+    throw new Error("Build @memory-lane/cli before running the OMP contract smoke")
   }
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-omp-contract-"))
   const summary = await startSummaryServer(path.join(root, "provider-requests.jsonl"))
   try {
-    const adapter = await runSourceForm({
-      form: "adapter",
-      executable: runtime.executable,
-      root,
-      targetSource: piAdapterImportSource(adapterPath),
-      profile: `memory-lane-contract-adapter-${process.pid}`,
-      summaryBaseUrl: summary.baseUrl,
-      cliPath,
-      manualInput,
-    })
-    const bridge = await runSourceForm({
-      form: "bridge",
+    const releaseBinaryPath = buildContractReleaseBinary(workspaceRoot, root)
+    const developmentBridge = await runSourceForm({
+      form: "development-bridge",
       executable: runtime.executable,
       root,
       targetSource: piCliBridgeSource(cliPath),
-      profile: `memory-lane-contract-bridge-${process.pid}`,
+      profile: `memory-lane-contract-development-bridge-${process.pid}`,
       summaryBaseUrl: summary.baseUrl,
       cliPath,
       manualInput,
     })
-    const sourceForms = [adapter, bridge].map((result) => {
+    const releaseBridge = await runSourceForm({
+      form: "release-bridge",
+      executable: runtime.executable,
+      root,
+      targetSource: piCliBridgeSource(releaseBinaryPath),
+      profile: `memory-lane-contract-release-bridge-${process.pid}`,
+      summaryBaseUrl: summary.baseUrl,
+      cliPath,
+      manualInput,
+    })
+    const results = [developmentBridge, releaseBridge]
+    const sourceForms = results.map((result) => {
       const registrations = [...new Set(result.entries.filter((entry) => entry.kind === "registration" && entry.owner === "production").map((entry) => entry.name))]
       const missingRegistrations = EXPECTED_REGISTRATIONS[result.form].filter((name) => !registrations.includes(name))
       const incompleteEvents = Object.entries(result.events).filter(([, event]) => event.status !== "pass").map(([name]) => name)
@@ -920,29 +1068,38 @@ async function main(): Promise<void> {
         registrations,
         missingRegistrations,
         incompleteEvents,
+        inputVerification: result.inputVerification,
         events: result.events,
       }
     })
-    const taskSessions = taskSessionResult([adapter, bridge])
-    const toolError = toolErrorResult([adapter, bridge])
-    const harnessArtifacts = [adapter, bridge].map((result) => ({
+    const taskSessions = taskSessionResult(results)
+    const toolError = toolErrorResult(results)
+    const deferredCompaction = deferredCompactionResult(results)
+    const compiledHostRuntime = compiledHostRuntimeResult(runtime.executable, results)
+    const harnessArtifacts = results.map((result) => ({
       sourceForm: result.form,
       providerRegistered: result.entries.some((entry) => entry.kind === "mechanism" && entry.owner === "harness" && entry.name === "provider"),
-      contractToolRegistered: result.entries.some((entry) => entry.kind === "registration" && entry.owner === "harness" && entry.name === "tool:shell:memory-lane-contract"),
+      contractToolRegisteredEssential: result.entries.some((entry) => entry.kind === "registration" && entry.owner === "harness" && entry.name === "tool:shell:memory-lane-contract" && entry.loadMode === CONTRACT_TOOL_LOAD_MODE),
+      productionToolsRegisteredEssential: EXPECTED_REGISTRATIONS[result.form]
+        .filter((name) => name.startsWith("tool:"))
+        .every((name) => result.entries.some((entry) => entry.kind === "registration" && entry.owner === "production" && entry.name === name && entry.loadMode === CONTRACT_TOOL_LOAD_MODE)),
     }))
     const lifecyclePass = ompContractOverallPass(sourceForms)
     const overallPass = lifecyclePass
+      && manualInputVerificationPass(manualInput, sourceForms)
       && taskSessions.status === "pass"
       && toolError.status === "pass"
-      && harnessArtifacts.every((artifact) => artifact.providerRegistered && artifact.contractToolRegistered)
+      && deferredCompaction.status === "pass"
+      && compiledHostRuntime.status === "pass"
+      && harnessArtifacts.every((artifact) => artifact.providerRegistered && artifact.contractToolRegisteredEssential && artifact.productionToolsRegisteredEssential)
     const failedRegisteredEvents = sourceForms.flatMap((form) => Object.entries(form.events)
       .filter(([, result]) => result.status === "fail")
       .map(([event]) => `${form.sourceForm}.${event}`))
-    const adapterTurnEndPassed = sourceForms.find((form) => form.sourceForm === "adapter")?.events.turn_end.status === "pass"
+    const developmentTurnEndPassed = sourceForms.find((form) => form.sourceForm === "development-bridge")?.events.turn_end.status === "pass"
     const decision = [
-      adapterTurnEndPassed
-        ? "OMP requires turn_end boundary normalization, and the normalized live contract passed."
-        : "OMP turn_end boundary normalization did not pass the live contract.",
+      developmentTurnEndPassed
+        ? "OMP requires turn_end boundary normalization, and the Node-backed development bridge passed the normalized live contract."
+        : "OMP turn_end boundary normalization did not pass the Node-backed development bridge contract.",
       failedRegisteredEvents.length
         ? `Full live lifecycle parity is not established. Failed registered contracts: ${failedRegisteredEvents.join(", ")}.`
         : "All registered live lifecycle contracts passed.",
@@ -962,15 +1119,17 @@ async function main(): Promise<void> {
         scratchAgentDir: true,
         manualRealTtyInput: manualInput,
         compactionMechanism: "rpc compact",
-        modelMechanism: "loopback OpenAI-compatible deterministic contract provider",
+        modelMechanism: "loopback OpenAI-compatible deterministic contract provider available to main and delegated child sessions",
       },
       hostNotes: [
-        `OMP ${PINNED_OMP_VERSION} does not load an explicit --extension when --no-extensions is also present despite its help text, so discovery isolation uses an empty scratch PI_CODING_AGENT_DIR instead.`,
-        `OMP ${PINNED_OMP_VERSION} interactive input is emitted only by the TUI editor submission path; noninteractive execution cannot mark input as passing.`,
+        `OMP ${PINNED_OMP_VERSION} RPC prompts correctly omit interactive input events; real-TTY editor input is reported independently.`,
+        "Delegated tasks use the local zero-cost contract provider and require a completed result before suppression can certify.",
       ],
       sourceForms,
       harnessArtifacts,
       toolError,
+      deferredCompaction,
+      compiledHostRuntime,
       taskSessions,
       decision,
       normalization: "OMP turn_end uses message/toolResults rather than legacy Pi last-message fields. OMP tool_result uses input/content/details/isError rather than legacy Pi toolInput/toolResponse. Both production forms normalize at their host boundary.",

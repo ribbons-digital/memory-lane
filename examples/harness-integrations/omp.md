@@ -69,7 +69,15 @@ Confirm the local OMP binary reports `omp/17.1.0`, then start it from the projec
 After rebuilding Memory Lane, exit and restart OMP because `/reload-plugins` does not reload an already loaded extension module.
 Use `omp --continue` from the same project to resume after the restart.
 Do not replace the generated OMP bridge with a shim that imports `packages/pi-adapter/dist/index.js`.
-Compiled OMP uses the bridge to launch the JavaScript CLI through Node, so `node` must be available on OMP's `PATH`.
+Compiled OMP exposes its own binary as `process.execPath`, so the source-checkout bridge resolves a separate Node executable to launch the JavaScript CLI.
+For that workflow, `node` must be available on OMP's `PATH`.
+A compiled release bridge instead launches the native Memory Lane executable directly.
 
-See [OMP: install and restart a local checkout](../../docs/development.md#omp-install-and-restart-a-local-checkout) for the exact verified build, init, load, and restart commands.
+Memory Lane's authoritative gate uses the unmodified official OMP `17.1.0` runtime.
+It separately verifies that RPC prompts do not produce interactive input events and that a real TTY editor submission produces the exact accepted `input` lifecycle event.
+It also verifies lifecycle and compaction delivery, essential Memory Lane tools without an extension-defined startup allowlist, deterministic completed child tasks, exact delegated-worker role detection, and child-session capture suppression.
+Normal discovery is covered at both the default OMP agent root and an explicit `PI_CODING_AGENT_DIR` override.
+The companion compatibility smoke invokes essential `memory_save` through installed Pi `0.81.1`.
+
+See [OMP: install and restart a local checkout](../../docs/development.md#omp-install-and-restart-a-local-checkout) for the exact verified build, init, load, restart, and certification commands.
 The adjacent development-docs section records the OMP-only APIs that Memory Lane intentionally does not use.

@@ -8,11 +8,17 @@ import { OMP_CONTRACT_DIAGNOSTIC } from "../../core/src/integration-diagnostics.
 import { installOmp, installPi, piAdapterImportSource, piCliBridgeSource } from "../src/installer/config.js"
 import {
   CONTRACT_EVENTS,
+  CONTRACT_TOOL_LOAD_MODE,
   EXPECTED_REGISTRATIONS,
+  OMP_WORKER_ROLE_SENTINEL,
   PINNED_OMP_VERSION,
   REQUIRED_FLAGS,
   ompContractOverallPass,
+  compiledHostRuntimeResult,
+  inputVerificationResult,
+  manualInputVerificationPass,
   isolatedOmpEnvironment,
+  ompContractWrapperSource,
   ompRpcCommandPlan,
   taskSessionResult,
   validateOmpContract,
@@ -21,12 +27,18 @@ import {
   type SourceForm,
 } from "./omp-contract-runner.js"
 
-const fixturePath = fileURLToPath(new URL("fixtures/omp-contract-16.4.8.json", import.meta.url))
+const fixturePath = fileURLToPath(new URL("fixtures/omp-contract-17.1.0.json", import.meta.url))
 
 type FixtureEvent = { status: string; evidence: string[] }
 type FixtureSourceForm = {
-  sourceForm: "adapter" | "bridge"
+  sourceForm: SourceForm
   registrations: string[]
+  missingRegistrations: string[]
+  incompleteEvents: string[]
+  inputVerification: {
+    rpc: { status: string; evidence: string[] }
+    interactive: { status: string; evidence: string[] }
+  }
   events: Record<string, FixtureEvent>
 }
 type ContractFixture = {
@@ -38,13 +50,26 @@ type ContractFixture = {
   execution: Record<string, unknown>
   sourceForms: FixtureSourceForm[]
   overallPass: boolean
+  harnessArtifacts: Array<{
+    sourceForm: SourceForm
+    providerRegistered: boolean
+    contractToolRegisteredEssential: boolean
+    productionToolsRegisteredEssential: boolean
+  }>
   toolError: { status: string }
+  deferredCompaction: { status: string }
+  compiledHostRuntime: {
+    status: string
+    compiledOmpExecPathIsOmpExecutable: boolean
+    sourceForms: Array<{ sourceForm: SourceForm; execPaths: string[]; ompExecutableObserved: boolean }>
+  }
   taskSessions: {
     status: string
     sourceForms: Array<{
       sourceForm: SourceForm
       missingEvents: string[]
-      taskSignals: { nestedSessionFile: boolean; subagentRole: boolean; parentLineageObserved: boolean }
+      taskSignals: { nestedSessionFile: boolean; subagentRole: boolean; workerRoleSentinel: string; parentLineageObserved: boolean }
+      taskResult: { status: string; evidence: Array<{ outputMatchesSentinel: boolean; resolvedModel: string; requests: number }> }
       automaticCaptureSuppressed: boolean
     }>
   }
@@ -68,7 +93,7 @@ function passingSourceForms(): Array<{
   registrations: string[]
   events: Record<ContractEvent, { status: EventStatus }>
 }> {
-  return (["adapter", "bridge"] as const).map((sourceForm) => ({
+  return (["development-bridge", "release-bridge"] as const).map((sourceForm) => ({
     sourceForm,
     registrations: [...EXPECTED_REGISTRATIONS[sourceForm]],
     events: Object.fromEntries(CONTRACT_EVENTS.map((event) => [event, { status: "pass" }])) as Record<ContractEvent, { status: EventStatus }>,
@@ -77,101 +102,78 @@ function passingSourceForms(): Array<{
 
 
 describe("OMP contract runner", () => {
-  it("committed fixture preserves the pinned report contract and recorded lifecycle result matrix", () => {
+  it("certifies the committed OMP 17.1.0 real-runtime contract", () => {
     const report = readFixture()
     assert.deepEqual(OMP_CONTRACT_DIAGNOSTIC, {
       testedVersion: report.expectedVersion,
       testedAt: report.testedAt,
       overallPass: report.overallPass,
     })
-
-    assert.deepEqual({
-      schemaVersion: report.schemaVersion,
-      host: report.host,
-      expectedVersion: report.expectedVersion,
-      actualVersion: report.actualVersion,
-      testedAt: report.testedAt,
-      execution: report.execution,
-      sourceForms: report.sourceForms.map(({ sourceForm, events }) => ({
-        sourceForm,
-        eventNames: Object.keys(events),
-        statuses: Object.fromEntries(Object.entries(events).map(([name, result]) => [name, result.status])),
-      })),
-      overallPass: report.overallPass,
-    }, {
-      schemaVersion: 1,
-      host: "omp",
-      expectedVersion: PINNED_OMP_VERSION,
-      actualVersion: `omp/${PINNED_OMP_VERSION}`,
-      testedAt: "2026-07-13",
-      execution: {
-        realRuntime: true,
-        mode: "rpc",
-        extensionFlag: true,
-        scratchHome: true,
-        scratchProfile: true,
-        scratchAgentDir: true,
-        manualRealTtyInput: true,
-        compactionMechanism: "rpc compact",
-        modelMechanism: "loopback OpenAI-compatible deterministic contract provider",
-      },
-      sourceForms: [
-        {
-          sourceForm: "adapter",
-          eventNames: [...CONTRACT_EVENTS],
-          statuses: {
-            input: "pass",
-            before_agent_start: "pass",
-            turn_end: "pass",
-            tool_result: "pass",
-            session_before_compact: "pass",
-          },
-        },
-        {
-          sourceForm: "bridge",
-          eventNames: [...CONTRACT_EVENTS],
-          statuses: {
-            input: "pass",
-            before_agent_start: "pass",
-            turn_end: "pass",
-            tool_result: "pass",
-            session_before_compact: "pass",
-          },
-        },
-      ],
-      overallPass: true,
+    assert.equal(report.schemaVersion, 1)
+    assert.equal(report.host, "omp")
+    assert.equal(report.expectedVersion, "17.1.0")
+    assert.equal(report.actualVersion, "omp/17.1.0")
+    assert.equal(report.testedAt, "2026-07-24")
+    assert.equal(report.overallPass, true)
+    assert.deepEqual(report.execution, {
+      realRuntime: true,
+      mode: "rpc",
+      extensionFlag: true,
+      scratchHome: true,
+      scratchProfile: true,
+      scratchAgentDir: true,
+      manualRealTtyInput: true,
+      compactionMechanism: "rpc compact",
+      modelMechanism: "loopback OpenAI-compatible deterministic contract provider available to main and delegated child sessions",
     })
-    assert.ok(report.sourceForms[0].events.input.evidence.includes("genuine real-TTY input and accepted pass-through result were observed"))
-    assert.ok(report.sourceForms[0].events.turn_end.evidence.includes("raw payload omits legacy Pi fields consumed before normalization: turnId, lastUserMessage, lastAssistantMessage"))
-    assert.ok(report.sourceForms[1].events.tool_result.evidence.includes("deterministic registered tool executed successfully before live tool_result delivery"))
+    assert.deepEqual(report.sourceForms.map((form) => form.sourceForm), ["development-bridge", "release-bridge"])
+    for (const form of report.sourceForms) {
+      assert.deepEqual(Object.keys(form.events), [...CONTRACT_EVENTS])
+      assert.ok(Object.values(form.events).every((event) => event.status === "pass"))
+      assert.deepEqual(form.incompleteEvents, [])
+      assert.equal(form.inputVerification.rpc.status, "pass")
+      assert.equal(form.inputVerification.interactive.status, "pass")
+      assert.ok(form.inputVerification.interactive.evidence.includes("genuine real-TTY input and accepted pass-through result were observed"))
+      assert.ok(form.events.turn_end.evidence.includes("raw payload omits legacy Pi fields consumed before normalization: turnId, lastUserMessage, lastAssistantMessage"))
+      assert.ok(form.events.tool_result.evidence.includes("deterministic registered tool executed successfully before live tool_result delivery"))
+    }
     assert.equal(report.toolError.status, "pass")
+    assert.equal(report.deferredCompaction.status, "pass")
+    assert.equal(report.compiledHostRuntime.status, "pass")
+    assert.equal(report.compiledHostRuntime.compiledOmpExecPathIsOmpExecutable, true)
+    assert.ok(report.compiledHostRuntime.sourceForms.every((form) =>
+      form.ompExecutableObserved && form.execPaths.every((execPath) => execPath === "<official-omp-17.1.0-executable>")))
+    assert.ok(report.harnessArtifacts.every((artifact) =>
+      artifact.providerRegistered && artifact.contractToolRegisteredEssential && artifact.productionToolsRegisteredEssential))
     assert.equal(report.taskSessions.status, "pass")
     assert.ok(report.taskSessions.sourceForms.every((form) =>
       form.missingEvents.length === 0
       && form.taskSignals.nestedSessionFile
       && form.taskSignals.subagentRole
+      && form.taskSignals.workerRoleSentinel === OMP_WORKER_ROLE_SENTINEL
       && !form.taskSignals.parentLineageObserved
+      && form.taskResult.status === "completed"
+      && form.taskResult.evidence.some((entry) => entry.outputMatchesSentinel && entry.requests > 0)
       && form.automaticCaptureSuppressed))
   })
 
-  it("committed fixture preserves the registration matrix recorded before targeted revision was added", () => {
+  it("keeps current bridge registration expectations aligned with the certified fixture", () => {
     const report = readFixture()
-    const recordedRegistrations = Object.fromEntries(Object.entries(EXPECTED_REGISTRATIONS).map(([sourceForm, registrations]) => [
-      sourceForm,
-      registrations.filter((registration) => registration !== "tool:memory_revise").sort(),
-    ]))
-    assert.deepEqual(
-      Object.fromEntries(report.sourceForms.map(({ sourceForm, registrations }) => [sourceForm, [...registrations].sort()])),
-      recordedRegistrations,
-    )
-    assert.ok(EXPECTED_REGISTRATIONS.adapter.includes("tool:memory_revise"))
-    assert.ok(EXPECTED_REGISTRATIONS.bridge.includes("tool:memory_revise"))
+    assert.deepEqual(report.sourceForms.map((form) => form.sourceForm), ["development-bridge", "release-bridge"])
+    for (const sourceForm of ["development-bridge", "release-bridge"] as const) {
+      const fixtureForm = report.sourceForms.find((form) => form.sourceForm === sourceForm)
+      assert.ok(fixtureForm)
+      for (const registration of EXPECTED_REGISTRATIONS[sourceForm]) {
+        assert.ok(fixtureForm.registrations.includes(registration), `${sourceForm} fixture is missing ${registration}`)
+      }
+      assert.deepEqual(fixtureForm.missingRegistrations, [])
+    }
   })
 
   it("committed fixture is bounded sanitized and free of machine-local evidence", () => {
     const fixture = fs.readFileSync(fixturePath, "utf8")
     assert.ok(Buffer.byteLength(fixture) < 50_000)
-    assert.doesNotMatch(fixture, /\/Users\/|\/var\/folders\/|\/private\/var\//u)
+    assert.doesNotMatch(fixture, /\/Users\/|\/var\/folders\/|\/private\/(?:tmp|var)\/|\/tmp\//u)
     assert.doesNotMatch(fixture, /MEMORY_LANE_CONTRACT_KEY|contract-only/u)
     assert.doesNotMatch(fixture, /Released v9\.9\.9 after OMP contract verification/u)
   })
@@ -183,17 +185,111 @@ describe("OMP contract runner", () => {
         kind: "event" as const,
         name,
         owner: "production" as const,
-        contextValues: { taskSession: true, nestedSessionFile, subagentRole, parentLineage: false },
+        contextValues: {
+          taskSession: true,
+          nestedSessionFile,
+          subagentRole,
+          workerRoleSentinel: subagentRole ? OMP_WORKER_ROLE_SENTINEL : "",
+          parentLineage: false,
+        },
         resultShape: {},
       }))
-      const result = taskSessionResult([{ form: "adapter", entries, memoryText: "" }])
+      const result = taskSessionResult([{ form: "development-bridge", entries, memoryText: "" }])
       assert.equal(result.status, "fail")
       assert.deepEqual(result.sourceForms[0].taskSignals, {
         nestedSessionFile,
         subagentRole,
+        workerRoleSentinel: OMP_WORKER_ROLE_SENTINEL,
         parentLineageObserved: false,
       })
     }
+  })
+
+  it("cannot certify suppression when the delegated task result failed", () => {
+    const childEntries = ["before_agent_start", "turn_end", "tool_result"].map((name) => ({
+      kind: "event" as const,
+      name,
+      owner: "production" as const,
+      contextValues: {
+        taskSession: true,
+        nestedSessionFile: true,
+        subagentRole: true,
+        workerRoleSentinel: OMP_WORKER_ROLE_SENTINEL,
+        parentLineage: false,
+      },
+      resultShape: {},
+    }))
+    const failedTaskResult = {
+      kind: "event" as const,
+      name: "tool_result",
+      owner: "production" as const,
+      contextValues: { taskSession: false },
+      eventValues: {
+        toolName: "task",
+        isError: true,
+        taskStatus: "failed",
+        taskResultCount: 1,
+        taskExitCode: 1,
+        taskAborted: false,
+        taskOutputMatchesSentinel: false,
+        taskResolvedModel: "memory-lane-contract/contract-model",
+        taskRequests: 1,
+      },
+      resultShape: {},
+    }
+
+    const result = taskSessionResult([{
+      form: "development-bridge",
+      entries: [...childEntries, failedTaskResult],
+      memoryText: "",
+    }])
+    assert.equal(result.status, "fail")
+    assert.equal(result.sourceForms[0].taskResult.status, "failed")
+    assert.equal(result.sourceForms[0].automaticCaptureSuppressed, false)
+  })
+
+  it("certifies a completed delegated task only with lifecycle, exact worker-role, and suppression signals", () => {
+    const childEntries = ["before_agent_start", "turn_end", "tool_result"].map((name) => ({
+      kind: "event" as const,
+      name,
+      owner: "production" as const,
+      contextValues: {
+        taskSession: true,
+        nestedSessionFile: true,
+        subagentRole: true,
+        workerRoleSentinel: OMP_WORKER_ROLE_SENTINEL,
+        parentLineage: false,
+      },
+      resultShape: {},
+    }))
+    const completedTaskResult = {
+      kind: "event" as const,
+      name: "tool_result",
+      owner: "production" as const,
+      contextValues: { taskSession: false },
+      eventValues: {
+        toolName: "task",
+        isError: false,
+        taskStatus: "completed",
+        taskResultCount: 1,
+        taskExitCode: 0,
+        taskAborted: false,
+        taskOutputMatchesSentinel: true,
+        taskResolvedModel: "memory-lane-contract/contract-model",
+        taskRequests: 1,
+      },
+      resultShape: {},
+    }
+
+    const result = taskSessionResult([{
+      form: "release-bridge",
+      entries: [...childEntries, completedTaskResult],
+      memoryText: "",
+    }])
+    assert.equal(result.status, "pass")
+    assert.equal(result.sourceForms[0].taskSignals.workerRoleSentinel, "You are a worker agent for delegated tasks.")
+    assert.equal(result.sourceForms[0].taskResult.status, "completed")
+    assert.equal(result.sourceForms[0].automaticCaptureSuppressed, true)
   })
 
   it("requires every lifecycle event to pass, including production-design omissions", () => {
@@ -209,8 +305,8 @@ describe("OMP contract runner", () => {
 
   it("requires every expected command and tool registration when lifecycle events pass", () => {
     const missingRegistrationCases = [
-      { sourceForm: "adapter", registration: "command:remember" },
-      { sourceForm: "bridge", registration: "tool:memory_get" },
+      { sourceForm: "development-bridge", registration: "command:remember" },
+      { sourceForm: "release-bridge", registration: "tool:memory_get" },
     ] as const
 
     for (const { sourceForm, registration } of missingRegistrationCases) {
@@ -222,9 +318,12 @@ describe("OMP contract runner", () => {
     }
   })
 
-  it("rejects OMP versions other than the pinned contract version", () => {
+  it("accepts only OMP 17.1.0", () => {
     const help = REQUIRED_FLAGS.join(" ")
-    for (const versionOutput of ["omp/16.4.4", "omp v17.0.0", "unexpected version output", ""]) {
+    assert.equal(PINNED_OMP_VERSION, "17.1.0")
+    assert.doesNotThrow(() => validateOmpContract("omp/17.1.0", help))
+    assert.doesNotThrow(() => validateOmpContract("omp v17.1.0", help))
+    for (const versionOutput of ["omp/16.4.8", "omp/17.1.1", "omp v17.0.0", "unexpected version output", ""]) {
       assert.throws(
         () => validateOmpContract(versionOutput, help),
         new RegExp(`OMP contract requires ${PINNED_OMP_VERSION.replaceAll(".", "\\.")}`),
@@ -264,6 +363,92 @@ describe("OMP contract runner", () => {
     assert.equal(env.HOME, "/scratch/home")
   })
 
+  it("keeps extension-defined tools out of startup selection and exposes the contract tool as essential", () => {
+    const plan = ompRpcCommandPlan({
+      executable: "/opt/omp/bin/omp",
+      profile: "memory-lane-contract-adapter-42",
+      projectDir: "/scratch/project",
+      sessionDir: "/scratch/sessions",
+      configPath: "/scratch/omp-contract.yml",
+      extensionPath: "/scratch/memory-lane-contract.ts",
+    })
+    const toolsIndex = plan.args.indexOf("--tools")
+    assert.notEqual(toolsIndex, -1)
+    assert.equal(plan.args[toolsIndex + 1], "task")
+    assert.ok(!plan.args.some((arg) => arg.includes("shell:memory-lane-contract")))
+
+    const wrapper = ompContractWrapperSource("/target.ts", "/events.jsonl", "http://127.0.0.1:1234/v1")
+    assert.equal(CONTRACT_TOOL_LOAD_MODE, "essential")
+    assert.match(wrapper, /name: "shell:memory-lane-contract",[\s\S]*?loadMode: "essential"/u)
+    assert.match(wrapper, /name: "host-runtime"[\s\S]*?execPath: process\.execPath/u)
+    assert.match(wrapper, /apiKey: "MEMORY_LANE_CONTRACT_KEY"/u)
+    assert.match(wrapper, /workerRoleSentinel = "You are a worker agent for delegated tasks\."/u)
+  })
+
+  it("sanitizes matching compiled OMP executable paths after checking the raw paths", () => {
+    const executable = process.execPath
+    const matchingEntry = {
+      kind: "mechanism" as const,
+      name: "host-runtime",
+      eventValues: { execPath: executable },
+    }
+    const mismatchedPath = path.join(path.dirname(executable), "not-the-selected-omp")
+    const mismatchedEntry = {
+      kind: "mechanism" as const,
+      name: "host-runtime",
+      eventValues: { execPath: mismatchedPath },
+    }
+
+    const matching = compiledHostRuntimeResult(executable, [{ form: "development-bridge", entries: [matchingEntry] }])
+    assert.equal(matching.status, "pass")
+    assert.deepEqual(matching.sourceForms[0].execPaths, ["<official-omp-17.1.0-executable>"])
+
+    const mismatched = compiledHostRuntimeResult(executable, [{ form: "development-bridge", entries: [mismatchedEntry] }])
+    assert.equal(mismatched.status, "fail")
+    assert.deepEqual(mismatched.sourceForms[0].execPaths, [mismatchedPath])
+  })
+
+  it("requires requested real-TTY input verification to pass overall gating", () => {
+    const interactive = (status: "pass" | "fail" | "not-run") => [{ inputVerification: { interactive: { status } } }]
+    assert.equal(manualInputVerificationPass(true, interactive("pass")), true)
+    assert.equal(manualInputVerificationPass(true, interactive("fail")), false)
+    assert.equal(manualInputVerificationPass(true, interactive("not-run")), false)
+    assert.equal(manualInputVerificationPass(false, interactive("not-run")), true)
+  })
+
+  it("represents RPC input absence separately from optional real-TTY evidence", () => {
+    const registration = { kind: "registration" as const, name: "input", owner: "production" as const }
+    assert.deepEqual(inputVerificationResult([registration], [registration], false), {
+      rpc: { status: "pass", evidence: ["input handler registered; RPC prompts correctly emitted no interactive input event"] },
+      interactive: { status: "not-run", evidence: ["real-TTY input verification was not requested and is not inferred from RPC"] },
+    })
+
+    const unexpectedRpcInput = {
+      kind: "event" as const,
+      name: "input",
+      owner: "production" as const,
+      contextValues: { taskSession: false },
+    }
+    assert.equal(inputVerificationResult([registration, unexpectedRpcInput], [registration, unexpectedRpcInput], false).rpc.status, "fail")
+
+    const interactiveInput = {
+      kind: "event" as const,
+      name: "input",
+      owner: "production" as const,
+      eventValues: { source: "interactive", textMatchesSentinel: true },
+      resultValues: { action: "continue" },
+    }
+    const manualEvidence = {
+      kind: "mechanism" as const,
+      name: "input",
+      owner: "harness" as const,
+      note: "genuine real-TTY editor submission observed in this contract run",
+    }
+    const verified = inputVerificationResult([registration], [registration, interactiveInput, manualEvidence], true)
+    assert.equal(verified.rpc.status, "pass")
+    assert.equal(verified.interactive.status, "pass")
+  })
+
   it("constructs the isolated RPC launch plan without invoking OMP", () => {
     assert.deepEqual(ompRpcCommandPlan({
       executable: "/opt/omp/bin/omp",
@@ -285,7 +470,7 @@ describe("OMP contract runner", () => {
         "--extension", "/scratch/memory-lane-contract.ts",
         "--auto-approve",
         "--model", "memory-lane-contract/contract-model",
-        "--tools", "task,shell:memory-lane-contract",
+        "--tools", "task",
         "--append-system-prompt", "Memory Lane contract runtime. Follow the current user request exactly.",
         "--max-time", "180",
       ],
