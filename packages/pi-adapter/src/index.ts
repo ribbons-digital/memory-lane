@@ -690,6 +690,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
   const memoryReviseSchema = Type.Object({
     id: Type.String({ description: "ID of the same pending memory suggestion to revise" }),
     text: Type.String({ description: "Revised memory text" }),
+    all: Type.Optional(Type.Boolean({ description: "Revise across all project scopes" })),
   })
 
   pi.registerTool({
@@ -703,6 +704,7 @@ export default function memoryLaneExtension(pi: ExtensionAPI) {
           text: params.text,
           reason: "targeted review revision",
           revisedBy: "lifecycle",
+          all: (params as { all?: boolean }).all ?? false,
         })
         if (!receipt) {
           return {

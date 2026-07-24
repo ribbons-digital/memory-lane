@@ -48,7 +48,7 @@ function makeHarness() {
   }
 }
 
-async function execute(pi: FakePi, name: string, params: Record<string, string>, ctx: ExtensionContext) {
+async function execute(pi: FakePi, name: string, params: Record<string, any>, ctx: ExtensionContext) {
   const tool = pi.tools.get(name)
   assert.ok(tool, `${name} should be registered`)
   return tool.execute("tool-call", params, undefined, () => {}, ctx)
@@ -74,7 +74,7 @@ test("registers first-class same-ID pending revision guidance", () => {
   assert.match(revise.description, /same ID/iu)
   assert.match(revise.description, /rerun/iu)
   assert.match(revise.description, /never (?:automatically )?approve|explicit user approval/iu)
-  assert.deepEqual(Object.keys(revise.parameters.properties), ["id", "text"])
+  assert.deepEqual(Object.keys(revise.parameters.properties), ["id", "text", "all"])
 })
 
 test("pending memory_suggest returns only its clean targeted receipt while approved semantics stay direct", async () => {
@@ -125,6 +125,38 @@ test("flagged suggestion and same-ID revision return actionable structured revie
   assert.equal(latest.status, "pending")
   assert.equal(currentRecords(harness.dir).some((record) => record.id === flagged.details.id && record.status === "approved"), false)
   assert.equal(currentRecords(harness.dir).some((record) => record.id === flagged.details.id && record.status === "rejected"), false)
+})
+
+test("memory_revise requires explicit all scope to revise another project's pending memory", async () => {
+  const harness = makeHarness()
+  cleanup = harness.restore
+  const otherProject = path.join(harness.dir, "other-project")
+  fs.mkdirSync(otherProject, { recursive: true })
+  fs.writeFileSync(path.join(otherProject, ".memory-lane-scope"), JSON.stringify({ id: "pi-targeted-review-other" }))
+
+  const created = await execute(harness.pi, "memory_suggest", { text: "Should we retain this?", category: "project" }, harness.ctx)
+  const before = currentRecords(harness.dir)
+  const otherCtx: ExtensionContext = { ...harness.ctx, cwd: otherProject }
+
+  const scoped = await execute(harness.pi, "memory_revise", {
+    id: created.details.id,
+    text: "The project retains durable release decisions.",
+  }, otherCtx)
+  assert.deepEqual(scoped.details, { id: created.details.id, error: "pending-memory-not-found" })
+  assert.deepEqual(currentRecords(harness.dir), before)
+
+  const revised = await execute(harness.pi, "memory_revise", {
+    id: created.details.id,
+    text: "The project retains durable release decisions.",
+    all: true,
+  }, otherCtx)
+  assert.equal(revised.details.id, created.details.id)
+  assert.equal(revised.details.review.id, created.details.id)
+  assert.equal(revised.details.review.outcome, "clean")
+  const latest = currentRecords(harness.dir).filter((record) => record.id === created.details.id).at(-1)
+  assert.equal(latest.id, created.details.id)
+  assert.equal(latest.status, "pending")
+  assert.equal(latest.text, "The project retains durable release decisions.")
 })
 
 test("repeated flagged same-ID revisions clearly stop at needs-human-review", async () => {
