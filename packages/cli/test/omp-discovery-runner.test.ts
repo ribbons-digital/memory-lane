@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import {
@@ -6,8 +9,22 @@ import {
   DISCOVERY_OMP_VERSION,
   closeRpcChild,
   ompDiscoveryCommandPlan,
+  prepareOmpDiscoveryCli,
   validateOmpDiscoveryVersion,
 } from "./omp-discovery-runner.js"
+
+test("OMP discovery preparation makes the built CLI executable", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "memory-lane-omp-discovery-test-"))
+  const cliPath = path.join(root, "index.js")
+  try {
+    fs.writeFileSync(cliPath, "#!/usr/bin/env node\n")
+    fs.chmodSync(cliPath, 0o644)
+    assert.doesNotThrow(() => prepareOmpDiscoveryCli(cliPath))
+    if (process.platform !== "win32") assert.equal(fs.statSync(cliPath).mode & 0o111, 0o111)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
 
 test("OMP discovery launch uses normal extension loading without --extension or profiles", () => {
   const plan = ompDiscoveryCommandPlan({
